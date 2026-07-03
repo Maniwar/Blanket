@@ -1,0 +1,34 @@
+name: Deploy Concierge
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Set function secrets
+        run: supabase secrets set ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" ALLOWED_ORIGINS="https://maniwar.github.io"
+
+      - name: Deploy concierge function
+        run: supabase functions deploy concierge --no-verify-jwt
+
+      - name: Print endpoint
+        run: |
+          echo "Endpoint: https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/concierge"
+          echo "Paste this into FEIER_CONCIERGE_CONFIG.endpoint in index.html and push."
