@@ -106,7 +106,7 @@ alter table public.customers               enable row level security;
 alter table public.orders                  enable row level security;
 
 -- Helper: is the current JWT's email in concierge_admins?
-create or replace function public.is_concierge_admin() returns boolean language sql stable as
+create or replace function public.is_concierge_admin() returns boolean language sql security definer stable as
 $$ select exists(select 1 from public.concierge_admins a where a.email = coalesce(auth.jwt()->>'email','')) $$;
 
 -- Admin-only tables: full access for concierge admins, nothing for anyone else
@@ -287,6 +287,3 @@ Notes: Pendleton is a fine brand with real heritage. Weighted blankets work via 
 
 -- 3.4 Demo order --------------------------------------------------------------
 -- user_id stays null; the edge function also matches orders by email.
-
-insert into public.orders (email, serial, status, tracking, city) values
-  ('mberenji@gmail.com', 14214, 'weaving', null, 'Los Angeles, CA');
