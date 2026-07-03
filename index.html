@@ -120,7 +120,14 @@ nav.scrolled{background:rgba(23,31,26,.78);backdrop-filter:blur(16px);-webkit-ba
   padding:0 var(--pad-x);
   will-change:transform;
 }
-.hero .eyebrow{color:var(--brass-soft);display:block;margin-bottom:clamp(1rem,2.5vh,1.75rem)}
+.hero .eyebrow{
+  color:var(--brass-soft);display:block;margin-bottom:clamp(1rem,2.5vh,1.75rem);
+  text-shadow:
+    0 0 2px rgba(15,20,17,.95),
+    0 0 5px rgba(15,20,17,.9),
+    0 0 12px rgba(15,20,17,.85),
+    0 0 24px rgba(15,20,17,.7);
+}
 .hero h1{
   font-family:var(--font-display);font-weight:400;
   font-size:clamp(4.4rem, 16.5vw, 15rem);
@@ -147,6 +154,7 @@ nav.scrolled{background:rgba(23,31,26,.78);backdrop-filter:blur(16px);-webkit-ba
 .hero-cue{
   font-family:var(--font-mono);font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;
   color:rgba(241,236,226,.65);
+  text-shadow:0 1px 2px rgba(15,20,17,.85), 0 2px 12px rgba(15,20,17,.7);
   display:flex;align-items:center;gap:.8rem;white-space:nowrap;text-decoration:none;flex-shrink:0;
 }
 .hero-cue::after{content:"";width:1px;height:2.6rem;background:var(--brass-soft);animation:drop 2.2s var(--ease) infinite;transform-origin:top}
@@ -248,6 +256,7 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 .break-caption .big{
   font-family:var(--font-display);text-transform:uppercase;line-height:.95;
   font-size:clamp(2.6rem,7.5vw,6.5rem);
+  text-shadow:0 2px 6px rgba(15,20,17,.75), 0 4px 28px rgba(15,20,17,.55);
 }
 .break-caption .big .o{
   color:transparent;-webkit-text-stroke:1.5px rgba(241,236,226,.9);
@@ -261,12 +270,14 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 .break-caption .mono{
   font-family:var(--font-mono);font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;
   color:rgba(241,236,226,.75);display:block;margin-top:1rem;
+  text-shadow:0 1px 2px rgba(15,20,17,.85), 0 2px 12px rgba(15,20,17,.7);
 }
 .break-tag{
   position:absolute;right:calc(var(--pad-x) + 1rem);top:clamp(1.75rem,5vh,3.5rem);z-index:2;
   font-family:var(--font-mono);font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;
   color:rgba(241,236,226,.7);
   writing-mode:vertical-rl;
+  text-shadow:1px 0 2px rgba(15,20,17,.85), 2px 0 12px rgba(15,20,17,.7);
 }
 
 /* ============ BENEFITS ============ */
