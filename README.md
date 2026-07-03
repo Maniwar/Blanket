@@ -1,6 +1,6 @@
 # Feierabend — Decke 01
 
-Concept landing page for a German-mill, zero-polyester wool blanket built for tech workers.
+Concept landing page for a zero-polyester wool blanket woven at a Bavarian family mill, positioned as a premium import for American tech workers — numbered editions, duties-included pricing, imperial-first specs with German metric flavor.
 Single self-contained HTML file (all images embedded as WebP data URIs, no build step, no dependencies).
 
 **Live site:** https://maniwar.github.io/Blanket/
