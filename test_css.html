@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<style>
+  .view { display: none; }
+  .view.on { display: block; }
+  .gate {
+    display: flex;
+  }
+  .view.on.gate { display: flex; }
+</style>
+</head>
+<body>
+  <div id="test" class="view gate">Hello</div>
+  <script>
+    const el = document.getElementById('test');
+    console.log(window.getComputedStyle(el).display);
+  </script>
+</body>
+</html>
