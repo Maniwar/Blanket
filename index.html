@@ -70,10 +70,20 @@ nav{
   position:fixed;top:0;left:0;right:0;z-index:50;
   display:flex;align-items:center;justify-content:space-between;
   padding:1.1rem var(--pad-x);
-  transition:background-color .5s var(--ease), box-shadow .5s;
+  transition:background-color .5s var(--ease), box-shadow .5s, transform .55s var(--ease);
   color:var(--wool);
 }
-nav.scrolled{background:rgba(23,31,26,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 1px 0 rgba(241,236,226,.08)}
+nav.scrolled{background:rgba(23,31,26,.82);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 1px 0 rgba(196,155,91,.26)}
+nav.tucked{transform:translateY(-100%)}
+.nav-live{
+  flex:1;min-width:0;text-align:center;padding:0 2rem;overflow:hidden;
+  font-family:var(--font-mono);font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(241,236,226,.55);white-space:nowrap;pointer-events:none;
+}
+.nav-live span{display:inline-block;transition:opacity .45s var(--ease), transform .45s var(--ease)}
+.nav-live span.swap{opacity:0;transform:translateY(6px)}
+.nav-live b{color:var(--brass-soft);font-weight:500}
+@media (max-width:960px){.nav-live{display:none}}
 .wordmark{font-family:var(--font-display);font-size:1.3rem;letter-spacing:.02em;text-decoration:none}
 .wordmark span{color:var(--brass-soft)}
 .nav-right{display:flex;align-items:center;gap:1.75rem}
@@ -81,9 +91,20 @@ nav.scrolled{background:rgba(23,31,26,.78);backdrop-filter:blur(16px);-webkit-ba
 .nav-link:hover{opacity:1}
 .nav-cta{
   font-family:var(--font-mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;text-decoration:none;
-  border:1px solid rgba(241,236,226,.35);padding:.55rem 1.1rem;
+  border:1px solid rgba(196,155,91,.55);padding:.55rem 1.1rem;
   transition:background-color .3s,color .3s,border-color .3s;
+  position:relative;overflow:hidden;
 }
+.nav-cta::before{
+  content:"";position:absolute;top:0;bottom:0;left:-70%;width:45%;
+  background:linear-gradient(100deg, transparent, rgba(241,236,226,.16), transparent);
+  transform:skewX(-18deg);
+  animation:sheen 6s var(--ease) infinite;
+  pointer-events:none;
+}
+@keyframes sheen{0%,58%{left:-70%}82%,100%{left:130%}}
+.nav-cta .remainCt{color:var(--brass-soft)}
+.nav-cta:hover .remainCt{color:inherit}
 .nav-cta:hover{background:var(--wool);color:var(--loden);border-color:var(--wool)}
 @media (max-width:640px){.nav-link{display:none}}
 
@@ -486,7 +507,26 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
   font-size:clamp(2.1rem,4.8vw,3.9rem);line-height:1.06;max-width:24ch;
 }
 .arrival h2 em{font-style:normal;color:transparent;-webkit-text-stroke:1.2px rgba(241,236,226,.55)}
-.manifest{margin-top:clamp(2.5rem,7vh,4.5rem);border-top:1px solid rgba(241,236,226,.16)}
+.arrival-photos{
+  display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
+  gap:clamp(1rem,2.5vw,2rem);
+  margin-top:clamp(2.5rem,7vh,4.5rem);
+}
+.arrival-photos figure{position:relative;overflow:hidden;height:clamp(260px,36vw,480px)}
+.arrival-photos img{width:100%;height:100%;object-fit:cover;display:block}
+.arrival-photos figure::after{content:"";position:absolute;inset:12px;border:1px dashed rgba(241,236,226,.45);mix-blend-mode:overlay;pointer-events:none}
+.arrival-photos .ph-tag{
+  position:absolute;left:12px;bottom:12px;z-index:2;
+  font-family:var(--font-mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(241,236,226,.9);
+  background:rgba(23,31,26,.55);backdrop-filter:blur(6px);
+  padding:.5rem .85rem;
+}
+@media (max-width:760px){
+  .arrival-photos{grid-template-columns:1fr}
+  .arrival-photos figure{height:clamp(220px,58vw,380px)}
+}
+.manifest{margin-top:clamp(2rem,5vh,3.2rem);border-top:1px solid rgba(241,236,226,.16)}
 .m-row{
   display:grid;grid-template-columns:minmax(4.2rem,9%) minmax(0,.4fr) 1fr;
   gap:clamp(1rem,3vw,2.5rem);align-items:baseline;
@@ -636,6 +676,7 @@ footer{
 
 <nav id="nav" aria-label="Main">
   <a class="wordmark" href="#top">Feierabend<span>.</span></a>
+  <div class="nav-live" aria-hidden="true"><span id="navLive"></span></div>
   <div class="nav-right">
     <a class="nav-link" href="#wool">The wool</a>
     <a class="nav-link" href="#label">The label</a>
@@ -846,6 +887,16 @@ footer{
   <div class="arrival-inner">
     <span class="eyebrow" data-reveal>The arrival · Die Ankunft</span>
     <h2 data-reveal="2">The box is the overture. <em>Nothing inside is filler.</em></h2>
+    <div class="arrival-photos">
+      <figure class="curtain" data-curtain>
+        <img class="cimg" src="img/pack-wide.webp" alt="Open forest-green rigid box on a walnut table: loden wool blanket wrapped in unbleached cotton twill, tied by hand, sealed in beeswax, register card resting on top" loading="lazy">
+        <span class="ph-tag">Fig. 02 — Die Verpackung</span>
+      </figure>
+      <figure class="curtain" data-curtain>
+        <img class="cimg" src="img/pack-seal.webp" alt="Close-up of an amber beeswax seal pressed with the mill stamp, on cotton twill over loden wool, beside a hand-tied knot" loading="lazy">
+        <span class="ph-tag">Fig. 03 — Das Siegel</span>
+      </figure>
+    </div>
     <div class="manifest">
       <div class="m-row" data-reveal>
         <span class="no">Nº 1</span>
@@ -955,7 +1006,14 @@ footer{
   setTimeout(function(){ document.body.classList.add('loaded'); }, 500);
 
   var nav = document.getElementById('nav');
-  function navState(){ nav.classList.toggle('scrolled', window.scrollY > 40); }
+  var lastSc = 0;
+  function navState(){
+    var sc = window.scrollY;
+    nav.classList.toggle('scrolled', sc > 40);
+    if(sc > lastSc + 4 && sc > 520){ nav.classList.add('tucked'); }
+    else if(sc < lastSc - 4 || sc <= 520){ nav.classList.remove('tucked'); }
+    lastSc = sc;
+  }
 
   /* reveal + curtain observer */
   var io = new IntersectionObserver(function(entries){
@@ -1162,6 +1220,30 @@ footer{
   }
   loomTick(); setInterval(loomTick, 30000);
   syncAlloc();
+
+  /* ---- nav live ticker ---- */
+  var navLive = document.getElementById('navLive');
+  if(navLive){
+    var cities = ['Denver, CO', 'Brooklyn, NY', 'Menlo Park, CA', 'Austin, TX', 'Seattle, WA', 'Chicago, IL'];
+    var tickN = 0;
+    function liveMsg(){
+      switch(tickN % 4){
+        case 0: return 'Nº <b>' + fmtN(claimed - (tickN % 3)) + '</b> · ' + cities[tickN % cities.length] + ' · just claimed';
+        case 1: return '<b>' + fmtN(RUN - claimed) + '</b> of 15,000 remain';
+        case 2: return 'Looms start in <b>' + (loomClock ? loomClock.textContent : '') + '</b>';
+        default: return 'Weberei Brandt · Allgäu · Est. <b>1897</b>';
+      }
+    }
+    navLive.innerHTML = liveMsg(); tickN++;
+    setInterval(function(){
+      navLive.classList.add('swap');
+      setTimeout(function(){
+        navLive.innerHTML = liveMsg();
+        navLive.classList.remove('swap');
+        tickN++;
+      }, 460);
+    }, 4200);
+  }
 })();
 </script>
 </body>
