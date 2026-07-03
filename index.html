@@ -94,6 +94,7 @@ nav.tucked{transform:translateY(-100%)}
   border:1px solid rgba(196,155,91,.55);padding:.55rem 1.1rem;
   transition:background-color .3s,color .3s,border-color .3s;
   position:relative;overflow:hidden;
+  white-space:nowrap;flex-shrink:0;
 }
 .nav-cta::before{
   content:"";position:absolute;top:0;bottom:0;left:-70%;width:45%;
@@ -106,7 +107,11 @@ nav.tucked{transform:translateY(-100%)}
 .nav-cta .remainCt{color:var(--brass-soft)}
 .nav-cta:hover .remainCt{color:inherit}
 .nav-cta:hover{background:var(--wool);color:var(--loden);border-color:var(--wool)}
-@media (max-width:640px){.nav-link{display:none}}
+@media (max-width:640px){
+  .nav-link{display:none}
+  .pill-name{display:none}
+  .nav-cta{font-size:.64rem;padding:.5rem .85rem;letter-spacing:.12em}
+}
 
 /* ============ HERO ============ */
 .hero{
@@ -681,7 +686,7 @@ footer{
     <a class="nav-link" href="#wool">The wool</a>
     <a class="nav-link" href="#label">The label</a>
     <a class="nav-link" href="#ritual">The ritual</a>
-    <a class="nav-cta" href="#reserve">Decke 01 · $589 · <span class="remainCt">787</span> left</a>
+    <a class="nav-cta" href="#reserve"><span class="pill-name">Decke 01 · </span>$589 · <span class="remainCt">787</span> left</a>
   </div>
 </nav>
 
