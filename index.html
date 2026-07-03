@@ -466,6 +466,47 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 .step p{font-size:clamp(1.05rem,1.7vw,1.3rem);font-weight:300;color:var(--ink)}
 .step p strong{font-weight:600}
 
+/* ============ ARRIVAL (unboxing overture) ============ */
+.arrival{
+  position:relative;background:var(--loden);color:var(--wool);
+  padding:clamp(5.5rem,14vh,10rem) var(--pad-x);
+  overflow:hidden;
+}
+.arrival::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(90% 70% at 85% 8%, rgba(166,124,61,.12) 0%, transparent 60%),
+    repeating-linear-gradient(45deg, rgba(241,236,226,.016) 0 1px, transparent 1px 9px);
+}
+.arrival-inner{position:relative;max-width:72rem;margin:0 auto}
+.arrival .eyebrow{color:var(--brass-soft);display:block;margin-bottom:1.4rem}
+.arrival h2{
+  font-family:var(--font-display);font-weight:400;
+  font-size:clamp(2.1rem,4.8vw,3.9rem);line-height:1.06;max-width:24ch;
+}
+.arrival h2 em{font-style:normal;color:transparent;-webkit-text-stroke:1.2px rgba(241,236,226,.55)}
+.manifest{margin-top:clamp(2.5rem,7vh,4.5rem);border-top:1px solid rgba(241,236,226,.16)}
+.m-row{
+  display:grid;grid-template-columns:minmax(4.2rem,9%) minmax(0,.4fr) 1fr;
+  gap:clamp(1rem,3vw,2.5rem);align-items:baseline;
+  padding:clamp(1.5rem,4vh,2.4rem) 0;
+  border-bottom:1px solid rgba(241,236,226,.12);
+}
+.m-row .no{font-family:var(--font-mono);font-size:.85rem;letter-spacing:.14em;color:var(--brass-soft)}
+.m-row h3{font-family:var(--font-display);font-weight:400;font-size:clamp(1.35rem,2.4vw,1.9rem)}
+.m-row div p{font-weight:300;color:rgba(241,236,226,.8);max-width:38rem}
+.m-row div .de{display:block;margin-top:.8rem;font-family:var(--font-mono);font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;color:rgba(196,155,91,.75)}
+.arrival-close{
+  margin-top:clamp(2.2rem,6vh,3.5rem);
+  font-family:var(--font-display);font-size:clamp(1.3rem,2.6vw,2rem);
+  font-style:italic;
+}
+.arrival-close .brass{color:var(--brass-soft);font-style:normal}
+@media (max-width:760px){
+  .m-row{grid-template-columns:3.2rem 1fr}
+  .m-row div{grid-column:2}
+}
+
 /* ============ COLORWAYS + CTA ============ */
 .cta{position:relative;background:var(--loden-deep);color:var(--wool);overflow:hidden}
 .cta-photo{position:absolute;inset:0}
@@ -519,6 +560,7 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 .btn-ghost{border-color:rgba(241,236,226,.4);color:var(--wool)}
 .btn-ghost:hover{border-color:var(--wool);background:rgba(241,236,226,.08)}
 .cta-note{font-family:var(--font-mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(241,236,226,.5);text-align:center}
+.cta-note.urge{color:var(--brass-soft)}
 
 /* closing marquee */
 .end-marquee{position:relative;z-index:2;overflow:hidden;padding:clamp(2rem,6vh,4rem) 0 clamp(1.5rem,4vh,3rem);pointer-events:none}
@@ -788,6 +830,46 @@ footer{
   </div>
 </section>
 
+<!-- ================= ARRIVAL ================= -->
+<section class="arrival" id="arrival">
+  <div class="arrival-inner">
+    <span class="eyebrow" data-reveal>The arrival · Die Ankunft</span>
+    <h2 data-reveal="2">The box is the overture. <em>Nothing inside is filler.</em></h2>
+    <div class="manifest">
+      <div class="m-row" data-reveal>
+        <span class="no">Nº 1</span>
+        <h3>The knot</h3>
+        <div><p>Cotton twill wrap, tied by hand at the loom. There is no tape anywhere
+        in the box. Your first act is untying a knot someone tied in Bavaria.</p>
+        <span class="de">Handgebunden · Kein Plastik</span></div>
+      </div>
+      <div class="m-row" data-reveal="2">
+        <span class="no">Nº 2</span>
+        <h3>The seal</h3>
+        <div><p>Beeswax over the fold, pressed with the mill's 1897 stamp.
+        It cracks once — and only for you.</p>
+        <span class="de">Bienenwachs · Siegel der Weberei</span></div>
+      </div>
+      <div class="m-row" data-reveal="3">
+        <span class="no">Nº 3</span>
+        <h3>The register card</h3>
+        <div><p>Your blanket's number, your name, the weaver's initials — a duplicate of
+        your line in the Webbuch, on card stock heavier than it needs to be. People frame
+        these. We pretend to be surprised.</p>
+        <span class="de">Aus dem Webbuch · Von Hand nummeriert</span></div>
+      </div>
+      <div class="m-row" data-reveal="4">
+        <span class="no">Nº 4</span>
+        <h3>The blanket</h3>
+        <div><p>Three pounds of teasel-raised twill, still carrying a trace of lanolin
+        and the valley. Unfold it once and the box stops mattering.</p>
+        <span class="de">Decke 01 · Zum Erben bestimmt</span></div>
+      </div>
+    </div>
+    <p class="arrival-close" data-reveal>You will fold the wrap and keep it. <span class="brass">Everyone does.</span></p>
+  </div>
+</section>
+
 <!-- ================= COLORWAYS + CTA ================= -->
 <section class="cta" id="reserve">
   <div class="cta-photo" aria-hidden="true">
@@ -823,6 +905,7 @@ footer{
         </p>
       </div>
       <div class="cta-actions" data-reveal="2">
+        <span class="cta-note urge">The fall looms start Friday — Nº 047 can still carry your name</span>
         <a class="btn btn-primary" href="#reserve"><span>Commission Nº 047</span></a>
         <a class="btn btn-ghost" href="#wool">Read the mill's story</a>
         <span class="cta-note">Duties &amp; U.S. delivery included · Wrapped in cotton twill, never plastic</span>
