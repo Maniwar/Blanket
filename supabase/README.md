@@ -73,12 +73,73 @@ each response. Watch your Anthropic usage dashboard; if usage looks wrong,
 rotate the API key (create a new one, update the `ANTHROPIC_API_KEY` repo
 secret, re-run the deploy, then revoke the old key).
 
-## FUTURE — personalization
+## v2 — config, knowledge base, logging, accounts
 
-The path to order-tracking personalization is already laid out: the Edge
-Function will join Supabase `customer` / `order` tables into the LIVE STATE
-block of the system prompt (see the `renderLiveState` note in
-`functions/concierge/index.ts`), so the concierge can answer per-customer
-questions like shipping status. The front end already sends the section and
-allocation context on every request, so no front-end changes are needed to
-extend the state.
+v2 keeps the entire v1 wire contract (`data: {"t":...}` chunks, `data: [DONE]`,
+CORS via `ALLOWED_ORIGINS`, the 20 req / 10 min rate limit) and layers a
+database on top. The schema lives in **`supabase/migrations/0001_concierge.sql`**
+— apply it with the Supabase MCP server or `supabase db push` before deploying
+the v2 function. The function reads the DB with the service-role key over raw
+PostgREST (no supabase-js) and caches config + KB in memory for **60 seconds**,
+so admin edits take up to a minute to reach live traffic.
+
+### Config — `concierge_config` (key / jsonb value)
+
+| key | effect |
+| --- | --- |
+| `enabled` (bool) | `false` → chat POSTs return 503 ("The concierge is resting…") and `?config=1` reports `enabled: false` so the widget shows a resting state |
+| `model` (string) | Anthropic model id for replies. Takes precedence over the `MODEL` env var; final fallback is `claude-sonnet-4-5` |
+| `max_tokens` (number) | per-reply output cap (default 1024) |
+| `greeting` (string) | opening line the widget shows before the first message |
+| `voice_notes` (string) | appended to the system prompt as `ADMIN TUNING NOTES (follow these):` — tune tone/emphasis without redeploying |
+| `starters` (object) | suggested questions per section, e.g. `{"wool": ["Is it soft?", ...]}` |
+
+### Editable knowledge base — `concierge_kb`
+
+Rows of (`slug`, `title`, `content_md`, `sort_order`, `enabled`). Enabled rows
+are concatenated (`## <title>` + content, ordered by `sort_order`) into the
+`{{KB}}` slot of the system prompt. If the table is empty or the DB is
+unreachable, the function falls back to the knowledge compiled into
+`functions/concierge/kb.ts`, so the concierge never goes blank.
+
+### Conversation logging — `concierge_conversations` / `concierge_messages`
+
+Each chat POST resolves a conversation — the optional `session_key` body field
+(≤ 64 chars) threads repeat requests into one conversation; the signed-in
+user's id/email and the page section are stored on it — then logs the user
+message and, after the stream completes, the assistant reply (full text, model
+used, `latency_ms`). Just before `data: [DONE]`, the stream emits a meta event
+`data: {"m":{"cid":"<conversation id>","mid":<message id>}}` so the front end
+can reference the exact rows. Logging failures never break the stream.
+
+### Feedback — `concierge_feedback`
+
+The front end inserts feedback rows (thumbs up/down on an answer) **directly
+with the anon key** — an insert-only RLS policy in the migration allows that
+and nothing else. Rows carry the conversation/message ids taken from the meta
+event above; review them in the admin portal.
+
+### Signed-in order awareness
+
+If the browser sends a Supabase Auth JWT (`Authorization: Bearer <jwt>` — the
+bare anon key does not count), the function verifies it against
+`/auth/v1/user`, then pulls the customer's `orders` rows (matched by `user_id`
+or `email`, via the service role) and injects a line like
+`CUSTOMER: jane@example.com (signed in). ORDERS: Nº 14213 — on the loom, …`
+into the LIVE STATE block, so the concierge can answer "where is my blanket?"
+per customer. Absent or invalid tokens simply mean an anonymous chat — never
+an error.
+
+### GET ?config=1
+
+`GET https://<project-ref>.supabase.co/functions/v1/concierge?config=1`
+returns `{"enabled":bool,"greeting":string|null,"starters":object|null,"auth":true}`
+(public, CORS-enabled). The widget bootstraps from this — greeting, starter
+chips, and whether to render at all.
+
+### Admin portal
+
+`/Blanket/admin.html` on the site edits the config keys and KB rows and
+browses logged conversations and feedback. It talks to the same Supabase
+project with a signed-in Supabase Auth account; write access is governed by
+the policies in `supabase/migrations/0001_concierge.sql`.
