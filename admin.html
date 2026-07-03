@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Feierabend — Concierge Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --loden:#26332B;
+    --loden-deep:#171F1A;
+    --wool:#F1ECE2;
+    --brass:#A67C3D;
+    --brass-soft:#C49B5B;
+    --hairline:rgba(196,155,91,.35);
+    --hairline-dim:rgba(196,155,91,.18);
+    --wool-dim:rgba(241,236,226,.62);
+    --wool-faint:rgba(241,236,226,.38);
+    --ink-well:rgba(241,236,226,.04);
+    --danger:#B4564A;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    background:var(--loden-deep);
+    background-image:radial-gradient(1200px 600px at 70% -10%, rgba(38,51,43,.9), transparent 70%);
+    color:var(--wool);
+    font-family:'Hanken Grotesk', system-ui, sans-serif;
+    font-weight:300;
+    font-size:15px;
+    line-height:1.55;
+    min-height:100vh;
+  }
+  h1,h2,h3{ font-family:'Gloock', serif; font-weight:400; letter-spacing:.01em; }
+  .micro{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--brass-soft);
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  a{ color:var(--brass-soft); }
+
+  /* ---------- fields ---------- */
+  input[type=text], input[type=email], input[type=number], textarea{
+    width:100%;
+    background:var(--ink-well);
+    border:1px solid var(--hairline-dim);
+    border-radius:2px;
+    color:var(--wool);
+    font-family:'Hanken Grotesk', system-ui, sans-serif;
+    font-size:15px;
+    font-weight:300;
+    padding:9px 12px;
+    outline:none;
+    transition:border-color .15s ease;
+  }
+  input:focus, textarea:focus{ border-color:var(--hairline); }
+  input::placeholder, textarea::placeholder{ color:var(--wool-faint); }
+  textarea{ resize:vertical; min-height:84px; }
+  input.mono-field{ font-family:'IBM Plex Mono', monospace; font-size:13.5px; }
+  .field{ margin-bottom:18px; }
+  .field > .micro{ display:block; margin-bottom:7px; }
+  .field .hint{ display:block; margin-top:6px; font-size:12.5px; color:var(--wool-faint); }
+
+  .btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--brass-soft);
+    background:transparent;
+    border:1px solid var(--hairline);
+    border-radius:2px;
+    padding:9px 18px;
+    cursor:pointer;
+    transition:color .15s ease, border-color .15s ease, background .15s ease, opacity .15s ease;
+  }
+  .btn:hover{ color:var(--wool); border-color:var(--brass-soft); }
+  .btn:disabled{ opacity:.45; cursor:default; }
+  .btn.primary{ background:var(--brass); border-color:var(--brass); color:var(--loden-deep); font-weight:500; }
+  .btn.primary:hover{ background:var(--brass-soft); border-color:var(--brass-soft); }
+  .btn.danger{ color:var(--danger); border-color:rgba(180,86,74,.45); }
+  .btn.danger:hover{ border-color:var(--danger); color:#d3766a; }
+  .btn.ghost{ border-color:transparent; padding-left:6px; padding-right:6px; }
+
+  /* ---------- switch ---------- */
+  .switch{ display:inline-flex; align-items:center; gap:12px; cursor:pointer; user-select:none; }
+  .switch input{ position:absolute; opacity:0; pointer-events:none; }
+  .switch .track{
+    width:44px; height:23px; border-radius:23px; flex:0 0 auto;
+    border:1px solid var(--hairline);
+    background:var(--ink-well);
+    position:relative;
+    transition:background .18s ease, border-color .18s ease;
+  }
+  .switch .track::after{
+    content:''; position:absolute; top:2px; left:2px;
+    width:17px; height:17px; border-radius:50%;
+    background:var(--wool-dim);
+    transition:transform .18s ease, background .18s ease;
+  }
+  .switch input:checked + .track{ background:var(--brass); border-color:var(--brass); }
+  .switch input:checked + .track::after{ transform:translateX(21px); background:var(--loden-deep); }
+  .switch .micro{ letter-spacing:.14em; }
+
+  /* ---------- views / shell ---------- */
+  .view{ display:none; }
+  .view.on{ display:block; }
+  .gate{
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; padding:32px 20px;
+  }
+  .view.on.gate{ display:flex; }
+  .gate .mark{ font-family:'Gloock', serif; font-size:44px; line-height:1.1; margin:14px 0 6px; }
+  .gate .sub{ color:var(--wool-dim); max-width:420px; margin:14px auto 0; }
+  .gate form{ margin-top:30px; width:100%; max-width:360px; display:flex; flex-direction:column; gap:12px; }
+  .gate .rule{ width:56px; height:1px; background:var(--hairline); margin:22px auto 0; }
+
+  header.bar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    padding:20px 32px;
+    border-bottom:1px solid var(--hairline);
+    background:rgba(23,31,26,.92);
+    position:sticky; top:0; z-index:5;
+    backdrop-filter:blur(6px);
+  }
+  header.bar .brand h1{ font-size:22px; margin-top:2px; }
+  header.bar .who{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .pill{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+    border:1px solid var(--hairline); border-radius:20px; padding:5px 13px 5px 10px;
+    display:inline-flex; align-items:center; gap:8px; color:var(--wool-dim);
+  }
+  .pill .dot{ width:7px; height:7px; border-radius:50%; background:var(--wool-faint); }
+  .pill.live{ color:var(--brass-soft); border-color:var(--brass); }
+  .pill.live .dot{ background:var(--brass-soft); box-shadow:0 0 8px rgba(196,155,91,.7); }
+  .who .email{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool-dim); }
+
+  nav.tabs{
+    display:flex; gap:4px; padding:0 32px;
+    border-bottom:1px solid var(--hairline-dim);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    background:none; border:none; border-bottom:1px solid transparent; margin-bottom:-1px;
+    color:var(--wool-faint); padding:15px 18px; cursor:pointer; white-space:nowrap;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  nav.tabs button:hover{ color:var(--wool-dim); }
+  nav.tabs button.on{ color:var(--brass-soft); border-bottom-color:var(--brass); }
+
+  main{ max-width:1180px; margin:0 auto; padding:34px 32px 90px; }
+  .panel{ display:none; }
+  .panel.on{ display:block; }
+  .panel-head{ margin-bottom:26px; }
+  .panel-head h2{ font-size:26px; margin-top:4px; }
+  .panel-head .note{ margin-top:8px; color:var(--wool-dim); max-width:640px; }
+
+  section.card{
+    border:1px solid var(--hairline-dim);
+    border-radius:3px;
+    padding:24px 26px 22px;
+    margin-bottom:26px;
+    background:rgba(38,51,43,.28);
+  }
+  section.card > .card-head{
+    display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+    margin-bottom:20px; padding-bottom:12px; border-bottom:1px solid var(--hairline-dim);
+  }
+  section.card h3{ font-size:18px; }
+  .card-foot{ display:flex; justify-content:flex-end; gap:12px; margin-top:6px; }
+  .grid-3{ display:grid; grid-template-columns:auto 1fr 160px; gap:22px; align-items:start; }
+
+  /* starters */
+  .starters{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+  fieldset.starter{
+    border:1px solid var(--hairline-dim); border-radius:3px; padding:14px 16px 16px; min-width:0;
+  }
+  fieldset.starter legend{ padding:0 8px; }
+  fieldset.starter input{ margin-top:8px; font-size:14px; }
+
+  /* knowledge */
+  .kb-row{
+    border:1px solid var(--hairline-dim); border-radius:3px;
+    padding:18px 20px; margin-bottom:18px; background:rgba(38,51,43,.28);
+  }
+  .kb-row.is-new{ border-color:var(--hairline); }
+  .kb-top{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
+  .kb-top .slug{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft); letter-spacing:.06em; }
+  .kb-top .ord{ margin-left:auto; color:var(--wool-faint); }
+  .kb-row textarea{ font-family:'IBM Plex Mono', monospace; font-size:13px; line-height:1.6; overflow:hidden; }
+  .kb-row .field{ margin-bottom:12px; }
+  .kb-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .checkline{ display:inline-flex; align-items:center; gap:9px; cursor:pointer; user-select:none; }
+  .checkline input{ accent-color:var(--brass); width:15px; height:15px; cursor:pointer; }
+
+  /* conversations */
+  .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
+  .stat{ border:1px solid var(--hairline-dim); border-radius:3px; padding:16px 18px 14px; background:rgba(38,51,43,.28); }
+  .stat .val{ font-family:'IBM Plex Mono', monospace; font-size:26px; color:var(--wool); margin-top:6px; }
+  .convo-wrap{ display:grid; grid-template-columns:360px 1fr; gap:22px; align-items:start; }
+  .convo-list{
+    border:1px solid var(--hairline-dim); border-radius:3px; overflow-y:auto; max-height:64vh;
+    background:rgba(38,51,43,.28);
+  }
+  .convo-item{
+    display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer;
+    border-bottom:1px solid var(--hairline-dim); padding:13px 16px; color:var(--wool);
+    font-family:'Hanken Grotesk', system-ui, sans-serif; font-weight:300; font-size:14px;
+    transition:background .12s ease;
+  }
+  .convo-item:last-child{ border-bottom:none; }
+  .convo-item:hover{ background:rgba(196,155,91,.06); }
+  .convo-item.on{ background:rgba(196,155,91,.1); box-shadow:inset 2px 0 0 var(--brass); }
+  .convo-item .line1{ display:flex; justify-content:space-between; gap:10px; margin-bottom:3px; }
+  .convo-item .who2{ color:var(--wool-dim); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .transcript{
+    border:1px solid var(--hairline-dim); border-radius:3px; min-height:64vh; max-height:78vh;
+    display:flex; flex-direction:column; background:rgba(38,51,43,.28);
+  }
+  .transcript-head{
+    padding:14px 20px; border-bottom:1px solid var(--hairline-dim);
+    display:flex; gap:16px; align-items:baseline; flex-wrap:wrap;
+  }
+  .transcript-body{ padding:22px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; flex:1; }
+  .msg{ max-width:76%; }
+  .msg .bubble{
+    padding:10px 14px; border-radius:3px; border:1px solid var(--hairline-dim);
+    white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere;
+  }
+  .msg.user{ align-self:flex-end; text-align:right; }
+  .msg.user .bubble{
+    font-family:'IBM Plex Mono', monospace; font-size:13px; line-height:1.6; text-align:left;
+    background:rgba(196,155,91,.09); border-color:var(--hairline);
+  }
+  .msg.assistant{ align-self:flex-start; }
+  .msg.assistant .bubble{ background:var(--ink-well); font-size:15px; }
+  .msg .meta{ margin-top:5px; font-size:10px; color:var(--wool-faint); }
+  .msg .meta .fb{ font-size:13px; }
+  .msg .meta .fbnote{ display:block; margin-top:3px; color:var(--wool-dim); font-style:normal; }
+  .empty{ color:var(--wool-faint); padding:26px 20px; text-align:center; }
+  .row-tools{ display:flex; gap:12px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+
+  /* toasts */
+  #toasts{ position:fixed; right:22px; bottom:22px; z-index:50; display:flex; flex-direction:column; gap:10px; }
+  .toast{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase;
+    background:var(--loden); color:var(--brass-soft);
+    border:1px solid var(--brass); border-radius:2px;
+    padding:11px 16px; max-width:380px;
+    box-shadow:0 8px 30px rgba(0,0,0,.4);
+    animation:toast-in .18s ease;
+  }
+  .toast.err{ color:#d3897f; border-color:rgba(180,86,74,.7); }
+  @keyframes toast-in{ from{ opacity:0; transform:translateY(8px);} to{ opacity:1; transform:none; } }
+
+  @media (max-width:860px){
+    header.bar{ padding:16px 18px; }
+    nav.tabs{ padding:0 18px; }
+    main{ padding:24px 18px 70px; }
+    .grid-3{ grid-template-columns:1fr; gap:16px; }
+    .metrics{ grid-template-columns:1fr; }
+    .convo-wrap{ grid-template-columns:1fr; }
+    .convo-list{ max-height:38vh; }
+    .msg{ max-width:92%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== SETUP NOTICE ===================== -->
+<div id="view-setup" class="view gate">
+  <span class="micro">Feierabend — Decke 01</span>
+  <div class="mark">Concierge Studio</div>
+  <div class="rule"></div>
+  <p class="sub micro" style="margin-top:26px;">Setup required</p>
+  <p class="sub" id="setup-msg">
+    The Supabase anon key has not been configured for this page. Either replace the
+    anon-key placeholder in <span class="mono">admin.html</span> at deploy time, or set
+    <span class="mono">window.FEIER_ADMIN_KEY</span> before the studio script runs.
+    Nothing is broken — the desk simply is not open yet.
+  </p>
+</div>
+
+<!-- ===================== SIGNED OUT ===================== -->
+<div id="view-auth" class="view gate">
+  <span class="micro">Feierabend — Decke 01</span>
+  <div class="mark">Concierge Studio</div>
+  <div class="rule"></div>
+  <form id="auth-form">
+    <label class="micro" for="auth-email" style="text-align:left;">Your address</label>
+    <input type="email" id="auth-email" class="mono-field" placeholder="you@feierabend.example" autocomplete="email" required>
+    <button type="submit" id="auth-send" class="btn primary">Send key</button>
+  </form>
+  <p class="sub micro" id="auth-note" style="min-height:16px; margin-top:18px;"></p>
+</div>
+
+<!-- ===================== VERIFYING ===================== -->
+<div id="view-wait" class="view gate">
+  <span class="micro">Feierabend — Decke 01</span>
+  <div class="mark">Concierge Studio</div>
+  <div class="rule"></div>
+  <p class="sub micro" style="margin-top:26px;">Verifying the desk…</p>
+</div>
+
+<!-- ===================== NOT AN ADMIN ===================== -->
+<div id="view-denied" class="view gate">
+  <span class="micro">Feierabend — Decke 01</span>
+  <div class="mark">This desk is not yours.</div>
+  <div class="rule"></div>
+  <p class="sub">The address you signed in with is not on the concierge admin register.</p>
+  <button id="denied-signout" class="btn" style="margin-top:26px;">Sign out</button>
+</div>
+
+<!-- ===================== STUDIO ===================== -->
+<div id="view-studio" class="view">
+  <header class="bar">
+    <div class="brand">
+      <span class="micro">Decke 01 — Admin</span>
+      <h1>Feierabend — Concierge Studio</h1>
+    </div>
+    <div class="who">
+      <span id="pill" class="pill"><span class="dot"></span><span id="pill-text">···</span></span>
+      <span id="who" class="email"></span>
+      <button id="signout" class="btn">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-tab="tuning" role="tab">Tuning</button>
+    <button class="tab" data-tab="knowledge" role="tab">Knowledge</button>
+    <button class="tab" data-tab="conversations" role="tab">Conversations</button>
+  </nav>
+
+  <main>
+
+    <!-- ============ TAB 1 : TUNING ============ -->
+    <div id="panel-tuning" class="panel on">
+      <div class="panel-head">
+        <span class="micro">Configuration</span>
+        <h2>Tuning</h2>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Engine</h3>
+          <span class="micro">concierge_config</span>
+        </div>
+        <div class="grid-3">
+          <div class="field">
+            <span class="micro">Concierge</span>
+            <label class="switch" style="margin-top:6px;">
+              <input type="checkbox" id="cfg-enabled">
+              <span class="track"></span>
+              <span class="micro" id="cfg-enabled-label">Paused</span>
+            </label>
+          </div>
+          <div class="field">
+            <label class="micro" for="cfg-model">Model</label>
+            <input type="text" id="cfg-model" class="mono-field" list="model-list" placeholder="claude-sonnet-4-5" autocomplete="off" spellcheck="false">
+            <datalist id="model-list">
+              <option value="claude-sonnet-4-5"></option>
+              <option value="claude-haiku-4-5-20251001"></option>
+              <option value="claude-opus-4-8"></option>
+            </datalist>
+          </div>
+          <div class="field">
+            <label class="micro" for="cfg-max-tokens">Max tokens</label>
+            <input type="number" id="cfg-max-tokens" class="mono-field" min="1" step="1" placeholder="1024">
+          </div>
+        </div>
+        <div class="card-foot">
+          <button id="save-engine" class="btn primary">Save engine</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Voice</h3>
+          <span class="micro">concierge_config</span>
+        </div>
+        <div class="field">
+          <label class="micro" for="cfg-greeting">Greeting</label>
+          <textarea id="cfg-greeting" rows="3" placeholder="The first line the concierge speaks."></textarea>
+        </div>
+        <div class="field">
+          <label class="micro" for="cfg-voice">Tuning notes — appended to the system prompt. Steer tone, emphasis, do/don't.</label>
+          <textarea id="cfg-voice" rows="5" placeholder="e.g. Never oversell. Speak of the wool with restraint."></textarea>
+        </div>
+        <div class="card-foot">
+          <button id="save-voice" class="btn primary">Save voice</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Conversation starters</h3>
+          <span class="micro">Three per section</span>
+        </div>
+        <div id="starters" class="starters"></div>
+        <div class="card-foot">
+          <button id="save-starters" class="btn primary">Save starters</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ TAB 2 : KNOWLEDGE ============ -->
+    <div id="panel-knowledge" class="panel">
+      <div class="panel-head">
+        <span class="micro">Source of truth</span>
+        <h2>Knowledge</h2>
+        <p class="note">The concierge answers ONLY from these sections. Edits are live within a minute.</p>
+      </div>
+      <div class="row-tools">
+        <button id="kb-add" class="btn">Add section</button>
+      </div>
+      <div id="kb-list"></div>
+    </div>
+
+    <!-- ============ TAB 3 : CONVERSATIONS ============ -->
+    <div id="panel-conversations" class="panel">
+      <div class="panel-head">
+        <span class="micro">The floor</span>
+        <h2>Conversations</h2>
+      </div>
+
+      <div class="metrics">
+        <div class="stat"><span class="micro">Conversations today</span><div class="val" id="m-convos">—</div></div>
+        <div class="stat"><span class="micro">Messages today</span><div class="val" id="m-msgs">—</div></div>
+        <div class="stat"><span class="micro">👍 rate</span><div class="val" id="m-rate">—</div></div>
+      </div>
+
+      <div class="row-tools">
+        <button id="convo-refresh" class="btn">Refresh</button>
+        <span class="micro" id="convo-count" style="color:var(--wool-faint);"></span>
+      </div>
+
+      <div class="convo-wrap">
+        <div id="convo-list" class="convo-list">
+          <div class="empty micro">Loading…</div>
+        </div>
+        <div class="transcript">
+          <div class="transcript-head" id="transcript-head">
+            <span class="micro" style="color:var(--wool-faint);">Select a conversation</span>
+          </div>
+          <div class="transcript-body" id="transcript-body">
+            <div class="empty micro">No transcript open</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toasts"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+'use strict';
+
+/* ============================================================
+   Feierabend — Concierge Studio
+   Single-file admin portal. Vanilla JS, no build step.
+   All database strings rendered via textContent — never innerHTML.
+   ============================================================ */
+
+const SUPABASE_URL = 'https://kvkjxjdpqoqasiehdlcw.supabase.co';
+const SUPABASE_ANON_KEY = (window.FEIER_ADMIN_KEY || '__ANON_KEY__');
+/* Placeholder rebuilt from parts so a deploy-time search/replace of the
+   literal placeholder cannot clobber this comparison. */
+const KEY_PLACEHOLDER = ['__ANON', '_KEY__'].join('');
+
+const STARTER_KEYS = ['hero', 'why', 'wool', 'label', 'ritual', 'arrival', 'reserve', 'default'];
+
+let sb = null;
+let adminPromise = null;
+
+const state = {
+  session: null,
+  adminFor: null,     // user id the current adminPromise belongs to
+  config: {},
+  kb: [],
+  convos: [],
+  activeConvoId: null,
+  loaded: false
+};
+
+/* ---------------- tiny DOM + utility helpers ---------------- */
+
+function $(id) { return document.getElementById(id); }
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = String(text);
+  return n;
+}
+
+function nowIso() { return new Date().toISOString(); }
+
+function kebab(s) {
+  return String(s).toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function show(viewId) {
+  document.querySelectorAll('.view').forEach(function (v) {
+    v.classList.toggle('on', v.id === viewId);
+  });
+}
+
+function toast(msg, isErr) {
+  const t = el('div', 'toast' + (isErr ? ' err' : ''), msg);
+  $('toasts').appendChild(t);
+  setTimeout(function () {
+    t.style.opacity = '0';
+    t.style.transition = 'opacity .3s ease';
+    setTimeout(function () { t.remove(); }, 320);
+  }, isErr ? 5200 : 3200);
+}
+
+function fail(where, error) {
+  const detail = (error && (error.message || error.hint || error.code)) || 'unknown error';
+  toast(where + ' — ' + detail, true);
+  if (window.console && console.error) console.error(where, error);
+}
+
+/* Disable a button while an async action runs. */
+async function withBusy(btn, fn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try { await fn(); }
+  finally { btn.disabled = false; }
+}
+
+function autoGrow(t) {
+  t.style.height = 'auto';
+  t.style.height = (t.scrollHeight + 2) + 'px';
+}
+
+function autoGrowAll() {
+  document.querySelectorAll('#kb-list textarea').forEach(autoGrow);
+}
+
+/* ---------------- boot / auth ---------------- */
+
+function init() {
+  if (SUPABASE_ANON_KEY === KEY_PLACEHOLDER || !SUPABASE_ANON_KEY) {
+    show('view-setup');
+    return;
+  }
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    $('setup-msg').textContent =
+      'The Supabase client library failed to load from the CDN. ' +
+      'Check the network and reload — nothing else is wrong.';
+    show('view-setup');
+    return;
+  }
+
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  sb.auth.onAuthStateChange(function (_event, session) {
+    state.session = session;
+    route();
+  });
+
+  sb.auth.getSession().then(function (res) {
+    state.session = (res.data && res.data.session) || null;
+    route();
+  }).catch(function (e) {
+    fail('Session', e);
+    show('view-auth');
+  });
+
+  wireStatic();
+}
+
+async function route() {
+  if (!state.session) {
+    state.adminFor = null;
+    adminPromise = null;
+    state.loaded = false;
+    show('view-auth');
+    return;
+  }
+  const uid = state.session.user && state.session.user.id;
+  if (state.adminFor !== uid || !adminPromise) {
+    state.adminFor = uid;
+    adminPromise = checkAdmin();
+    show('view-wait');
+  }
+  const ok = await adminPromise;
+  if (!state.session) return; // signed out while verifying
+  if (!ok) { show('view-denied'); return; }
+
+  $('who').textContent = (state.session.user && state.session.user.email) || '';
+  show('view-studio');
+  if (!state.loaded) {
+    state.loaded = true;
+    loadConfig();
+    loadKb();
+    loadConversations();
+  }
+}
+
+/* RLS: only admins can read concierge_admins — an error or an empty
+   count both mean "not yours". */
+async function checkAdmin() {
+  try {
+    const res = await sb.from('concierge_admins')
+      .select('*', { count: 'exact', head: true });
+    if (res.error) return false;
+    return (res.count || 0) > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+function wireStatic() {
+  $('auth-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    const email = $('auth-email').value.trim();
+    if (!email) return;
+    withBusy($('auth-send'), async function () {
+      const res = await sb.auth.signInWithOtp({
+        email: email,
+        options: { emailRedirectTo: location.href }
+      });
+      if (res.error) { fail('Send key', res.error); return; }
+      $('auth-note').textContent = 'Check your inbox.';
+    });
+  });
+
+  $('signout').addEventListener('click', doSignOut);
+  $('denied-signout').addEventListener('click', doSignOut);
+
+  document.querySelectorAll('nav.tabs .tab').forEach(function (btn) {
+    btn.addEventListener('click', function () { activateTab(btn.dataset.tab); });
+  });
+
+  $('save-engine').addEventListener('click', function () {
+    withBusy($('save-engine'), saveEngine);
+  });
+  $('save-voice').addEventListener('click', function () {
+    withBusy($('save-voice'), saveVoice);
+  });
+  $('save-starters').addEventListener('click', function () {
+    withBusy($('save-starters'), saveStarters);
+  });
+  $('cfg-enabled').addEventListener('change', function () {
+    $('cfg-enabled-label').textContent = $('cfg-enabled').checked ? 'Live' : 'Paused';
+  });
+
+  $('kb-add').addEventListener('click', addKbSection);
+
+  $('convo-refresh').addEventListener('click', function () {
+    withBusy($('convo-refresh'), loadConversations);
+  });
+}
+
+async function doSignOut() {
+  try { await sb.auth.signOut(); }
+  catch (e) { fail('Sign out', e); }
+  state.session = null;
+  route();
+}
+
+function activateTab(name) {
+  document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.tab === name);
+  });
+  ['tuning', 'knowledge', 'conversations'].forEach(function (p) {
+    $('panel-' + p).classList.toggle('on', p === name);
+  });
+  if (name === 'knowledge') autoGrowAll();
+}
+
+/* ---------------- header pill ---------------- */
+
+function setPill(enabled) {
+  const pill = $('pill');
+  pill.classList.toggle('live', !!enabled);
+  $('pill-text').textContent = enabled ? 'Live' : 'Paused';
+}
+
+/* ============================================================
+   TAB 1 — TUNING (concierge_config)
+   ============================================================ */
+
+async function loadConfig() {
+  const res = await sb.from('concierge_config').select('key,value');
+  if (res.error) { fail('Load config', res.error); return; }
+  const cfg = {};
+  (res.data || []).forEach(function (r) { cfg[r.key] = r.value; });
+  state.config = cfg;
+
+  $('cfg-enabled').checked = cfg.enabled === true;
+  $('cfg-enabled-label').textContent = cfg.enabled === true ? 'Live' : 'Paused';
+  $('cfg-model').value = (typeof cfg.model === 'string') ? cfg.model : '';
+  $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
+  $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
+  $('cfg-voice').value = (typeof cfg.voice_notes === 'string') ? cfg.voice_notes : '';
+  renderStarters((cfg.starters && typeof cfg.starters === 'object') ? cfg.starters : {});
+  setPill(cfg.enabled === true);
+}
+
+function renderStarters(starters) {
+  const wrap = $('starters');
+  wrap.textContent = '';
+  STARTER_KEYS.forEach(function (key) {
+    const fs = el('fieldset', 'starter');
+    const lg = el('legend', 'micro', key);
+    fs.appendChild(lg);
+    const vals = Array.isArray(starters[key]) ? starters[key] : [];
+    for (let i = 0; i < 3; i++) {
+      const inp = el('input');
+      inp.type = 'text';
+      inp.id = 'st-' + key + '-' + i;
+      inp.placeholder = 'Starter ' + (i + 1);
+      inp.value = (typeof vals[i] === 'string') ? vals[i] : '';
+      fs.appendChild(inp);
+    }
+    wrap.appendChild(fs);
+  });
+}
+
+async function saveEngine() {
+  const mt = Number($('cfg-max-tokens').value);
+  if (!Number.isFinite(mt) || mt <= 0) {
+    toast('max_tokens must be a positive number', true);
+    return;
+  }
+  const enabled = $('cfg-enabled').checked;
+  const rows = [
+    { key: 'enabled',    value: enabled,                     updated_at: nowIso() },
+    { key: 'model',      value: $('cfg-model').value.trim(), updated_at: nowIso() },
+    { key: 'max_tokens', value: Math.round(mt),              updated_at: nowIso() }
+  ];
+  const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
+  if (res.error) { fail('Save engine', res.error); return; }
+  setPill(enabled);
+  toast('Engine saved');
+}
+
+async function saveVoice() {
+  const rows = [
+    { key: 'greeting',    value: $('cfg-greeting').value, updated_at: nowIso() },
+    { key: 'voice_notes', value: $('cfg-voice').value,    updated_at: nowIso() }
+  ];
+  const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
+  if (res.error) { fail('Save voice', res.error); return; }
+  toast('Voice saved');
+}
+
+async function saveStarters() {
+  const obj = {};
+  STARTER_KEYS.forEach(function (key) {
+    const trio = [];
+    for (let i = 0; i < 3; i++) {
+      const inp = $('st-' + key + '-' + i);
+      trio.push(inp ? inp.value.trim() : '');
+    }
+    obj[key] = trio;
+  });
+  const res = await sb.from('concierge_config').upsert(
+    [{ key: 'starters', value: obj, updated_at: nowIso() }],
+    { onConflict: 'key' }
+  );
+  if (res.error) { fail('Save starters', res.error); return; }
+  toast('Starters saved');
+}
+
+/* ============================================================
+   TAB 2 — KNOWLEDGE (concierge_kb)
+   ============================================================ */
+
+async function loadKb() {
+  const res = await sb.from('concierge_kb').select('*')
+    .order('sort_order', { ascending: true });
+  if (res.error) { fail('Load knowledge', res.error); return; }
+  state.kb = res.data || [];
+  renderKb();
+}
+
+function renderKb() {
+  const list = $('kb-list');
+  list.textContent = '';
+  if (!state.kb.length) {
+    list.appendChild(el('div', 'empty micro', 'No sections yet — add the first one.'));
+    return;
+  }
+  state.kb.forEach(function (row) { list.appendChild(kbEditor(row)); });
+  if ($('panel-knowledge').classList.contains('on')) autoGrowAll();
+}
+
+function addKbSection() {
+  let maxOrder = 0;
+  state.kb.forEach(function (r) {
+    if (typeof r.sort_order === 'number' && r.sort_order > maxOrder) maxOrder = r.sort_order;
+  });
+  const fresh = {
+    id: null, slug: '', title: '', content_md: '',
+    enabled: true, sort_order: maxOrder + 10
+  };
+  state.kb.push(fresh);
+  const list = $('kb-list');
+  const firstEmpty = list.querySelector('.empty');
+  if (firstEmpty) firstEmpty.remove();
+  const node = kbEditor(fresh);
+  list.appendChild(node);
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const titleInput = node.querySelector('input[type=text]');
+  if (titleInput) titleInput.focus();
+}
+
+function kbEditor(row) {
+  const wrap = el('div', 'kb-row' + (row.id ? '' : ' is-new'));
+
+  // -- top line: enabled / slug / sort order
+  const top = el('div', 'kb-top');
+  const chk = el('label', 'checkline');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = row.enabled !== false;
+  chk.appendChild(cb);
+  chk.appendChild(el('span', 'micro', 'Enabled'));
+  top.appendChild(chk);
+
+  const slugEl = el('span', 'slug', row.id ? (row.slug || '') : '(slug from title)');
+  top.appendChild(slugEl);
+  top.appendChild(el('span', 'micro ord', '#' + row.sort_order));
+  wrap.appendChild(top);
+
+  // -- title
+  const fTitle = el('div', 'field');
+  fTitle.appendChild(el('span', 'micro', 'Title'));
+  const title = el('input');
+  title.type = 'text';
+  title.placeholder = 'Section title';
+  title.value = row.title || '';
+  fTitle.appendChild(title);
+  wrap.appendChild(fTitle);
+
+  if (!row.id) {
+    title.addEventListener('input', function () {
+      const s = kebab(title.value);
+      slugEl.textContent = s || '(slug from title)';
+    });
+  }
+
+  // -- content
+  const fBody = el('div', 'field');
+  fBody.appendChild(el('span', 'micro', 'Content (markdown)'));
+  const body = el('textarea');
+  body.rows = 4;
+  body.placeholder = 'What the concierge may say about this…';
+  body.value = row.content_md || '';
+  body.addEventListener('input', function () { autoGrow(body); });
+  fBody.appendChild(body);
+  wrap.appendChild(fBody);
+
+  // -- actions
+  const actions = el('div', 'kb-actions');
+  const btnDel = el('button', 'btn danger', 'Delete');
+  const btnSave = el('button', 'btn primary', 'Save');
+  actions.appendChild(btnDel);
+  actions.appendChild(btnSave);
+  wrap.appendChild(actions);
+
+  btnSave.addEventListener('click', function () {
+    withBusy(btnSave, async function () {
+      const t = title.value.trim();
+      if (!t) { toast('A section needs a title', true); return; }
+
+      if (row.id) {
+        const res = await sb.from('concierge_kb').update({
+          title: t,
+          content_md: body.value,
+          enabled: cb.checked,
+          updated_at: nowIso()
+        }).eq('id', row.id);
+        if (res.error) { fail('Save section', res.error); return; }
+        row.title = t; row.content_md = body.value; row.enabled = cb.checked;
+        toast('Section saved — ' + (row.slug || t));
+      } else {
+        const slug = kebab(t);
+        if (!slug) { toast('Could not derive a slug from that title', true); return; }
+        const res = await sb.from('concierge_kb').insert({
+          slug: slug,
+          title: t,
+          content_md: body.value,
+          enabled: cb.checked,
+          sort_order: row.sort_order,
+          updated_at: nowIso()
+        }).select().single();
+        if (res.error) { fail('Add section', res.error); return; }
+        row.id = res.data.id;
+        row.slug = res.data.slug;
+        row.title = t; row.content_md = body.value; row.enabled = cb.checked;
+        slugEl.textContent = row.slug;
+        wrap.classList.remove('is-new');
+        toast('Section added — ' + row.slug);
+      }
+    });
+  });
+
+  btnDel.addEventListener('click', function () {
+    withBusy(btnDel, async function () {
+      if (!row.id) { // never persisted — just discard
+        state.kb = state.kb.filter(function (r) { return r !== row; });
+        wrap.remove();
+        return;
+      }
+      const label = row.slug || row.title || 'section';
+      if (!window.confirm('Delete "' + label + '"? The concierge will forget it.')) return;
+      const res = await sb.from('concierge_kb').delete().eq('id', row.id);
+      if (res.error) { fail('Delete section', res.error); return; }
+      state.kb = state.kb.filter(function (r) { return r !== row; });
+      wrap.remove();
+      toast('Section deleted — ' + label);
+    });
+  });
+
+  return wrap;
+}
+
+/* ============================================================
+   TAB 3 — CONVERSATIONS
+   ============================================================ */
+
+async function loadConversations() {
+  loadMetrics();
+
+  const res = await sb.from('concierge_conversations').select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (res.error) { fail('Load conversations', res.error); return; }
+  state.convos = res.data || [];
+
+  // message counts — second query, tallied client-side
+  const counts = {};
+  const ids = state.convos.map(function (c) { return c.id; });
+  if (ids.length) {
+    const mres = await sb.from('concierge_messages')
+      .select('conversation_id')
+      .in('conversation_id', ids)
+      .limit(10000);
+    if (mres.error) fail('Message counts', mres.error);
+    else (mres.data || []).forEach(function (r) {
+      counts[r.conversation_id] = (counts[r.conversation_id] || 0) + 1;
+    });
+  }
+  renderConvoList(counts);
+}
+
+async function loadMetrics() {
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const iso = dayStart.toISOString();
+  try {
+    const results = await Promise.all([
+      sb.from('concierge_conversations').select('*', { count: 'exact', head: true }).gte('created_at', iso),
+      sb.from('concierge_messages').select('*', { count: 'exact', head: true }).gte('created_at', iso),
+      sb.from('concierge_feedback').select('*', { count: 'exact', head: true }),
+      sb.from('concierge_feedback').select('*', { count: 'exact', head: true }).eq('rating', 1)
+    ]);
+    const convosToday = results[0], msgsToday = results[1], fbAll = results[2], fbUp = results[3];
+
+    $('m-convos').textContent = convosToday.error ? '—' : String(convosToday.count || 0);
+    $('m-msgs').textContent = msgsToday.error ? '—' : String(msgsToday.count || 0);
+
+    if (fbAll.error || fbUp.error || !(fbAll.count > 0)) {
+      $('m-rate').textContent = '—';
+    } else {
+      $('m-rate').textContent = Math.round(100 * (fbUp.count || 0) / fbAll.count) + '%';
+    }
+    const firstErr = results.find(function (r) { return r.error; });
+    if (firstErr) fail('Metrics', firstErr.error);
+  } catch (e) {
+    fail('Metrics', e);
+  }
+}
+
+function fmtWhen(ts) {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderConvoList(counts) {
+  const list = $('convo-list');
+  list.textContent = '';
+  $('convo-count').textContent = state.convos.length
+    ? ('Latest ' + state.convos.length)
+    : '';
+  if (!state.convos.length) {
+    list.appendChild(el('div', 'empty micro', 'No conversations yet.'));
+    return;
+  }
+  state.convos.forEach(function (c) {
+    const btn = el('button', 'convo-item');
+    if (c.id === state.activeConvoId) btn.classList.add('on');
+
+    const line1 = el('div', 'line1');
+    line1.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
+    line1.appendChild(el('span', 'micro', c.section || '—'));
+    btn.appendChild(line1);
+
+    const n = counts[c.id] || 0;
+    const who = el('div', 'who2', (c.user_email || 'anonymous') + '  ·  ' + n + (n === 1 ? ' message' : ' messages'));
+    btn.appendChild(who);
+
+    btn.addEventListener('click', function () {
+      list.querySelectorAll('.convo-item').forEach(function (b) { b.classList.remove('on'); });
+      btn.classList.add('on');
+      openConvo(c);
+    });
+    list.appendChild(btn);
+  });
+}
+
+async function openConvo(c) {
+  state.activeConvoId = c.id;
+
+  const head = $('transcript-head');
+  head.textContent = '';
+  head.appendChild(el('span', 'micro', c.section || 'no section'));
+  head.appendChild(el('span', 'mono', c.user_email || 'anonymous'));
+  const d = new Date(c.created_at);
+  head.appendChild(el('span', 'micro', isNaN(d.getTime()) ? '' : d.toLocaleString()));
+  if (c.session_key) {
+    const sk = el('span', 'micro', String(c.session_key).slice(0, 18));
+    sk.style.color = 'var(--wool-faint)';
+    head.appendChild(sk);
+  }
+
+  const body = $('transcript-body');
+  body.textContent = '';
+  body.appendChild(el('div', 'empty micro', 'Loading transcript…'));
+
+  const res = await sb.from('concierge_messages').select('*')
+    .eq('conversation_id', c.id)
+    .order('created_at', { ascending: true });
+  if (res.error) {
+    fail('Load transcript', res.error);
+    body.textContent = '';
+    body.appendChild(el('div', 'empty micro', 'Could not load the transcript.'));
+    return;
+  }
+  const msgs = res.data || [];
+
+  // feedback for this conversation's messages
+  const fbMap = {};
+  const ids = msgs.map(function (m) { return m.id; }).filter(function (x) { return x !== null && x !== undefined; });
+  if (ids.length) {
+    const fres = await sb.from('concierge_feedback')
+      .select('message_id,rating,note')
+      .in('message_id', ids);
+    if (fres.error) fail('Load feedback', fres.error);
+    else (fres.data || []).forEach(function (f) { fbMap[f.message_id] = f; });
+  }
+
+  if (state.activeConvoId !== c.id) return; // user clicked away meanwhile
+  renderTranscript(msgs, fbMap);
+}
+
+function renderTranscript(msgs, fbMap) {
+  const body = $('transcript-body');
+  body.textContent = '';
+  if (!msgs.length) {
+    body.appendChild(el('div', 'empty micro', 'Empty conversation.'));
+    return;
+  }
+  msgs.forEach(function (m) {
+    const isUser = m.role === 'user';
+    const node = el('div', 'msg ' + (isUser ? 'user' : 'assistant'));
+
+    // PLAIN TEXT only — content set via textContent, never innerHTML.
+    const bubble = el('div', 'bubble', m.content == null ? '' : String(m.content));
+    node.appendChild(bubble);
+
+    const bits = [];
+    const t = new Date(m.created_at);
+    if (!isNaN(t.getTime())) bits.push(t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    if (!isUser) {
+      if (m.role && m.role !== 'assistant') bits.push(String(m.role));
+      if (m.model) bits.push(String(m.model));
+      if (typeof m.latency_ms === 'number') bits.push(m.latency_ms + ' ms');
+    }
+    const meta = el('div', 'meta micro', bits.join('  ·  '));
+
+    const fb = fbMap[m.id];
+    if (fb && (fb.rating === 1 || fb.rating === -1)) {
+      const emo = el('span', 'fb', '  ' + (fb.rating === 1 ? '👍' : '👎'));
+      meta.appendChild(emo);
+      if (fb.note) meta.appendChild(el('em', 'fbnote', '“' + String(fb.note) + '”'));
+    }
+    node.appendChild(meta);
+    body.appendChild(node);
+  });
+  body.scrollTop = body.scrollHeight;
+}
+
+/* ---------------- go ---------------- */
+init();
+</script>
+</body>
+</html>
