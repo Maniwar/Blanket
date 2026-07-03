@@ -1251,7 +1251,35 @@ footer{
       }, 460);
     }, 4200);
   }
+
+  /* ---- concierge state bridge ---- */
+  var cxSections = ['top','why','wool','label','ritual','arrival','reserve'];
+  function pubFeierState(){
+    var mid = window.scrollY + window.innerHeight * 0.5;
+    var cur = 'top';
+    for(var ci = 0; ci < cxSections.length; ci++){
+      var cel = document.getElementById(cxSections[ci]);
+      if(cel && cel.offsetTop <= mid) cur = cxSections[ci];
+    }
+    window.__feierState = {
+      section: cur === 'top' ? 'hero' : cur,
+      claimed: claimed,
+      run: RUN,
+      remaining: RUN - claimed,
+      slot: fmtN(claimed + 1),
+      holdClock: holdClock ? holdClock.textContent : '',
+      loomClock: loomClock ? loomClock.textContent : ''
+    };
+  }
+  pubFeierState();
+  setInterval(pubFeierState, 1000);
 })();
 </script>
+
+<!-- Concierge: endpoint empty = demo mode. After deploying the edge function, set:
+     endpoint: 'https://kvkjxjdpqoqasiehdlcw.supabase.co/functions/v1/concierge' -->
+<script>window.FEIER_CONCIERGE_CONFIG = { endpoint: '' };</script>
+<script defer src="assets/concierge-kb.js"></script>
+<script defer src="assets/concierge.js"></script>
 </body>
 </html>
