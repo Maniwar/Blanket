@@ -23,6 +23,17 @@
     return (typeof e === 'string') ? e.replace(/^\s+|\s+$/g, '') : '';
   }
   function isDemo() { return !endpoint(); }
+  function supaUrl() {
+    var u = cfg().supabaseUrl;
+    return (typeof u === 'string') ? u.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '') : '';
+  }
+  function supaKey() {
+    var k = cfg().supabaseAnonKey;
+    return (typeof k === 'string') ? k.replace(/^\s+|\s+$/g, '') : '';
+  }
+  function hasSupabase() { return !!(supaUrl() && supaKey()); }
+  /* auth UI is creds-gated, and the mill can switch it off remotely */
+  function authEnabled() { return hasSupabase() && remoteAuth !== false; }
   function kb() {
     var k = window.FEIER_KB;
     return (k && typeof k === 'object') ? k : {};
@@ -31,9 +42,15 @@
     var i = kb().images;
     return (i && typeof i === 'object') ? i : {};
   }
-  function kbSuggested(sectionId) {
+  /* remote starters (from ?config=1) REPLACE the KB map when present */
+  function suggestedMap() {
+    if (remoteStarters) { return remoteStarters; }
     var s = kb().suggested;
-    if (!s || typeof s !== 'object') { return []; }
+    return (s && typeof s === 'object') ? s : null;
+  }
+  function kbSuggested(sectionId) {
+    var s = suggestedMap();
+    if (!s) { return []; }
     var list = (sectionId && s[sectionId]) ? s[sectionId] : s['default'];
     if (Object.prototype.toString.call(list) !== '[object Array]') { return []; }
     return list.slice(0, 3);
@@ -43,6 +60,7 @@
     return (Object.prototype.toString.call(d) === '[object Array]') ? d : [];
   }
   function kbGreeting() {
+    if (remoteGreeting) { return remoteGreeting; }
     var g = kb().greeting;
     if (typeof g === 'string' && g.length) { return g; }
     return 'Good evening. I keep the register at the mill — ask me about the wool, ' +
@@ -73,12 +91,109 @@
   } catch (e0) { /* ignore */ }
 
   var SECTIONS = ['top', 'why', 'wool', 'label', 'ritual', 'arrival', 'reserve'];
+  var INLINE_SECTIONS = ['why', 'wool', 'label', 'ritual', 'arrival'];
   var HISTORY_KEY = 'cx-history';
   var CHIP_COUNT_KEY = 'cx-chip-count';
   var CHIP_SEEN_KEY = 'cx-chip-seen';
+  var SKEY_KEY = 'cx-skey';
   var HISTORY_CAP = 40;
   var SEND_TURNS = 12;
   var ERROR_LINE = 'The line to the mill is quiet. Try once more, or write hello@feierabend.example.';
+  var BUSY_LINE = 'The mill is resting. Try again in a moment.';
+  var STAMP_SRC = 'assets/concierge-stamp.webp';
+  var SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+  var TRACK_QUESTION = 'Where is my blanket?';
+
+  /* ----------------------------------------------------------
+     0b. Session key — one random id per browser session
+  ---------------------------------------------------------- */
+  var _sessionKey = '';
+  function sessionKey() {
+    if (_sessionKey) { return _sessionKey; }
+    var k = null;
+    try { k = window.sessionStorage.getItem(SKEY_KEY); } catch (eK) { k = null; }
+    if (k) { _sessionKey = k; return k; }
+    k = 'sk-';
+    try {
+      var buf = new Uint8Array(16);
+      (window.crypto || window.msCrypto).getRandomValues(buf);
+      var b;
+      for (b = 0; b < buf.length; b++) { k += (buf[b] + 256).toString(16).slice(1); }
+    } catch (eR) {
+      k += Date.now().toString(36) +
+        Math.random().toString(36).slice(2, 10) +
+        Math.random().toString(36).slice(2, 10);
+    }
+    try { window.sessionStorage.setItem(SKEY_KEY, k); } catch (eS) { /* ignore */ }
+    _sessionKey = k;
+    return k;
+  }
+
+  /* ----------------------------------------------------------
+     0c. Remote config (?config=1) — 3s budget, failures swallowed
+  ---------------------------------------------------------- */
+  var remoteCfgOk = false;      /* fetch succeeded and parsed */
+  var remoteEnabled = null;     /* true/false once fetched */
+  var remoteGreeting = '';
+  var remoteStarters = null;    /* replaces FEIER_KB.suggested when present */
+  var remoteAuth = null;
+
+  function sanitizeStarters(raw) {
+    if (!raw || typeof raw !== 'object') { return null; }
+    var out = {}, any = false, key, list, i, clean;
+    for (key in raw) {
+      if (!Object.prototype.hasOwnProperty.call(raw, key)) { continue; }
+      list = raw[key];
+      if (Object.prototype.toString.call(list) !== '[object Array]') { continue; }
+      clean = [];
+      for (i = 0; i < list.length; i++) {
+        if (typeof list[i] === 'string' && list[i]) { clean.push(list[i]); }
+      }
+      out[key] = clean;
+      any = true;
+    }
+    return any ? out : null;
+  }
+
+  function fetchRemoteConfig(cb) {
+    if (!endpoint()) { cb(); return; }
+    var settled = false;
+    function finish() {
+      if (settled) { return; }
+      settled = true;
+      cb();
+    }
+    var ac = null;
+    try { ac = new AbortController(); } catch (eA) { ac = null; }
+    var timer = setTimeout(function () {
+      if (ac) { try { ac.abort(); } catch (eT) { /* ignore */ } }
+      finish();
+    }, 3000);
+    var url = endpoint() + (endpoint().indexOf('?') === -1 ? '?config=1' : '&config=1');
+    try {
+      fetch(url, { method: 'GET', signal: ac ? ac.signal : undefined }).then(function (res) {
+        if (!res.ok) { throw new Error('HTTP ' + res.status); }
+        return res.json();
+      }).then(function (j) {
+        if (j && typeof j === 'object') {
+          remoteCfgOk = true;
+          remoteEnabled = (j.enabled !== false);
+          if (typeof j.greeting === 'string' && j.greeting) { remoteGreeting = j.greeting; }
+          var st = sanitizeStarters(j.starters);
+          if (st) { remoteStarters = st; }
+          if (j.auth != null) { remoteAuth = j.auth; }
+        }
+        clearTimeout(timer);
+        finish();
+      })['catch'](function () {
+        clearTimeout(timer);
+        finish();
+      });
+    } catch (eF) {
+      clearTimeout(timer);
+      finish();
+    }
+  }
 
   /* ----------------------------------------------------------
      1. Styles — glass loden
@@ -264,14 +379,92 @@
       'font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.14em;',
       'text-transform:uppercase;color:var(--cx-ink);opacity:.45;line-height:1.7;}',
 
+      /* ---------- mill stamp (avatar) ---------- */
+      '.cx-stamp{flex:0 0 auto;width:28px;height:28px;border-radius:50%;object-fit:cover;',
+      'border:1px solid var(--cx-hair);margin-top:.15rem;}',
+      '.cx-stamp-mini{width:18px;height:18px;border-radius:50%;object-fit:cover;',
+      'border:1px solid var(--cx-hair-soft);flex:0 0 auto;}',
+      '.cx-think{display:inline-flex;align-items:center;gap:.5rem;}',
+      '.cx-headleft{flex:1 1 auto;min-width:0;}',
+
+      /* ---------- top-hairline shimmer (once per open) ---------- */
+      '.cx-shimline{position:absolute;top:0;left:0;right:0;height:1px;overflow:hidden;',
+      'pointer-events:none;z-index:3;}',
+      '.cx-shimline i{position:absolute;top:0;left:0;width:34%;height:100%;',
+      'background:linear-gradient(90deg,transparent,rgba(196,155,91,.85),transparent);',
+      'transform:translateX(-110%);animation:cxShim 2s ease .1s both;}',
+      '@keyframes cxShim{from{transform:translateX(-110%);}to{transform:translateX(420%);}}',
+
+      /* ---------- account (magic link) ---------- */
+      '.cx-authbox{flex:0 0 auto;display:flex;align-items:center;gap:.55rem;',
+      'margin-left:auto;margin-top:-.2rem;min-width:0;}',
+      '.cx-authmail{font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.12em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.55);max-width:8.5rem;overflow:hidden;',
+      'text-overflow:ellipsis;white-space:nowrap;}',
+      '.cx-authlink{background:none;border:none;padding:.6rem .2rem;min-height:44px;cursor:pointer;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.18em;',
+      'text-transform:uppercase;color:var(--cx-brass-soft);white-space:nowrap;}',
+      '.cx-authlink:hover{color:var(--cx-ink);}',
+      '.cx-authlink:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
+      '.cx-authrow{flex:0 0 auto;padding:.85rem 1.4rem .95rem;border-bottom:1px solid var(--cx-hair-soft);}',
+      '.cx-authcap{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.16em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.6);line-height:1.7;}',
+      '.cx-authline{display:flex;align-items:flex-end;gap:.7rem;margin-top:.55rem;}',
+      '.cx-authinput{flex:1 1 auto;min-width:0;background:transparent;border:none;',
+      'border-bottom:1px solid var(--cx-hair-soft);color:var(--cx-ink);',
+      'font-family:"Hanken Grotesk",sans-serif;font-weight:300;font-size:16px;line-height:1.4;',
+      'padding:.35rem 0;min-height:40px;}',
+      '.cx-authinput:focus{outline:none;border-bottom-color:var(--cx-hair);}',
+      '.cx-authinput::placeholder{font-family:"IBM Plex Mono",monospace;font-size:.66rem;',
+      'letter-spacing:.14em;text-transform:uppercase;color:rgba(241,236,226,.35);}',
+      '.cx-authsend{flex:0 0 auto;min-height:40px;padding:.45rem .9rem;background:transparent;',
+      'border:1px solid var(--cx-hair);border-radius:2px;color:var(--cx-brass-soft);cursor:pointer;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.18em;',
+      'text-transform:uppercase;transition:border-color .25s ease;}',
+      '.cx-authsend:hover:not(:disabled){border-color:var(--cx-brass-soft);}',
+      '.cx-authsend:disabled{opacity:.45;cursor:default;}',
+      '.cx-authsend:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
+      '.cx-signedline{margin-top:.7rem;font-family:"IBM Plex Mono",monospace;font-size:.6rem;',
+      'letter-spacing:.18em;text-transform:uppercase;color:rgba(241,236,226,.5);}',
+
+      /* ---------- feedback (↑ / ↓) ---------- */
+      '.cx-fb{display:flex;justify-content:flex-end;align-items:center;gap:.15rem;margin-top:.35rem;}',
+      '.cx-fbbtn{background:none;border:none;min-width:44px;min-height:44px;padding:.8rem .85rem;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.85rem;line-height:1;cursor:pointer;',
+      'color:var(--cx-ink);opacity:.4;transition:opacity .25s ease,color .25s ease;}',
+      '.cx-fbbtn:hover:not(:disabled){opacity:1;color:var(--cx-brass-soft);}',
+      '.cx-fbbtn:disabled{cursor:default;}',
+      '.cx-fbbtn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
+      '.cx-fbnote{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.18em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.5);padding:.4rem 0;}',
+
+      /* ---------- inline starters woven into the page ---------- */
+      '.cx-inline{display:flex;align-items:center;gap:.85rem;width:100%;max-width:80rem;',
+      'margin:clamp(2rem,5vh,3.25rem) auto 0;padding:1.1rem 0;background:none;border:0;',
+      'border-top:1px solid rgba(196,155,91,.28);border-radius:0;cursor:pointer;text-align:left;',
+      'font-family:"IBM Plex Mono",monospace;',
+      'grid-column:1/-1;position:relative;z-index:2;color:var(--wool,#F1ECE2);}',
+      '.cx-inline-ink{color:var(--ink,#26332B);}',
+      '.cx-inline-pad{padding-left:clamp(1.25rem,4vw,4rem);padding-right:clamp(1.25rem,4vw,4rem);}',
+      '.cx-inline .cx-inline-star{flex:0 0 auto;color:var(--brass,#A67C3D);font-size:.85rem;line-height:1;}',
+      '.cx-inline .cx-inline-q{flex:1 1 auto;font-family:"IBM Plex Mono",monospace;font-size:.68rem;',
+      'letter-spacing:.18em;text-transform:uppercase;line-height:1.6;opacity:.65;',
+      'transition:opacity .3s ease;}',
+      '.cx-inline .cx-inline-arrow{flex:0 0 auto;color:var(--brass-soft,#C49B5B);font-size:.9rem;',
+      'line-height:1;transform:translateX(0);transition:transform .3s ease;}',
+      '.cx-inline:hover .cx-inline-q,.cx-inline:focus-visible .cx-inline-q{opacity:1;}',
+      '.cx-inline:hover .cx-inline-arrow{transform:translateX(4px);}',
+      '.cx-inline:focus-visible{outline:1px solid var(--brass-soft,#C49B5B);outline-offset:4px;}',
+
       /* ---------- reduced motion ---------- */
       '.cx-reduced,.cx-reduced *{transition:none !important;animation:none !important;}',
       '.cx-reduced .cx-caret{opacity:1;}',
       '.cx-reduced .cx-dots i{opacity:.8;transform:none;}',
 
       '@media (prefers-reduced-motion:reduce){',
-      '.cx-launch,.cx-chip,.cx-scrim,.cx-panel,.cx-newpill,.cx-sbtn,.cx-send{transition:none !important;}',
-      '.cx-caret,.cx-dots i,.cx-fade-in{animation:none !important;}',
+      '.cx-launch,.cx-chip,.cx-scrim,.cx-panel,.cx-newpill,.cx-sbtn,.cx-send,',
+      '.cx-inline .cx-inline-q,.cx-inline .cx-inline-arrow,.cx-fbbtn,.cx-authsend{transition:none !important;}',
+      '.cx-caret,.cx-dots i,.cx-fade-in,.cx-shimline i{animation:none !important;}',
       '}'
     ].join('');
     var tag = document.createElement('style');
@@ -288,6 +481,31 @@
     if (cls) { n.className = cls; }
     if (text != null) { n.appendChild(document.createTextNode(String(text))); }
     return n;
+  }
+
+  /* mill-stamp emblem — hides itself if the asset is missing */
+  function stampImg(cls) {
+    var img = document.createElement('img');
+    img.className = cls;
+    img.alt = '';
+    img.setAttribute('aria-hidden', 'true');
+    img.onerror = function () { img.style.display = 'none'; };
+    img.src = STAMP_SRC;
+    return img;
+  }
+
+  /* status dot: green only when the mill line is verified live */
+  function syncStatusDot() {
+    if (!statusDot) { return; }
+    if (endpoint() && remoteCfgOk && remoteEnabled === true) {
+      statusDot.className = 'cx-dot cx-live';
+      statusDot.title = 'Live';
+    } else {
+      statusDot.className = 'cx-dot cx-demo';
+      statusDot.title = isDemo()
+        ? 'Demo — answers from the product register'
+        : 'Standing by — the mill line is unverified';
+    }
   }
 
   /* ----------------------------------------------------------
@@ -515,6 +733,7 @@
      5. UI construction
   ---------------------------------------------------------- */
   var launcher, chipEl, scrim, panel, msgsEl, inputEl, sendBtn, newPill, statusDot;
+  var authMailEl = null, authBtn = null, authRow = null;
   var roots = [];
 
   function syncReduced() {
@@ -558,21 +777,27 @@
 
     /* header */
     var head = el('header', 'cx-head');
-    var headLeft = el('div');
+    head.appendChild(stampImg('cx-stamp'));
+    var headLeft = el('div', 'cx-headleft');
     headLeft.appendChild(el('h2', 'cx-title', 'The Mill Concierge'));
     var sub = el('div', 'cx-sub');
     statusDot = el('span', 'cx-dot');
-    if (isDemo()) {
-      statusDot.className = 'cx-dot cx-demo';
-      statusDot.title = 'Demo — answers from the product register';
-    } else {
-      statusDot.className = 'cx-dot cx-live';
-      statusDot.title = 'Live';
-    }
+    syncStatusDot();
     sub.appendChild(statusDot);
     sub.appendChild(el('span', null, 'WEBEREI BRANDT · EST. 1897'));
     headLeft.appendChild(sub);
     head.appendChild(headLeft);
+    if (authEnabled()) {
+      var authBox = el('div', 'cx-authbox');
+      authMailEl = el('span', 'cx-authmail');
+      authMailEl.style.display = 'none';
+      authBox.appendChild(authMailEl);
+      authBtn = el('button', 'cx-authlink', 'Sign in');
+      authBtn.type = 'button';
+      authBtn.addEventListener('click', onAuthLink);
+      authBox.appendChild(authBtn);
+      head.appendChild(authBox);
+    }
     var closeBtn = el('button', 'cx-close', '×');
     closeBtn.type = 'button';
     closeBtn.setAttribute('aria-label', 'Close concierge');
@@ -699,8 +924,8 @@
     var seen = chipSeen();
     var k;
     for (k = 0; k < seen.length; k++) { if (seen[k] === sectionId) { return; } }
-    var sugg = kb().suggested;
-    if (!sugg || typeof sugg !== 'object') { return; }
+    var sugg = suggestedMap();
+    if (!sugg) { return; }
     var list = sugg[sectionId];
     if (Object.prototype.toString.call(list) !== '[object Array]' || !list.length) { return; }
     var question = String(list[0]);
@@ -813,7 +1038,11 @@
     dots.appendChild(el('i'));
     dots.appendChild(el('i'));
     dots.appendChild(el('i'));
-    if (!REDUCED) { body.appendChild(dots); }
+    var think = el('span', 'cx-think');
+    think.setAttribute('aria-hidden', 'true');
+    think.appendChild(stampImg('cx-stamp-mini'));
+    think.appendChild(dots);
+    if (!REDUCED) { body.appendChild(think); }
     scrollToBottom(false);
     return {
       turn: turn,
@@ -852,10 +1081,18 @@
   }
 
   function addSuggestChips(questions) {
-    if (!questions || !questions.length) { return; }
+    var list = [], j;
+    if (authEmail) { list.push(TRACK_QUESTION); }
+    if (questions && questions.length) {
+      for (j = 0; j < questions.length; j++) {
+        if (String(questions[j]) !== TRACK_QUESTION) { list.push(questions[j]); }
+      }
+    }
+    if (!list.length) { return; }
+    var cap = authEmail ? 4 : 3;
     var box = el('div', 'cx-suggest');
     var i;
-    for (i = 0; i < questions.length && i < 3; i++) {
+    for (i = 0; i < list.length && i < cap; i++) {
       (function (q) {
         var b = el('button', 'cx-sbtn', q);
         b.type = 'button';
@@ -864,7 +1101,7 @@
           sendMessage(String(q));
         });
         box.appendChild(b);
-      })(String(questions[i]));
+      })(String(list[i]));
     }
     msgsEl.appendChild(box);
     scrollToBottom(false);
@@ -888,6 +1125,9 @@
     if (!history.length) {
       var greet = el('div', 'cx-turn cx-turn-assistant');
       greet.appendChild(mdRender(kbGreeting()));
+      if (authEmail) {
+        greet.appendChild(el('div', 'cx-signedline', 'Signed in as ' + authEmail + '.'));
+      }
       msgsEl.appendChild(greet);
       addSuggestChips(kbSuggested(currentSection()));
       return;
@@ -982,6 +1222,9 @@
       history.push({ role: 'assistant', content: content });
       saveHistory();
     }
+    if (content && shell.mid != null && hasSupabase()) {
+      addFeedback(shell.turn, shell.mid);
+    }
     setStreaming(false);
   }
 
@@ -1004,19 +1247,39 @@
     for (i = 0; i < turns.length; i++) {
       messages.push({ role: turns[i].role, content: turns[i].content });
     }
-    var body = JSON.stringify({ messages: messages, context: freshState() });
+    var body = JSON.stringify({
+      messages: messages,
+      context: freshState(),
+      session_key: sessionKey()
+    });
     var ac = null;
     try { ac = new AbortController(); } catch (eAC) { ac = null; }
     currentAbort = ac;
     var aborted = false;
 
-    fetch(endpoint(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body,
-      signal: ac ? ac.signal : undefined
+    getAccessToken().then(function (token) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) { headers['Authorization'] = 'Bearer ' + token; }
+      return fetch(endpoint(), {
+        method: 'POST',
+        headers: headers,
+        body: body,
+        signal: ac ? ac.signal : undefined
+      });
     }).then(function (res) {
       if (!res.ok) {
+        if (res.status === 503) {
+          /* the mill is closed for the moment — calm mono notice */
+          return res.json()['catch'](function () { return null; }).then(function (j) {
+            var msg = '';
+            if (typeof j === 'string') { msg = j; }
+            else if (j && typeof j.error === 'string') { msg = j.error; }
+            else if (j && typeof j.message === 'string') { msg = j.message; }
+            shell.fail();
+            addSysLine(msg || BUSY_LINE);
+            setStreaming(false);
+          });
+        }
         return res.json()['catch'](function () { return {}; }).then(function () {
           throw new Error('HTTP ' + res.status);
         });
@@ -1066,6 +1329,10 @@
             try {
               obj = JSON.parse(payload);
               if (obj && typeof obj.t === 'string') { shell.append(obj.t); }
+              if (obj && obj.m && typeof obj.m === 'object') {
+                if (obj.m.mid != null) { shell.mid = obj.m.mid; }
+                if (obj.m.cid != null) { shell.cid = obj.m.cid; }
+              }
             } catch (eJ) { /* skip malformed frame */ }
           }
         }
@@ -1105,6 +1372,10 @@
         try {
           obj = JSON.parse(payload);
           if (obj && typeof obj.t === 'string') { shell.append(obj.t); }
+          if (obj && obj.m && typeof obj.m === 'object') {
+            if (obj.m.mid != null) { shell.mid = obj.m.mid; }
+            if (obj.m.cid != null) { shell.cid = obj.m.cid; }
+          }
         } catch (eJ) { /* ignore */ }
       }
     }
@@ -1174,6 +1445,279 @@
   }
 
   /* ----------------------------------------------------------
+     10b. Accounts — magic link via supabase-js (lazy UMD load)
+  ---------------------------------------------------------- */
+  var sbClient = null, sbPromise = null;
+  var authEmail = '';
+
+  function ensureSupabase() {
+    if (sbPromise) { return sbPromise; }
+    sbPromise = new Promise(function (resolve) {
+      if (!hasSupabase()) { resolve(null); return; }
+      if (window.supabase && window.supabase.createClient) { resolve(makeSbClient()); return; }
+      var s = document.createElement('script');
+      s.src = SUPABASE_CDN;
+      s.async = true;
+      s.onload = function () { resolve(makeSbClient()); };
+      s.onerror = function () { resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    });
+    return sbPromise;
+  }
+
+  function makeSbClient() {
+    if (sbClient) { return sbClient; }
+    try {
+      if (!window.supabase || !window.supabase.createClient) { return null; }
+      /* persistSession + detectSessionInUrl are supabase-js defaults;
+         the magic-link redirect is picked up automatically */
+      sbClient = window.supabase.createClient(supaUrl(), supaKey());
+      try {
+        sbClient.auth.onAuthStateChange(function (evt, session) { setAuthState(session); });
+        sbClient.auth.getSession().then(function (r) {
+          setAuthState(r && r.data ? r.data.session : null);
+        }, function () { /* ignore */ });
+      } catch (eL) { /* ignore */ }
+    } catch (eC) { sbClient = null; }
+    return sbClient;
+  }
+
+  function getAccessToken() {
+    return new Promise(function (resolve) {
+      if (!sbClient) { resolve(null); return; }
+      try {
+        sbClient.auth.getSession().then(function (r) {
+          var s = r && r.data ? r.data.session : null;
+          resolve((s && s.access_token) ? s.access_token : null);
+        }, function () { resolve(null); });
+      } catch (eG) { resolve(null); }
+    });
+  }
+
+  function setAuthState(session) {
+    var em = '';
+    try {
+      em = (session && session.user && typeof session.user.email === 'string')
+        ? session.user.email : '';
+    } catch (eE) { em = ''; }
+    if (em === authEmail) { return; }
+    authEmail = em;
+    if (em) { closeAuthRow(); }
+    updateAuthUI();
+    /* fresh conversation on screen — refresh greeting + chips in place */
+    if (panelOpen && !streaming && !history.length && msgsEl) { renderHistory(); }
+  }
+
+  function shortEmail(em) {
+    var at = em.indexOf('@');
+    if (at < 1) { return em; }
+    var local = em.slice(0, at);
+    if (local.length > 7) { local = local.slice(0, 6) + '…'; }
+    return local + em.slice(at);
+  }
+
+  function updateAuthUI() {
+    if (!authBtn || !authMailEl) { return; }
+    if (authEmail) {
+      authMailEl.textContent = shortEmail(authEmail);
+      authMailEl.title = authEmail;
+      authMailEl.style.display = '';
+      authBtn.textContent = 'Sign out';
+      authBtn.setAttribute('aria-label', 'Sign out of ' + authEmail);
+    } else {
+      authMailEl.textContent = '';
+      authMailEl.style.display = 'none';
+      authBtn.textContent = 'Sign in';
+      authBtn.setAttribute('aria-label', 'Sign in with a magic link');
+    }
+  }
+
+  function onAuthLink() {
+    if (authEmail) {
+      ensureSupabase().then(function (client) {
+        if (!client) { return; }
+        try {
+          client.auth.signOut().then(function () { setAuthState(null); },
+            function () { /* ignore */ });
+        } catch (eO) { /* ignore */ }
+      });
+      return;
+    }
+    if (authRow) { closeAuthRow(); return; }
+    openAuthRow();
+  }
+
+  function openAuthRow() {
+    if (!panel || authRow) { return; }
+    ensureSupabase();
+    authRow = el('div', 'cx-authrow');
+    var cap = el('div', 'cx-authcap', 'Your email — we send a key, no passwords.');
+    authRow.appendChild(cap);
+    var line = el('div', 'cx-authline');
+    var input = document.createElement('input');
+    input.type = 'email';
+    input.className = 'cx-authinput';
+    input.placeholder = 'you@example.com';
+    input.autocomplete = 'email';
+    input.setAttribute('aria-label', 'Email for sign-in key');
+    var send = el('button', 'cx-authsend', 'Send key');
+    send.type = 'button';
+    function fail() {
+      send.disabled = false;
+      send.textContent = 'Send key';
+      cap.textContent = 'The key could not be sent. Try once more.';
+    }
+    function submit() {
+      if (send.disabled) { return; }
+      var em = (input.value || '').replace(/^\s+|\s+$/g, '');
+      if (!em || em.indexOf('@') < 1) {
+        try { input.focus(); } catch (eF) { /* ignore */ }
+        return;
+      }
+      send.disabled = true;
+      send.textContent = 'Sending…';
+      ensureSupabase().then(function (client) {
+        if (!client) { fail(); return; }
+        try {
+          client.auth.signInWithOtp({
+            email: em,
+            options: { emailRedirectTo: location.href }
+          }).then(function (r) {
+            if (r && r.error) { fail(); return; }
+            var row = authRow;
+            if (!row) { return; }
+            while (row.firstChild) { row.removeChild(row.firstChild); }
+            row.appendChild(el('div', 'cx-authcap', 'Sent. Check your inbox.'));
+          }, fail);
+        } catch (eS) { fail(); }
+      });
+    }
+    send.addEventListener('click', submit);
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+    line.appendChild(input);
+    line.appendChild(send);
+    authRow.appendChild(line);
+    panel.insertBefore(authRow, msgsEl);
+    try { input.focus(); } catch (eI) { /* ignore */ }
+  }
+
+  function closeAuthRow() {
+    if (authRow && authRow.parentNode) { authRow.parentNode.removeChild(authRow); }
+    authRow = null;
+  }
+
+  /* ----------------------------------------------------------
+     10c. Feedback — ↑/↓ under completed assistant messages
+  ---------------------------------------------------------- */
+  function addFeedback(turn, mid) {
+    var box = el('div', 'cx-fb');
+    var up = el('button', 'cx-fbbtn', '↑');
+    up.type = 'button';
+    up.setAttribute('aria-label', 'Helpful');
+    var down = el('button', 'cx-fbbtn', '↓');
+    down.type = 'button';
+    down.setAttribute('aria-label', 'Not helpful');
+    function remove() {
+      if (box.parentNode) { box.parentNode.removeChild(box); }
+    }
+    function vote(rating) {
+      if (up.disabled) { return; } /* one vote per message */
+      up.disabled = true;
+      down.disabled = true;
+      try {
+        fetch(supaUrl() + '/rest/v1/concierge_feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supaKey(),
+            'Authorization': 'Bearer ' + supaKey(),
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({ message_id: mid, rating: rating })
+        }).then(function (res) {
+          if (res.ok) {
+            while (box.firstChild) { box.removeChild(box.firstChild); }
+            box.appendChild(el('span', 'cx-fbnote', 'Noted.'));
+          } else {
+            remove();
+          }
+        }, remove);
+      } catch (eV) { remove(); }
+    }
+    up.addEventListener('click', function () { vote(1); });
+    down.addEventListener('click', function () { vote(-1); });
+    box.appendChild(up);
+    box.appendChild(down);
+    turn.appendChild(box);
+    scrollToBottom(false);
+  }
+
+  /* ----------------------------------------------------------
+     10d. Inline conversation starters woven into the page
+          Second starter per section (index 1) — the floating
+          context chip already uses index 0.
+  ---------------------------------------------------------- */
+  var LIGHT_SECTIONS = { wool: 1, ritual: 1 }; /* wool-coloured backgrounds → ink text */
+
+  function initInlineStarters() {
+    var map = suggestedMap();
+    if (!map) { return; }
+    var i;
+    for (i = 0; i < INLINE_SECTIONS.length; i++) {
+      (function (id) {
+        var section = document.getElementById(id);
+        if (!section) { return; }
+        var list = map[id];
+        if (Object.prototype.toString.call(list) !== '[object Array]' || list.length < 2) { return; }
+        var question = String(list[1]);
+        if (!question) { return; }
+        /* match the section's own gutters by living inside its inner wrapper */
+        var target = section.querySelector('.scrub-inner,.specs-inner,.ritual-inner,.arrival-inner');
+        var pad = false;
+        if (!target) {
+          var head = section.querySelector('.benefits-head');
+          if (head && head.parentNode) { target = head.parentNode; }
+          else { target = section; pad = true; }
+        }
+        var b = el('button', 'cx-inline');
+        b.type = 'button';
+        if (LIGHT_SECTIONS[id]) { b.className += ' cx-inline-ink'; }
+        if (pad) { b.className += ' cx-inline-pad'; }
+        b.setAttribute('aria-label', 'Ask the mill: ' + question);
+        b.appendChild(el('span', 'cx-inline-star', '✳'));
+        b.appendChild(el('span', 'cx-inline-q', question));
+        b.appendChild(el('span', 'cx-inline-arrow', '→'));
+        b.addEventListener('click', function () { openPanel(question); });
+        target.appendChild(b);
+        roots.push(b);
+      })(INLINE_SECTIONS[i]);
+    }
+    syncReduced();
+  }
+
+  /* ----------------------------------------------------------
+     10e. Brass shimmer across the panel's top hairline
+  ---------------------------------------------------------- */
+  var shimmerTimer = null;
+
+  function runShimmer() {
+    if (REDUCED || !panel) { return; }
+    var old = panel.querySelector('.cx-shimline');
+    if (old && old.parentNode) { old.parentNode.removeChild(old); }
+    if (shimmerTimer) { clearTimeout(shimmerTimer); shimmerTimer = null; }
+    var line = el('div', 'cx-shimline');
+    line.setAttribute('aria-hidden', 'true');
+    line.appendChild(el('i'));
+    panel.appendChild(line);
+    shimmerTimer = setTimeout(function () {
+      shimmerTimer = null;
+      if (line.parentNode) { line.parentNode.removeChild(line); }
+    }, 2400);
+  }
+
+  /* ----------------------------------------------------------
      11. Panel open / close, focus trap, body lock
   ---------------------------------------------------------- */
   var panelOpen = false;
@@ -1192,6 +1736,7 @@
   }
 
   function openPanel(prefillQuestion) {
+    if (!panel) { return; } /* not mounted (yet), or remotely disabled */
     if (panelOpen) {
       if (typeof prefillQuestion === 'string' && prefillQuestion && !streaming) {
         sendMessage(prefillQuestion);
@@ -1199,6 +1744,7 @@
       return;
     }
     panelOpen = true;
+    if (hasSupabase()) { ensureSupabase(); }
     hideChip();
     lastFocused = (document.activeElement && document.activeElement !== document.body)
       ? document.activeElement : launcher;
@@ -1207,6 +1753,7 @@
     pinned = true;
     scrim.classList.add('cx-on');
     panel.classList.add('cx-open');
+    runShimmer();
     lockBody();
     updateLauncher();
     scrollToBottom(true);
@@ -1238,7 +1785,7 @@
   function trapFocus(e) {
     if (e.key !== 'Tab') { return; }
     var focusables = panel.querySelectorAll(
-      'button:not(:disabled),textarea:not(:disabled),a[href],[tabindex]:not([tabindex="-1"])'
+      'button:not(:disabled),textarea:not(:disabled),input:not(:disabled),a[href],[tabindex]:not([tabindex="-1"])'
     );
     if (!focusables.length) { return; }
     var list = [], i;
@@ -1358,9 +1905,9 @@
   /* ----------------------------------------------------------
      15. Boot
   ---------------------------------------------------------- */
-  function boot() {
-    injectStyle();
+  function mountAll() {
     buildUI();
+    initInlineStarters();
     initSectionObserver();
     initSectionPoll();
     initVisualViewport();
@@ -1369,6 +1916,24 @@
     window.addEventListener('resize', updateLauncher);
     document.addEventListener('keydown', onKeydown);
     updateLauncher();
+    /* a magic-link redirect landed here — let supabase-js collect it now */
+    if (authEnabled()) {
+      var loc = '';
+      try { loc = String(location.hash || '') + String(location.search || ''); } catch (eH) { loc = ''; }
+      if (loc.indexOf('access_token=') !== -1 || loc.indexOf('type=magiclink') !== -1 ||
+          loc.indexOf('code=') !== -1) {
+        ensureSupabase();
+      }
+    }
+  }
+
+  function boot() {
+    injectStyle();
+    fetchRemoteConfig(function () {
+      /* remotely switched off: mount nothing — no launcher, chips or starters */
+      if (endpoint() && remoteCfgOk && remoteEnabled === false) { return; }
+      mountAll();
+    });
   }
 
   if (document.readyState === 'loading') {

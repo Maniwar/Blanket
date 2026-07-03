@@ -1278,8 +1278,16 @@ footer{
 
 <!-- Concierge: endpoint empty = demo mode. After deploying the edge function, set:
      endpoint: 'https://kvkjxjdpqoqasiehdlcw.supabase.co/functions/v1/concierge' -->
-<script>window.FEIER_CONCIERGE_CONFIG = { endpoint: '' };</script>
-<script defer src="assets/concierge-kb.js"></script>
-<script defer src="assets/concierge.js"></script>
+<script>
+/* Concierge wiring — endpoint flips live once the Supabase function is deployed.
+   supabaseAnonKey is the public (publishable) key; required for accounts & feedback. */
+window.FEIER_CONCIERGE_CONFIG = {
+  endpoint: '',
+  supabaseUrl: 'https://kvkjxjdpqoqasiehdlcw.supabase.co',
+  supabaseAnonKey: ''
+};
+</script>
+<script defer src="assets/concierge-kb.js?v=2"></script>
+<script defer src="assets/concierge.js?v=2"></script>
 </body>
 </html>
