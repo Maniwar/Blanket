@@ -330,6 +330,22 @@
       'color:rgba(241,236,226,.65);font-size:1.25rem;line-height:1;cursor:pointer;font-family:"Hanken Grotesk",sans-serif;}',
       '.cx-close:hover{color:var(--cx-ink);}',
       '.cx-close:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
+      /* ---------- conversation options menu ---------- */
+      '.cx-menuwrap{position:relative;flex:0 0 auto;}',
+      '.cx-menu-btn{width:40px;height:40px;margin:-.5rem -.2rem 0 0;display:flex;align-items:center;',
+      'justify-content:center;background:none;border:none;color:rgba(241,236,226,.55);',
+      'font-size:1.2rem;line-height:1;cursor:pointer;font-family:"Hanken Grotesk",sans-serif;}',
+      '.cx-menu-btn:hover{color:var(--cx-ink);}',
+      '.cx-menu-btn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
+      '.cx-menu{position:absolute;top:100%;right:0;margin-top:.3rem;z-index:6;min-width:230px;',
+      'background:#1c1a17;border:1px solid var(--cx-hair);border-radius:10px;padding:.35rem;',
+      'box-shadow:0 14px 34px rgba(0,0,0,.5);}',
+      '.cx-menu[hidden]{display:none;}',
+      '.cx-menu-item{display:block;width:100%;text-align:left;background:none;border:none;',
+      'color:rgba(241,236,226,.82);font-family:"Hanken Grotesk",sans-serif;font-size:.82rem;',
+      'line-height:1.3;padding:.6rem .7rem;border-radius:7px;cursor:pointer;}',
+      '.cx-menu-item:hover{background:rgba(241,236,226,.06);color:var(--cx-ink);}',
+      '.cx-menu-item:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:-1px;}',
 
       /* ---------- message list ---------- */
       '.cx-msgs{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;padding:.4rem 1.4rem 1rem;',
@@ -1105,6 +1121,45 @@
       authBox.appendChild(authBtn);
       head.appendChild(authBox);
     }
+    /* A quiet "⋯" menu: the visitor's own signals — pause me, or wrap up. */
+    var menuWrap = el('div', 'cx-menuwrap');
+    var menuBtn = el('button', 'cx-menu-btn', '⋯');
+    menuBtn.type = 'button';
+    menuBtn.setAttribute('aria-label', 'Conversation options');
+    menuBtn.setAttribute('aria-haspopup', 'true');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    var menuEl = el('div', 'cx-menu');
+    menuEl.setAttribute('role', 'menu');
+    menuEl.hidden = true;
+    function closeMenu() {
+      menuEl.hidden = true;
+      menuBtn.setAttribute('aria-expanded', 'false');
+    }
+    function openMenu() {
+      menuEl.hidden = false;
+      menuBtn.setAttribute('aria-expanded', 'true');
+    }
+    menuBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (menuEl.hidden) { openMenu(); } else { closeMenu(); }
+    });
+    var quietItem = el('button', 'cx-menu-item', 'Don’t message me until I write back');
+    quietItem.type = 'button';
+    quietItem.setAttribute('role', 'menuitem');
+    quietItem.addEventListener('click', function () { closeMenu(); enterQuietMode(); });
+    var closeItem = el('button', 'cx-menu-item', 'That’s all for now');
+    closeItem.type = 'button';
+    closeItem.setAttribute('role', 'menuitem');
+    closeItem.addEventListener('click', function () { closeMenu(); wrapUpByCustomer(); });
+    menuEl.appendChild(quietItem);
+    menuEl.appendChild(closeItem);
+    document.addEventListener('click', function (ev) {
+      if (!menuEl.hidden && ev.target !== menuBtn && !menuEl.contains(ev.target)) { closeMenu(); }
+    });
+    menuWrap.appendChild(menuBtn);
+    menuWrap.appendChild(menuEl);
+    head.appendChild(menuWrap);
+
     var closeBtn = el('button', 'cx-close', '×');
     closeBtn.type = 'button';
     closeBtn.setAttribute('aria-label', 'Close concierge');
@@ -1209,8 +1264,17 @@
     try { launcher.removeAttribute('data-cx-say'); } catch (e) { /* ignore */ }
   }
 
+  function orDismissAll() {
+    if (outreachEl) {
+      try { outreachEl.remove(); } catch (e) { /* ignore */ }
+      outreachEl = null;
+    }
+    pendingSay = '';
+    clearLauncherUnread();
+  }
+
   function showOutreach(kind, text, exempt) {
-    if (!text || orSeen(kind) || panelOpen || outreachEl) { return; }
+    if (!text || orSeen(kind) || panelOpen || outreachEl || quietMode) { return; }
     if (!exempt && orCount() >= 2) { return; }
     orMark(kind);
     if (!exempt) { orBump(); }
@@ -1702,6 +1766,99 @@
   var nudgeCount = 0;           /* proactive follow-ups since the visitor last spoke */
   var pendingNudge = null;      /* {seconds,count} carried into the next request */
 
+  /* ----------------------------------------------------------
+     Conversation lifecycle — closing / snoozing (a mix of both:
+     the visitor's own signal AND the bot winding down)
+  ---------------------------------------------------------- */
+  var QUIET_KEY = 'feier_cx_quiet';
+  var quietMode = false;        /* visitor asked for room; no nudges until they write */
+  try { quietMode = window.sessionStorage.getItem(QUIET_KEY) === '1'; } catch (eQ) { quietMode = false; }
+  var wrappedUp = false;        /* this conversation has been recorded as closed/snoozed */
+
+  function setQuiet(on) {
+    quietMode = on;
+    try {
+      if (on) { window.sessionStorage.setItem(QUIET_KEY, '1'); }
+      else { window.sessionStorage.removeItem(QUIET_KEY); }
+    } catch (eSQ) { /* ignore */ }
+  }
+
+  /* A real exchange = at least one visitor turn AND one bot turn. Only then is
+     there a conversation worth recording as wrapped. */
+  function hasRealExchange() {
+    var u = false, a = false, i;
+    for (i = 0; i < history.length; i++) {
+      if (history[i].role === 'user') { u = true; }
+      else if (history[i].role === 'assistant') { a = true; }
+    }
+    return u && a;
+  }
+
+  /* Start a fresh conversation server-side. The visible transcript stays; the
+     next message opens a new conversation the bot reads as a re-engagement. */
+  function rotateSessionKey() {
+    _sessionKey = '';
+    try { window.sessionStorage.removeItem(SKEY_KEY); } catch (eRK) { /* ignore */ }
+  }
+
+  /* Tell the register the conversation closed or snoozed. Fire-and-forget;
+     keepalive lets it survive a page dismissal. */
+  function postWrapup(reason) {
+    if (isDemo()) { return; }
+    var key = sessionKey();
+    getAccessToken().then(function (token) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) { headers['Authorization'] = 'Bearer ' + token; }
+      try {
+        fetch(endpoint() + (endpoint().indexOf('?') === -1 ? '?wrapup=1' : '&wrapup=1'), {
+          method: 'POST', headers: headers, keepalive: true,
+          body: JSON.stringify({ session_key: key, reason: reason })
+        })['catch'](function () { /* nothing to recover */ });
+      } catch (eW) { /* ignore */ }
+    })['catch'](function () { /* no token — still fine, anonymous wrapup */
+      try {
+        fetch(endpoint() + (endpoint().indexOf('?') === -1 ? '?wrapup=1' : '&wrapup=1'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+          body: JSON.stringify({ session_key: key, reason: reason })
+        })['catch'](function () {});
+      } catch (eW2) { /* ignore */ }
+    });
+  }
+
+  /* Record the wrap once, then rotate so the next turn re-engages. */
+  function doWrapup(reason) {
+    if (wrappedUp || !hasRealExchange()) { return; }
+    postWrapup(reason);
+    rotateSessionKey();
+    wrappedUp = true;
+    clearNudge();
+  }
+
+  /* Visitor: "Don't message me until I write back." */
+  function enterQuietMode() {
+    setQuiet(true);
+    clearNudge();
+    orDismissAll();
+    doWrapup('quiet');
+    if (hasRealExchange()) {
+      addSysLine('Understood — I’ll leave you to browse in peace. Write whenever you like and I’ll be right here.');
+    } else {
+      addSysLine('Of course — browse at your leisure. I’m here the moment you want me.');
+    }
+  }
+
+  /* Visitor: "That's all for now." */
+  function wrapUpByCustomer() {
+    setQuiet(true);
+    clearNudge();
+    orDismissAll();
+    doWrapup('close');
+    addSysLine('A pleasure. The mill is here whenever you return — your number will be waiting.');
+    if (panelOpen) {
+      setTimeout(function () { if (panelOpen) { closePanel(); } }, REDUCED ? 0 : 1500);
+    }
+  }
+
   function setStreaming(on) {
     streaming = on;
     if (sendBtn) { sendBtn.disabled = on; }
@@ -1748,6 +1905,10 @@
     entryMode = 'typed'; /* until the next tap says otherwise */
     nudgeCount = 0;      /* they spoke — the follow-up budget resets */
     holdAttempts = 0;
+    /* the visitor wrote back — quiet mode lifts, and this begins a fresh
+       (possibly re-engaged) conversation the register can wrap again later */
+    if (quietMode) { setQuiet(false); }
+    wrappedUp = false;
     clearNudge();
   }
 
@@ -1823,7 +1984,7 @@
      once, then once more, then it rests (the snooze procedure does the rest). */
   function scheduleNudge(spacious) {
     clearNudge();
-    if (isDemo() || !panelOpen) { return; }
+    if (isDemo() || !panelOpen || quietMode) { return; }
     if (nudgeCount >= 2) { return; }
     /* only when a real exchange is underway and the last word was the bot's */
     if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
@@ -2390,6 +2551,10 @@
 
   function closePanel() {
     if (!panelOpen) { return; }
+    /* Bot-automatic half of the "mix of both": dismissing the panel after a
+       real exchange records the conversation as wound down, so the next visit
+       reads as a re-engagement rather than one endless thread. */
+    doWrapup('auto');
     panelOpen = false;
     abortStream();
     clearNudge();
@@ -2539,6 +2704,10 @@
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', updateLauncher);
     document.addEventListener('keydown', onKeydown);
+    /* leaving the tab mid-exchange still records the wind-down (keepalive) */
+    window.addEventListener('pagehide', function () {
+      if (panelOpen) { doWrapup('auto'); }
+    });
     updateLauncher();
     /* a magic-link redirect landed here — let supabase-js collect it now */
     if (authEnabled()) {

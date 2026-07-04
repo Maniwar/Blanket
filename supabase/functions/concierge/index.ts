@@ -302,8 +302,15 @@ async function customerBlock(customer: Customer): Promise<string> {
   const notesP = pgSelect<{ note: string; created_at: string }>(
     `customer_notes?select=note,created_at&${noteFilter}&order=created_at.desc&limit=8`,
   );
+  // Re-engagement: the last conversation we wrapped (snoozed or closed). If one
+  // exists, THIS is a fresh visit picking the thread back up, not a first hello.
+  const lastConvoP = pgSelect<{ ended_at: string; status: string; section: string | null }>(
+    `concierge_conversations?select=ended_at,status,section&user_id=eq.${
+      encodeURIComponent(customer.id)}&ended_at=not.is.null&order=ended_at.desc&limit=1`,
+  );
   const all = await myOrders(customer, true);
   const notes = await notesP;
+  const lastConvo = await lastConvoP;
   const orders = all ? all.filter((o) => o.status !== "cancelled") : null;
   const struck = all ? all.length - (orders?.length ?? 0) : 0;
   const fmt = (o: OrderRow) =>
@@ -361,7 +368,21 @@ async function customerBlock(customer: Customer): Promise<string> {
     }.`;
   }
 
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine} ORDERS: ${summary}.${standing}${recency}${archive}${book}`;
+  // Re-engagement recency — how long since the last conversation was wrapped.
+  let reengage = "";
+  if (lastConvo && lastConvo.length > 0 && lastConvo[0].ended_at) {
+    const mins = Math.floor((Date.now() - new Date(lastConvo[0].ended_at).getTime()) / 60000);
+    const when = mins < 1 ? "moments ago"
+      : mins < 60 ? `${mins} min ago`
+      : mins < 1440 ? `${Math.floor(mins / 60)}h ago`
+      : `${Math.floor(mins / 1440)} days ago`;
+    const how = lastConvo[0].status === "snoozed"
+      ? "they asked for room (quiet mode)" : "the chat was wrapped up";
+    reengage = ` RE-ENGAGEMENT: this is a new visit — you last spoke ${when} and ${how}. ` +
+      `Greet like someone returning, not a stranger; pick up naturally, don't restart from scratch.`;
+  }
+
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;
 }
 
 // ── Register tools — definitions + execution (signed-in only) ────────────────
@@ -1296,6 +1317,56 @@ async function handleChatPost(req: Request): Promise<Response> {
   return sseResponse(req, stream);
 }
 
+// ── POST ?wrapup=1 — record that a conversation closed or snoozed ─────────────
+// The client posts this on two kinds of signal, so the lifecycle is a MIX:
+//   • customer-explicit — they pressed "That's all for now" (close) or
+//     "Don't message me until I write back" (snoozed / quiet mode);
+//   • bot-automatic — the panel was dismissed after a real exchange, or the
+//     bot itself wound the conversation down.
+// Either way we stamp the conversation's status + ended_at ONCE (already-ended
+// conversations are left alone, which dedupes repeat closes). From then on the
+// next message opens a fresh conversation the bot treats as a re-engagement.
+async function handleWrapup(req: Request): Promise<Response> {
+  let body: Record<string, unknown>;
+  try { body = await req.json() as Record<string, unknown>; } catch {
+    return jsonError(req, 400, "Request body must be valid JSON.");
+  }
+  const sessionKey = typeof body.session_key === "string" ? body.session_key.slice(0, 64) : "";
+  if (!sessionKey) return jsonResponse(req, 200, { ok: true, noted: false });
+  const reason = body.reason === "quiet" ? "quiet"
+    : body.reason === "close" ? "close"
+    : "auto";
+  // quiet mode → snoozed ("come back when they write"); close/auto → closed.
+  const status = reason === "quiet" ? "snoozed" : "closed";
+  try {
+    const rows = await pgSelect<{ id: string; ended_at: string | null; user_id: string | null }>(
+      `concierge_conversations?select=id,ended_at,user_id&session_key=eq.${
+        encodeURIComponent(sessionKey)}&order=created_at.desc&limit=1`,
+    );
+    if (!rows || rows.length === 0 || rows[0].ended_at) {
+      return jsonResponse(req, 200, { ok: true, noted: false });
+    }
+    const cid = rows[0].id;
+    await pgPatch(`concierge_conversations?id=eq.${cid}`, {
+      status, ended_at: new Date().toISOString(),
+    });
+    // For a signed-in patron, leave one terse client-book line so the next
+    // visit reads as continuity, not a cold open.
+    const customer = await verifyUser(req);
+    if (customer) {
+      const line = reason === "quiet"
+        ? "Asked for room — quiet mode; wants to reach out first next time."
+        : reason === "close"
+        ? "Wrapped up the chat themselves — needs were met for now."
+        : "Chat wound down after our exchange.";
+      await pgInsert("customer_notes", { user_id: customer.id, email: customer.email, note: line });
+    }
+    return jsonResponse(req, 200, { ok: true, noted: true, status });
+  } catch {
+    return jsonResponse(req, 200, { ok: true, noted: false });
+  }
+}
+
 // ── POST ?form=1 — structured submissions from in-chat forms ─────────────────
 // Same trust boundary as the model's own tool calls: verified JWT, the tool's
 // ownership filters and validation, the concierge_actions audit log.
@@ -1423,6 +1494,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, report);
   }
   if (req.method !== "POST") return jsonError(req, 405, "Method not allowed. Use POST, or GET ?config=1.");
+  if (new URL(req.url).searchParams.get("wrapup")) return await handleWrapup(req);
   if (new URL(req.url).searchParams.get("form")) return await handleFormPost(req);
   return await handleChatPost(req);
 });

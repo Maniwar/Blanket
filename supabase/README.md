@@ -5,6 +5,27 @@ The AI sales concierge on the site talks to a Supabase Edge Function
 Anthropic API. The API key lives only in Supabase — never in the browser
 or the repo.
 
+## The database — one file
+
+**`supabase/setup.sql`** is the single, idempotent setup for the whole
+database. Paste it into the Supabase **SQL Editor** and Run. It is safe on a
+fresh project, safe on a partially-configured one, and safe to run again —
+every statement creates only what is missing, so it always brings the schema
+to the state the edge functions expect. Change the admin email near the
+bottom (`insert into public.concierge_admins …`) to your own before running.
+
+The `supabase/migrations/` folder holds the same schema as an ordered history
+for `supabase db push` and CI, and also seeds the large editable content (KB,
+SOPs, forms). On a brand-new project, run the ordered migration files once (or
+`supabase db push`) to seed that content, then manage everything from the
+admin Studio thereafter. (The older `APPLY_NOW_*.sql` snippets have been
+folded into `setup.sql` and removed.)
+
+**`supabase/SCHEMA.md`** is the field-by-field reference for the whole
+database — every table and column, what writes it, what reads it, and when,
+plus the RPCs, HTTP endpoints, and the conversation lifecycle. Update it
+alongside any schema change so the backend stays explainable.
+
 ## Setup
 
 1. **Create a free Supabase project** at [supabase.com](https://supabase.com).
