@@ -751,8 +751,9 @@ async function handleChatPost(req: Request): Promise<Response> {
   // the register. Neither may be cached or served from cache.
   let queryEmbedding: number[] | null = null;
   const lastUser = [...validated.messages].reverse().find((m) => m.role === "user");
+  const userTurns = validated.messages.filter((m) => m.role === "user").length;
   const cacheEligible = !customer &&
-    validated.messages.length === 1 &&
+    userTurns === 1 &&
     !!lastUser && lastUser.content.length <= 300 &&
     !CACHE_SKIP.test(lastUser.content);
 
@@ -961,6 +962,28 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   if (req.method === "GET" && new URL(req.url).searchParams.get("config")) {
     return await handleConfigGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("cachecheck")) {
+    // Self-diagnosis for the semantic cache: is the embedding runtime alive,
+    // and how many rows does the cache hold? Safe to expose — counts only.
+    let embedding = "ok";
+    const v = await embed("a quiet diagnostic sentence for the register");
+    if (!v) embedding = "unavailable — see concierge_flags for detail";
+    let rows = -1;
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/concierge_cache?select=id`,
+        { headers: { ...PG_HEADERS, "Prefer": "count=exact", "Range": "0-0" } },
+      );
+      const range = res.headers.get("content-range") ?? "";
+      const total = parseInt(range.split("/")[1] ?? "", 10);
+      if (Number.isFinite(total)) rows = total;
+    } catch { /* rows stays -1 */ }
+    return jsonResponse(req, 200, {
+      embedding,
+      cache_rows: rows,
+      note: "cache engages only for anonymous visitors' first question of a conversation",
+    });
   }
   if (req.method !== "POST") return jsonError(req, 405, "Method not allowed. Use POST, or GET ?config=1.");
   return await handleChatPost(req);
