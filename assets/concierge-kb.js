@@ -76,6 +76,10 @@
 
     demo: [
       {
+        match: ['buy', 'checkout', 'purchase', 'order one', 'get one', 'commission', 'reserve', 'want one', 'take my money', 'sign me up', 'how do i order'],
+        answer: 'The commission takes about a minute. You choose your cloth, leave four details for the register — name, email, city, state — and your number is assigned at the mill. No payment is taken; this is a concept demonstration, and nothing will ship.\n\n{{action:commission}}\n\nI will be here when you return.'
+      },
+      {
         match: ['price', 'cost', 'how much', 'expensive', 'per year', 'value', 'afford'],
         answer: '**$589**, duties and U.S. delivery included. No import fees at the door, no surprises at checkout.\n\nThe more useful number: Decke 01 is built for the fifty years it takes to become someone else’s. Across that span it works out to about **twelve dollars a year**. If it ever needs repair, Weberei Brandt mends it for life, which keeps the arithmetic honest. A blanket like this isn’t replaced. It’s inherited.'
       },

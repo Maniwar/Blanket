@@ -321,6 +321,12 @@
       /* figures */
       '.cx-fig{margin:.2em 0 .95em;}',
       '.cx-fig img{display:block;max-width:100%;height:auto;border:1px solid var(--cx-hair-soft);}',
+      '.cx-actionrow{margin:.3em 0 .9em;}',
+      '.cx-action{min-height:44px;display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;',
+      'color:var(--cx-loden-deep,#171F1A);background:var(--cx-brass-soft);border:1px solid var(--cx-brass-soft);',
+      'padding:.65rem 1.25rem;transition:background .25s,color .25s;}',
+      '.cx-action:hover{background:transparent;color:var(--cx-brass-soft);}',
       '.cx-fade-in{animation:cxFade .6s ease both;}',
       '@keyframes cxFade{from{opacity:0;}to{opacity:1;}}',
 
@@ -615,6 +621,24 @@
           img.setAttribute('alt', (typeof meta.alt === 'string') ? meta.alt : '');
           fig.appendChild(img);
           frag.appendChild(fig);
+        }
+        i++; continue;
+      }
+
+      /* {{action:commission}} line — whitelisted action button */
+      var actm = /^\{\{action:(commission)\}\}$/.exec(trimmed);
+      if (actm) {
+        flushPara();
+        if (window.FeierabendCheckout && typeof window.FeierabendCheckout.open === 'function') {
+          var act = el('div', 'cx-actionrow cx-fade-in');
+          var ab = el('button', 'cx-action', '✳ Begin the commission');
+          ab.type = 'button';
+          ab.addEventListener('click', function () {
+            closePanel();
+            window.FeierabendCheckout.open();
+          });
+          act.appendChild(ab);
+          frag.appendChild(act);
         }
         i++; continue;
       }
