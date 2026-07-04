@@ -218,6 +218,18 @@
     flex:1 1 160px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
 
+  /* goal chips */
+  .goal-scorecard{ display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:10px 14px; margin-bottom:12px; border:1px solid var(--hairline-dim);
+    border-radius:3px; background:rgba(38,51,43,.28); }
+  .goal-chips{ display:flex; gap:7px; flex-wrap:wrap; }
+  .goal-chip{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.08em;
+    text-transform:uppercase; border-radius:20px; padding:3px 10px; cursor:default;
+    border:1px solid var(--hairline-dim); color:var(--wool-dim); }
+  .goal-chip.goal-met{ color:#8fce9b; border-color:rgba(143,206,155,.5); background:rgba(143,206,155,.1); }
+  .goal-chip.goal-partial{ color:var(--brass-soft); border-color:var(--hairline); background:rgba(196,155,91,.1); }
+  .goal-chip.goal-unmet{ color:var(--wool-faint); }
+
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
     background:rgba(38,51,43,.28); overflow:hidden; }
@@ -499,6 +511,21 @@
 
       <section class="card">
         <div class="card-head">
+          <h3>Conversation goals</h3>
+          <span class="micro">what every conversation should accomplish</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">The concierge pursues these in every conversation, and each conversation is scored against them — see met / partial / unmet on the Conversations tab. Edit the label and description; disable any you don't want pursued.</p>
+        <div class="row-tools">
+          <button id="goal-add" class="btn">Add goal</button>
+        </div>
+        <div id="goals-def-list"></div>
+        <div class="card-foot">
+          <button id="goals-def-refresh" class="btn">Refresh</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Forms</h3>
           <span class="micro">structured input the concierge can hand out</span>
         </div>
@@ -635,6 +662,7 @@ const state = {
   gaps: [],
   customers: [],
   forms: [],
+  goalDefs: [],
   convos: [],
   activeConvoId: null,
   loaded: false
@@ -761,6 +789,7 @@ async function route() {
     loadGaps();
     loadCustomers();
     loadForms();
+    loadGoalDefs();
     loadConversations();
   }
 }
@@ -825,6 +854,10 @@ function wireStatic() {
   $('forms-refresh').addEventListener('click', function () {
     withBusy($('forms-refresh'), loadForms);
   });
+  $('goals-def-refresh').addEventListener('click', function () {
+    withBusy($('goals-def-refresh'), loadGoalDefs);
+  });
+  $('goal-add').addEventListener('click', addGoalDef);
   $('cache-refresh').addEventListener('click', function () {
     withBusy($('cache-refresh'), loadCache);
   });
@@ -1206,6 +1239,124 @@ function formEditor(row) {
     });
   });
 
+  return wrap;
+}
+
+/* ============================================================
+   TAB 3a2 — CONVERSATION GOALS (concierge_goals)
+   ============================================================ */
+
+async function loadGoalDefs() {
+  const res = await sb.from('concierge_goals').select('*')
+    .order('sort_order', { ascending: true });
+  if (res.error) { fail('Load goals', res.error); return; }
+  state.goalDefs = res.data || [];
+  renderGoalDefs();
+}
+
+function renderGoalDefs() {
+  const list = $('goals-def-list');
+  list.textContent = '';
+  if (!state.goalDefs.length) {
+    list.appendChild(el('div', 'empty micro', 'No goals yet — run the goals migration, or add the first.'));
+    return;
+  }
+  state.goalDefs.forEach(function (row) { list.appendChild(goalEditor(row)); });
+  if ($('panel-procedures').classList.contains('on')) autoGrowAll('#goals-def-list');
+}
+
+function addGoalDef() {
+  let maxOrder = 0;
+  state.goalDefs.forEach(function (r) { if (r.sort_order > maxOrder) maxOrder = r.sort_order; });
+  const fresh = { id: null, slug: '', label: '', description: '', enabled: true, sort_order: maxOrder + 1 };
+  state.goalDefs.push(fresh);
+  const list = $('goals-def-list');
+  const em = list.querySelector('.empty'); if (em) em.remove();
+  const node = goalEditor(fresh);
+  list.appendChild(node);
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function goalEditor(row) {
+  const wrap = el('div', 'kb-row' + (row.id ? '' : ' is-new'));
+  const top = el('div', 'kb-top');
+  const chk = el('label', 'checkline');
+  const cb = el('input'); cb.type = 'checkbox'; cb.checked = row.enabled !== false;
+  chk.appendChild(cb); chk.appendChild(el('span', 'micro', 'Pursued'));
+  top.appendChild(chk);
+  const slugEl = el('span', 'slug', row.id ? (row.slug || '') : '(slug from label)');
+  top.appendChild(slugEl);
+  wrap.appendChild(top);
+
+  const fLabel = el('div', 'field');
+  fLabel.appendChild(el('span', 'micro', 'Goal'));
+  const label = el('input'); label.type = 'text'; label.placeholder = 'Short goal name'; label.value = row.label || '';
+  fLabel.appendChild(label); wrap.appendChild(fLabel);
+  if (!row.id) { label.addEventListener('input', function () { slugEl.textContent = kebab(label.value) || '(slug from label)'; }); }
+
+  const fDesc = el('div', 'field');
+  fDesc.appendChild(el('span', 'micro', 'What it means'));
+  const desc = el('textarea'); desc.rows = 2; desc.value = row.description || '';
+  desc.addEventListener('input', function () { autoGrow(desc); });
+  fDesc.appendChild(desc); wrap.appendChild(fDesc);
+
+  const actions = el('div', 'kb-actions');
+  const btnDel = el('button', 'btn danger', 'Delete');
+  const btnSave = el('button', 'btn primary', 'Save');
+  actions.appendChild(btnDel); actions.appendChild(btnSave); wrap.appendChild(actions);
+
+  btnSave.addEventListener('click', function () {
+    withBusy(btnSave, async function () {
+      const l = label.value.trim();
+      if (!l) { toast('A goal needs a name', true); return; }
+      if (row.id) {
+        const res = await sb.from('concierge_goals').update({
+          label: l, description: desc.value.trim(), enabled: cb.checked, updated_at: nowIso()
+        }).eq('id', row.id);
+        if (res.error) { fail('Save goal', res.error); return; }
+        row.label = l; row.description = desc.value.trim(); row.enabled = cb.checked;
+        toast('Goal saved');
+      } else {
+        const slug = kebab(l);
+        if (!slug) { toast('Could not derive a slug', true); return; }
+        const res = await sb.from('concierge_goals').insert({
+          slug: slug, label: l, description: desc.value.trim(), enabled: cb.checked, sort_order: row.sort_order, updated_at: nowIso()
+        }).select().single();
+        if (res.error) { fail('Add goal', res.error); return; }
+        row.id = res.data.id; row.slug = res.data.slug; slugEl.textContent = row.slug;
+        wrap.classList.remove('is-new'); toast('Goal added — ' + row.slug);
+      }
+    });
+  });
+  btnDel.addEventListener('click', function () {
+    withBusy(btnDel, async function () {
+      if (!row.id) { state.goalDefs = state.goalDefs.filter(function (r) { return r !== row; }); wrap.remove(); return; }
+      if (!window.confirm('Delete goal "' + (row.label || row.slug) + '"?')) return;
+      const res = await sb.from('concierge_goals').delete().eq('id', row.id);
+      if (res.error) { fail('Delete goal', res.error); return; }
+      state.goalDefs = state.goalDefs.filter(function (r) { return r !== row; });
+      wrap.remove(); toast('Goal deleted');
+    });
+  });
+  return wrap;
+}
+
+/* Goal chips for a conversation's goal_status (met/partial/unmet). */
+function goalChips(goalStatus) {
+  const wrap = el('div', 'goal-chips');
+  if (!goalStatus || typeof goalStatus !== 'object') {
+    wrap.appendChild(el('span', 'micro', 'Not yet evaluated.'));
+    return wrap;
+  }
+  const byslug = {};
+  state.goalDefs.forEach(function (g) { byslug[g.slug] = g.label; });
+  Object.keys(goalStatus).forEach(function (slug) {
+    const v = goalStatus[slug] || {};
+    const st = (v.status === 'met' || v.status === 'partial') ? v.status : 'unmet';
+    const chip = el('span', 'goal-chip goal-' + st, (byslug[slug] || slug));
+    if (v.note) chip.title = v.note;
+    wrap.appendChild(chip);
+  });
   return wrap;
 }
 
@@ -1689,6 +1840,16 @@ async function openConvo(c) {
 function renderTranscript(msgs, fbMap) {
   const body = $('transcript-body');
   body.textContent = '';
+
+  /* how this conversation scored against the goals */
+  const convo = (state.convos || []).find(function (c) { return c.id === state.activeConvoId; });
+  if (convo) {
+    const head = el('div', 'goal-scorecard');
+    head.appendChild(el('div', 'micro', 'Goals'));
+    head.appendChild(goalChips(convo.goal_status));
+    body.appendChild(head);
+  }
+
   if (!msgs.length) {
     body.appendChild(el('div', 'empty micro', 'Empty conversation.'));
     return;

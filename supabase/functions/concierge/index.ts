@@ -136,11 +136,14 @@ interface FormDef {
   slug: string; title: string; submit_tool: string; fields: unknown;
 }
 
+interface GoalDef { slug: string; label: string; description: string }
+
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
   kbText: string | null; // enabled concierge_kb rows; null -> KB_MARKDOWN fallback
   sopText: string | null; // enabled concierge_sops rows; null -> none
   forms: FormDef[]; // enabled concierge_forms rows
+  goals: GoalDef[]; // enabled concierge_goals rows
   at: number; // Date.now() of the read; refreshed after CACHE_TTL_MS
 }
 
@@ -149,7 +152,7 @@ let dataCache: ConciergeData | null = null;
 
 async function loadConciergeData(): Promise<ConciergeData> {
   if (dataCache && Date.now() - dataCache.at < CACHE_TTL_MS) return dataCache;
-  const [cfgRows, kbRows, sopRows, formRows] = await Promise.all([
+  const [cfgRows, kbRows, sopRows, formRows, goalRows] = await Promise.all([
     pgSelect<{ key: string; value: unknown }>("concierge_config?select=key,value"),
     pgSelect<{ title: string; content_md: string }>(
       "concierge_kb?select=title,content_md&enabled=is.true&order=sort_order.asc",
@@ -159,6 +162,9 @@ async function loadConciergeData(): Promise<ConciergeData> {
     ),
     pgSelect<FormDef>(
       "concierge_forms?select=slug,title,submit_tool,fields&enabled=is.true",
+    ),
+    pgSelect<GoalDef>(
+      "concierge_goals?select=slug,label,description&enabled=is.true&order=sort_order.asc",
     ),
   ]);
   dataCache = {
@@ -172,6 +178,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
       ? sopRows.map((r) => `### ${r.title}\n${r.content_md}`).join("\n\n")
       : null,
     forms: formRows ?? [],
+    goals: goalRows ?? [],
     at: Date.now(),
   };
   return dataCache;
@@ -681,6 +688,83 @@ async function maybeFlagGap(
   } catch { /* flagging never breaks the chat */ }
 }
 
+// ── Goal evaluation — a light judge scores the conversation vs. the goals ────
+
+// Supabase edge background-task hook; run the judge after the response closes.
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: any;
+
+function scheduleGoalEval(
+  cid: string | null, data: ConciergeData, transcript: ChatMessage[],
+  apiKey: string, model: string,
+): void {
+  if (!cid || data.goals.length === 0) return;
+  const p = evaluateGoals(cid, data, transcript, apiKey, model);
+  try {
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(p);
+    } else {
+      p.catch(() => {});
+    }
+  } catch { p.catch(() => {}); }
+}
+
+
+async function evaluateGoals(
+  cid: string, data: ConciergeData, transcript: ChatMessage[],
+  apiKey: string, model: string,
+): Promise<void> {
+  try {
+    if (!cid || data.goals.length === 0) return;
+    const convo = transcript
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-16)
+      .map((m) => `${m.role === "user" ? "Shopper" : "Concierge"}: ${m.content}`)
+      .join("\n");
+    const goalList = data.goals.map((g) => `${g.slug}: ${g.label} — ${g.description}`).join("\n");
+    const judgeSystem =
+      "You evaluate a sales conversation against goals. For EACH goal, judge whether it is " +
+      "'met', 'partial', or 'unmet' so far, with a very short reason. Respond ONLY with a JSON " +
+      "object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\"}. No prose.";
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model, max_tokens: 500,
+        system: judgeSystem,
+        messages: [{
+          role: "user",
+          content: `GOALS:\n${goalList}\n\nCONVERSATION:\n${convo}\n\nReturn the JSON now.`,
+        }],
+      }),
+    });
+    if (!res.ok) return;
+    // deno-lint-ignore no-explicit-any
+    const msg = await res.json() as any;
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    // deno-lint-ignore no-explicit-any
+    let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    const a = text.indexOf("{"), z = text.lastIndexOf("}");
+    if (a < 0 || z < 0) return;
+    text = text.slice(a, z + 1);
+    const parsed = JSON.parse(text) as Record<string, { status?: string; note?: string }>;
+    const clean: Record<string, { status: string; note: string }> = {};
+    for (const g of data.goals) {
+      const v = parsed[g.slug];
+      const st = v && ["met", "partial", "unmet"].includes(String(v.status)) ? String(v.status) : "unmet";
+      clean[g.slug] = { status: st, note: (v && typeof v.note === "string") ? v.note.slice(0, 160) : "" };
+    }
+    await pgPatch(
+      `concierge_conversations?id=eq.${cid}`,
+      { goal_status: clean, goal_status_at: new Date().toISOString() },
+    );
+  } catch { /* evaluation is best-effort */ }
+}
+
 // ── System prompt assembly ───────────────────────────────────────────────────
 
 function renderLiveState(ctx: Record<string, unknown>, customerLine: string | null): string {
@@ -748,6 +832,10 @@ function buildSystemPrompt(
       "Acknowledge it once, lightly, when greeting or thanking — never as a gimmick or a sales lever. " +
       "Orders marked as gifts carry the recipient's name on the card; the buyer remains the owner of record.\n";
   }
+  if (data.goals.length > 0) {
+    system += "\nCONVERSATION GOALS (pursue these naturally across the conversation; do not announce them)\n" +
+      data.goals.map((g) => `- ${g.label}: ${g.description}`).join("\n") + "\n";
+  }
   if (data.sopText) {
     system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
   }
@@ -766,10 +854,19 @@ async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipU
     // Reuse the latest conversation for this session_key, else insert one.
     let cid: string | null = null;
     if (body.sessionKey) {
-      const q = `concierge_conversations?select=id&session_key=eq.${
+      const q = `concierge_conversations?select=id,user_id,user_email&session_key=eq.${
         encodeURIComponent(body.sessionKey)}&order=created_at.desc&limit=1`;
-      const rows = await pgSelect<{ id: string }>(q);
-      if (rows && rows.length > 0) cid = rows[0].id;
+      const rows = await pgSelect<{ id: string; user_id: string | null; user_email: string | null }>(q);
+      if (rows && rows.length > 0) {
+        cid = rows[0].id;
+        // Backfill identity if they signed in after the conversation began —
+        // otherwise a signed-in chat keeps showing as anonymous in the Studio.
+        if (customer && (!rows[0].user_id || !rows[0].user_email)) {
+          await pgPatch(`concierge_conversations?id=eq.${cid}`, {
+            user_id: customer.id, user_email: customer.email,
+          });
+        }
+      }
     }
     if (!cid) {
       const row = await pgInsert<{ id: string }>("concierge_conversations", {
@@ -1090,6 +1187,9 @@ async function handleChatPost(req: Request): Promise<Response> {
           for (const piece of chunked(finalText)) send({ t: piece });
           const lastUserMsg = [...validated.messages].reverse().find((m) => m.role === "user");
           await maybeFlagGap(cid, lastUserMsg?.content, finalText);
+          if (!isNudge) {
+            scheduleGoalEval(cid, data, [...validated.messages, { role: "assistant", content: finalText }], apiKey, model);
+          }
           const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
           if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
         } catch { /* fall through to [DONE] */ }
@@ -1166,6 +1266,10 @@ async function handleChatPost(req: Request): Promise<Response> {
         try {
           await maybeFlagGap(await conversationPromise, lastUser?.content, assistantText);
         } catch { /* ignore */ }
+        try {
+          const cidE = await conversationPromise;
+          scheduleGoalEval(cidE, data, [...validated.messages, { role: "assistant", content: assistantText }], apiKey, model);
+        } catch { /* eval is best-effort */ }
         // Cache write: single-turn anonymous miss with a state-free answer.
         try {
           if (cacheEligible && queryEmbedding && lastUser && cacheableAnswer(assistantText)) {
