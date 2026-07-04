@@ -141,8 +141,10 @@ function validateBody(body: unknown): Commission | string {
 
 // ── Optional signed-in linkage — verify Supabase Auth JWT ────────────────────
 
-/** Verified user id, or null (absent / anon key / invalid — never errors). */
-async function verifyUserId(req: Request): Promise<string | null> {
+interface VerifiedUser { id: string; email: string | null }
+
+/** Verified user, or null (absent / anon key / invalid — never errors). */
+async function verifyUser(req: Request): Promise<VerifiedUser | null> {
   const auth = req.headers.get("Authorization") ?? "";
   if (!auth.toLowerCase().startsWith("bearer ")) return null;
   const token = auth.slice(7).trim();
@@ -155,7 +157,8 @@ async function verifyUserId(req: Request): Promise<string | null> {
     });
     if (!res.ok) return null;
     const user = await res.json() as Record<string, unknown>;
-    return typeof user?.id === "string" ? user.id : null;
+    if (typeof user?.id !== "string") return null;
+    return { id: user.id, email: typeof user.email === "string" ? user.email : null };
   } catch { return null; }
 }
 
@@ -196,6 +199,19 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(req) });
   }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("recent")) {
+    // Public: the latest register entries — serial, city/state, time only.
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/orders?select=serial,city,state,placed_at&order=placed_at.desc&limit=3`,
+        { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
+      );
+      const rows = res.ok ? await res.json() as unknown[] : [];
+      return jsonResponse(req, 200, { orders: rows });
+    } catch {
+      return jsonError(req, 502, "Register unavailable.");
+    }
+  }
   if (req.method === "GET" && new URL(req.url).searchParams.get("next")) {
     // Public: the next serial to be assigned — keeps the page's number honest.
     try {
@@ -230,11 +246,17 @@ Deno.serve(async (req: Request) => {
   const validated = validateBody(parsed);
   if (typeof validated === "string") return jsonError(req, 400, validated);
 
-  // Optional signed-in linkage (anonymous on absent/invalid token).
-  const userId = await verifyUserId(req);
+  // The register takes signed entries only: a verified magic-link session is
+  // required, and the verified email is the one recorded — not the typed one.
+  const customer = await verifyUser(req);
+  if (!customer) {
+    return jsonError(req, 401,
+      "The register takes signed entries. Verify your email first — the key arrives by mail.");
+  }
+  if (customer.email) validated.email = customer.email;
 
   // Assign the serial and record the order.
-  const serial = await commissionOrder(validated, userId);
+  const serial = await commissionOrder(validated, customer.id);
   if (serial === null) {
     return jsonError(req, 502,
       "The register is briefly unavailable. Nothing was recorded — try again.");

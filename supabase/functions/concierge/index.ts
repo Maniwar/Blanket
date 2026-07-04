@@ -226,10 +226,17 @@ async function customerBlock(customer: Customer): Promise<string> {
       o.city && `to ${o.city}`,
       o.placed_at && `placed ${String(o.placed_at).slice(0, 10)}`,
     ].filter(Boolean).join(", ");
-  const summary = orders && orders.length > 0
-    ? orders.map(fmt).join("; ")
-    : "no orders on file";
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in). ORDERS: ${summary}`;
+  let summary = "no orders on file";
+  if (orders && orders.length > 0) {
+    const delivered = orders.filter((o) => o.status === "delivered").length;
+    const open = orders.length - delivered;
+    summary = `${orders.length} on the register` +
+      (orders.length > 1 || open > 0
+        ? ` (${open} not yet delivered, ${delivered} delivered)`
+        : "") +
+      ` — ${orders.map(fmt).join("; ")}`;
+  }
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}`;
 }
 
 // ── System prompt assembly ───────────────────────────────────────────────────

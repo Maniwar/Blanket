@@ -471,14 +471,15 @@
 
   function syncThread() {
     var i;
+    var a = (act === 5) ? 2 : act; /* the key gate sits within stage two */
     for (i = 0; i < knots.length; i++) {
       knots[i].className = 'ck-knot';
       var step = i + 1;
-      if (act > step || act === 4) { knots[i].classList.add('ck-done'); }
-      else if (act === step) { knots[i].classList.add('ck-now'); }
+      if (a > step || a === 4) { knots[i].classList.add('ck-done'); }
+      else if (a === step) { knots[i].classList.add('ck-now'); }
     }
     for (i = 0; i < segs.length; i++) {
-      segs[i].className = 'ck-seg' + ((act > i + 1 || act === 4) ? ' ck-done' : '');
+      segs[i].className = 'ck-seg' + ((a > i + 1 || a === 4) ? ' ck-done' : '');
     }
   }
 
@@ -489,11 +490,13 @@
     if (n === 2) { return buildAct2(); }
     if (n === 3) { return buildAct3(); }
     if (n === 4) { return buildAct4(); }
+    if (n === 5) { return buildGate(); }
     return buildAct1();
   }
 
   function showAct(n, dir) {
     act = n;
+    saveDraft();
     syncThread();
     var next = buildAct(n);
     var prev = currentActEl;
@@ -809,7 +812,14 @@
         if (firstBad) { try { firstBad.focus(); } catch (eF) { /* ignore */ } }
         return;
       }
-      showAct(3, 1);
+      saveDraft();
+      /* the register takes signed entries: verified session, or the key gate */
+      if (isDemo() || !hasSb() || findAccessToken()) { showAct(3, 1); return; }
+      reviewBtn.disabled = true;
+      sendKey().then(function () {
+        reviewBtn.disabled = false;
+        showAct(5, 1);
+      });
     });
 
     /* keep drafts even if the sheet is abandoned mid-entry */
@@ -846,7 +856,8 @@
     var plate = el('div', 'ck-plate');
     plate.appendChild(plateRow('Cloth', cw ? (cw.name + ' — ' + cw.desc.charAt(0).toLowerCase() + cw.desc.slice(1)) : '—'));
     plate.appendChild(plateRow('Register name', order.name || '—'));
-    plate.appendChild(plateRow('Email', order.email || '—'));
+    plate.appendChild(plateRow('Email',
+      (order.email || '—') + ((!isDemo() && findAccessToken()) ? ' — verified' : '')));
     plate.appendChild(plateRow('Address', order.address ? (order.address + (order.address2 ? ', ' + order.address2 : '')) : '—'));
     plate.appendChild(plateRow('City', order.city || '—'));
     plate.appendChild(plateRow('State · ZIP', (order.state ? stateName(order.state) : '—') + ' · ' + (order.zip || '—')));
@@ -895,8 +906,14 @@
       }
     }
 
-    function fail() {
+    function fail(code) {
       setWeaving(false);
+      if (code === 401) {
+        sysline.textContent = 'Your key has lapsed — one more turn of the lock.';
+        sysline.style.display = '';
+        setTimeout(function () { showAct(5, 1); }, 1400);
+        return;
+      }
       sysline.textContent = ERR_LINE;
       sysline.style.display = '';
       while (confirmBtn.firstChild) { confirmBtn.removeChild(confirmBtn.firstChild); }
@@ -905,6 +922,12 @@
 
     function succeed(serial) {
       sending = false;
+      clearDraft();
+      try {
+        window.dispatchEvent(new CustomEvent('ck:commissioned', {
+          detail: { serial: serial, city: order.city, state: order.state }
+        }));
+      } catch (eEv) { /* older browsers — the card still shows */ }
       commissioned = {
         serial: serial,
         dateLine: todayLine()
@@ -955,6 +978,120 @@
     return '';
   }
 
+  /* ---- supabase-js (shared session with the concierge) ---- */
+  var ckSb = null, ckSbPromise = null;
+  function hasSb() {
+    return !!(CONFIG.supabaseUrl && CONFIG.supabaseAnonKey);
+  }
+  function ensureSb() {
+    if (ckSbPromise) { return ckSbPromise; }
+    ckSbPromise = new Promise(function (resolve) {
+      if (!hasSb()) { resolve(null); return; }
+      function make() {
+        try {
+          ckSb = ckSb || window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+          resolve(ckSb);
+        } catch (eC) { resolve(null); }
+      }
+      if (window.supabase && typeof window.supabase.createClient === 'function') { make(); return; }
+      var sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      sc.onload = make;
+      sc.onerror = function () { resolve(null); };
+      document.head.appendChild(sc);
+    });
+    return ckSbPromise;
+  }
+  function gateRedirectUrl() {
+    return window.location.origin + window.location.pathname;
+  }
+
+  /* ---- draft persistence — the entry survives the key's round trip ---- */
+  function saveDraft() {
+    try {
+      if (act === 4) { return; }
+      window.sessionStorage.setItem('ck-draft', JSON.stringify({ act: act, order: order }));
+    } catch (eS) { /* ignore */ }
+  }
+  function clearDraft() {
+    try { window.sessionStorage.removeItem('ck-draft'); } catch (eS) { /* ignore */ }
+  }
+  function loadDraft() {
+    try {
+      var raw = window.sessionStorage.getItem('ck-draft');
+      if (!raw) { return null; }
+      var d = JSON.parse(raw);
+      return (d && d.order && typeof d.order === 'object') ? d : null;
+    } catch (eS) { return null; }
+  }
+
+  /* ---- the key gate (act 5): verification pending ---- */
+  function sendKey() {
+    return ensureSb().then(function (sb) {
+      if (!sb) { return null; }
+      return sb.auth.signInWithOtp({
+        email: order.email,
+        options: { emailRedirectTo: gateRedirectUrl() }
+      });
+    });
+  }
+  function buildGate() {
+    var box = el('section', 'ck-act');
+    box.setAttribute('aria-label', 'Verification — the key is in the mail');
+    box.appendChild(el('div', 'ck-kicker', 'The Key'));
+    box.appendChild(el('p', 'ck-lede',
+      'The register takes signed entries. A key is on its way to ' + order.email +
+      ' — open it, and you return here with your entry intact.'));
+    box.appendChild(el('p', 'ck-notice',
+      'The mill posts only a couple of keys an hour. If nothing arrives, look where mail goes to be forgotten, then resend.'));
+
+    var checkBtn = el('button', 'ck-primary', 'I have turned the key — continue');
+    checkBtn.type = 'button';
+    box.appendChild(checkBtn);
+
+    var sysline = el('p', 'ck-sysline');
+    sysline.style.display = 'none';
+    sysline.setAttribute('role', 'status');
+    box.appendChild(sysline);
+
+    var backRow = el('div', 'ck-backrow');
+    var resend = el('button', 'ck-back', 'Resend the key');
+    resend.type = 'button';
+    var cool = 0;
+    function coolTick() {
+      if (cool <= 0) { resend.disabled = false; resend.textContent = 'Resend the key'; return; }
+      resend.disabled = true;
+      resend.textContent = 'Resend — ' + cool + 's';
+      cool--;
+      setTimeout(coolTick, 1000);
+    }
+    resend.addEventListener('click', function () {
+      if (cool > 0) { return; }
+      cool = 30; coolTick();
+      sendKey();
+    });
+    backRow.appendChild(resend);
+    var back = el('button', 'ck-back', '← The register entry');
+    back.type = 'button';
+    back.addEventListener('click', function () { showAct(2, -1); });
+    backRow.appendChild(back);
+    box.appendChild(backRow);
+
+    checkBtn.addEventListener('click', function () {
+      if (findAccessToken()) { showAct(3, 1); return; }
+      sysline.textContent = 'Not yet — the key has not been turned. Open the email on this device, or wait a breath.';
+      sysline.style.display = '';
+    });
+
+    /* the key often turns in another tab — notice quietly and move on */
+    var watch = setInterval(function () {
+      if (!box.isConnected) { clearInterval(watch); return; }
+      if (findAccessToken()) { clearInterval(watch); showAct(3, 1); }
+    }, 2500);
+
+    return box;
+  }
+
   function submitCommission(onOk, onFail) {
     /* DEMO-LOCAL: no endpoint configured — simulate the mill's ledger */
     if (isDemo()) {
@@ -980,6 +1117,7 @@
         headers: headers,
         body: body
       }).then(function (res) {
+        if (res.status === 401) { var e401 = new Error('401'); e401.code = 401; throw e401; }
         if (!res.ok) { throw new Error('HTTP ' + res.status); }
         return res.json()['catch'](function () { return {}; });
       }).then(function (j) {
@@ -991,8 +1129,8 @@
         }
         if (!serial || isNaN(serial)) { serial = demoSerial(); }
         onOk(serial);
-      })['catch'](function () { onFail(); });
-    } catch (eF) { onFail(); }
+      })['catch'](function (err) { onFail(err && err.code === 401 ? 401 : 0); });
+    } catch (eF) { onFail(0); }
   }
 
   /* ----------------------------------------------------------
@@ -1022,6 +1160,14 @@
     box.appendChild(card);
 
     var returnRow = el('div', 'ck-returnrow');
+    var againBtn = el('button', 'ck-back', 'Commission another →');
+    againBtn.type = 'button';
+    againBtn.addEventListener('click', function () {
+      commissioned = null;
+      order.colorway = '';
+      showAct(1, 1); /* details stay filled; only the cloth is chosen anew */
+    });
+    returnRow.appendChild(againBtn);
     var closeBtn = el('button', 'ck-back', 'Return to the evening');
     closeBtn.type = 'button';
     closeBtn.addEventListener('click', function () { closePanel(); });
@@ -1205,6 +1351,28 @@
     hookReserveButtons();
     initVisualViewport();
     document.addEventListener('keydown', onKeydown);
+
+    /* restore a draft across reloads and the key's redirect round trip */
+    var d = loadDraft();
+    if (d) {
+      var k;
+      for (k in d.order) {
+        if (Object.prototype.hasOwnProperty.call(d.order, k) &&
+            Object.prototype.hasOwnProperty.call(order, k)) {
+          order[k] = String(d.order[k] || '');
+        }
+      }
+      if (typeof d.act === 'number' && d.act >= 1 && d.act <= 3) { act = d.act; }
+      var fromKey = /[?&]code=/.test(window.location.search) ||
+        window.location.hash.indexOf('access_token') > -1;
+      if (fromKey && d.act >= 2) {
+        ensureSb().then(function (sb) {
+          var resume = function () { act = 3; openPanel(); };
+          if (!sb) { resume(); return; }
+          sb.auth.getSession().then(resume)['catch'](resume);
+        });
+      }
+    }
   }
 
   if (document.readyState === 'loading') {

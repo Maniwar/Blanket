@@ -76,6 +76,10 @@
 
     demo: [
       {
+        match: ['my order', 'my blanket', 'order status', 'my deliveries', 'where is my', 'track', 'tracking', 'delivery status', 'status of my'],
+        answer: 'The register can tell you exactly — each of your numbers, each with its own status — once it knows it is you. Sign in and I will read your entries back to you.\n\n{{action:signin}}\n\nFor changes or cancellations, write hello@feierabend.example.'
+      },
+      {
         match: ['buy', 'checkout', 'purchase', 'order one', 'get one', 'commission', 'reserve', 'want one', 'take my money', 'sign me up', 'how do i order'],
         answer: 'The commission takes about a minute. You choose your cloth, leave four details for the register — name, email, city, state — and your number is assigned at the mill. No payment is taken; this is a concept demonstration, and nothing will ship.\n\n{{action:commission}}\n\nI will be here when you return.'
       },

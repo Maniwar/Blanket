@@ -1,0 +1,34 @@
+<!-- Feierabend — Magic Link email template.
+     Paste into: Supabase dashboard → Authentication → Emails → Magic Link.
+     Suggested subject:  Your key — Feierabend
+     Variables: {{ .ConfirmationURL }} is required and inserted below. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#171F1A" style="background-color:#171F1A;padding:40px 16px;">
+  <tr><td align="center">
+    <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;border:1px solid #574a2e;background-color:#1d2721;">
+      <tr><td style="padding:36px 36px 28px;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;color:#F1ECE2;">Feierabend<span style="color:#C49B5B;">.</span></div>
+        <div style="font-family:'Courier New',monospace;font-size:10px;letter-spacing:3px;color:#C49B5B;text-transform:uppercase;padding-top:8px;">Weberei Brandt &middot; Est. 1897</div>
+        <hr style="border:none;border-top:1px solid #3a4438;margin:24px 0;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;color:#F1ECE2;padding-bottom:12px;">Your key to the register.</div>
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.7;color:#cfc9bc;padding-bottom:26px;">
+          Turn it once and you are signed in — no password, nothing to remember.
+          The key works for a short while and then politely expires.
+        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td bgcolor="#A67C3D" style="background-color:#A67C3D;">
+            <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#171F1A;text-decoration:none;">Turn the key</a>
+          </td>
+        </tr></table>
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#8f897d;padding-top:26px;">
+          If the button is shy, use the thread itself:<br>
+          <a href="{{ .ConfirmationURL }}" style="color:#C49B5B;word-break:break-all;">{{ .ConfirmationURL }}</a>
+        </div>
+        <hr style="border:none;border-top:1px solid #3a4438;margin:26px 0 18px;">
+        <div style="font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;color:#6e6a5f;text-transform:uppercase;line-height:1.8;">
+          Concept demonstration &middot; no real product &middot; nothing ships<br>
+          Didn&rsquo;t ask for a key? Let this one rest.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>

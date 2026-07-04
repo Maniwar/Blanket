@@ -625,18 +625,22 @@
         i++; continue;
       }
 
-      /* {{action:commission}} line — whitelisted action button */
-      var actm = /^\{\{action:(commission)\}\}$/.exec(trimmed);
+      /* {{action:token}} line — whitelisted action buttons */
+      var actm = /^\{\{action:(commission|signin)\}\}$/.exec(trimmed);
       if (actm) {
         flushPara();
-        if (window.FeierabendCheckout && typeof window.FeierabendCheckout.open === 'function') {
+        var actName = actm[1];
+        var canDo = actName === 'commission'
+          ? (window.FeierabendCheckout && typeof window.FeierabendCheckout.open === 'function')
+          : authEnabled();
+        if (canDo) {
           var act = el('div', 'cx-actionrow cx-fade-in');
-          var ab = el('button', 'cx-action', '✳ Begin the commission');
+          var ab = el('button', 'cx-action',
+            actName === 'commission' ? '✳ Begin the commission' : '✳ Sign in — the key arrives by mail');
           ab.type = 'button';
-          ab.addEventListener('click', function () {
-            closePanel();
-            window.FeierabendCheckout.open();
-          });
+          ab.addEventListener('click', actName === 'commission'
+            ? function () { closePanel(); window.FeierabendCheckout.open(); }
+            : function () { openAuthRow(); });
           act.appendChild(ab);
           frag.appendChild(act);
         }
@@ -876,7 +880,7 @@
 
     /* footer */
     panel.appendChild(el('div', 'cx-foot',
-      'Answers may be woven, not warranted · hello@feierabend.example'));
+      'An automated AI concierge — answers by Anthropic\u2019s Claude · woven, not warranted · hello@feierabend.example'));
 
     document.body.appendChild(launcher);
     document.body.appendChild(scrim);

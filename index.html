@@ -1228,17 +1228,63 @@ footer{
   loomTick(); setInterval(loomTick, 30000);
   syncAlloc();
 
-  /* sync the shown number to the mill's real counter, when the line is up */
+  /* sync the shown number + the claims feed to the mill's real register */
+  function relTime(iso){
+    var ms = Date.now() - new Date(iso).getTime();
+    if(!(ms >= 0)) return 'just now';
+    var m = Math.floor(ms / 60000);
+    if(m < 1) return 'just now';
+    if(m < 60) return m + ' min ago';
+    var h = Math.floor(m / 60);
+    if(h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    var d = Math.floor(h / 24);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+  function claimLi(serial, place, when){
+    var li = document.createElement('li');
+    var b = document.createElement('b');
+    b.textContent = 'Nº ' + fmtN(serial);
+    li.appendChild(b);
+    var sp = document.createElement('span');
+    sp.textContent = place + ' · ' + when;
+    li.appendChild(sp);
+    return li;
+  }
+  function renderClaims(list){
+    var ul = document.querySelector('.claims');
+    if(!ul || !list || !list.length) return;
+    while(ul.firstChild) ul.removeChild(ul.firstChild);
+    for(var i = 0; i < list.length && i < 3; i++){
+      var o = list[i];
+      var place = (o.city ? o.city + ', ' : '') + (o.state || '');
+      ul.appendChild(claimLi(o.serial, place || 'the register', relTime(o.placed_at)));
+    }
+  }
   window.addEventListener('DOMContentLoaded', function(){
     var cfg = window.FEIER_CONCIERGE_CONFIG || {};
     if(!cfg.endpoint) return;
-    var u = cfg.endpoint.replace(/concierge$/, 'commission') + '?next=1';
-    fetch(u).then(function(r){ return r.json(); }).then(function(j){
+    var base = cfg.endpoint.replace(/concierge$/, 'commission');
+    fetch(base + '?next=1').then(function(r){ return r.json(); }).then(function(j){
       if(j && typeof j.next_serial === 'number' && j.next_serial > 1){
         claimed = j.next_serial - 1;
         syncAlloc();
       }
     })['catch'](function(){});
+    fetch(base + '?recent=1').then(function(r){ return r.json(); }).then(function(j){
+      if(j && j.orders) renderClaims(j.orders);
+    })['catch'](function(){});
+  });
+  /* a commission just happened on this very page */
+  window.addEventListener('ck:commissioned', function(ev){
+    claimed++;
+    syncAlloc();
+    var d = ev && ev.detail;
+    var ul = document.querySelector('.claims');
+    if(ul && d && d.serial){
+      var place = (d.city ? d.city + ', ' : '') + (d.state || '');
+      ul.insertBefore(claimLi(d.serial, place || 'the register', 'just now'), ul.firstChild);
+      while(ul.children.length > 3) ul.removeChild(ul.lastChild);
+    }
   });
 
   /* ---- nav live ticker ---- */
@@ -1306,8 +1352,8 @@ window.FEIER_CONCIERGE_CONFIG = {
   supabaseAnonKey: 'sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy'
 };
 </script>
-<script defer src="assets/concierge-kb.js?v=5"></script>
-<script defer src="assets/concierge.js?v=5"></script>
-<script defer src="assets/checkout.js?v=2"></script>
+<script defer src="assets/concierge-kb.js?v=6"></script>
+<script defer src="assets/concierge.js?v=6"></script>
+<script defer src="assets/checkout.js?v=3"></script>
 </body>
 </html>
