@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-selftest+lifecycle+ltv";
+const BUILD_TAG = "2026-07-04-selftest2+adminhealth";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1031,6 +1031,28 @@ async function handleSelfTest(req: Request): Promise<Response> {
     // The literal block the model sees — orders, standing, client book, recency.
     try { report.customer_block = await customerBlock(customer); } catch (e) {
       report.customer_block = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    // Admin + logging health. The admin panel reads conversations under RLS,
+    // so it shows NOTHING unless the caller's email is in concierge_admins.
+    // Only an admin sees others' data here, so gate the detail behind that.
+    if (safeEmail) {
+      const adminProbe = await pgProbe(`concierge_admins?select=email&email=eq."${safeEmail}"`);
+      const isAdmin = adminProbe.ok && (adminProbe.count ?? 0) > 0;
+      report.is_admin = isAdmin;
+      report.admin_note = isAdmin
+        ? "You are a registered admin — the admin panel's RLS will let you read conversations."
+        : "NOT a registered admin. The admin panel shows nothing under RLS until your email is " +
+          "added to concierge_admins (setup.sql seeds it — run it, or add the row).";
+      if (isAdmin) {
+        // What the SERVICE ROLE sees (bypasses RLS): proves whether logging works
+        // and whether your latest conversation is actually there.
+        report.conversations_total = await pgProbe("concierge_conversations?select=id");
+        const recent = await pgSelect<Record<string, unknown>>(
+          "concierge_conversations?select=created_at,user_email,session_key,status,section" +
+            "&order=created_at.desc&limit=6",
+        );
+        report.recent_conversations = recent ?? "QUERY FAILED — table or a selected column is missing";
+      }
     }
   } else {
     report.hint = "Not recognized as signed in. The widget must send Authorization: " +
