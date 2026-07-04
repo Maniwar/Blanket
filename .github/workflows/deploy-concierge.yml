@@ -28,8 +28,17 @@ jobs:
         if: env.SUPABASE_DB_PASSWORD != ''
         run: supabase db push -p "$SUPABASE_DB_PASSWORD"
 
-      - name: Set function secrets
-        run: supabase secrets set ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" ALLOWED_ORIGINS="https://maniwar.github.io"
+      - name: Set allowed origins
+        run: supabase secrets set ALLOWED_ORIGINS="https://maniwar.github.io"
+
+      - name: Set Anthropic key (only when the GitHub secret exists)
+        if: env.ANTHROPIC_API_KEY != ''
+        run: supabase secrets set ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+
+      - name: Warn when the Anthropic key secret is absent
+        if: env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "::warning::ANTHROPIC_API_KEY repo secret is not set. Leaving the function's existing secret untouched — manage it in the Supabase dashboard (Edge Functions → Secrets) or add the GitHub secret."
 
       - name: Deploy concierge function
         run: supabase functions deploy concierge --no-verify-jwt
@@ -37,4 +46,4 @@ jobs:
       - name: Print endpoint
         run: |
           echo "Endpoint: https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/concierge"
-          echo "Paste this into FEIER_CONCIERGE_CONFIG.endpoint in index.html and push."
+          echo "This URL is already wired into index.html (FEIER_CONCIERGE_CONFIG.endpoint)."
