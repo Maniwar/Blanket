@@ -589,7 +589,14 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
   transition:opacity .4s,transform .4s;pointer-events:none;z-index:3;
 }
 .cw:hover .cw-go,.cw:focus-visible .cw-go{opacity:1;transform:translate(-50%,0)}
+.cw .cw-go{max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis}
+.cw .cw-go-brief{display:none}
 @media (hover:none){.cw .cw-go{opacity:1;transform:translate(-50%,0)}}
+@media (max-width:900px){
+  .cw .cw-go{font-size:.56rem;letter-spacing:.16em;padding:.55em .95em;bottom:12px}
+  .cw .cw-go-full{display:none}
+  .cw .cw-go-brief{display:inline}
+}
 .cta-row{
   display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);
   gap:clamp(2.5rem,7vw,7rem);align-items:end;
@@ -1309,7 +1316,14 @@ footer{
         if(chip){
           var go = document.createElement('span');
           go.className = 'cw-go';
-          go.textContent = 'Commission in this cloth \u2733';
+          var goFull = document.createElement('span');
+          goFull.className = 'cw-go-full';
+          goFull.textContent = 'Commission in this cloth \u2733';
+          var goBrief = document.createElement('span');
+          goBrief.className = 'cw-go-brief';
+          goBrief.textContent = 'Commission \u2733';
+          go.appendChild(goFull);
+          go.appendChild(goBrief);
           chip.appendChild(go);
         }
         fig.setAttribute('tabindex', '0');
