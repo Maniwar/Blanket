@@ -8,10 +8,15 @@
  * hello@feierabend.example.
  *
  * Wire contract:
- *   POST <fn> {"name","email","city","state","colorway"}
+ *   POST <fn> {"name","email","city","state","colorway","session_key"?}
  *     -> 200 {"serial":14215,"name":"…","colorway":"…","email":"…"}
+ *   POST <fn>?hold=1 {"session_key"} -> 200 {"serial":14216,"expires_at":"…"}
+ *     or 200 {"sold_out":true} when every number is held/claimed right now.
+ *     The hold reserves the shown number for the visit (10-min TTL, refresh
+ *     by calling again); the commission consumes it, so shown == recorded.
  *   Errors: JSON {"error":"..."} with CORS headers (400 validation,
- *   405 non-POST, 429 rate limit, 502 register unavailable).
+ *   405 non-POST, 409 run fully spoken for, 429 rate limit,
+ *   502 register unavailable).
  *
  * Optional Authorization: Bearer <Supabase user JWT> links the order to the
  * signed-in account (invalid/absent tokens simply mean anonymous — never an
@@ -57,23 +62,23 @@ function jsonError(req: Request, status: number, message: string): Response {
 
 // ── Rate limiting — in-memory sliding window per client IP ───────────────────
 
-const RATE_LIMIT = 10; // requests
 const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const hits = new Map<string, number[]>(); // ip -> request timestamps
+const hits = new Map<string, number[]>(); // key -> request timestamps
 
-function rateLimited(ip: string): boolean {
+/** Sliding-window limiter; holds get their own, roomier budget per IP. */
+function rateLimited(key: string, limit: number): boolean {
   const now = Date.now();
   const cutoff = now - RATE_WINDOW_MS;
   // Prune stale entries across the whole map so it can't grow unbounded.
-  for (const [key, times] of hits) {
+  for (const [k, times] of hits) {
     const fresh = times.filter((t) => t > cutoff);
-    if (fresh.length === 0) hits.delete(key);
-    else hits.set(key, fresh);
+    if (fresh.length === 0) hits.delete(k);
+    else hits.set(k, fresh);
   }
-  const recent = hits.get(ip) ?? [];
-  if (recent.length >= RATE_LIMIT) return true;
+  const recent = hits.get(key) ?? [];
+  if (recent.length >= limit) return true;
   recent.push(now);
-  hits.set(ip, recent);
+  hits.set(key, recent);
   return false;
 }
 
@@ -162,35 +167,78 @@ async function verifyUser(req: Request): Promise<VerifiedUser | null> {
   } catch { return null; }
 }
 
-// ── RPC — commission_order via PostgREST with the service role ───────────────
+// ── Session keys — a visit's identity for holds (opaque, client-generated) ───
 
-/** Calls public.commission_order; returns the serial, or null on any failure. */
-async function commissionOrder(c: Commission, userId: string | null): Promise<number | null> {
+const SESSION_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+function readSessionKey(raw: unknown): string | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const v = (raw as Record<string, unknown>).session_key;
+  return typeof v === "string" && SESSION_RE.test(v) ? v : null;
+}
+
+// ── RPCs via PostgREST with the service role ─────────────────────────────────
+
+const RPC_HEADERS = {
+  "apikey": SERVICE_KEY,
+  "Authorization": `Bearer ${SERVICE_KEY}`,
+  "Content-Type": "application/json",
+};
+
+/** Calls public.hold_serial; {serial, expires_at}, "sold out" (empty), or null on failure. */
+async function holdSerial(session: string): Promise<{ serial: number; expires_at: string } | "sold_out" | null> {
   if (!SUPABASE_URL || !SERVICE_KEY) return null;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/commission_order`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/hold_serial`, {
       method: "POST",
-      headers: {
-        "apikey": SERVICE_KEY,
-        "Authorization": `Bearer ${SERVICE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        p_email: c.email,
-        p_name: c.name,
-        p_address: c.address,
-        p_address2: c.address2,
-        p_city: c.city,
-        p_state: c.state,
-        p_zip: c.zip,
-        p_colorway: c.colorway,
-        p_user_id: userId,
-      }),
+      headers: RPC_HEADERS,
+      body: JSON.stringify({ p_session: session }),
     });
     if (!res.ok) return null;
-    const serial = await res.json() as unknown;
-    return typeof serial === "number" && Number.isInteger(serial) ? serial : null;
+    const rows = await res.json() as Array<{ o_serial: number; o_expires_at: string }>;
+    if (!Array.isArray(rows) || rows.length === 0) return "sold_out";
+    const row = rows[0];
+    return typeof row?.o_serial === "number"
+      ? { serial: row.o_serial, expires_at: String(row.o_expires_at ?? "") }
+      : null;
   } catch { return null; }
+}
+
+/** Calls public.commission_order; the serial, -1 (run fully spoken for),
+ *  or null on failure. Falls back to the pre-holds 9-parameter signature so
+ *  a freshly deployed function still works against a not-yet-migrated DB. */
+async function commissionOrder(
+  c: Commission, userId: string | null, session: string | null,
+): Promise<number | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null;
+  const legacyArgs: Record<string, unknown> = {
+    p_email: c.email,
+    p_name: c.name,
+    p_address: c.address,
+    p_address2: c.address2,
+    p_city: c.city,
+    p_state: c.state,
+    p_zip: c.zip,
+    p_colorway: c.colorway,
+    p_user_id: userId,
+  };
+  const attempts: Record<string, unknown>[] = [
+    { ...legacyArgs, p_session: session },
+    legacyArgs,
+  ];
+  for (const args of attempts) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/commission_order`, {
+        method: "POST",
+        headers: RPC_HEADERS,
+        body: JSON.stringify(args),
+      });
+      if (!res.ok) continue; // signature mismatch pre-migration → try legacy
+      const serial = await res.json() as unknown;
+      return typeof serial === "number" && Number.isInteger(serial) ? serial : null;
+    } catch { /* fall through to the next signature */ }
+  }
+  return null;
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -231,9 +279,29 @@ Deno.serve(async (req: Request) => {
     return jsonError(req, 405, "Method not allowed. Use POST, or GET ?next=1.");
   }
 
-  // Rate limit: 10 requests / 10 minutes per x-forwarded-for IP.
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  if (rateLimited(ip)) {
+
+  // ── POST ?hold=1 — reserve (or re-confirm) the visit's number ─────────────
+  if (new URL(req.url).searchParams.get("hold")) {
+    if (rateLimited("h:" + ip, 30)) {
+      return jsonError(req, 429, "Too many hold requests — a short pause, please.");
+    }
+    let holdBody: unknown;
+    try { holdBody = await req.json(); } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const session = readSessionKey(holdBody);
+    if (!session) {
+      return jsonError(req, 400, "session_key must be 8-64 characters of [A-Za-z0-9_-].");
+    }
+    const hold = await holdSerial(session);
+    if (hold === null) return jsonError(req, 502, "The register is briefly unavailable.");
+    if (hold === "sold_out") return jsonResponse(req, 200, { sold_out: true });
+    return jsonResponse(req, 200, hold);
+  }
+
+  // Rate limit: 10 commissions / 10 minutes per x-forwarded-for IP.
+  if (rateLimited(ip, 10)) {
     return jsonError(req, 429,
       "Too many requests. The register takes a short pause — try again in a few minutes.");
   }
@@ -245,6 +313,7 @@ Deno.serve(async (req: Request) => {
   }
   const validated = validateBody(parsed);
   if (typeof validated === "string") return jsonError(req, 400, validated);
+  const session = readSessionKey(parsed);
 
   // The register takes signed entries only: a verified magic-link session is
   // required, and the verified email is the one recorded — not the typed one.
@@ -255,11 +324,15 @@ Deno.serve(async (req: Request) => {
   }
   if (customer.email) validated.email = customer.email;
 
-  // Assign the serial and record the order.
-  const serial = await commissionOrder(validated, customer.id);
+  // Assign the serial and record the order (consuming the visit's hold).
+  const serial = await commissionOrder(validated, customer.id, session);
   if (serial === null) {
     return jsonError(req, 502,
       "The register is briefly unavailable. Nothing was recorded — try again.");
+  }
+  if (serial === -1) {
+    return jsonError(req, 409,
+      "The year's run is fully spoken for at this moment. The 2027 waitlist stands open.");
   }
 
   return jsonResponse(req, 200, {

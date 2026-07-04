@@ -33,6 +33,25 @@
     return e;
   }
   function isDemo() { return !commissionEndpoint(); }
+  function visitKey() {
+    try {
+      var k = window.localStorage.getItem('feier-visit');
+      return (k && /^[A-Za-z0-9_-]{8,64}$/.test(k)) ? k : '';
+    } catch (eK) { return ''; }
+  }
+  /* re-confirm the visit's held number whenever the sheet opens */
+  function refreshHold() {
+    var e = commissionEndpoint();
+    var k = visitKey();
+    if (!e || !k) { return; }
+    try {
+      fetch(e + '?hold=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_key: k })
+      })['catch'](function () { /* the page's own cycle will retry */ });
+    } catch (eH) { /* ignore */ }
+  }
 
   function feierState() {
     var s = window.__feierState;
@@ -308,19 +327,56 @@
       '.ck-otpbtn{flex:1 1 auto;margin-top:0;}',
 
       /* ---------- act 4 — the register card ---------- */
-      '.ck-card{position:relative;border:1px solid var(--ck-brass-soft);padding:2.2rem 1.6rem 1.9rem;',
-      'margin:.6rem 0 1.4rem;text-align:center;background:rgba(241,236,226,.02);}',
-      '.ck-card::after{content:"";position:absolute;inset:10px;',
-      'border:1px dashed rgba(241,236,226,.4);mix-blend-mode:overlay;pointer-events:none;}',
-      '.ck-cardstamp{display:block;width:40px;height:40px;margin:0 auto 1.1rem;',
+      '.ck-card{position:relative;overflow:hidden;border:1px solid var(--ck-brass-soft);',
+      'aspect-ratio:840/1042;display:flex;flex-direction:column;justify-content:center;',
+      'padding:20% 25% 22%;margin:.6rem 0 .9rem;text-align:center;',
+      'background-color:#141b16;background-image:url("img/card-engraving.webp");',
+      'background-size:100% 100%;background-repeat:no-repeat;}',
+      '.ck-stampwrap{position:relative;display:block;margin:0 auto .8rem;',
+      'width:clamp(36px,11vw,50px);height:clamp(36px,11vw,50px);}',
+      '.ck-cardstamp{display:block;width:100%;height:100%;',
       'border-radius:50%;object-fit:cover;border:1px solid var(--ck-hair);}',
-      '.ck-cardno{font-family:"Gloock",serif;font-weight:400;font-size:2.6rem;line-height:1.1;',
+      '.ck-stampwrap::after{content:"";position:absolute;inset:-7px;border-radius:50%;',
+      'border:1px solid rgba(196,155,91,.75);opacity:0;pointer-events:none;}',
+      '.ck-cardno{font-family:"Gloock",serif;font-weight:400;',
+      'font-size:clamp(1.5rem,8.5vw,2.6rem);line-height:1.1;',
       'color:var(--ck-ink);margin:0 0 .35rem;}',
+      '.ck-sheen{position:absolute;inset:0;pointer-events:none;',
+      'background:linear-gradient(115deg,transparent 30%,rgba(241,236,226,.08) 45%,',
+      'rgba(196,155,91,.16) 50%,transparent 66%);transform:translateX(-130%);}',
+      '.ck-motes{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;}',
+
+      /* the commission moment — only when motion is welcome */
+      '.ck-card.ck-celebrate{animation:ckRise .9s cubic-bezier(.22,1,.36,1) both;}',
+      '.ck-celebrate .ck-cardstamp{animation:ckStamp 1.05s cubic-bezier(.16,1.4,.3,1) .35s both;}',
+      '.ck-celebrate .ck-stampwrap::after{animation:ckRing 1.5s ease-out 1.05s both;}',
+      '.ck-celebrate .ck-cardno{animation:ckInkIn .6s ease .35s both;}',
+      '.ck-celebrate .ck-cardrun{opacity:0;animation:ckRow .8s ease 1.15s both;}',
+      '.ck-celebrate .ck-cardrow{opacity:0;animation:ckRow .7s ease both;}',
+      '.ck-celebrate .ck-sheen{animation:ckSheen 3s ease-in-out 1.7s 2;}',
+      '@keyframes ckRise{0%{opacity:0;transform:translateY(28px) scale(.96);}',
+      '100%{opacity:1;transform:none;}}',
+      '@keyframes ckStamp{0%{opacity:0;transform:scale(2.4) rotate(-9deg);}',
+      '55%{opacity:1;transform:scale(.93) rotate(1deg);}78%{transform:scale(1.06);}',
+      '100%{opacity:1;transform:scale(1) rotate(0);}}',
+      '@keyframes ckRing{0%{opacity:.9;transform:scale(.55);}100%{opacity:0;transform:scale(2.7);}}',
+      '@keyframes ckInkIn{0%{opacity:0;filter:blur(4px);}100%{opacity:1;filter:blur(0);}}',
+      '@keyframes ckRow{0%{opacity:0;transform:translateY(7px);}100%{opacity:1;transform:none;}}',
+      '@keyframes ckSheen{0%{transform:translateX(-130%);}60%{transform:translateX(130%);}',
+      '100%{transform:translateX(130%);}}',
+      '@keyframes ckFlare{0%{text-shadow:0 0 26px rgba(196,155,91,.95);}',
+      '100%{text-shadow:0 0 0 rgba(196,155,91,0);}}',
+      '@media (max-width:480px){',
+      '.ck-cardrow{font-size:.52rem;letter-spacing:.1em;padding:.42rem 0;}',
+      '.ck-cardrun{font-size:.5rem;letter-spacing:.18em;margin-bottom:.85rem;}',
+      '.ck-stampwrap{margin-bottom:.55rem;}',
+      '.ck-cardno{font-size:clamp(1.35rem,7.2vw,2rem);}',
+      '}',
       '.ck-cardrun{font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.26em;',
       'text-transform:uppercase;color:var(--ck-brass-soft);margin-bottom:1.3rem;}',
-      '.ck-cardrows{border-top:1px solid var(--ck-hair-soft);margin:0 .4rem;}',
-      '.ck-cardrow{padding:.65rem 0;border-bottom:1px solid var(--ck-hair-soft);',
-      'font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.16em;',
+      '.ck-cardrows{border-top:1px solid var(--ck-hair-soft);margin:0;}',
+      '.ck-cardrow{padding:.55rem 0;border-bottom:1px solid var(--ck-hair-soft);',
+      'font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.14em;',
       'text-transform:uppercase;line-height:1.7;color:rgba(241,236,226,.78);',
       'overflow-wrap:break-word;word-break:break-word;}',
       '.ck-cardrow.ck-cardrow-soft{color:rgba(241,236,226,.5);text-transform:none;letter-spacing:.08em;}',
@@ -862,6 +918,8 @@
   function buildAct3() {
     var box = el('section', 'ck-act');
     box.setAttribute('aria-label', 'Act three — the commission');
+    /* warm the register card's engraving while the visitor reads the plate */
+    try { var pre = new Image(); pre.src = 'img/card-engraving.webp'; } catch (eP) { /* ignore */ }
 
     box.appendChild(el('div', 'ck-kicker', 'Act III — The Commission'));
     box.appendChild(el('p', 'ck-lede', 'Read it the way the mill will sew it in. Then sign the evening over.'));
@@ -931,6 +989,13 @@
         }).then(function () {
           showAct(5, 1);
         });
+        return;
+      }
+      if (code === 409) {
+        sysline.textContent = 'The year\u2019s run is fully spoken for at this moment. A held number may free within minutes \u2014 or the 2027 waitlist stands open.';
+        sysline.style.display = '';
+        while (confirmBtn.firstChild) { confirmBtn.removeChild(confirmBtn.firstChild); }
+        confirmBtn.appendChild(el('span', null, 'Try once more'));
         return;
       }
       sysline.textContent = ERR_LINE;
@@ -1204,7 +1269,8 @@
       city: order.city,
       state: order.state,
       zip: order.zip,
-      colorway: order.colorway
+      colorway: order.colorway,
+      session_key: visitKey() || undefined
     });
     try {
       getFreshToken().then(function (token) {
@@ -1217,6 +1283,7 @@
         });
       }).then(function (res) {
         if (res.status === 401) { var e401 = new Error('401'); e401.code = 401; throw e401; }
+        if (res.status === 409) { var e409 = new Error('409'); e409.code = 409; throw e409; }
         if (!res.ok) { throw new Error('HTTP ' + res.status); }
         return res.json()['catch'](function () { return {}; });
       }).then(function (j) {
@@ -1228,13 +1295,58 @@
         }
         if (!serial || isNaN(serial)) { serial = demoSerial(); }
         onOk(serial);
-      })['catch'](function (err) { onFail(err && err.code === 401 ? 401 : 0); });
+      })['catch'](function (err) { onFail(err && err.code ? err.code : 0); });
     } catch (eF) { onFail(0); }
   }
 
   /* ----------------------------------------------------------
      10. Act 4 — THE REGISTER CARD
   ---------------------------------------------------------- */
+  /* Brass motes — a slow drift of golden dust over the card. Cheap canvas,
+     stops itself the moment the card leaves the document. */
+  function startMotes(card) {
+    var cv = document.createElement('canvas');
+    cv.className = 'ck-motes';
+    cv.setAttribute('aria-hidden', 'true');
+    card.appendChild(cv);
+    var ctx = cv.getContext && cv.getContext('2d');
+    if (!ctx) { return; }
+    var W = 0, H = 0, motes = [], i;
+    function size() {
+      W = cv.width = card.clientWidth || 300;
+      H = cv.height = card.clientHeight || 380;
+    }
+    size();
+    for (i = 0; i < 26; i++) {
+      motes.push({
+        x: Math.random() * W, y: Math.random() * H,
+        r: 0.6 + Math.random() * 1.6,
+        s: 0.06 + Math.random() * 0.2,
+        w: Math.random() * 6.28,
+        a: 0.12 + Math.random() * 0.45
+      });
+    }
+    function frame(ts) {
+      if (!cv.isConnected) { return; }
+      if (W !== (card.clientWidth || W) || H !== (card.clientHeight || H)) { size(); }
+      ctx.clearRect(0, 0, W, H);
+      var p, tw;
+      for (i = 0; i < motes.length; i++) {
+        p = motes[i];
+        p.y -= p.s;
+        p.x += Math.sin(ts / 1500 + p.w) * 0.12;
+        if (p.y < -4) { p.y = H + 4; p.x = Math.random() * W; }
+        tw = p.a * (0.55 + 0.45 * Math.sin(ts / 680 + p.w));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, 6.2832);
+        ctx.fillStyle = 'rgba(214,178,122,' + tw.toFixed(3) + ')';
+        ctx.fill();
+      }
+      window.requestAnimationFrame(frame);
+    }
+    window.requestAnimationFrame(frame);
+  }
+
   function buildAct4() {
     var box = el('section', 'ck-act');
     box.setAttribute('aria-label', 'Act four — the register card');
@@ -1244,19 +1356,53 @@
     var serial = commissioned ? commissioned.serial : demoSerial();
     var dateLine = (commissioned && commissioned.dateLine) ? commissioned.dateLine : todayLine();
     var cw = colorwayById(order.colorway);
+    var celebrate = !REDUCED;
 
-    var card = el('div', 'ck-card' + (REDUCED ? '' : ' ck-fade'));
-    card.appendChild(stampImg('ck-cardstamp'));
-    card.appendChild(el('div', 'ck-cardno', 'Nº ' + fmtSerial(serial)));
+    var card = el('div', 'ck-card' + (celebrate ? ' ck-celebrate' : ''));
+    card.appendChild(el('div', 'ck-sheen'));
+    var stampWrap = el('span', 'ck-stampwrap');
+    stampWrap.appendChild(stampImg('ck-cardstamp'));
+    card.appendChild(stampWrap);
+
+    var no = el('div', 'ck-cardno', 'Nº ' + fmtSerial(celebrate ? Math.max(1, serial - 24) : serial));
+    card.appendChild(no);
     card.appendChild(el('div', 'ck-cardrun', 'Decke 01 · Run of 15,000'));
 
     var rows = el('div', 'ck-cardrows');
-    rows.appendChild(el('div', 'ck-cardrow', order.name || '—'));
-    rows.appendChild(el('div', 'ck-cardrow', cw ? (cw.name + ' · ' + cw.desc) : '—'));
-    rows.appendChild(el('div', 'ck-cardrow', 'Entered in the Webbuch · ' + dateLine));
-    rows.appendChild(el('div', 'ck-cardrow ck-cardrow-soft', DEMO_LINE));
+    var rowData = [
+      [order.name || '—', ''],
+      [cw ? (cw.name + ' · ' + cw.desc) : '—', ''],
+      ['Webbuch · ' + dateLine, '']
+    ];
+    var r, rowEl;
+    for (r = 0; r < rowData.length; r++) {
+      rowEl = el('div', 'ck-cardrow' + rowData[r][1], rowData[r][0]);
+      if (celebrate) { rowEl.style.animationDelay = (1250 + r * 170) + 'ms'; }
+      rows.appendChild(rowEl);
+    }
     card.appendChild(rows);
+
+    if (celebrate) {
+      /* the number inks itself upward until it settles on the assigned Nº */
+      var from = Math.max(1, serial - 24);
+      var t0 = null;
+      var tick = function (ts) {
+        if (!card.isConnected) { return; }
+        if (t0 === null) { t0 = ts; }
+        var p = Math.min(1, (ts - t0) / 950);
+        var eased = 1 - Math.pow(1 - p, 3);
+        no.textContent = 'Nº ' + fmtSerial(Math.round(from + (serial - from) * eased));
+        if (p < 1) { window.requestAnimationFrame(tick); }
+        else {
+          no.textContent = 'Nº ' + fmtSerial(serial);
+          no.style.animation = 'ckFlare 1.3s ease-out both';
+        }
+      };
+      setTimeout(function () { window.requestAnimationFrame(tick); }, 480);
+      startMotes(card);
+    }
     box.appendChild(card);
+    box.appendChild(el('p', 'ck-demoline', DEMO_LINE));
 
     var returnRow = el('div', 'ck-returnrow');
     var againBtn = el('button', 'ck-back', 'Commission another →');
@@ -1297,6 +1443,7 @@
   function openPanel() {
     if (!panel || panelOpen) { return; }
     panelOpen = true;
+    refreshHold();
     lastFocused = (document.activeElement && document.activeElement !== document.body)
       ? document.activeElement : null;
     /* resume where the visitor left off; a finished commission shows its card */

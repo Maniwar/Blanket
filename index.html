@@ -1244,7 +1244,9 @@ footer{
   var allocFill  = document.getElementById('allocFill');
   function fmtN(n){ return n.toLocaleString('en-US'); }
   function syncAlloc(pulse){
-    slotEls.forEach(function(el){ el.textContent = fmtN(claimed + 1); });
+    slotEls.forEach(function(el){
+      el.textContent = soldOut ? 'next free' : fmtN(heldSerial !== null ? heldSerial : claimed + 1);
+    });
     claimedEls.forEach(function(el){ el.textContent = fmtN(claimed); });
     remainEls.forEach(function(el){ el.textContent = fmtN(RUN - claimed); });
     if(allocFill) allocFill.style.width = (claimed / RUN * 100).toFixed(1) + '%';
@@ -1257,12 +1259,54 @@ footer{
       }
     }
   }
+  /* ---- real serial holds: the shown number is reserved for this visit ---- */
+  var heldSerial = null, soldOut = false;
+  function liveBase(){
+    var cfg = window.FEIER_CONCIERGE_CONFIG || {};
+    return cfg.endpoint ? cfg.endpoint.replace(/concierge$/, 'commission') : '';
+  }
+  function visitKey(){
+    try {
+      var k = window.localStorage.getItem('feier-visit');
+      if(k && /^[A-Za-z0-9_-]{8,64}$/.test(k)) return k;
+      k = 'v';
+      var a = new Uint8Array(16);
+      (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(a)
+        : a.forEach(function(_, i){ a[i] = Math.floor(Math.random() * 256); });
+      for(var i = 0; i < a.length; i++) k += (a[i] % 36).toString(36);
+      window.localStorage.setItem('feier-visit', k);
+      return k;
+    } catch(e) { return 'v-ephemeral-' + String(Date.now() % 1e9); }
+  }
+  function requestHold(){
+    var base = liveBase();
+    if(!base) return;
+    fetch(base + '?hold=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_key: visitKey() })
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if(j && typeof j.serial === 'number'){
+        soldOut = false;
+        var changed = heldSerial !== null && heldSerial !== j.serial;
+        heldSerial = j.serial;
+        syncAlloc(changed); /* pulse only when the visitor's number moved */
+      } else if(j && j.sold_out){
+        soldOut = true; heldSerial = null; syncAlloc();
+      }
+    })['catch'](function(){ /* keep the soft fallback display */ });
+  }
+
   var holdClock = document.getElementById('holdClock');
   var HOLD = 600, holdLeft = HOLD;
   if(holdClock){
     setInterval(function(){
       holdLeft--;
-      if(holdLeft <= 0){ if(claimed < RUN - 1) claimed++; holdLeft = HOLD; syncAlloc(); }
+      if(holdLeft <= 0){
+        holdLeft = HOLD;
+        if(liveBase()){ requestHold(); /* same number back if nobody took it */ }
+        else if(claimed < RUN - 1){ claimed++; syncAlloc(); }
+      }
       var m = Math.floor(holdLeft / 60), s = holdLeft % 60;
       holdClock.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }, 1000);
@@ -1326,6 +1370,7 @@ footer{
         syncAlloc();
       }
     })['catch'](function(){});
+    requestHold();
     fetch(base + '?recent=1').then(function(r){ return r.json(); }).then(function(j){
       if(j && j.orders) renderClaims(j.orders);
     })['catch'](function(){});
@@ -1333,6 +1378,9 @@ footer{
   /* a commission just happened on this very page */
   window.addEventListener('ck:commissioned', function(ev){
     claimed++;
+    heldSerial = null;   /* consumed by the register */
+    holdLeft = HOLD;
+    requestHold();       /* reserve the next number for 'commission another' */
     syncAlloc(true);
     var d = ev && ev.detail;
     var ul = document.querySelector('.claims');
@@ -1424,7 +1472,7 @@ footer{
       claimed: claimed,
       run: RUN,
       remaining: RUN - claimed,
-      slot: fmtN(claimed + 1),
+      slot: soldOut ? 'next free' : fmtN(heldSerial !== null ? heldSerial : claimed + 1),
       holdClock: holdClock ? holdClock.textContent : '',
       loomClock: loomClock ? loomClock.textContent : ''
     };
@@ -1453,6 +1501,6 @@ window.FEIER_CONCIERGE_CONFIG = {
 </script>
 <script defer src="assets/concierge-kb.js?v=6"></script>
 <script defer src="assets/concierge.js?v=7"></script>
-<script defer src="assets/checkout.js?v=5"></script>
+<script defer src="assets/checkout.js?v=6"></script>
 </body>
 </html>
