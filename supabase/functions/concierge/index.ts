@@ -368,6 +368,24 @@ const REGISTER_TOOLS: any[] = [
     },
   },
   {
+    name: "update_colorway",
+    description:
+      "Change the cloth (colorway) on one of the owner's orders. Allowed only while the " +
+      "order is still 'placed' — once weaving begins the cloth is on the loom. " +
+      "Confirm the exact change with the owner before calling.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+        colorway: {
+          type: "string", enum: ["ungefaerbt", "loden", "graphit"],
+          description: "The new cloth.",
+        },
+      },
+      required: ["serial", "colorway"],
+    },
+  },
+  {
     name: "cancel_order",
     description:
       "Cancel one of the owner's orders. Allowed only while the order is still 'placed' " +
@@ -445,6 +463,26 @@ async function runRegisterTool(
     const u = updated[0];
     return `Recorded. Nº ${serial} now ships to: ${u.address}` +
       `${u.address2 ? ", " + u.address2 : ""}, ${u.city}, ${u.state} ${u.zip}.`;
+  }
+
+  if (name === "update_colorway") {
+    if (order.status !== "placed") {
+      return `ERROR: Nº ${serial} is '${order.status}' — the cloth is on the loom. ` +
+        "Colorway changes are possible only while an order is still 'placed'; " +
+        "the 30-night trial covers a color that turns out wrong.";
+    }
+    const cw = String(input.colorway ?? "").toLowerCase();
+    if (!["ungefaerbt", "loden", "graphit"].includes(cw)) {
+      return "ERROR: colorway must be ungefaerbt, loden, or graphit.";
+    }
+    const updated = await pgPatch<OrderRow>(
+      `orders?serial=eq.${serial}&status=eq.placed&${ownershipFilter(customer)}`,
+      { colorway: cw },
+    );
+    if (!updated || updated.length === 0) return "ERROR: the register did not accept the change.";
+    await logAction(cid, customer, "update_colorway", serial, { colorway: cw }, "colorway updated");
+    const pretty = cw === "ungefaerbt" ? "Ungefärbt" : cw === "loden" ? "Loden" : "Graphit";
+    return `Recorded. Nº ${serial} now weaves in ${pretty}.`;
   }
 
   if (name === "cancel_order") {
@@ -612,7 +650,7 @@ function buildSystemPrompt(
     system += "\nREGISTER TOOLS\n" +
       "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
       "get_my_orders (read their orders), update_shipping_address (before shipment), " +
-      "cancel_order (only while 'placed').\n" +
+      "update_colorway (only while 'placed'), cancel_order (only while 'placed').\n" +
       "- Call get_my_orders before answering any question about their orders — never rely on memory. " +
       "Struck (cancelled) entries are archive: leave them out of lists and counts unless the owner " +
       "asks about cancellations or history (then call get_my_orders with include_cancelled).\n" +

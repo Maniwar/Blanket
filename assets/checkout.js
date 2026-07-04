@@ -39,6 +39,15 @@
       return (k && /^[A-Za-z0-9_-]{8,64}$/.test(k)) ? k : '';
     } catch (eK) { return ''; }
   }
+  /* the concierge's session, only when a conversation actually happened */
+  function chatKey() {
+    try {
+      var h = JSON.parse(window.sessionStorage.getItem('cx-history') || '[]');
+      if (!h || !h.length) { return ''; }
+      var k = window.sessionStorage.getItem('cx-skey');
+      return (k && /^[A-Za-z0-9_-]{8,64}$/.test(k)) ? k : '';
+    } catch (eC) { return ''; }
+  }
   /* re-confirm the visit's held number whenever the sheet opens */
   function refreshHold() {
     var e = commissionEndpoint();
@@ -1514,6 +1523,7 @@
       zip: order.zip,
       colorway: order.colorway,
       session_key: visitKey() || undefined,
+      chat_session: chatKey() || undefined,
       is_gift: order.is_gift || undefined,
       recipient: (order.is_gift && order.recipient) || undefined,
       billing: order.bill_differs && order.bill_address ? {

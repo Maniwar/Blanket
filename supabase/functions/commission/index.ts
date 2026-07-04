@@ -220,6 +220,13 @@ function readSessionKey(raw: unknown): string | null {
   return typeof v === "string" && SESSION_RE.test(v) ? v : null;
 }
 
+/** The concierge conversation key, when the buyer chatted this visit. */
+function readChatSession(raw: unknown): string | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const v = (raw as Record<string, unknown>).chat_session;
+  return typeof v === "string" && SESSION_RE.test(v) ? v : null;
+}
+
 // ── Standing — the patron's place in the Webbuch ─────────────────────────────
 
 function standingTier(n: number): string {
@@ -421,6 +428,7 @@ Deno.serve(async (req: Request) => {
   const validated = validateBody(parsed);
   if (typeof validated === "string") return jsonError(req, 400, validated);
   const session = readSessionKey(parsed);
+  const chatSession = readChatSession(parsed);
 
   // The register takes signed entries only: a verified magic-link session is
   // required, and the verified email is the one recorded — not the typed one.
@@ -440,6 +448,17 @@ Deno.serve(async (req: Request) => {
   if (serial === -1) {
     return jsonError(req, 409,
       "The year's run is fully spoken for at this moment. The 2027 waitlist stands open.");
+  }
+
+  // Attribution: the concierge's commissions are counted (best-effort).
+  if (chatSession) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/orders?serial=eq.${serial}`, {
+        method: "PATCH",
+        headers: RPC_HEADERS,
+        body: JSON.stringify({ chat_session: chatSession }),
+      });
+    } catch { /* the order stands either way */ }
   }
 
   const count = await orderCount(customer.id, customer.email);

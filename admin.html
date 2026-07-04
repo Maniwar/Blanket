@@ -569,6 +569,8 @@
       <div class="metrics">
         <div class="stat"><span class="micro">Conversations today</span><div class="val" id="m-convos">—</div></div>
         <div class="stat"><span class="micro">Messages today</span><div class="val" id="m-msgs">—</div></div>
+        <div class="stat"><span class="micro">Assisted commissions</span><div class="val" id="m-assist">—</div></div>
+        <div class="stat"><span class="micro">Assisted revenue</span><div class="val" id="m-assist-rev">—</div></div>
         <div class="stat"><span class="micro">👍 rate</span><div class="val" id="m-rate">—</div></div>
       </div>
 
@@ -1520,12 +1522,23 @@ async function loadMetrics() {
       sb.from('concierge_conversations').select('*', { count: 'exact', head: true }).gte('created_at', iso),
       sb.from('concierge_messages').select('*', { count: 'exact', head: true }).gte('created_at', iso),
       sb.from('concierge_feedback').select('*', { count: 'exact', head: true }),
-      sb.from('concierge_feedback').select('*', { count: 'exact', head: true }).eq('rating', 1)
+      sb.from('concierge_feedback').select('*', { count: 'exact', head: true }).eq('rating', 1),
+      sb.from('orders').select('*', { count: 'exact', head: true })
+        .not('chat_session', 'is', null).neq('status', 'cancelled')
     ]);
     const convosToday = results[0], msgsToday = results[1], fbAll = results[2], fbUp = results[3];
+    const assisted = results[4];
 
     $('m-convos').textContent = convosToday.error ? '—' : String(convosToday.count || 0);
     $('m-msgs').textContent = msgsToday.error ? '—' : String(msgsToday.count || 0);
+    if (assisted.error) {
+      $('m-assist').textContent = '—';
+      $('m-assist-rev').textContent = '—';
+    } else {
+      const n = assisted.count || 0;
+      $('m-assist').textContent = String(n);
+      $('m-assist-rev').textContent = '$' + (n * 589).toLocaleString('en-US');
+    }
 
     if (fbAll.error || fbUp.error || !(fbAll.count > 0)) {
       $('m-rate').textContent = '—';
