@@ -160,3 +160,11 @@ revoke execute on function public.match_cached_answer(extensions.vector, float)
 alter table public.orders drop constraint orders_status_check;
 alter table public.orders add constraint orders_status_check
   check (status in ('placed','weaving','finishing','shipped','delivered','returned','cancelled'));
+
+-- ----------------------------------------------------------------------------
+-- KB alignment: the concierge now handles addresses/cancellations itself
+-- ----------------------------------------------------------------------------
+
+update public.concierge_kb set content_md = $kb$Every blanket is **woven to order — allow 3–5 weeks to your door**. **Duties and U.S. delivery are included** in the $589; nothing is owed on arrival. It ships wrapped in **cotton twill, never plastic**. Signed-in owners handle status, tracking, address changes (before shipment), and cancellations (before weaving) right here with the concierge; only matters after shipment — carrier redirects, returns in motion — go to hello@feierabend.example.$kb$,
+  updated_at = now()
+  where slug = 'shipping-duties';
