@@ -669,7 +669,13 @@ function renderLiveState(ctx: Record<string, unknown>, customerLine: string | nu
     `remaining: ${val("remaining")}`, `slot: ${val("slot")}`,
     `holdClock: ${val("holdClock")}`, `loomClock: ${val("loomClock")}`,
   ].join(" | ");
-  return customerLine ? `${line}\n${customerLine}` : line;
+  const browsing = [
+    `device: ${val("device")}`, `scrolled: ${val("depth")}`,
+    `minutes on page: ${val("minutes")}`, `checkout: ${val("checkout")}`,
+    `this message arrived by: ${val("entry")}`, `seconds since their last: ${val("sinceLast")}`,
+  ].join(" | ");
+  const base = `${line}\nBROWSING: ${browsing}`;
+  return customerLine ? `${base}\n${customerLine}` : base;
 }
 
 function formCatalog(data: ConciergeData): string {
@@ -733,7 +739,7 @@ function buildSystemPrompt(
 // ── Logging — concierge_conversations / concierge_messages ───────────────────
 
 /** Resolves the conversation, logs the last user message. Never throws. */
-async function logUserTurn(body: ValidatedBody, customer: Customer | null): Promise<string | null> {
+async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipUser = false): Promise<string | null> {
   try {
     // Reuse the latest conversation for this session_key, else insert one.
     let cid: string | null = null;
@@ -755,11 +761,13 @@ async function logUserTurn(body: ValidatedBody, customer: Customer | null): Prom
       cid = row?.id ?? null;
     }
     if (!cid) return null;
-    const lastUser = [...body.messages].reverse().find((m) => m.role === "user");
-    if (lastUser) {
-      await pgInsert("concierge_messages", {
-        conversation_id: cid, role: "user", content: lastUser.content,
-      });
+    if (!skipUser) {
+      const lastUser = [...body.messages].reverse().find((m) => m.role === "user");
+      if (lastUser) {
+        await pgInsert("concierge_messages", {
+          conversation_id: cid, role: "user", content: lastUser.content,
+        });
+      }
     }
     return cid;
   } catch { return null; }
@@ -841,6 +849,33 @@ async function handleChatPost(req: Request): Promise<Response> {
   const validated = validateBody(parsed);
   if (typeof validated === "string") return jsonError(req, 400, validated);
 
+  // Proactive follow-up: the client reports the shopper fell quiet with a
+  // nudge context. Append a synthetic instruction (never shown, never logged
+  // as the shopper's words) so the model picks the thread back up itself.
+  const nudge = (validated.context && typeof validated.context === "object")
+    ? (validated.context as Record<string, unknown>).nudge as
+      { seconds?: number; count?: number } | undefined
+    : undefined;
+  const isNudge = !!nudge &&
+    validated.messages.length > 0 &&
+    validated.messages[validated.messages.length - 1].role === "assistant";
+  if (isNudge) {
+    const secs = typeof nudge!.seconds === "number" ? Math.round(nudge!.seconds) : 40;
+    const cnt = typeof nudge!.count === "number" ? nudge!.count : 1;
+    validated.messages.push({
+      role: "user",
+      content:
+        `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
+        `(this is possible follow-up #${cnt}). Follow your ENGAGEMENT & PACING procedure. ` +
+        `First DECIDE, as a real clerk reading the room would, whether this is a moment to speak ` +
+        `or to give space. If speaking would intrude — they seem to be reading, deciding, or ` +
+        `filling the register — reply with exactly [HOLD] and nothing else. Otherwise send ONE ` +
+        `brief, warm line drawn from THIS conversation and what you know of them (their client ` +
+        `book, the room or person they mentioned) — never a generic or scripted line. Do not ` +
+        `greet them again; do not repeat yourself. One or two sentences.]`,
+    });
+  }
+
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
 
@@ -865,7 +900,7 @@ async function handleChatPost(req: Request): Promise<Response> {
 
   // Logging: resolve conversation + store the user turn, concurrently with
   // the model work; awaited again before the stream finishes.
-  const conversationPromise = logUserTurn(validated, customer);
+  const conversationPromise = logUserTurn(validated, customer, isNudge);
   const startedAt = Date.now();
 
   // ── Semantic cache — anonymous, single-turn questions only ────────────────
@@ -874,7 +909,7 @@ async function handleChatPost(req: Request): Promise<Response> {
   let queryEmbedding: number[] | null = null;
   const lastUser = [...validated.messages].reverse().find((m) => m.role === "user");
   const userTurns = validated.messages.filter((m) => m.role === "user").length;
-  const cacheEligible = !customer &&
+  const cacheEligible = !customer && !isNudge &&
     userTurns === 1 &&
     !!lastUser && lastUser.content.length <= 300 &&
     !CACHE_SKIP.test(lastUser.content);
@@ -906,6 +941,58 @@ async function handleChatPost(req: Request): Promise<Response> {
         return sseResponse(req, stream);
       }
     }
+  }
+
+  // ── Nudge path: the model decides to speak or to give space (hold) ──
+  if (isNudge) {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (obj: unknown) => {
+          try { controller.enqueue(sseFrame(obj)); } catch { /* gone */ }
+        };
+        let text = "";
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model, max_tokens: Math.min(maxTokens, 400), system,
+              messages: validated.messages,
+            }),
+          });
+          if (res.ok) {
+            // deno-lint-ignore no-explicit-any
+            const msg = await res.json() as any;
+            const blocks = Array.isArray(msg.content) ? msg.content : [];
+            text = blocks.filter((b: { type: string }) => b.type === "text")
+              // deno-lint-ignore no-explicit-any
+              .map((b: any) => b.text).join("").trim();
+          }
+        } catch { /* fall through to hold */ }
+
+        const held = text.length === 0 || /^\[?hold\]?\.?$/i.test(text) ||
+          /^\[hold\]/i.test(text);
+        if (held) {
+          send({ hold: 1 });
+        } else {
+          for (const piece of chunked(text)) send({ t: piece });
+          try {
+            const cid = await conversationPromise;
+            const meta = await logAssistantTurn(cid, text, model, Date.now() - startedAt);
+            if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
+          } catch { /* skip meta */ }
+        }
+        try {
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        } catch { /* gone */ }
+      },
+    });
+    return sseResponse(req, stream);
   }
 
   // ── Signed-in path: agentic tool loop (non-streaming turns, chunked out) ──

@@ -622,9 +622,20 @@
     return buildAct1();
   }
 
+  function pubCkState() {
+    try {
+      window.__ckState = {
+        open: panelOpen, act: act,
+        colorway: order.colorway || '',
+        commissioned: !!commissioned
+      };
+    } catch (eP) { /* ignore */ }
+  }
+
   function showAct(n, dir) {
     act = n;
     saveDraft();
+    pubCkState();
     syncThread();
     var next = buildAct(n);
     var prev = currentActEl;
@@ -1782,6 +1793,7 @@
   function openPanel() {
     if (!panel || panelOpen) { return; }
     panelOpen = true;
+    pubCkState();
     refreshHold();
     prefillReturning();
     lastFocused = (document.activeElement && document.activeElement !== document.body)
@@ -1800,6 +1812,7 @@
   function closePanel() {
     if (!panelOpen) { return; }
     panelOpen = false;
+    pubCkState();
     panel.classList.remove('ck-open');
     scrim.classList.remove('ck-on');
     unlockBody();

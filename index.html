@@ -1548,7 +1548,19 @@ footer{
 
   /* ---- concierge state bridge ---- */
   var cxSections = ['top','why','wool','label','ritual','arrival','reserve'];
+  var pageT0 = Date.now();
+  var maxDepth = 0;
   function pubFeierState(){
+    var doc = document.documentElement;
+    var span = Math.max(1, doc.scrollHeight - window.innerHeight);
+    maxDepth = Math.max(maxDepth, Math.min(1, (window.scrollY || 0) / span));
+    var ck = window.__ckState || null;
+    var ckLine = 'closed';
+    if(ck && ck.open){
+      ckLine = 'open at act ' + (ck.act || 1) + (ck.colorway ? ' · cloth ' + ck.colorway : '');
+    } else if(ck && ck.commissioned){
+      ckLine = 'commissioned this visit';
+    }
     var mid = window.scrollY + window.innerHeight * 0.5;
     var cur = 'top';
     for(var ci = 0; ci < cxSections.length; ci++){
@@ -1562,7 +1574,11 @@ footer{
       remaining: RUN - claimed,
       slot: soldOut ? 'next free' : fmtN(heldSerial !== null ? heldSerial : claimed + 1),
       holdClock: holdClock ? holdClock.textContent : '',
-      loomClock: loomClock ? loomClock.textContent : ''
+      loomClock: loomClock ? loomClock.textContent : '',
+      device: (window.innerWidth <= 760 || ('ontouchstart' in window && window.innerWidth <= 1024)) ? 'mobile' : 'desktop',
+      depth: Math.round(maxDepth * 100) + '%',
+      minutes: Math.max(0, Math.round((Date.now() - pageT0) / 60000)),
+      checkout: ckLine
     };
   }
   pubFeierState();
@@ -1587,8 +1603,8 @@ window.FEIER_CONCIERGE_CONFIG = {
   supabaseAnonKey: 'sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy'
 };
 </script>
-<script defer src="assets/concierge-kb.js?v=7"></script>
-<script defer src="assets/concierge.js?v=10"></script>
+<script defer src="assets/concierge-kb.js?v=8"></script>
+<script defer src="assets/concierge.js?v=12"></script>
 <script defer src="assets/checkout.js?v=9"></script>
 </body>
 </html>

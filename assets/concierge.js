@@ -66,6 +66,9 @@
     return 'Good evening. I keep the register at the mill — ask me about the wool, ' +
       'the weave, or the number that will be yours.';
   }
+  var entryMode = 'typed';      /* how the current exchange was initiated */
+  var lastSentAt = 0;           /* silence gap between the visitor's messages */
+
   function freshState() {
     var s = window.__feierState;
     s = (s && typeof s === 'object') ? s : {};
@@ -75,7 +78,13 @@
       remaining: (s.remaining != null) ? s.remaining : null,
       slot: (s.slot != null) ? s.slot : null,
       holdClock: (s.holdClock != null) ? s.holdClock : null,
-      loomClock: (s.loomClock != null) ? s.loomClock : null
+      loomClock: (s.loomClock != null) ? s.loomClock : null,
+      device: (s.device != null) ? s.device : null,
+      depth: (s.depth != null) ? s.depth : null,
+      minutes: (s.minutes != null) ? s.minutes : null,
+      checkout: (s.checkout != null) ? s.checkout : null,
+      entry: entryMode,
+      sinceLast: lastSentAt ? Math.round((Date.now() - lastSentAt) / 1000) : null
     };
   }
 
@@ -246,6 +255,10 @@
       '.cx-launch .cx-star{color:var(--cx-brass-soft);font-size:.85rem;line-height:1;transform:translateY(-1px);}',
       '.cx-launch.cx-on{opacity:1;pointer-events:auto;}',
       '.cx-launch.cx-tuck{opacity:0;transform:translateX(-50%) translateY(140%);pointer-events:none;}',
+      '.cx-launch.cx-unread::after{content:"";position:absolute;top:-3px;right:-3px;width:11px;height:11px;',
+      'border-radius:50%;background:var(--cx-brass-soft,#C49B5B);border:2px solid var(--cx-loden-deep,#171F1A);',
+      'box-shadow:0 0 0 0 rgba(196,155,91,.6);animation:cxUnread 2s ease-out infinite;}',
+      '@keyframes cxUnread{0%{box-shadow:0 0 0 0 rgba(196,155,91,.55);}70%{box-shadow:0 0 0 9px rgba(196,155,91,0);}100%{box-shadow:0 0 0 0 rgba(196,155,91,0);}}',
       '.cx-launch:hover{border-color:rgba(196,155,91,.6);}',
       '.cx-launch:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:3px;}',
       /* docked circular form over the reserve section */
@@ -379,6 +392,12 @@
       '@keyframes cxWeave{0%,100%{transform:translateY(0);opacity:.4;}50%{transform:translateY(-4px);opacity:1;}}',
       '.cx-status{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
       'text-transform:uppercase;color:rgba(196,155,91,.75);margin-left:10px;vertical-align:middle;}',
+
+      /* the concierge asking a question — set apart from informational prose */
+      '.cx-ask{position:relative;padding-left:.9rem;margin-top:.55rem;',
+      'color:var(--cx-wool,#F1ECE2);font-style:italic;}',
+      '.cx-ask::before{content:"";position:absolute;left:0;top:.18em;bottom:.18em;width:2px;',
+      'border-radius:2px;background:linear-gradient(var(--cx-brass,#A67C3D),rgba(196,155,91,.2));}',
 
       /* quick replies */
       '.cx-replies{display:flex;flex-wrap:wrap;gap:8px;margin:.65rem 0 .2rem;}',
@@ -755,6 +774,27 @@
     return card;
   }
 
+  /* When the concierge's message ENDS on a question, that final line is an
+     invitation — set it apart from informational prose. */
+  function markAsk(frag) {
+    try {
+      var nodes = frag.childNodes;
+      var lastP = null;
+      for (var i = nodes.length - 1; i >= 0; i--) {
+        var n = nodes[i];
+        if (!n || !n.classList) { continue; }
+        /* pills and action rows may trail the question itself */
+        if (n.classList.contains('cx-replies') || n.classList.contains('cx-actionrow')) { continue; }
+        if (n.tagName === 'P') { lastP = n; }
+        break;
+      }
+      if (lastP && /\?\s*$/.test(lastP.textContent || '')) {
+        lastP.classList.add('cx-ask');
+      }
+    } catch (eM) { /* prose is fine too */ }
+    return frag;
+  }
+
   function mdRender(text) {
     var frag = document.createDocumentFragment();
     if (typeof text !== 'string' || !text.length) { return frag; }
@@ -842,6 +882,7 @@
               row.classList.add('cx-replies-used');
               var bs = row.querySelectorAll('button');
               for (var bi = 0; bi < bs.length; bi++) { bs[bi].disabled = true; }
+              entryMode = 'pill';
               sendMessage(lbl);
             });
             row.appendChild(pb);
@@ -938,7 +979,7 @@
       i++;
     }
     flushPara();
-    return frag;
+    return markAsk(frag);
   }
 
   /* ----------------------------------------------------------
@@ -1004,7 +1045,16 @@
     launcher.setAttribute('aria-label', 'Ask the mill — open product concierge');
     launcher.appendChild(el('span', 'cx-star', '✳'));
     launcher.appendChild(el('span', 'cx-label', 'Ask the mill'));
-    launcher.addEventListener('click', function () { openPanel(); });
+    launcher.addEventListener('click', function () {
+      if (pendingSay && !history.length) {
+        entryMode = 'outreach:' + (pendingKind || 'launcher');
+        history.push({ role: 'assistant', content: pendingSay });
+        saveHistory();
+      }
+      pendingSay = ''; pendingKind = '';
+      clearLauncherUnread();
+      openPanel();
+    });
 
     /* context chip (built lazily on show) */
 
@@ -1120,6 +1170,8 @@
      each kind shows once per session.
   ---------------------------------------------------------- */
   var outreachEl = null;
+  var pendingSay = '';          /* an outreach line not yet seen in the panel */
+  var pendingKind = '';
 
   function orCfg() {
     var c = cfg().outreach;
@@ -1138,11 +1190,25 @@
     try { window.sessionStorage.setItem('cx-or-n', String(orCount() + 1)); } catch (e) { /* ignore */ }
   }
 
+  function markLauncherUnread(text) {
+    if (!launcher) { return; }
+    launcher.classList.add('cx-unread');
+    try { launcher.setAttribute('data-cx-say', String(text).slice(0, 140)); } catch (e) { /* ignore */ }
+  }
+  function clearLauncherUnread() {
+    if (!launcher) { return; }
+    launcher.classList.remove('cx-unread');
+    try { launcher.removeAttribute('data-cx-say'); } catch (e) { /* ignore */ }
+  }
+
   function showOutreach(kind, text, exempt) {
     if (!text || orSeen(kind) || panelOpen || outreachEl) { return; }
     if (!exempt && orCount() >= 2) { return; }
     orMark(kind);
     if (!exempt) { orBump(); }
+    /* the launcher carries an unread mark until the visitor engages */
+    markLauncherUnread(text);
+    pendingSay = text; pendingKind = kind;
 
     var b = el('div', 'cx-outreach');
     b.setAttribute('role', 'status');
@@ -1159,7 +1225,10 @@
     b.addEventListener('click', function () {
       b.remove();
       outreachEl = null;
+      clearLauncherUnread();
+      pendingSay = '';
       /* the concierge said it — the conversation resumes from its line */
+      entryMode = 'outreach:' + kind;
       history.push({ role: 'assistant', content: text });
       saveHistory();
       openPanel();
@@ -1586,6 +1655,9 @@
   var streaming = false;
   var currentAbort = null;
   var demoTimers = [];
+  var nudgeTimer = null;        /* silence timer while the panel is open */
+  var nudgeCount = 0;           /* proactive follow-ups since the visitor last spoke */
+  var pendingNudge = null;      /* {seconds,count} carried into the next request */
 
   function setStreaming(on) {
     streaming = on;
@@ -1629,6 +1701,11 @@
     history.push({ role: 'user', content: text });
     saveHistory();
     performRequest();
+    lastSentAt = Date.now();
+    entryMode = 'typed'; /* until the next tap says otherwise */
+    nudgeCount = 0;      /* they spoke — the follow-up budget resets */
+    holdAttempts = 0;
+    clearNudge();
   }
 
   function resendLast() {
@@ -1650,7 +1727,19 @@
     else { liveRespond(shell); }
   }
 
+  var holdAttempts = 0;         /* times the bot chose to give space */
+
   function finishTurn(shell) {
+    if (shell.held) {
+      /* the concierge chose to give space — remove the empty turn, refund the
+         follow-up budget, and try again later (a few times, then rest) */
+      shell.fail();
+      if (nudgeCount > 0) { nudgeCount--; }
+      holdAttempts++;
+      setStreaming(false);
+      if (holdAttempts < 3) { scheduleNudge(true); }
+      return;
+    }
     shell.done();
     var content = shell.getText();
     if (content) {
@@ -1661,6 +1750,37 @@
       addFeedback(shell.turn, shell.mid);
     }
     setStreaming(false);
+    scheduleNudge();
+  }
+
+  function clearNudge() {
+    if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
+  }
+
+  /* The concierge picks the thread back up when the visitor falls quiet —
+     once, then once more, then it rests (the snooze procedure does the rest). */
+  function scheduleNudge(spacious) {
+    clearNudge();
+    if (isDemo() || !panelOpen) { return; }
+    if (nudgeCount >= 2) { return; }
+    /* only when a real exchange is underway and the last word was the bot's */
+    if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
+    var spoke = false, i;
+    for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
+    if (!spoke) { return; }
+    var o = orCfg();
+    var first = typeof o.nudge1Ms === 'number' ? o.nudge1Ms : 38000;
+    var second = typeof o.nudge2Ms === 'number' ? o.nudge2Ms : 55000;
+    var wait = nudgeCount === 0 ? first : second;
+    if (spacious) { wait = Math.round(wait * 1.8); } /* a declined moment earns more room */
+    nudgeTimer = setTimeout(function () {
+      if (streaming || !panelOpen) { return; }
+      if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
+      nudgeCount++;
+      entryMode = 'nudge';
+      pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount };
+      performRequest(); /* the bot's own turn — no user message */
+    }, wait);
   }
 
   function failTurn(shell) {
@@ -1682,9 +1802,11 @@
     for (i = 0; i < turns.length; i++) {
       messages.push({ role: turns[i].role, content: turns[i].content });
     }
+    var ctx = freshState();
+    if (pendingNudge) { ctx.nudge = pendingNudge; pendingNudge = null; }
     var body = JSON.stringify({
       messages: messages,
-      context: freshState(),
+      context: ctx,
       session_key: sessionKey()
     });
     var ac = null;
@@ -1765,6 +1887,7 @@
               obj = JSON.parse(payload);
               if (obj && typeof obj.t === 'string') { shell.append(obj.t); }
               if (obj && typeof obj.s === 'string' && shell.status) { shell.status(obj.s); }
+              if (obj && obj.hold) { shell.held = true; }
               if (obj && obj.m && typeof obj.m === 'object') {
                 if (obj.m.mid != null) { shell.mid = obj.m.mid; }
                 if (obj.m.cid != null) { shell.cid = obj.m.cid; }
@@ -1809,6 +1932,7 @@
           obj = JSON.parse(payload);
           if (obj && typeof obj.t === 'string') { shell.append(obj.t); }
           if (obj && typeof obj.s === 'string' && shell.status) { shell.status(obj.s); }
+          if (obj && obj.hold) { shell.held = true; }
           if (obj && obj.m && typeof obj.m === 'object') {
             if (obj.m.mid != null) { shell.mid = obj.m.mid; }
             if (obj.m.cid != null) { shell.cid = obj.m.cid; }
@@ -2206,6 +2330,7 @@
     if (!panelOpen) { return; }
     panelOpen = false;
     abortStream();
+    clearNudge();
     panel.classList.remove('cx-open');
     panel.classList.remove('cx-tall');
     scrim.classList.remove('cx-on');

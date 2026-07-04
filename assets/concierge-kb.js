@@ -149,6 +149,6 @@
       }
     ],
 
-    greeting: 'Good evening from the mill’s concierge. Ask me anything about **Decke 01** — the wool, the weave, the washing, or whether $589 is a reasonable thing to spend on a blanket (we have thoughts).'
+    greeting: 'Good evening — I am the mill’s concierge. Before the wool and the weave: tell me who the blanket is for, and I’ll point you to the right cloth.\n\n{{reply:It’s for me}}\n{{reply:It’s a gift}}\n{{reply:Just looking}}'
   };
 })();
