@@ -330,16 +330,17 @@
       'color:rgba(241,236,226,.65);font-size:1.25rem;line-height:1;cursor:pointer;font-family:"Hanken Grotesk",sans-serif;}',
       '.cx-close:hover{color:var(--cx-ink);}',
       '.cx-close:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
-      /* ---------- conversation options menu ---------- */
+      /* ---------- conversation options menu (in the composer, opens upward) ---------- */
       '.cx-menuwrap{position:relative;flex:0 0 auto;}',
-      '.cx-menu-btn{width:40px;height:40px;margin:-.5rem -.2rem 0 0;display:flex;align-items:center;',
-      'justify-content:center;background:none;border:none;color:rgba(241,236,226,.55);',
-      'font-size:1.2rem;line-height:1;cursor:pointer;font-family:"Hanken Grotesk",sans-serif;}',
-      '.cx-menu-btn:hover{color:var(--cx-ink);}',
-      '.cx-menu-btn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
-      '.cx-menu{position:absolute;top:100%;right:0;margin-top:.3rem;z-index:6;min-width:230px;',
+      '.cx-menu-btn{width:40px;height:44px;display:flex;align-items:center;',
+      'justify-content:center;background:none;border:none;color:rgba(241,236,226,.4);',
+      'font-size:1.2rem;line-height:1;cursor:pointer;font-family:"Hanken Grotesk",sans-serif;',
+      'transition:color .25s ease;}',
+      '.cx-menu-btn:hover{color:var(--cx-brass-soft);}',
+      '.cx-menu-btn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;border-radius:6px;}',
+      '.cx-menu{position:absolute;bottom:100%;right:0;margin-bottom:.5rem;z-index:8;min-width:236px;',
       'background:#1c1a17;border:1px solid var(--cx-hair);border-radius:10px;padding:.35rem;',
-      'box-shadow:0 14px 34px rgba(0,0,0,.5);}',
+      'box-shadow:0 -12px 34px rgba(0,0,0,.5);}',
       '.cx-menu[hidden]{display:none;}',
       '.cx-menu-item{display:block;width:100%;text-align:left;background:none;border:none;',
       'color:rgba(241,236,226,.82);font-family:"Hanken Grotesk",sans-serif;font-size:.82rem;',
@@ -1121,45 +1122,6 @@
       authBox.appendChild(authBtn);
       head.appendChild(authBox);
     }
-    /* A quiet "⋯" menu: the visitor's own signals — pause me, or wrap up. */
-    var menuWrap = el('div', 'cx-menuwrap');
-    var menuBtn = el('button', 'cx-menu-btn', '⋯');
-    menuBtn.type = 'button';
-    menuBtn.setAttribute('aria-label', 'Conversation options');
-    menuBtn.setAttribute('aria-haspopup', 'true');
-    menuBtn.setAttribute('aria-expanded', 'false');
-    var menuEl = el('div', 'cx-menu');
-    menuEl.setAttribute('role', 'menu');
-    menuEl.hidden = true;
-    function closeMenu() {
-      menuEl.hidden = true;
-      menuBtn.setAttribute('aria-expanded', 'false');
-    }
-    function openMenu() {
-      menuEl.hidden = false;
-      menuBtn.setAttribute('aria-expanded', 'true');
-    }
-    menuBtn.addEventListener('click', function (ev) {
-      ev.stopPropagation();
-      if (menuEl.hidden) { openMenu(); } else { closeMenu(); }
-    });
-    var quietItem = el('button', 'cx-menu-item', 'Don’t message me until I write back');
-    quietItem.type = 'button';
-    quietItem.setAttribute('role', 'menuitem');
-    quietItem.addEventListener('click', function () { closeMenu(); enterQuietMode(); });
-    var closeItem = el('button', 'cx-menu-item', 'That’s all for now');
-    closeItem.type = 'button';
-    closeItem.setAttribute('role', 'menuitem');
-    closeItem.addEventListener('click', function () { closeMenu(); wrapUpByCustomer(); });
-    menuEl.appendChild(quietItem);
-    menuEl.appendChild(closeItem);
-    document.addEventListener('click', function (ev) {
-      if (!menuEl.hidden && ev.target !== menuBtn && !menuEl.contains(ev.target)) { closeMenu(); }
-    });
-    menuWrap.appendChild(menuBtn);
-    menuWrap.appendChild(menuEl);
-    head.appendChild(menuWrap);
-
     var closeBtn = el('button', 'cx-close', '×');
     closeBtn.type = 'button';
     closeBtn.setAttribute('aria-label', 'Close concierge');
@@ -1196,6 +1158,47 @@
       }
     });
     row.appendChild(inputEl);
+
+    /* A quiet "⋯" menu beside the send button: the visitor's own signals —
+       pause me, or wrap up. The popover opens upward from the composer. */
+    var menuWrap = el('div', 'cx-menuwrap');
+    var menuBtn = el('button', 'cx-menu-btn', '⋯');
+    menuBtn.type = 'button';
+    menuBtn.setAttribute('aria-label', 'Conversation options');
+    menuBtn.setAttribute('aria-haspopup', 'true');
+    menuBtn.setAttribute('aria-expanded', 'false');
+    var menuEl = el('div', 'cx-menu');
+    menuEl.setAttribute('role', 'menu');
+    menuEl.hidden = true;
+    function closeMenu() {
+      menuEl.hidden = true;
+      menuBtn.setAttribute('aria-expanded', 'false');
+    }
+    function openMenu() {
+      menuEl.hidden = false;
+      menuBtn.setAttribute('aria-expanded', 'true');
+    }
+    menuBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      if (menuEl.hidden) { openMenu(); } else { closeMenu(); }
+    });
+    var quietItem = el('button', 'cx-menu-item', 'Don’t message me until I write back');
+    quietItem.type = 'button';
+    quietItem.setAttribute('role', 'menuitem');
+    quietItem.addEventListener('click', function () { closeMenu(); enterQuietMode(); });
+    var closeItem = el('button', 'cx-menu-item', 'That’s all for now');
+    closeItem.type = 'button';
+    closeItem.setAttribute('role', 'menuitem');
+    closeItem.addEventListener('click', function () { closeMenu(); wrapUpByCustomer(); });
+    menuEl.appendChild(quietItem);
+    menuEl.appendChild(closeItem);
+    document.addEventListener('click', function (ev) {
+      if (!menuEl.hidden && ev.target !== menuBtn && !menuEl.contains(ev.target)) { closeMenu(); }
+    });
+    menuWrap.appendChild(menuBtn);
+    menuWrap.appendChild(menuEl);
+    row.appendChild(menuWrap);
+
     sendBtn = el('button', 'cx-send', '↑');
     sendBtn.type = 'button';
     sendBtn.setAttribute('aria-label', 'Send question');
