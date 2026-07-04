@@ -229,6 +229,10 @@
   .cust-tier{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.14em;
     text-transform:uppercase; color:var(--brass-soft); border:1px solid var(--hairline);
     border-radius:20px; padding:3px 11px; }
+  .cust-book-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--loden-deep); background:var(--brass-soft);
+    border-radius:20px; padding:3px 10px; }
+  .cust-book{ background:rgba(196,155,91,.05); }
   .cust-meta{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:12px;
     color:var(--wool-dim); white-space:nowrap; }
   .cust-meta b{ color:var(--wool); font-weight:500; }
@@ -542,7 +546,7 @@
       <div class="panel-head">
         <span class="micro">The register's patrons</span>
         <h2>Customers</h2>
-        <p class="note">Every buyer on the register — their standing, lifetime value at $589 a blanket, and each entry under their name. Gift orders count toward the buyer who commissioned them.</p>
+        <p class="note">Every buyer on the register — their standing, lifetime value at $589 a blanket, and each entry under their name. <strong>Click any customer</strong> to expand their orders and their <strong>client book</strong> — what the concierge has learned about them. Gift orders count toward the buyer who commissioned them.</p>
       </div>
 
       <div class="metrics">
@@ -1464,6 +1468,10 @@ function renderCustomers() {
     head.appendChild(el('span', 'cust-name', c.name));
     head.appendChild(el('span', 'cust-email', c.email));
     head.appendChild(el('span', 'cust-tier', c.tier));
+    if (c.notes.length) {
+      head.appendChild(el('span', 'cust-book-badge', '❦ ' + c.notes.length +
+        (c.notes.length === 1 ? ' note' : ' notes')));
+    }
     const meta = el('span', 'cust-meta');
     const bLtv = el('b', null, '$' + c.ltv.toLocaleString('en-US'));
     meta.appendChild(bLtv);
@@ -1492,9 +1500,14 @@ function renderCustomers() {
     });
     row.appendChild(orders);
 
-    if (c.notes.length) {
-      const book = el('div', 'cust-orders');
-      book.appendChild(el('div', 'micro', 'Client book — what the concierge has learned'));
+    /* The client book — always shown when a row is expanded, so it is
+       findable even before the concierge has learned anything. */
+    const book = el('div', 'cust-orders cust-book');
+    book.appendChild(el('div', 'micro', 'Client book — what the concierge has learned'));
+    if (!c.notes.length) {
+      book.appendChild(el('div', 'empty micro',
+        'Nothing recorded yet. The concierge notes what signed-in patrons share (a room, a favored cloth, a gift occasion) as it talks with them.'));
+    } else {
       c.notes.forEach(function (n) {
         const line = el('div', 'cust-order');
         line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
@@ -1514,11 +1527,8 @@ function renderCustomers() {
         line.appendChild(del);
         book.appendChild(line);
       });
-      row.appendChild(book);
-      row.addEventListener('click', function (ev) {
-        /* keep the book visible with the orders */
-      });
     }
+    row.appendChild(book);
 
     head.addEventListener('click', function () { row.classList.toggle('open'); });
     list.appendChild(row);
