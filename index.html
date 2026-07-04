@@ -1291,8 +1291,10 @@ footer{
         var changed = heldSerial !== null && heldSerial !== j.serial;
         heldSerial = j.serial;
         syncAlloc(changed); /* pulse only when the visitor's number moved */
+        pubFeierState();   /* checkout reads the bridge — refresh it now */
       } else if(j && j.sold_out){
         soldOut = true; heldSerial = null; syncAlloc();
+        pubFeierState();
       }
     })['catch'](function(){ /* keep the soft fallback display */ });
   }
@@ -1382,6 +1384,7 @@ footer{
     holdLeft = HOLD;
     requestHold();       /* reserve the next number for 'commission another' */
     syncAlloc(true);
+    pubFeierState();     /* never let the sheet read the consumed number */
     var d = ev && ev.detail;
     var ul = document.querySelector('.claims');
     if(ul && d && d.serial){
