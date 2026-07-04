@@ -233,10 +233,11 @@ function validateBody(body: unknown): ValidatedBody | string {
 
 interface Customer { id: string; email: string | null }
 interface OrderRow {
-  serial: number; status: string | null; tracking: string | null;
+  serial: number | null; status: string | null; tracking: string | null;
   colorway: string | null; address: string | null; address2: string | null;
   city: string | null; state: string | null; zip: string | null;
   placed_at: string | null; recipient_name?: string | null; is_gift?: boolean;
+  cancelled_serial?: number | null;
 }
 
 /** Verified user, or null (absent / anon key / invalid token — never errors). */
@@ -268,7 +269,7 @@ function ownershipFilter(customer: Customer): string {
 
 async function myOrders(customer: Customer): Promise<OrderRow[] | null> {
   return await pgSelect<OrderRow>(
-    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift" +
+    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,cancelled_serial" +
       `&${ownershipFilter(customer)}&order=placed_at.desc&limit=10`,
   );
 }
@@ -278,7 +279,7 @@ async function customerBlock(customer: Customer): Promise<string> {
   const orders = await myOrders(customer);
   const fmt = (o: OrderRow) =>
     [
-      `Nº ${o.serial} — ${o.status ?? "status unknown"}`,
+      `Nº ${o.serial ?? o.cancelled_serial ?? "—"} — ${o.status ?? "status unknown"}`,
       o.is_gift && o.recipient_name && `a gift for ${o.recipient_name}`,
       o.tracking && `tracking ${o.tracking}`,
       o.city && `to ${o.city}`,
@@ -379,7 +380,7 @@ async function runRegisterTool(
     if (orders === null) return "ERROR: the register is unreachable right now.";
     await logAction(cid, customer, "get_my_orders", null, null, `${orders.length} orders read`);
     if (orders.length === 0) return "No orders on the register for this owner.";
-    return JSON.stringify(orders);
+    return JSON.stringify(orders.map((o) => ({ ...o, serial: o.serial ?? o.cancelled_serial })));
   }
 
   const serial = typeof input.serial === "number" ? Math.floor(input.serial) : NaN;
@@ -425,13 +426,28 @@ async function runRegisterTool(
       return `ERROR: Nº ${serial} is '${order.status}' — only 'placed' orders can be cancelled. ` +
         "Once weaving begins the cloth carries the owner's number; the 30-night trial applies on arrival.";
     }
-    const updated = await pgPatch<OrderRow>(
-      `orders?serial=eq.${serial}&status=eq.placed&${ownershipFilter(customer)}`,
-      { status: "cancelled" },
-    );
-    if (!updated || updated.length === 0) return "ERROR: the register did not accept the cancellation.";
-    await logAction(cid, customer, "cancel_order", serial, null, "order cancelled");
-    return `Done. Nº ${serial} is cancelled; the number returns to the year's edition.`;
+    // Atomic strike-and-release: the entry is struck, the number rejoins the
+    // edition's pool and goes to the next visitor, lowest first.
+    const result = await pgRpc<string>("cancel_order_return", {
+      p_serial: serial,
+      p_user_id: customer.id,
+      p_email: customer.email,
+    });
+    if (result === "ok") {
+      await logAction(cid, customer, "cancel_order", serial, null, "order cancelled; serial released");
+      return `Done. Nº ${serial} is struck from the register and the number returns to the year's edition.`;
+    }
+    if (result === null) {
+      // Pre-migration register: fall back to the plain status change.
+      const updated = await pgPatch<OrderRow>(
+        `orders?serial=eq.${serial}&status=eq.placed&${ownershipFilter(customer)}`,
+        { status: "cancelled" },
+      );
+      if (!updated || updated.length === 0) return "ERROR: the register did not accept the cancellation.";
+      await logAction(cid, customer, "cancel_order", serial, null, "order cancelled");
+      return `Done. Nº ${serial} is cancelled.`;
+    }
+    return `ERROR: the register declined — ${result}.`;
   }
 
   return `ERROR: unknown tool '${name}'.`;
@@ -571,6 +587,14 @@ function buildSystemPrompt(
       "- For any change (address, cancellation): state exactly what you are about to do and get the " +
       "owner's explicit confirmation in this conversation before calling the tool. Report the tool's " +
       "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n" +
+      "- This pattern governs EVERY register action (status detail, cancellation, address change, " +
+      "anything that modifies an order): when more than one order could be meant, FIRST list the " +
+      "eligible orders — Nº, cloth, status — then offer one {{reply:...}} pill per order (e.g. " +
+      "{{reply:Cancel Nº 14,228}} or {{reply:Change the address on Nº 14,228}}), each on its own " +
+      "line, at most 6. For any change, after they pick, restate the consequence in one line and " +
+      "offer exactly two pills — {{reply:Yes, cancel Nº X}} / {{reply:Keep Nº X}} (or the matching " +
+      "pair for the action). Call the tool only after the explicit Yes. Never make the owner type " +
+      "what a tap can say.\n" +
       "- LIVE STATE may carry the owner's STANDING in the Webbuch (Eintrag — first entry; " +
       "Wiederkehr — one who returns; Hausfreund — friend of the house; Stifter — patron of the mill). " +
       "Acknowledge it once, lightly, when greeting or thanking — never as a gimmick or a sales lever. " +

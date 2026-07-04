@@ -1292,7 +1292,7 @@ function tierFor(n) {
 
 async function loadCustomers() {
   const res = await sb.from('orders')
-    .select('email,name,serial,status,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing')
+    .select('email,name,serial,status,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
     .order('placed_at', { ascending: false })
     .limit(1000);
   if (res.error) { fail('Load customers', res.error); return; }
@@ -1359,7 +1359,7 @@ function renderCustomers() {
     const orders = el('div', 'cust-orders');
     c.orders.forEach(function (o) {
       const line = el('div', 'cust-order');
-      line.appendChild(el('span', 'serial', 'Nº ' + Number(o.serial).toLocaleString('en-US')));
+      line.appendChild(el('span', 'serial', 'Nº ' + Number(o.serial != null ? o.serial : o.cancelled_serial).toLocaleString('en-US')));
       line.appendChild(el('span', null, o.colorway || '—'));
       line.appendChild(el('span', 'st', o.status || '—'));
       if (o.is_gift && o.recipient_name) {

@@ -76,6 +76,10 @@
 
     demo: [
       {
+        match: ['cancel', 'cancellation'],
+        answer: 'On the live register, I list your cancellable orders and you tap the one to strike \u2014 its number returns to the year\u2019s edition. In this demonstration there is no register behind me, but the gesture looks like this:\n\n{{reply:Yes, cancel N\u00ba 14,214}}\n{{reply:Keep N\u00ba 14,214}}\n\nOnce weaving begins, the cloth carries your number \u2014 then the 30-night trial takes over instead.'
+      },
+      {
         match: ['my order', 'my blanket', 'order status', 'my deliveries', 'where is my', 'track', 'tracking', 'delivery status', 'status of my'],
         answer: 'The register can tell you exactly — each of your numbers, each with its own status — once it knows it is you. Sign in and I will read your entries back to you.\n\n{{action:signin}}\n\nFor changes or cancellations, write hello@feierabend.example.'
       },

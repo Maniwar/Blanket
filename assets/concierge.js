@@ -347,6 +347,17 @@
       '.cx-status{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
       'text-transform:uppercase;color:rgba(196,155,91,.75);margin-left:10px;vertical-align:middle;}',
 
+      /* quick replies */
+      '.cx-replies{display:flex;flex-wrap:wrap;gap:8px;margin:.65rem 0 .2rem;}',
+      '.cx-reply{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.14em;',
+      'text-transform:uppercase;color:var(--cx-brass-soft);background:rgba(196,155,91,.07);',
+      'border:1px solid rgba(196,155,91,.45);border-radius:999px;padding:.65em 1.1em;',
+      'cursor:pointer;transition:background .25s,color .25s,border-color .25s,opacity .25s;}',
+      '.cx-reply:hover:not(:disabled){background:rgba(196,155,91,.16);color:var(--cx-wool,#F1ECE2);',
+      'border-color:var(--cx-brass-soft);}',
+      '.cx-reply:disabled{opacity:.35;cursor:default;}',
+      '.cx-replies-used .cx-reply{opacity:.35;}',
+
       /* error + system lines */
       '.cx-sysline{font-family:"IBM Plex Mono",monospace;font-size:.64rem;letter-spacing:.14em;',
       'text-transform:uppercase;line-height:1.8;color:rgba(241,236,226,.6);}',
@@ -647,6 +658,39 @@
           frag.appendChild(act);
         }
         i++; continue;
+      }
+
+      /* {{reply:...}} lines — tappable quick replies; consecutive lines group */
+      if (/^\{\{reply:/.test(trimmed)) {
+        flushPara();
+        var pills = [];
+        while (i < n) {
+          var rl = lines[i].replace(/^\s+|\s+$/g, '');
+          var rm = /^\{\{reply:([^{}]{1,64})\}\}$/.exec(rl);
+          if (!rm) { break; }
+          var label = rm[1].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+          if (label && pills.length < 6) { pills.push(label); }
+          i++;
+        }
+        if (pills.length) {
+          var row = el('div', 'cx-replies cx-fade-in');
+          row.setAttribute('role', 'group');
+          row.setAttribute('aria-label', 'Suggested replies');
+          pills.forEach(function (lbl) {
+            var pb = el('button', 'cx-reply', lbl);
+            pb.type = 'button';
+            pb.addEventListener('click', function () {
+              if (streaming) { return; }
+              row.classList.add('cx-replies-used');
+              var bs = row.querySelectorAll('button');
+              for (var bi = 0; bi < bs.length; bi++) { bs[bi].disabled = true; }
+              sendMessage(lbl);
+            });
+            row.appendChild(pb);
+          });
+          frag.appendChild(row);
+        }
+        continue;
       }
 
       /* pipe table: needs header row + separator row */
