@@ -1400,6 +1400,18 @@ async function loadCustomers() {
     .order('placed_at', { ascending: false })
     .limit(1000);
   if (res.error) { fail('Load customers', res.error); return; }
+  let notesByKey = new Map();
+  const nres = await sb.from('customer_notes')
+    .select('id,email,user_id,note,created_at')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (!nres.error) {
+    (nres.data || []).forEach(function (n) {
+      const key = (n.email || n.user_id || 'unknown').toLowerCase();
+      if (!notesByKey.has(key)) notesByKey.set(key, []);
+      notesByKey.get(key).push(n);
+    });
+  }
 
   const byKey = new Map();
   (res.data || []).forEach(function (o) {
@@ -1415,6 +1427,7 @@ async function loadCustomers() {
     const active = c.orders.filter(function (o) { return o.status !== 'cancelled'; }).length;
     return {
       email: c.email, name: c.name || '—', orders: c.orders,
+      notes: notesByKey.get((c.email || 'unknown').toLowerCase()) || [],
       count: active, tier: tierFor(Math.max(1, active)),
       ltv: active * PRICE, latest: c.orders[0].placed_at
     };
@@ -1478,6 +1491,34 @@ function renderCustomers() {
       orders.appendChild(line);
     });
     row.appendChild(orders);
+
+    if (c.notes.length) {
+      const book = el('div', 'cust-orders');
+      book.appendChild(el('div', 'micro', 'Client book — what the concierge has learned'));
+      c.notes.forEach(function (n) {
+        const line = el('div', 'cust-order');
+        line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
+        const txt = el('span', null, n.note || '');
+        txt.style.flex = '1 1 240px';
+        line.appendChild(txt);
+        const del = el('button', 'btn ghost danger', '×');
+        del.setAttribute('aria-label', 'Delete note');
+        del.addEventListener('click', function () {
+          withBusy(del, async function () {
+            const r = await sb.from('customer_notes').delete().eq('id', n.id);
+            if (r.error) { fail('Delete note', r.error); return; }
+            line.remove();
+            toast('Note removed from the client book');
+          });
+        });
+        line.appendChild(del);
+        book.appendChild(line);
+      });
+      row.appendChild(book);
+      row.addEventListener('click', function (ev) {
+        /* keep the book visible with the orders */
+      });
+    }
 
     head.addEventListener('click', function () { row.classList.toggle('open'); });
     list.appendChild(row);

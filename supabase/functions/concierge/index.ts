@@ -288,7 +288,15 @@ async function myOrders(
 
 /** Builds the CUSTOMER line for LIVE STATE (orders via service-role call). */
 async function customerBlock(customer: Customer): Promise<string> {
+  const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+  const noteFilter = safeEmail
+    ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+    : `user_id=eq.${encodeURIComponent(customer.id)}`;
+  const notesP = pgSelect<{ note: string; created_at: string }>(
+    `customer_notes?select=note,created_at&${noteFilter}&order=created_at.desc&limit=8`,
+  );
   const all = await myOrders(customer, true);
+  const notes = await notesP;
   const orders = all ? all.filter((o) => o.status !== "cancelled") : null;
   const struck = all ? all.length - (orders?.length ?? 0) : 0;
   const fmt = (o: OrderRow) =>
@@ -320,7 +328,11 @@ async function customerBlock(customer: Customer): Promise<string> {
     standing = ` STANDING: ${tier} (${active} on the register).`;
   }
   const archive = struck > 0 ? ` ARCHIVE: ${struck} struck (cancelled) — mention only if asked.` : "";
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}.${standing}${archive}`;
+  const book = notes && notes.length > 0
+    ? ` CLIENT BOOK (weave in naturally, never recite): ${
+      notes.map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`).join(" | ")}`
+    : "";
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}.${standing}${archive}${book}`;
 }
 
 // ── Register tools — definitions + execution (signed-in only) ────────────────
@@ -365,6 +377,21 @@ const REGISTER_TOOLS: any[] = [
         zip: { type: "string", description: "ZIP code, 12345 or 12345-6789." },
       },
       required: ["serial", "address", "city", "state", "zip"],
+    },
+  },
+  {
+    name: "remember_customer",
+    description:
+      "Write one short, durable, factual line to this patron's client book — a room they " +
+      "mentioned, a favored cloth, a gift occasion, a hesitation, a thread to pick up later. " +
+      "Only what a good clerk would note; never health, beliefs, finances, or anything " +
+      "sensitive. The book is shown to the patron's own conversations and to the admin.",
+    input_schema: {
+      type: "object",
+      properties: {
+        note: { type: "string", description: "One factual line, at most 240 characters." },
+      },
+      required: ["note"],
     },
   },
   {
@@ -425,6 +452,17 @@ async function runRegisterTool(
     await logAction(cid, customer, "get_my_orders", null, null, `${orders.length} orders read`);
     if (orders.length === 0) return "No orders on the register for this owner.";
     return JSON.stringify(orders.map((o) => ({ ...o, serial: o.serial ?? o.cancelled_serial })));
+  }
+
+  if (name === "remember_customer") {
+    const note = typeof input.note === "string" ? input.note.trim().slice(0, 240) : "";
+    if (note.length < 3) return "ERROR: a note needs a few words.";
+    const row = await pgInsert("customer_notes", {
+      user_id: customer.id, email: customer.email, note,
+    });
+    if (!row) return "ERROR: the client book is unreachable right now.";
+    await logAction(cid, customer, "remember_customer", null, { note }, "noted");
+    return "Noted in the client book.";
   }
 
   const serial = typeof input.serial === "number" ? Math.floor(input.serial) : NaN;
@@ -650,7 +688,8 @@ function buildSystemPrompt(
     system += "\nREGISTER TOOLS\n" +
       "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
       "get_my_orders (read their orders), update_shipping_address (before shipment), " +
-      "update_colorway (only while 'placed'), cancel_order (only while 'placed').\n" +
+      "update_colorway (only while 'placed'), cancel_order (only while 'placed'), " +
+      "remember_customer (one durable line to the client book).\n" +
       "- Call get_my_orders before answering any question about their orders — never rely on memory. " +
       "Struck (cancelled) entries are archive: leave them out of lists and counts unless the owner " +
       "asks about cancellations or history (then call get_my_orders with include_cancelled).\n" +
