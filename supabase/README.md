@@ -143,3 +143,109 @@ chips, and whether to render at all.
 browses logged conversations and feedback. It talks to the same Supabase
 project with a signed-in Supabase Auth account; write access is governed by
 the policies in `supabase/migrations/0001_concierge.sql`.
+
+## Commission endpoint (demo checkout)
+
+A second edge function, **`supabase/functions/commission/`**, backs the
+"commission" flow on the site. This is a **demo** — no product ships and **no
+payment is collected**. A commission does exactly two things: atomically
+assigns the next serial number and records a minimal order row.
+
+### Wire contract
+
+`POST https://<project-ref>.supabase.co/functions/v1/commission`
+
+Request body (all fields required, trimmed server-side):
+
+```json
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "city": "Portland",
+  "state": "OR",
+  "colorway": "loden"
+}
+```
+
+- `name` — 1–80 chars
+- `email` — valid address, ≤ 120 chars
+- `city` — 1–80 chars
+- `state` — exactly two uppercase letters, one of the 50 US states or DC
+- `colorway` — `ungefaerbt` | `loden` | `graphit`
+
+Success — `200`:
+
+```json
+{ "serial": 14215, "name": "Jane Doe", "colorway": "loden", "email": "jane@example.com" }
+```
+
+Errors are JSON `{"error": "..."}` with CORS headers: `400` (specific
+validation message), `405` (non-POST), `429` (rate limit — **10 requests per
+10 minutes per IP**), `502` ("The register is briefly unavailable. Nothing
+was recorded — try again.") when the RPC fails.
+
+Optionally send `Authorization: Bearer <Supabase user JWT>` to link the order
+to the signed-in account (the bare anon key does not count; invalid tokens
+simply mean an anonymous order — never an error).
+
+### Data minimization by design
+
+The commission stores **only**: email, name, city + state, colorway (plus
+the assigned serial and a `placed` status). No street address (nothing
+ships), no phone number, no payment data of any kind (nothing is charged),
+no analytics fields. City/state exist purely so the concierge can answer
+"where is my blanket headed?"; the CCPA-minded stance is that data never
+collected never needs safeguarding or disclosure. Deletion requests:
+hello@feierabend.example.
+
+### Counter table + RPC
+
+`supabase/migrations/0004_commission.sql` adds:
+
+- `public.orders` gains `name`, `state`, and `colorway` (checked against the
+  three colorways).
+- **`public.allocation_counter`** — a single-row table (`id = 1` enforced by
+  a check constraint) holding `next_serial`, seeded at **14215** (the demo
+  order already holds 14,214). RLS is enabled with **no policies** — only the
+  service role touches it.
+- **`public.commission_order(p_email, p_name, p_city, p_state, p_colorway,
+  p_user_id) returns int`** — `security definer` with pinned empty
+  `search_path`; locks the counter row `FOR UPDATE`, increments it, inserts
+  the order with `status = 'placed'`, and returns the assigned serial.
+  `EXECUTE` is revoked from `public`, `anon`, and `authenticated`; the edge
+  function calls it with the service role.
+
+### Deployment
+
+The **Deploy Concierge** GitHub Action deploys **only the concierge
+function** — it does not deploy this one. Apply the migration first
+(Supabase MCP server or `supabase db push`), then deploy the function with:
+
+```bash
+supabase functions deploy commission --no-verify-jwt
+```
+
+or via the Supabase MCP server's deploy tool. It reads the same secrets the
+project already has (`SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY` are injected by the platform; `ALLOWED_ORIGINS`
+is shared with the concierge).
+
+### Verify with curl
+
+```bash
+curl -s "https://<project-ref>.supabase.co/functions/v1/commission" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "city": "Portland",
+    "state": "OR",
+    "colorway": "loden"
+  }'
+```
+
+Expected response:
+
+```json
+{"serial":14215,"name":"Jane Doe","colorway":"loden","email":"jane@example.com"}
+```
