@@ -407,6 +407,22 @@
       '.cx-form-done{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
       'text-transform:uppercase;color:var(--cx-brass-soft);line-height:1.8;}',
 
+      /* outreach — the concierge speaks first, chat closed or not */
+      '.cx-outreach{position:fixed;left:50%;transform:translateX(-50%) translateY(12px);',
+      'bottom:calc(4.6rem + env(safe-area-inset-bottom,0px));z-index:79;',
+      'max-width:min(340px,calc(100vw - 32px));display:flex;gap:10px;align-items:flex-start;',
+      'background:rgba(23,31,26,.96);border:1px solid rgba(196,155,91,.55);',
+      'padding:.85rem 2rem .85rem .85rem;cursor:pointer;opacity:0;',
+      'box-shadow:0 24px 48px -20px rgba(0,0,0,.8);backdrop-filter:blur(6px);',
+      'transition:opacity .6s ease,transform .6s ease;}',
+      '.cx-outreach.cx-on{opacity:1;transform:translateX(-50%) translateY(0);}',
+      '.cx-outreach .cx-or-text{font-size:.82rem;line-height:1.55;color:rgba(241,236,226,.92);}',
+      '.cx-outreach .cx-or-x{position:absolute;top:2px;right:4px;background:none;border:none;',
+      'color:rgba(241,236,226,.5);font-size:14px;cursor:pointer;padding:7px;line-height:1;}',
+      '.cx-outreach .cx-or-x:hover{color:#F1ECE2;}',
+      '.cx-outreach img{width:30px;height:30px;border-radius:50%;flex:0 0 auto;',
+      'border:1px solid rgba(196,155,91,.5);object-fit:cover;}',
+
       /* error + system lines */
       '.cx-sysline{font-family:"IBM Plex Mono",monospace;font-size:.64rem;letter-spacing:.14em;',
       'text-transform:uppercase;line-height:1.8;color:rgba(241,236,226,.6);}',
@@ -1096,6 +1112,131 @@
     var h = Math.min(inputEl.scrollHeight, max);
     inputEl.style.height = h + 'px';
   }
+
+  /* ----------------------------------------------------------
+     5b. Outreach — the concierge initiates, visibly, chat closed or not.
+     Tap: the line becomes the concierge's own message and the panel opens.
+     Caps: at most 2 ambient outreaches per session; congrats are exempt;
+     each kind shows once per session.
+  ---------------------------------------------------------- */
+  var outreachEl = null;
+
+  function orCfg() {
+    var c = cfg().outreach;
+    return (c && typeof c === 'object') ? c : {};
+  }
+  function orSeen(kind) {
+    try { return !!window.sessionStorage.getItem('cx-or-' + kind); } catch (e) { return true; }
+  }
+  function orMark(kind) {
+    try { window.sessionStorage.setItem('cx-or-' + kind, '1'); } catch (e) { /* ignore */ }
+  }
+  function orCount() {
+    try { return parseInt(window.sessionStorage.getItem('cx-or-n') || '0', 10) || 0; } catch (e) { return 9; }
+  }
+  function orBump() {
+    try { window.sessionStorage.setItem('cx-or-n', String(orCount() + 1)); } catch (e) { /* ignore */ }
+  }
+
+  function showOutreach(kind, text, exempt) {
+    if (!text || orSeen(kind) || panelOpen || outreachEl) { return; }
+    if (!exempt && orCount() >= 2) { return; }
+    orMark(kind);
+    if (!exempt) { orBump(); }
+
+    var b = el('div', 'cx-outreach');
+    b.setAttribute('role', 'status');
+    b.appendChild(stampImg(''));
+    b.appendChild(el('span', 'cx-or-text', text));
+    var x = el('button', 'cx-or-x', '\u00d7');
+    x.setAttribute('aria-label', 'Dismiss');
+    x.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      b.remove();
+      outreachEl = null;
+    });
+    b.appendChild(x);
+    b.addEventListener('click', function () {
+      b.remove();
+      outreachEl = null;
+      /* the concierge said it — the conversation resumes from its line */
+      history.push({ role: 'assistant', content: text });
+      saveHistory();
+      openPanel();
+    });
+    document.body.appendChild(b);
+    outreachEl = b;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { b.classList.add('cx-on'); });
+    });
+    /* an unheeded outreach withdraws on its own — snooze, not siege */
+    setTimeout(function () {
+      if (outreachEl === b) {
+        b.classList.remove('cx-on');
+        setTimeout(function () { b.remove(); if (outreachEl === b) { outreachEl = null; } }, 700);
+      }
+    }, 22000);
+  }
+
+  /* congrats after a commission — waits for the register card to be put down */
+  window.addEventListener('ck:commissioned', function (ev) {
+    var d = (ev && ev.detail) || {};
+    var no = d.serial ? 'N\u00ba ' + Number(d.serial).toLocaleString('en-US') : 'Your number';
+    var line = 'Congratulations \u2014 ' + no + ' is entered in the Webbuch under your name.';
+    if (d.count === 1) {
+      line += ' When it ships, the tracking will be right here with me.';
+    } else if (d.count === 2) {
+      line += ' That makes you Wiederkehr \u2014 one who returns. The house notices.';
+    } else if (d.count >= 5) {
+      line += ' Stifter of the house \u2014 the mill knows your thread by now.';
+    } else if (d.count >= 3) {
+      line += ' Hausfreund \u2014 a friend of the house. A cloth you don\u2019t own yet would round out the set.';
+    }
+    var tries = 0;
+    var waitClose = setInterval(function () {
+      tries++;
+      var sheetOpen = document.querySelector('.ck-panel.ck-open');
+      if (!sheetOpen || tries > 120) {
+        clearInterval(waitClose);
+        try { window.sessionStorage.removeItem('cx-or-congrats'); } catch (e) { /* re-arm per sale */ }
+        setTimeout(function () { showOutreach('congrats', line, true); }, 1200);
+      }
+    }, 1000);
+  });
+
+  /* a dwell opener — one considered line, once, after real attention */
+  (function () {
+    var dwellMs = typeof orCfg().dwellMs === 'number' ? orCfg().dwellMs : 45000;
+    setTimeout(function () {
+      if (panelOpen || history.length) { return; }
+      var y = window.scrollY || window.pageYOffset || 0;
+      if (y < window.innerHeight * 0.5) { return; }
+      var sec = currentSection();
+      var lines = {
+        wool: 'Guten Abend. The cloth you\u2019re reading about \u2014 I can tell you which of the three would suit the room you have in mind.',
+        label: 'Guten Abend. Care questions are my favorite kind \u2014 wool asks less than people think. Ask me anything.',
+        ritual: 'Guten Abend. If this one is meant as a gift, the register card can carry another name \u2014 I can arrange it.',
+        reserve: 'Guten Abend. Your number is held while you decide. If it helps, tell me the room \u2014 I\u2019ll suggest the cloth.'
+      };
+      showOutreach('dwell', lines[sec] ||
+        'Guten Abend. I\u2019m the mill\u2019s concierge \u2014 tell me the room it\u2019s for, and I\u2019ll tell you the cloth.');
+    }, dwellMs);
+  })();
+
+  /* a half-written entry — offer to finish it together */
+  (function () {
+    var draftMs = typeof orCfg().draftMs === 'number' ? orCfg().draftMs : 25000;
+    var check = setInterval(function () {
+      if (orSeen('draft')) { clearInterval(check); return; }
+      if (panelOpen || document.querySelector('.ck-panel.ck-open')) { return; }
+      var draft = null;
+      try { draft = JSON.parse(window.sessionStorage.getItem('ck-draft') || 'null'); } catch (e) { draft = null; }
+      if (!draft || !draft.act || draft.act < 2) { return; }
+      clearInterval(check);
+      showOutreach('draft',
+        'Your entry rests half-written in the register \u2014 your number is still held. Shall we finish it together?');
+    }, draftMs);
+  })();
 
   /* ----------------------------------------------------------
      6. Launcher visibility & scroll choreography
