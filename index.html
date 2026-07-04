@@ -581,28 +581,20 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 .cw:hover figcaption{border-color:var(--brass-soft);color:var(--wool)}
 .cw[data-colorway]{cursor:pointer}
 .cw[data-colorway]:focus-visible{outline:1px solid var(--brass-soft);outline-offset:6px}
-.cw .cw-go{
-  position:absolute;left:50%;bottom:18px;transform:translate(-50%,8px);
-  font-family:var(--font-mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;
-  color:var(--wool);background:rgba(23,31,26,.85);border:1px solid var(--brass-soft);
-  padding:.6em 1.15em;white-space:nowrap;opacity:0;
-  transition:opacity .4s,transform .4s;pointer-events:none;z-index:3;
+.cw .cw-band{
+  position:absolute;left:0;right:0;bottom:0;z-index:3;pointer-events:none;
+  padding:2.8rem 0 .9rem;
+  background:linear-gradient(to top,rgba(18,24,20,.92),rgba(18,24,20,0));
+  font-family:var(--font-mono);font-size:.58rem;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--brass-soft);text-align:center;
+  opacity:0;transform:translateY(10px);
+  transition:opacity .45s var(--ease-out),transform .45s var(--ease-out),color .3s;
 }
-.cw:hover .cw-go,.cw:focus-visible .cw-go{opacity:1;transform:translate(-50%,0)}
-.cw .cw-go{max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis}
-.cw .cw-cta{
-  display:none;margin-top:.85rem;align-items:center;justify-content:space-between;gap:.7rem;
-  font-family:var(--font-mono);font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--brass-soft);border:1px solid rgba(196,155,91,.38);
-  padding:.95em 1.05em;
-  transition:background .35s,border-color .35s,color .35s;
-}
-.cw .cw-cta i{font-style:normal;color:rgba(196,155,91,.75);transition:transform .35s}
-.cw:active .cw-cta{background:rgba(196,155,91,.14);border-color:var(--brass-soft);color:var(--wool)}
-.cw:hover .cw-cta i{transform:translateX(4px)}
+.cw .cw-band i{font-style:normal;margin-right:.6em;color:rgba(196,155,91,.85)}
+.cw:hover .cw-band,.cw:focus-visible .cw-band{opacity:1;transform:none}
+.cw:active .cw-band{color:var(--wool)}
 @media (hover:none),(max-width:900px){
-  .cw .cw-go{display:none}
-  .cw .cw-cta{display:flex}
+  .cw .cw-band{opacity:1;transform:none}
 }
 .cta-row{
   display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);
@@ -654,6 +646,27 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 @keyframes claimIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
 @keyframes claimHot{0%{color:#F1ECE2;text-shadow:0 0 18px rgba(196,155,91,.95)}100%{color:var(--brass-soft);text-shadow:none}}
 @keyframes claimSweep{to{transform:translateX(130%)}}
+.wb-card{
+  position:fixed;top:84px;right:20px;z-index:70;max-width:340px;
+  background:rgba(23,31,26,.94);border:1px solid rgba(196,155,91,.5);
+  padding:1rem 2.5rem 1rem 1.15rem;
+  font-family:var(--font-mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(241,236,226,.85);line-height:1.95;
+  opacity:0;transform:translateY(-10px);
+  transition:opacity .7s var(--ease-out),transform .7s var(--ease-out);
+  box-shadow:0 24px 48px -24px rgba(0,0,0,.75);backdrop-filter:blur(6px);
+}
+.wb-card.on{opacity:1;transform:none}
+.wb-card b{color:var(--brass-soft);font-weight:500}
+.wb-card .wb-x{
+  position:absolute;top:4px;right:6px;background:none;border:none;
+  color:rgba(241,236,226,.5);font-size:15px;line-height:1;cursor:pointer;padding:8px;
+}
+.wb-card .wb-x:hover{color:var(--wool)}
+@media (max-width:640px){
+  .wb-card{left:16px;right:16px;max-width:none;top:auto;bottom:92px}
+  .wb-card.on{transform:none}
+}
 .ct-tick{animation:ctTick 1.2s var(--ease-out)}
 @keyframes ctTick{0%{color:#F1ECE2;text-shadow:0 0 18px rgba(196,155,91,.95)}100%{text-shadow:none}}
 .alloc-bar i.ct-glow{animation:barGlow 1.6s var(--ease-out)}
@@ -1349,7 +1362,9 @@ footer{
     li.appendChild(sp);
     return li;
   }
+  var recentOrders = [];
   function renderClaims(list){
+    recentOrders = (list || []).slice(0, 3);
     var ul = document.querySelector('.claims');
     if(!ul || !list || !list.length) return;
     while(ul.firstChild) ul.removeChild(ul.firstChild);
@@ -1392,6 +1407,8 @@ footer{
       var li = claimLi(d.serial, place || 'the register', 'just now');
       li.classList.add('claim-new');
       ul.insertBefore(li, ul.firstChild);
+      recentOrders.unshift({ serial: d.serial, city: d.city, state: d.state, placed_at: new Date().toISOString() });
+      if(recentOrders.length > 3) recentOrders.length = 3;
       while(ul.children.length > 3) ul.removeChild(ul.lastChild);
     }
   });
@@ -1405,27 +1422,18 @@ footer{
         var id = fig.getAttribute('data-colorway');
         var chip = fig.querySelector('.chip');
         if(chip){
-          var go = document.createElement('span');
-          go.className = 'cw-go';
-          go.textContent = 'Commission in this cloth \u2733';
-          chip.appendChild(go);
+          var band = document.createElement('span');
+          band.className = 'cw-band';
+          var mark = document.createElement('i');
+          mark.textContent = '\u2733';
+          band.appendChild(mark);
+          band.appendChild(document.createTextNode('Commission'));
+          chip.appendChild(band);
         }
         fig.setAttribute('tabindex', '0');
         fig.setAttribute('role', 'button');
         var name = fig.querySelector('figcaption span');
         fig.setAttribute('aria-label', 'Commission Decke 01 in ' + (name ? name.textContent : id));
-        var cta = document.createElement('span');
-        cta.className = 'cw-cta';
-        var ctaMark = document.createElement('i');
-        ctaMark.textContent = '\u2733';
-        var ctaText = document.createElement('span');
-        ctaText.textContent = 'Commission \u2014 ' + (name ? name.textContent : id);
-        var ctaArrow = document.createElement('i');
-        ctaArrow.textContent = '\u2192';
-        cta.appendChild(ctaMark);
-        cta.appendChild(ctaText);
-        cta.appendChild(ctaArrow);
-        fig.appendChild(cta);
         function commission(){
           if(window.FeierabendCheckout){ window.FeierabendCheckout.open({ colorway: id }); }
         }
@@ -1437,14 +1445,91 @@ footer{
     }
   })();
 
+  /* ---- welcome back: the register remembers its patrons ---- */
+  (function(){
+    try { if(window.sessionStorage.getItem('feier-wb-done')) return; } catch(e){}
+    function pageToken(){
+      try {
+        for(var i = 0; i < window.localStorage.length; i++){
+          var k = window.localStorage.key(i);
+          if(!k || !/^sb-.*-auth-token$/.test(k)) continue;
+          var p = JSON.parse(window.localStorage.getItem(k) || 'null');
+          if(p && typeof p.access_token === 'string') return p.access_token;
+        }
+      } catch(e){}
+      return '';
+    }
+    function show(greet, tier, detail){
+      try { window.sessionStorage.setItem('feier-wb-done', '1'); } catch(e){}
+      var card = document.createElement('aside');
+      card.className = 'wb-card';
+      card.setAttribute('role', 'status');
+      var l1 = document.createElement('div');
+      l1.appendChild(document.createTextNode(greet + ' — '));
+      var bt = document.createElement('b');
+      bt.textContent = tier;
+      l1.appendChild(bt);
+      card.appendChild(l1);
+      if(detail){
+        var l2 = document.createElement('div');
+        l2.textContent = detail;
+        card.appendChild(l2);
+      }
+      var x = document.createElement('button');
+      x.className = 'wb-x';
+      x.setAttribute('aria-label', 'Dismiss');
+      x.textContent = '\u00d7';
+      x.addEventListener('click', function(){ card.remove(); });
+      card.appendChild(x);
+      document.body.appendChild(card);
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){ card.classList.add('on'); }); });
+      setTimeout(function(){
+        card.classList.remove('on');
+        setTimeout(function(){ card.remove(); }, 900);
+      }, 14000);
+    }
+    function firstName(n){ return n ? String(n).split(/\s+/)[0] : ''; }
+    function fromLocal(){
+      try {
+        var p = JSON.parse(window.localStorage.getItem('feier-patron') || 'null');
+        if(!p || !p.serial) return;
+        var who = firstName(p.name);
+        show('Willkommen zur\u00fcck' + (who ? ', ' + who : ''), p.tier || 'Eintrag',
+          'N\u00ba ' + fmtN(p.serial) + ' rests in the Webbuch under your name.');
+      } catch(e){}
+    }
+    var base = liveBase(), token = pageToken();
+    if(base && token){
+      fetch(base + '?me=1', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && typeof j.count === 'number' && j.count > 0){
+            var l = j.latest || {};
+            var detail = l.serial
+              ? 'N\u00ba ' + fmtN(l.serial) + (l.status ? ' is ' + l.status : '') +
+                (l.is_gift && l.recipient_name ? ' \u2014 a gift for ' + l.recipient_name : '') + '.'
+              : j.count + ' on the register.';
+            show('Willkommen zur\u00fcck' + (l.name ? ', ' + firstName(l.name) : ''),
+                 j.tier || 'Eintrag', detail);
+          } else { fromLocal(); }
+        })['catch'](fromLocal);
+    } else { fromLocal(); }
+  })();
+
   /* ---- nav live ticker ---- */
   var navLive = document.getElementById('navLive');
   if(navLive){
-    var cities = ['Denver, CO', 'Brooklyn, NY', 'Menlo Park, CA', 'Austin, TX', 'Seattle, WA', 'Chicago, IL'];
     var tickN = 0;
     function liveMsg(){
       switch(tickN % 4){
-        case 0: return 'Nº <b>' + fmtN(claimed - (tickN % 3)) + '</b> · ' + cities[tickN % cities.length] + ' · just claimed';
+        case 0:
+          /* only real register entries — never an invented claim */
+          if(recentOrders.length){
+            var o = recentOrders[tickN % recentOrders.length];
+            var place = (o.city ? o.city + ', ' : '') + (o.state || '');
+            return 'Nº <b>' + fmtN(o.serial) + '</b> · ' + (place || 'the register') + ' · ' + relTime(o.placed_at);
+          }
+          return 'Woven to order · <b>3–5 weeks</b> to your door';
         case 1: return '<b>' + fmtN(RUN - claimed) + '</b> of 15,000 remain';
         case 2: return 'Looms start in <b>' + (loomClock ? loomClock.textContent : '') + '</b>';
         default: return 'Weberei Brandt · Allgäu · Est. <b>1897</b>';
@@ -1504,6 +1589,6 @@ window.FEIER_CONCIERGE_CONFIG = {
 </script>
 <script defer src="assets/concierge-kb.js?v=6"></script>
 <script defer src="assets/concierge.js?v=7"></script>
-<script defer src="assets/checkout.js?v=6"></script>
+<script defer src="assets/checkout.js?v=7"></script>
 </body>
 </html>

@@ -438,6 +438,17 @@
         <h2>Knowledge</h2>
         <p class="note">The concierge answers ONLY from these sections. Edits are live within a minute.</p>
       </div>
+      <section class="card">
+        <div class="card-head">
+          <h3>Knowledge gaps</h3>
+          <span class="micro">what the concierge could not answer</span>
+        </div>
+        <div id="gaps-list"></div>
+        <div class="card-foot">
+          <button id="gaps-refresh" class="btn">Refresh</button>
+        </div>
+      </section>
+
       <div class="row-tools">
         <button id="kb-add" class="btn">Add section</button>
       </div>
@@ -555,6 +566,7 @@ const state = {
   sops: [],
   cache: [],
   actions: [],
+  gaps: [],
   convos: [],
   activeConvoId: null,
   loaded: false
@@ -678,6 +690,7 @@ async function route() {
     loadSections(SOP_SPEC);
     loadActions();
     loadCache();
+    loadGaps();
     loadConversations();
   }
 }
@@ -735,6 +748,9 @@ function wireStatic() {
 
   $('actions-refresh').addEventListener('click', function () {
     withBusy($('actions-refresh'), loadActions);
+  });
+  $('gaps-refresh').addEventListener('click', function () {
+    withBusy($('gaps-refresh'), loadGaps);
   });
   $('cache-refresh').addEventListener('click', function () {
     withBusy($('cache-refresh'), loadCache);
@@ -1059,6 +1075,57 @@ function renderActions() {
     row.appendChild(el('span', 'who', a.email || ''));
     const detail = a.result || (a.payload ? JSON.stringify(a.payload) : '');
     if (detail) row.appendChild(el('span', 'payload', detail));
+    list.appendChild(row);
+  });
+}
+
+/* ============================================================
+   TAB 2b — KNOWLEDGE GAPS (concierge_flags)
+   ============================================================ */
+
+async function loadGaps() {
+  const res = await sb.from('concierge_flags')
+    .select('id,question,answer,created_at')
+    .eq('resolved', false)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (res.error) { fail('Load gaps', res.error); return; }
+  state.gaps = res.data || [];
+  renderGaps();
+}
+
+function renderGaps() {
+  const list = $('gaps-list');
+  list.textContent = '';
+  if (!state.gaps.length) {
+    list.appendChild(el('div', 'empty micro', 'No open gaps — the concierge had an answer for everything.'));
+    return;
+  }
+  state.gaps.forEach(function (g) {
+    const row = el('div', 'action-row');
+    row.appendChild(el('span', 'micro', fmtWhen(g.created_at)));
+    const body = el('div');
+    body.style.flex = '1 1 260px';
+    body.style.minWidth = '0';
+    body.appendChild(el('div', 'cache-q', '“' + (g.question || '') + '”'));
+    const ans = el('div', 'payload', g.answer || '');
+    ans.style.whiteSpace = 'normal';
+    ans.style.marginTop = '4px';
+    body.appendChild(ans);
+    row.appendChild(body);
+    const done = el('button', 'btn', 'Resolved');
+    done.addEventListener('click', function () {
+      withBusy(done, async function () {
+        const res = await sb.from('concierge_flags')
+          .update({ resolved: true }).eq('id', g.id);
+        if (res.error) { fail('Resolve gap', res.error); return; }
+        state.gaps = state.gaps.filter(function (x) { return x !== g; });
+        row.remove();
+        if (!state.gaps.length) renderGaps();
+        toast('Gap resolved');
+      });
+    });
+    row.appendChild(done);
     list.appendChild(row);
   });
 }

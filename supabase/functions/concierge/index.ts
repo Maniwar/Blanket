@@ -236,7 +236,7 @@ interface OrderRow {
   serial: number; status: string | null; tracking: string | null;
   colorway: string | null; address: string | null; address2: string | null;
   city: string | null; state: string | null; zip: string | null;
-  placed_at: string | null;
+  placed_at: string | null; recipient_name?: string | null; is_gift?: boolean;
 }
 
 /** Verified user, or null (absent / anon key / invalid token — never errors). */
@@ -268,7 +268,7 @@ function ownershipFilter(customer: Customer): string {
 
 async function myOrders(customer: Customer): Promise<OrderRow[] | null> {
   return await pgSelect<OrderRow>(
-    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at" +
+    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift" +
       `&${ownershipFilter(customer)}&order=placed_at.desc&limit=10`,
   );
 }
@@ -279,11 +279,13 @@ async function customerBlock(customer: Customer): Promise<string> {
   const fmt = (o: OrderRow) =>
     [
       `Nº ${o.serial} — ${o.status ?? "status unknown"}`,
+      o.is_gift && o.recipient_name && `a gift for ${o.recipient_name}`,
       o.tracking && `tracking ${o.tracking}`,
       o.city && `to ${o.city}`,
       o.placed_at && `placed ${String(o.placed_at).slice(0, 10)}`,
     ].filter(Boolean).join(", ");
   let summary = "no orders on file";
+  let standing = "";
   if (orders && orders.length > 0) {
     const delivered = orders.filter((o) => o.status === "delivered").length;
     const open = orders.length - delivered;
@@ -292,8 +294,17 @@ async function customerBlock(customer: Customer): Promise<string> {
         ? ` (${open} not yet delivered, ${delivered} delivered)`
         : "") +
       ` — ${orders.map(fmt).join("; ")}`;
+    const active = orders.filter((o) => o.status !== "cancelled").length;
+    const tier = active >= 5
+      ? "Stifter"
+      : active >= 3
+      ? "Hausfreund"
+      : active === 2
+      ? "Wiederkehr"
+      : "Eintrag";
+    standing = ` STANDING: ${tier} (${active} on the register).`;
   }
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}`;
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}.${standing}`;
 }
 
 // ── Register tools — definitions + execution (signed-in only) ────────────────
@@ -460,6 +471,40 @@ function cacheableAnswer(text: string): boolean {
   return text.length > 0 && text.length <= 4000;
 }
 
+// ── Knowledge gaps — flag "I don't know" answers for the admin ───────────────
+
+const GAP_RE = new RegExp(
+  [
+    "don'?t have that",
+    "do not have that",
+    "isn'?t something i know",
+    "not something i know",
+    "i don'?t know",
+    "i do not know",
+    "don'?t have (a|the|that) (detail|figure|answer)",
+    "beyond (my|the) (register|knowledge)",
+    "cannot (say|tell you|answer)",
+    "no figure for",
+    "that'?s a question for hello@",
+  ].join("|"),
+  "i",
+);
+
+/** Files an unanswered question for the Studio's Knowledge tab. Never throws. */
+async function maybeFlagGap(
+  cid: string | null, question: string | undefined, answer: string,
+): Promise<void> {
+  try {
+    if (!question || !answer || !GAP_RE.test(answer)) return;
+    await pgInsert("concierge_flags", {
+      conversation_id: cid,
+      question: question.slice(0, 2000),
+      answer: answer.slice(0, 4000),
+      reason: "knowledge_gap",
+    });
+  } catch { /* flagging never breaks the chat */ }
+}
+
 // ── System prompt assembly ───────────────────────────────────────────────────
 
 function renderLiveState(ctx: Record<string, unknown>, customerLine: string | null): string {
@@ -489,7 +534,11 @@ function buildSystemPrompt(
       "- Call get_my_orders before answering any question about their orders — never rely on memory.\n" +
       "- For any change (address, cancellation): state exactly what you are about to do and get the " +
       "owner's explicit confirmation in this conversation before calling the tool. Report the tool's " +
-      "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n";
+      "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n" +
+      "- LIVE STATE may carry the owner's STANDING in the Webbuch (Eintrag — first entry; " +
+      "Wiederkehr — one who returns; Hausfreund — friend of the house; Stifter — patron of the mill). " +
+      "Acknowledge it once, lightly, when greeting or thanking — never as a gimmick or a sales lever. " +
+      "Orders marked as gifts carry the recipient's name on the card; the buyer remains the owner of record.\n";
   }
   if (data.sopText) {
     system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
@@ -742,6 +791,8 @@ async function handleChatPost(req: Request): Promise<Response> {
           }
 
           for (const piece of chunked(finalText)) send({ t: piece });
+          const lastUserMsg = [...validated.messages].reverse().find((m) => m.role === "user");
+          await maybeFlagGap(cid, lastUserMsg?.content, finalText);
           const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
           if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
         } catch { /* fall through to [DONE] */ }
@@ -815,6 +866,9 @@ async function handleChatPost(req: Request): Promise<Response> {
           const cid = await conversationPromise;
           meta = await logAssistantTurn(cid, assistantText, model, Date.now() - startedAt);
         } catch { /* skip the meta event; still finish the stream */ }
+        try {
+          await maybeFlagGap(await conversationPromise, lastUser?.content, assistantText);
+        } catch { /* ignore */ }
         // Cache write: single-turn anonymous miss with a state-free answer.
         try {
           if (cacheEligible && queryEmbedding && lastUser && cacheableAnswer(assistantText)) {

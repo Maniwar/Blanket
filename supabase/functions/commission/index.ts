@@ -100,6 +100,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 interface Commission {
   name: string; email: string; address: string; address2: string;
   city: string; state: string; zip: string; colorway: string;
+  recipient: string; isGift: boolean;
 }
 
 function validateBody(body: unknown): Commission | string {
@@ -141,7 +142,15 @@ function validateBody(body: unknown): Commission | string {
   if (!COLORWAYS.has(colorway)) {
     return "colorway must be one of: ungefaerbt, loden, graphit.";
   }
-  return { name, email, address, address2, city, state, zip, colorway };
+  const recipient = str(raw.recipient);
+  const isGift = raw.is_gift === true;
+  if (recipient.length > 80) {
+    return "recipient must be at most 80 characters.";
+  }
+  if (isGift && recipient.length < 2) {
+    return "recipient is required when is_gift is true.";
+  }
+  return { name, email, address, address2, city, state, zip, colorway, recipient, isGift };
 }
 
 // ── Optional signed-in linkage — verify Supabase Auth JWT ────────────────────
@@ -175,6 +184,41 @@ function readSessionKey(raw: unknown): string | null {
   if (typeof raw !== "object" || raw === null) return null;
   const v = (raw as Record<string, unknown>).session_key;
   return typeof v === "string" && SESSION_RE.test(v) ? v : null;
+}
+
+// ── Standing — the patron's place in the Webbuch ─────────────────────────────
+
+function standingTier(n: number): string {
+  if (n >= 5) return "Stifter";
+  if (n >= 3) return "Hausfreund";
+  if (n === 2) return "Wiederkehr";
+  return "Eintrag";
+}
+
+/** Orders on the register for this buyer (id OR verified email), sans cancelled. */
+async function orderCount(userId: string, email: string | null): Promise<number | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null;
+  const safeEmail = email?.replace(/["\\,()]/g, "");
+  const filter = safeEmail
+    ? `or=${encodeURIComponent(`(user_id.eq.${userId},email.eq."${safeEmail}")`)}`
+    : `user_id=eq.${encodeURIComponent(userId)}`;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/orders?select=serial&${filter}&status=neq.cancelled`,
+      {
+        headers: {
+          "apikey": SERVICE_KEY,
+          "Authorization": `Bearer ${SERVICE_KEY}`,
+          "Prefer": "count=exact",
+          "Range": "0-0",
+        },
+      },
+    );
+    if (!res.ok) return null;
+    const range = res.headers.get("content-range") ?? "";
+    const total = parseInt(range.split("/")[1] ?? "", 10);
+    return Number.isFinite(total) ? total : null;
+  } catch { return null; }
 }
 
 // ── RPCs via PostgREST with the service role ─────────────────────────────────
@@ -223,6 +267,7 @@ async function commissionOrder(
     p_user_id: userId,
   };
   const attempts: Record<string, unknown>[] = [
+    { ...legacyArgs, p_session: session, p_recipient: c.recipient || null, p_is_gift: c.isGift },
     { ...legacyArgs, p_session: session },
     legacyArgs,
   ];
@@ -274,6 +319,29 @@ Deno.serve(async (req: Request) => {
       }
     } catch { /* fall through */ }
     return jsonError(req, 502, "Counter unavailable.");
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("me")) {
+    // Signed-in only: the buyer's standing and latest entry, for the welcome.
+    const me = await verifyUser(req);
+    if (!me) return jsonError(req, 401, "The register takes signed entries.");
+    const count = await orderCount(me.id, me.email);
+    if (count === null) return jsonError(req, 502, "Register unavailable.");
+    let latest: unknown = null;
+    try {
+      const safeEmail = me.email?.replace(/["\\,()]/g, "");
+      const filter = safeEmail
+        ? `or=${encodeURIComponent(`(user_id.eq.${me.id},email.eq."${safeEmail}")`)}`
+        : `user_id=eq.${encodeURIComponent(me.id)}`;
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/orders?select=serial,status,colorway,name,recipient_name,is_gift&${filter}&status=neq.cancelled&order=placed_at.desc&limit=1`,
+        { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
+      );
+      const rows = res.ok ? await res.json() as unknown[] : [];
+      latest = rows.length > 0 ? rows[0] : null;
+    } catch { /* latest stays null */ }
+    return jsonResponse(req, 200, {
+      count, tier: standingTier(count), latest,
+    });
   }
   if (req.method !== "POST") {
     return jsonError(req, 405, "Method not allowed. Use POST, or GET ?next=1.");
@@ -335,10 +403,12 @@ Deno.serve(async (req: Request) => {
       "The year's run is fully spoken for at this moment. The 2027 waitlist stands open.");
   }
 
+  const count = await orderCount(customer.id, customer.email);
   return jsonResponse(req, 200, {
     serial,
     name: validated.name,
     colorway: validated.colorway,
     email: validated.email,
+    standing: count !== null ? { count, tier: standingTier(count) } : null,
   });
 });

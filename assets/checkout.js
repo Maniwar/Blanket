@@ -65,6 +65,22 @@
     var n = parseInt(String(feierState().slot).replace(/,/g, ''), 10);
     return n || 14215;
   }
+  function ordinal(n) {
+    var v = n % 100;
+    if (v >= 11 && v <= 13) { return n + 'th'; }
+    switch (n % 10) {
+      case 1: return n + 'st';
+      case 2: return n + 'nd';
+      case 3: return n + 'rd';
+      default: return n + 'th';
+    }
+  }
+  function tierFor(n) {
+    if (n >= 5) { return 'Stifter'; }
+    if (n >= 3) { return 'Hausfreund'; }
+    if (n === 2) { return 'Wiederkehr'; }
+    return 'Eintrag';
+  }
   function fmtSerial(n) {
     var s = String(n), out = '', i, c = 0;
     for (i = s.length - 1; i >= 0; i--) {
@@ -99,6 +115,20 @@
     { id: 'loden',      name: 'Loden',     desc: 'Alder-bark dye', tone: '#26332B' },
     { id: 'graphit',    name: 'Graphit',   desc: 'Walnut-hull dye', tone: '#3A3D3A' }
   ];
+  /* Each cloth carries its own certificate frame, seal photograph, and light */
+  var CARD_ART = {
+    ungefaerbt: { frame: 'img/card-ungefaerbt.webp', seal: 'img/seal-ungefaerbt.webp',
+                  film: 'img/seal-ungefaerbt.mp4',
+                  bg: '#1B1712', mote: '233,226,212', flare: '232,226,212' },
+    loden:      { frame: 'img/card-engraving.webp',  seal: 'img/seal-loden.webp',
+                  film: 'img/seal-loden.mp4',
+                  bg: '#141b16', mote: '214,178,122', flare: '196,155,91' },
+    graphit:    { frame: 'img/card-graphit.webp',    seal: 'img/seal-graphit.webp',
+                  film: 'img/seal-graphit.mp4',
+                  bg: '#131514', mote: '168,173,169', flare: '186,191,187' }
+  };
+  function cardArt() { return CARD_ART[order.colorway] || CARD_ART.loden; }
+
   function colorwayById(id) {
     var i;
     for (i = 0; i < COLORWAYS.length; i++) {
@@ -320,6 +350,15 @@
       '.ck-sysline{margin:.9rem 0 0;font-family:"IBM Plex Mono",monospace;font-size:.62rem;',
       'letter-spacing:.14em;text-transform:uppercase;line-height:1.8;color:rgba(241,236,226,.6);}',
 
+      /* the gift line */
+      '.ck-giftrow{margin:.2rem 0 1rem;}',
+      '.ck-giftline{display:flex;align-items:center;gap:10px;cursor:pointer;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.7);margin-bottom:.7rem;',
+      'user-select:none;-webkit-user-select:none;}',
+      '.ck-giftline input{accent-color:var(--ck-brass,#A67C3D);width:15px;height:15px;',
+      'flex:0 0 auto;cursor:pointer;}',
+
       /* the key gate: six figures from the letter */
       '.ck-otprow{display:flex;gap:.7rem;margin-top:.7rem;align-items:stretch;}',
       '.ck-otp{flex:0 1 11ch;text-align:center;font-family:"IBM Plex Mono",monospace;',
@@ -329,31 +368,40 @@
       /* ---------- act 4 — the register card ---------- */
       '.ck-card{position:relative;overflow:hidden;border:1px solid var(--ck-brass-soft);',
       'aspect-ratio:840/1042;display:flex;flex-direction:column;justify-content:center;',
-      'padding:20% 25% 22%;margin:.6rem 0 .9rem;text-align:center;',
-      'background-color:#141b16;background-image:url("img/card-engraving.webp");',
+      'padding:24% 25% 25%;margin:.6rem 0 .9rem;text-align:center;',
+      'background-color:#141b16;',
       'background-size:100% 100%;background-repeat:no-repeat;}',
-      '.ck-stampwrap{position:relative;display:block;margin:0 auto .8rem;',
-      'width:clamp(36px,11vw,50px);height:clamp(36px,11vw,50px);}',
-      '.ck-cardstamp{display:block;width:100%;height:100%;',
-      'border-radius:50%;object-fit:cover;border:1px solid var(--ck-hair);}',
-      '.ck-stampwrap::after{content:"";position:absolute;inset:-7px;border-radius:50%;',
+      '.ck-stampwrap{position:relative;display:block;margin:0 auto .9rem;width:100%;}',
+      '.ck-sealcameo{display:block;width:100%;aspect-ratio:2.35/1;',
+      'background-size:cover;background-position:50% 44%;background-repeat:no-repeat;',
+      'border:1px solid var(--ck-hair);box-shadow:0 10px 26px -12px rgba(0,0,0,.85);}',
+      '.ck-sealshot{position:absolute;inset:0;z-index:3;pointer-events:none;',
+      'background-size:cover;background-position:center 30%;opacity:0;}',
+      '.ck-stampwrap::after{content:"";position:absolute;inset:-5px;',
       'border:1px solid rgba(196,155,91,.75);opacity:0;pointer-events:none;}',
       '.ck-cardno{font-family:"Gloock",serif;font-weight:400;',
-      'font-size:clamp(1.5rem,8.5vw,2.6rem);line-height:1.1;',
-      'color:var(--ck-ink);margin:0 0 .35rem;}',
+      'font-size:clamp(1.5rem,8.5vw,2.4rem);line-height:1.1;',
+      'color:var(--ck-ink);margin:0 0 .25rem;}',
       '.ck-sheen{position:absolute;inset:0;pointer-events:none;',
       'background:linear-gradient(115deg,transparent 30%,rgba(241,236,226,.08) 45%,',
       'rgba(196,155,91,.16) 50%,transparent 66%);transform:translateX(-130%);}',
       '.ck-motes{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;}',
 
-      /* the commission moment — only when motion is welcome */
+      /* the commission moment — only when motion is welcome.
+         Order: the seal-press photograph fills the card, recedes, and the
+         certificate assembles beneath it. */
       '.ck-card.ck-celebrate{animation:ckRise .9s cubic-bezier(.22,1,.36,1) both;}',
-      '.ck-celebrate .ck-cardstamp{animation:ckStamp 1.05s cubic-bezier(.16,1.4,.3,1) .35s both;}',
-      '.ck-celebrate .ck-stampwrap::after{animation:ckRing 1.5s ease-out 1.05s both;}',
-      '.ck-celebrate .ck-cardno{animation:ckInkIn .6s ease .35s both;}',
-      '.ck-celebrate .ck-cardrun{opacity:0;animation:ckRow .8s ease 1.15s both;}',
+      '.ck-celebrate .ck-sealshot{animation:ckShot 3.4s ease-in-out both;}',
+      '.ck-celebrate .ck-sealcameo{animation:ckVignette 1.1s ease 2.6s both;}',
+      '@keyframes ckVignette{0%{opacity:0;transform:scale(1.04);}100%{opacity:1;transform:scale(1);}}',
+      '.ck-celebrate .ck-stampwrap::after{animation:ckRing 1.5s ease-out 3.5s both;}',
+      '.ck-celebrate .ck-cardno{animation:ckInkIn .6s ease 2.7s both;}',
+      '.ck-celebrate .ck-cardrun{opacity:0;animation:ckRow .8s ease 3.6s both;}',
       '.ck-celebrate .ck-cardrow{opacity:0;animation:ckRow .7s ease both;}',
-      '.ck-celebrate .ck-sheen{animation:ckSheen 3s ease-in-out 1.7s 2;}',
+      '.ck-celebrate .ck-sheen{animation:ckSheen 3s ease-in-out 4.4s 2;}',
+      '@keyframes ckShot{0%{opacity:0;transform:scale(1.06);}8%{opacity:1;}',
+      '72%{opacity:1;transform:scale(1.01);}100%{opacity:0;transform:scale(1.1);}}',
+      '.ck-sealshot video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}',
       '@keyframes ckRise{0%{opacity:0;transform:translateY(28px) scale(.96);}',
       '100%{opacity:1;transform:none;}}',
       '@keyframes ckStamp{0%{opacity:0;transform:scale(2.4) rotate(-9deg);}',
@@ -364,18 +412,19 @@
       '@keyframes ckRow{0%{opacity:0;transform:translateY(7px);}100%{opacity:1;transform:none;}}',
       '@keyframes ckSheen{0%{transform:translateX(-130%);}60%{transform:translateX(130%);}',
       '100%{transform:translateX(130%);}}',
-      '@keyframes ckFlare{0%{text-shadow:0 0 26px rgba(196,155,91,.95);}',
-      '100%{text-shadow:0 0 0 rgba(196,155,91,0);}}',
+      '@keyframes ckFlare{0%{text-shadow:0 0 26px rgba(var(--ck-flare,196,155,91),.95);}',
+      '100%{text-shadow:0 0 0 rgba(var(--ck-flare,196,155,91),0);}}',
       '@media (max-width:480px){',
-      '.ck-cardrow{font-size:.52rem;letter-spacing:.1em;padding:.42rem 0;}',
-      '.ck-cardrun{font-size:.5rem;letter-spacing:.18em;margin-bottom:.85rem;}',
-      '.ck-stampwrap{margin-bottom:.55rem;}',
-      '.ck-cardno{font-size:clamp(1.35rem,7.2vw,2rem);}',
+      '.ck-cardrow{font-size:.5rem;letter-spacing:.08em;padding:.3rem 0;}',
+      '.ck-cardrun{font-size:.46rem;letter-spacing:.14em;margin-bottom:.45rem;}',
+      '.ck-stampwrap{margin-bottom:.4rem;}',
+      '.ck-sealcameo{aspect-ratio:3.5/1;}',
+      '.ck-cardno{font-size:clamp(1.2rem,6.2vw,1.6rem);}',
       '}',
-      '.ck-cardrun{font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.26em;',
-      'text-transform:uppercase;color:var(--ck-brass-soft);margin-bottom:1.3rem;}',
+      '.ck-cardrun{font-family:"IBM Plex Mono",monospace;font-size:.54rem;letter-spacing:.24em;',
+      'text-transform:uppercase;color:var(--ck-brass-soft);margin-bottom:.8rem;}',
       '.ck-cardrows{border-top:1px solid var(--ck-hair-soft);margin:0;}',
-      '.ck-cardrow{padding:.55rem 0;border-bottom:1px solid var(--ck-hair-soft);',
+      '.ck-cardrow{padding:.45rem 0;border-bottom:1px solid var(--ck-hair-soft);',
       'font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.14em;',
       'text-transform:uppercase;line-height:1.7;color:rgba(241,236,226,.78);',
       'overflow-wrap:break-word;word-break:break-word;}',
@@ -425,6 +474,8 @@
   var act = 1;                       /* 1..4 */
   var order = {
     colorway: '',
+    is_gift: false,
+    recipient: '',
     name: '',
     email: '',
     address: '',
@@ -794,6 +845,37 @@
 
     form.appendChild(fields);
 
+    /* a gift: the register card carries the recipient's name */
+    var giftRow = el('div', 'ck-giftrow');
+    var giftLbl = el('label', 'ck-giftline');
+    var giftCb = document.createElement('input');
+    giftCb.type = 'checkbox';
+    giftCb.checked = !!order.is_gift;
+    giftLbl.appendChild(giftCb);
+    giftLbl.appendChild(el('span', null, 'This one is a gift — the card carries another name'));
+    giftRow.appendChild(giftLbl);
+
+    var recInput = document.createElement('input');
+    recInput.className = 'ck-input';
+    recInput.type = 'text';
+    recInput.autocomplete = 'off';
+    recInput.value = order.recipient;
+    var recField = makeField('Recipient’s name — for the register card', recInput, 'recipient');
+    recField.style.display = order.is_gift ? '' : 'none';
+    giftRow.appendChild(recField);
+    form.appendChild(giftRow);
+
+    giftCb.addEventListener('change', function () {
+      order.is_gift = giftCb.checked;
+      recField.style.display = giftCb.checked ? '' : 'none';
+      if (giftCb.checked) { try { recInput.focus(); } catch (eG) { /* ignore */ } }
+      saveDraft();
+    });
+    recInput.addEventListener('input', function () {
+      order.recipient = (recInput.value || '').replace(/^\s+|\s+$/g, '');
+      saveDraft();
+    });
+
     /* notice at collection — quiet, present, not a checkbox */
     var notice = el('p', 'ck-notice');
     notice.appendChild(document.createTextNode(
@@ -870,6 +952,13 @@
         ok = false; firstBad = firstBad || zipInput;
       } else { setFieldError(zipField, ''); }
 
+      order.recipient = (recInput.value || '').replace(/^\s+|\s+$/g, '');
+      order.is_gift = giftCb.checked;
+      if (order.is_gift && (order.recipient.length < 2 || order.recipient.length > 80)) {
+        setFieldError(recField, 'A name for the card, please.');
+        ok = false; firstBad = firstBad || recInput;
+      } else { setFieldError(recField, ''); }
+
       if (!ok) {
         if (firstBad) { try { firstBad.focus(); } catch (eF) { /* ignore */ } }
         return;
@@ -918,8 +1007,12 @@
   function buildAct3() {
     var box = el('section', 'ck-act');
     box.setAttribute('aria-label', 'Act three — the commission');
-    /* warm the register card's engraving while the visitor reads the plate */
-    try { var pre = new Image(); pre.src = 'img/card-engraving.webp'; } catch (eP) { /* ignore */ }
+    /* warm the chosen cloth's engraving and seal while the visitor reads */
+    try {
+      var artPre = cardArt();
+      var pre1 = new Image(); pre1.src = artPre.frame;
+      var pre2 = new Image(); pre2.src = artPre.seal;
+    } catch (eP) { /* ignore */ }
 
     box.appendChild(el('div', 'ck-kicker', 'Act III — The Commission'));
     box.appendChild(el('p', 'ck-lede', 'Read it the way the mill will sew it in. Then sign the evening over.'));
@@ -927,6 +1020,9 @@
     var cw = colorwayById(order.colorway);
     var plate = el('div', 'ck-plate');
     plate.appendChild(plateRow('Cloth', cw ? (cw.name + ' — ' + cw.desc.charAt(0).toLowerCase() + cw.desc.slice(1)) : '—'));
+    if (order.is_gift && order.recipient) {
+      plate.appendChild(plateRow('For', order.recipient + ' — a gift'));
+    }
     plate.appendChild(plateRow('Register name', order.name || '—'));
     plate.appendChild(plateRow('Email',
       (order.email || '—') + ((!isDemo() && findAccessToken()) ? ' — verified' : '')));
@@ -1004,17 +1100,36 @@
       confirmBtn.appendChild(el('span', null, 'Retry'));
     }
 
-    function succeed(serial) {
+    function succeed(serial, standing) {
       sending = false;
       clearDraft();
+      /* standing: the register's count wins; otherwise count locally */
+      var st = standing && typeof standing.count === 'number'
+        ? { count: standing.count, tier: standing.tier || tierFor(standing.count) }
+        : (function () {
+            var n = 1;
+            try {
+              var prev = JSON.parse(window.localStorage.getItem('feier-patron') || 'null');
+              if (prev && typeof prev.count === 'number') { n = prev.count + 1; }
+            } catch (eL) { /* fresh patron */ }
+            return { count: n, tier: tierFor(n) };
+          })();
+      try {
+        window.localStorage.setItem('feier-patron', JSON.stringify({
+          count: st.count, tier: st.tier, serial: serial,
+          name: order.name, colorway: order.colorway, at: Date.now()
+        }));
+      } catch (eS) { /* storage blocked */ }
       try {
         window.dispatchEvent(new CustomEvent('ck:commissioned', {
-          detail: { serial: serial, city: order.city, state: order.state }
+          detail: { serial: serial, city: order.city, state: order.state,
+                    tier: st.tier, count: st.count }
         }));
       } catch (eEv) { /* older browsers — the card still shows */ }
       commissioned = {
         serial: serial,
-        dateLine: todayLine()
+        dateLine: todayLine(),
+        standing: st
       };
       showAct(4, 1);
     }
@@ -1258,7 +1373,7 @@
   function submitCommission(onOk, onFail) {
     /* DEMO-LOCAL: no endpoint configured — simulate the mill's ledger */
     if (isDemo()) {
-      setTimeout(function () { onOk(demoSerial()); }, 900);
+      setTimeout(function () { onOk(demoSerial(), null); }, 900);
       return;
     }
     var body = JSON.stringify({
@@ -1270,7 +1385,9 @@
       state: order.state,
       zip: order.zip,
       colorway: order.colorway,
-      session_key: visitKey() || undefined
+      session_key: visitKey() || undefined,
+      is_gift: order.is_gift || undefined,
+      recipient: (order.is_gift && order.recipient) || undefined
     });
     try {
       getFreshToken().then(function (token) {
@@ -1294,7 +1411,7 @@
           else if (j.no != null) { serial = parseInt(String(j.no).replace(/,/g, ''), 10); }
         }
         if (!serial || isNaN(serial)) { serial = demoSerial(); }
-        onOk(serial);
+        onOk(serial, (j && j.standing) || null);
       })['catch'](function (err) { onFail(err && err.code ? err.code : 0); });
     } catch (eF) { onFail(0); }
   }
@@ -1304,7 +1421,7 @@
   ---------------------------------------------------------- */
   /* Brass motes — a slow drift of golden dust over the card. Cheap canvas,
      stops itself the moment the card leaves the document. */
-  function startMotes(card) {
+  function startMotes(card, rgb) {
     var cv = document.createElement('canvas');
     cv.className = 'ck-motes';
     cv.setAttribute('aria-hidden', 'true');
@@ -1339,7 +1456,7 @@
         tw = p.a * (0.55 + 0.45 * Math.sin(ts / 680 + p.w));
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, 6.2832);
-        ctx.fillStyle = 'rgba(214,178,122,' + tw.toFixed(3) + ')';
+        ctx.fillStyle = 'rgba(' + (rgb || '214,178,122') + ',' + tw.toFixed(3) + ')';
         ctx.fill();
       }
       window.requestAnimationFrame(frame);
@@ -1357,32 +1474,75 @@
     var dateLine = (commissioned && commissioned.dateLine) ? commissioned.dateLine : todayLine();
     var cw = colorwayById(order.colorway);
     var celebrate = !REDUCED;
+    var art = cardArt();
 
     var card = el('div', 'ck-card' + (celebrate ? ' ck-celebrate' : ''));
+    card.style.backgroundImage = 'url("' + art.frame + '")';
+    card.style.backgroundColor = art.bg;
+    card.style.setProperty('--ck-flare', art.flare);
     card.appendChild(el('div', 'ck-sheen'));
+
     var stampWrap = el('span', 'ck-stampwrap');
-    stampWrap.appendChild(stampImg('ck-cardstamp'));
+    var cameo = el('span', 'ck-sealcameo');
+    cameo.style.backgroundImage = 'url("' + art.seal + '")';
+    cameo.setAttribute('role', 'img');
+    cameo.setAttribute('aria-label', 'The mill seal, pressed in beeswax on your cloth');
+    stampWrap.appendChild(cameo);
     card.appendChild(stampWrap);
 
     var no = el('div', 'ck-cardno', 'Nº ' + fmtSerial(celebrate ? Math.max(1, serial - 24) : serial));
     card.appendChild(no);
-    card.appendChild(el('div', 'ck-cardrun', 'Decke 01 · Run of 15,000'));
+    var standing = commissioned && commissioned.standing;
+    var runLine = 'Decke 01 · Run of 15,000' + (standing && standing.tier
+      ? ' — ' + standing.tier + ' · ' + ordinal(standing.count) + ' entry'
+      : '');
+    card.appendChild(el('div', 'ck-cardrun', runLine));
 
     var rows = el('div', 'ck-cardrows');
-    var rowData = [
-      [order.name || '—', ''],
-      [cw ? (cw.name + ' · ' + cw.desc) : '—', ''],
-      ['Webbuch · ' + dateLine, '']
-    ];
+    var rowData = order.is_gift && order.recipient
+      ? [
+          ['For ' + order.recipient, ''],
+          ['from ' + (order.name || '—'), ''],
+          [cw ? (cw.name + ' · ' + cw.desc) : '—', ''],
+          ['Webbuch · ' + dateLine, '']
+        ]
+      : [
+          [order.name || '—', ''],
+          [cw ? (cw.name + ' · ' + cw.desc) : '—', ''],
+          ['Webbuch · ' + dateLine, '']
+        ];
     var r, rowEl;
     for (r = 0; r < rowData.length; r++) {
       rowEl = el('div', 'ck-cardrow' + rowData[r][1], rowData[r][0]);
-      if (celebrate) { rowEl.style.animationDelay = (1250 + r * 170) + 'ms'; }
+      if (celebrate) { rowEl.style.animationDelay = (3700 + r * 170) + 'ms'; }
       rows.appendChild(rowEl);
     }
     card.appendChild(rows);
 
     if (celebrate) {
+      /* the seal-press film fills the card, then recedes into the vignette;
+         the photograph sits behind it so nothing waits on the network */
+      var shot = el('div', 'ck-sealshot');
+      shot.style.backgroundImage = 'url("' + art.seal + '")';
+      shot.setAttribute('aria-hidden', 'true');
+      if (art.film && window.HTMLVideoElement) {
+        try {
+          var film = document.createElement('video');
+          film.muted = true;
+          film.setAttribute('muted', '');
+          film.setAttribute('playsinline', '');
+          film.autoplay = true;
+          film.preload = 'auto';
+          film.src = art.film;
+          film.playbackRate = 1.5;
+          film.addEventListener('error', function () { film.remove(); });
+          shot.appendChild(film);
+          var playP = film.play();
+          if (playP && playP['catch']) { playP['catch'](function () { /* still covers */ }); }
+        } catch (eV) { /* the photograph carries the moment */ }
+      }
+      card.appendChild(shot);
+
       /* the number inks itself upward until it settles on the assigned Nº */
       var from = Math.max(1, serial - 24);
       var t0 = null;
@@ -1398,8 +1558,8 @@
           no.style.animation = 'ckFlare 1.3s ease-out both';
         }
       };
-      setTimeout(function () { window.requestAnimationFrame(tick); }, 480);
-      startMotes(card);
+      setTimeout(function () { window.requestAnimationFrame(tick); }, 2800);
+      startMotes(card, art.mote);
     }
     box.appendChild(card);
     box.appendChild(el('p', 'ck-demoline', DEMO_LINE));
