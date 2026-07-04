@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-summaries+silent+goaljustify";
+const BUILD_TAG = "2026-07-04-summaries+silent+goaljustify+probefix";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1037,7 +1037,9 @@ async function handleSelfTest(req: Request): Promise<Response> {
     const safeEmail = customer.email?.replace(/["\\,()]/g, "");
     report.orders = {
       by_user_id: await pgProbe(`orders?select=serial&user_id=eq.${encodeURIComponent(customer.id)}`),
-      by_email: safeEmail ? await pgProbe(`orders?select=serial&email=eq."${safeEmail}"`) : null,
+      by_email: customer.email
+        ? await pgProbe(`orders?select=serial&email=eq.${encodeURIComponent(customer.email)}`)
+        : null,
     };
     const nf = safeEmail
       ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
@@ -1050,8 +1052,10 @@ async function handleSelfTest(req: Request): Promise<Response> {
     // Admin + logging health. The admin panel reads conversations under RLS,
     // so it shows NOTHING unless the caller's email is in concierge_admins.
     // Only an admin sees others' data here, so gate the detail behind that.
-    if (safeEmail) {
-      const adminProbe = await pgProbe(`concierge_admins?select=email&email=eq."${safeEmail}"`);
+    if (customer.email) {
+      const adminProbe = await pgProbe(
+        `concierge_admins?select=email&email=eq.${encodeURIComponent(customer.email)}`,
+      );
       const isAdmin = adminProbe.ok && (adminProbe.count ?? 0) > 0;
       report.is_admin = isAdmin;
       report.admin_note = isAdmin
