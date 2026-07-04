@@ -590,12 +590,19 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 }
 .cw:hover .cw-go,.cw:focus-visible .cw-go{opacity:1;transform:translate(-50%,0)}
 .cw .cw-go{max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis}
-.cw .cw-go-brief{display:none}
-@media (hover:none){.cw .cw-go{opacity:1;transform:translate(-50%,0)}}
-@media (max-width:900px){
-  .cw .cw-go{font-size:.56rem;letter-spacing:.16em;padding:.55em .95em;bottom:12px}
-  .cw .cw-go-full{display:none}
-  .cw .cw-go-brief{display:inline}
+.cw .cw-cta{
+  display:none;margin-top:.85rem;align-items:center;justify-content:space-between;gap:.7rem;
+  font-family:var(--font-mono);font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--brass-soft);border:1px solid rgba(196,155,91,.38);
+  padding:.95em 1.05em;
+  transition:background .35s,border-color .35s,color .35s;
+}
+.cw .cw-cta i{font-style:normal;color:rgba(196,155,91,.75);transition:transform .35s}
+.cw:active .cw-cta{background:rgba(196,155,91,.14);border-color:var(--brass-soft);color:var(--wool)}
+.cw:hover .cw-cta i{transform:translateX(4px)}
+@media (hover:none),(max-width:900px){
+  .cw .cw-go{display:none}
+  .cw .cw-cta{display:flex}
 }
 .cta-row{
   display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);
@@ -635,6 +642,26 @@ body.loaded .hero-meta{transition:opacity .9s var(--ease) .85s, transform .9s va
 .claims{list-style:none;margin-top:1.5rem;display:flex;flex-direction:column;gap:.5rem}
 .claims li{font-family:var(--font-mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(241,236,226,.5)}
 .claims li b{font-weight:500;color:var(--brass-soft);margin-right:.65rem}
+.claims li{position:relative;overflow:hidden;padding:.15em 0}
+.claims li.claim-seen{opacity:0;animation:claimIn .9s var(--ease-out) both}
+.claims li.claim-new{opacity:0;animation:claimIn .9s var(--ease-out) both}
+.claims li.claim-new b{animation:claimHot 2.6s var(--ease-out) both}
+.claims li.claim-new::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(105deg,transparent 25%,rgba(196,155,91,.3) 50%,transparent 75%);
+  transform:translateX(-130%);animation:claimSweep 1.6s .25s var(--ease-out) forwards;
+}
+@keyframes claimIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@keyframes claimHot{0%{color:#F1ECE2;text-shadow:0 0 18px rgba(196,155,91,.95)}100%{color:var(--brass-soft);text-shadow:none}}
+@keyframes claimSweep{to{transform:translateX(130%)}}
+.ct-tick{animation:ctTick 1.2s var(--ease-out)}
+@keyframes ctTick{0%{color:#F1ECE2;text-shadow:0 0 18px rgba(196,155,91,.95)}100%{text-shadow:none}}
+.alloc-bar i.ct-glow{animation:barGlow 1.6s var(--ease-out)}
+@keyframes barGlow{0%{box-shadow:0 0 14px rgba(196,155,91,.9)}100%{box-shadow:none}}
+@media (prefers-reduced-motion:reduce){
+  .claims li.claim-seen,.claims li.claim-new,.claims li.claim-new b,.claims li.claim-new::after,
+  .ct-tick,.alloc-bar i.ct-glow{animation:none;opacity:1}
+}
 
 /* closing marquee */
 .end-marquee{position:relative;z-index:2;overflow:hidden;padding:clamp(2rem,6vh,4rem) 0 clamp(1.5rem,4vh,3rem);pointer-events:none}
@@ -1216,11 +1243,19 @@ footer{
   var remainEls  = Array.prototype.slice.call(document.querySelectorAll('.remainCt'));
   var allocFill  = document.getElementById('allocFill');
   function fmtN(n){ return n.toLocaleString('en-US'); }
-  function syncAlloc(){
+  function syncAlloc(pulse){
     slotEls.forEach(function(el){ el.textContent = fmtN(claimed + 1); });
     claimedEls.forEach(function(el){ el.textContent = fmtN(claimed); });
     remainEls.forEach(function(el){ el.textContent = fmtN(RUN - claimed); });
     if(allocFill) allocFill.style.width = (claimed / RUN * 100).toFixed(1) + '%';
+    if(pulse){
+      slotEls.concat(claimedEls, remainEls).forEach(function(el){
+        el.classList.remove('ct-tick'); void el.offsetWidth; el.classList.add('ct-tick');
+      });
+      if(allocFill){
+        allocFill.classList.remove('ct-glow'); void allocFill.offsetWidth; allocFill.classList.add('ct-glow');
+      }
+    }
   }
   var holdClock = document.getElementById('holdClock');
   var HOLD = 600, holdLeft = HOLD;
@@ -1275,7 +1310,10 @@ footer{
     for(var i = 0; i < list.length && i < 3; i++){
       var o = list[i];
       var place = (o.city ? o.city + ', ' : '') + (o.state || '');
-      ul.appendChild(claimLi(o.serial, place || 'the register', relTime(o.placed_at)));
+      var li = claimLi(o.serial, place || 'the register', relTime(o.placed_at));
+      li.classList.add('claim-seen');
+      li.style.animationDelay = (i * 140) + 'ms';
+      ul.appendChild(li);
     }
   }
   window.addEventListener('DOMContentLoaded', function(){
@@ -1295,12 +1333,14 @@ footer{
   /* a commission just happened on this very page */
   window.addEventListener('ck:commissioned', function(ev){
     claimed++;
-    syncAlloc();
+    syncAlloc(true);
     var d = ev && ev.detail;
     var ul = document.querySelector('.claims');
     if(ul && d && d.serial){
       var place = (d.city ? d.city + ', ' : '') + (d.state || '');
-      ul.insertBefore(claimLi(d.serial, place || 'the register', 'just now'), ul.firstChild);
+      var li = claimLi(d.serial, place || 'the register', 'just now');
+      li.classList.add('claim-new');
+      ul.insertBefore(li, ul.firstChild);
       while(ul.children.length > 3) ul.removeChild(ul.lastChild);
     }
   });
@@ -1316,20 +1356,25 @@ footer{
         if(chip){
           var go = document.createElement('span');
           go.className = 'cw-go';
-          var goFull = document.createElement('span');
-          goFull.className = 'cw-go-full';
-          goFull.textContent = 'Commission in this cloth \u2733';
-          var goBrief = document.createElement('span');
-          goBrief.className = 'cw-go-brief';
-          goBrief.textContent = 'Commission \u2733';
-          go.appendChild(goFull);
-          go.appendChild(goBrief);
+          go.textContent = 'Commission in this cloth \u2733';
           chip.appendChild(go);
         }
         fig.setAttribute('tabindex', '0');
         fig.setAttribute('role', 'button');
         var name = fig.querySelector('figcaption span');
         fig.setAttribute('aria-label', 'Commission Decke 01 in ' + (name ? name.textContent : id));
+        var cta = document.createElement('span');
+        cta.className = 'cw-cta';
+        var ctaMark = document.createElement('i');
+        ctaMark.textContent = '\u2733';
+        var ctaText = document.createElement('span');
+        ctaText.textContent = 'Commission \u2014 ' + (name ? name.textContent : id);
+        var ctaArrow = document.createElement('i');
+        ctaArrow.textContent = '\u2192';
+        cta.appendChild(ctaMark);
+        cta.appendChild(ctaText);
+        cta.appendChild(ctaArrow);
+        fig.appendChild(cta);
         function commission(){
           if(window.FeierabendCheckout){ window.FeierabendCheckout.open({ colorway: id }); }
         }
@@ -1408,6 +1453,6 @@ window.FEIER_CONCIERGE_CONFIG = {
 </script>
 <script defer src="assets/concierge-kb.js?v=6"></script>
 <script defer src="assets/concierge.js?v=7"></script>
-<script defer src="assets/checkout.js?v=4"></script>
+<script defer src="assets/checkout.js?v=5"></script>
 </body>
 </html>

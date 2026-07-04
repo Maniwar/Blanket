@@ -1,7 +1,10 @@
 <!-- Feierabend — Magic Link email template.
      Paste into: Supabase dashboard → Authentication → Emails → Magic Link.
      Suggested subject:  Your key — Feierabend
-     Variables: {{ .ConfirmationURL }} is required and inserted below. -->
+     Variables: {{ .ConfirmationURL }} and {{ .Token }} are inserted below.
+     {{ .Token }} matters: it is the six-figure code the checkout gate and the
+     concierge sign-in accept, and it works even when this email opens in a
+     different browser than the shop. -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#171F1A" style="background-color:#171F1A;padding:40px 16px;">
   <tr><td align="center">
     <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;border:1px solid #574a2e;background-color:#1d2721;">
@@ -19,7 +22,11 @@
             <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#171F1A;text-decoration:none;">Turn the key</a>
           </td>
         </tr></table>
-        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#8f897d;padding-top:26px;">
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.7;color:#cfc9bc;padding-top:26px;padding-bottom:8px;">
+          Or copy the six figures into the page you came from:
+        </div>
+        <div style="font-family:'Courier New',monospace;font-size:26px;letter-spacing:8px;color:#F1ECE2;border:1px solid #574a2e;background-color:#171F1A;padding:12px 0 12px 8px;text-align:center;">{{ .Token }}</div>
+        <div style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:#8f897d;padding-top:22px;">
           If the button is shy, use the thread itself:<br>
           <a href="{{ .ConfirmationURL }}" style="color:#C49B5B;word-break:break-all;">{{ .ConfirmationURL }}</a>
         </div>

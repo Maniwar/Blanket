@@ -301,6 +301,12 @@
       '.ck-sysline{margin:.9rem 0 0;font-family:"IBM Plex Mono",monospace;font-size:.62rem;',
       'letter-spacing:.14em;text-transform:uppercase;line-height:1.8;color:rgba(241,236,226,.6);}',
 
+      /* the key gate: six figures from the letter */
+      '.ck-otprow{display:flex;gap:.7rem;margin-top:.7rem;align-items:stretch;}',
+      '.ck-otp{flex:0 1 11ch;text-align:center;font-family:"IBM Plex Mono",monospace;',
+      'font-size:1.1rem;letter-spacing:.45em;text-indent:.45em;}',
+      '.ck-otpbtn{flex:1 1 auto;margin-top:0;}',
+
       /* ---------- act 4 — the register card ---------- */
       '.ck-card{position:relative;border:1px solid var(--ck-brass-soft);padding:2.2rem 1.6rem 1.9rem;',
       'margin:.6rem 0 1.4rem;text-align:center;background:rgba(241,236,226,.02);}',
@@ -814,9 +820,17 @@
       }
       saveDraft();
       /* the register takes signed entries: verified session, or the key gate */
-      if (isDemo() || !hasSb() || findAccessToken()) { showAct(3, 1); return; }
+      if (isDemo() || !hasSb()) { showAct(3, 1); return; }
       reviewBtn.disabled = true;
-      sendKey().then(function () {
+      getFreshToken().then(function (token) {
+        if (token) { reviewBtn.disabled = false; showAct(3, 1); return null; }
+        return sendKey().then(function (res) {
+          reviewBtn.disabled = false;
+          if (res && res.error) { setFieldError(emailField, keyErrorLine(res.error)); return null; }
+          showAct(5, 1);
+          return null;
+        });
+      })['catch'](function () {
         reviewBtn.disabled = false;
         showAct(5, 1);
       });
@@ -909,9 +923,14 @@
     function fail(code) {
       setWeaving(false);
       if (code === 401) {
-        sysline.textContent = 'Your key has lapsed — one more turn of the lock.';
+        sysline.textContent = 'Your key has lapsed — a fresh one is going in the post.';
         sysline.style.display = '';
-        setTimeout(function () { showAct(5, 1); }, 1400);
+        /* drop the dead session first, or the gate sees it and loops back */
+        clearStaleSession().then(function () {
+          return sendKey()['catch'](function () { return null; });
+        }).then(function () {
+          showAct(5, 1);
+        });
         return;
       }
       sysline.textContent = ERR_LINE;
@@ -981,7 +1000,8 @@
   /* ---- supabase-js (shared session with the concierge) ---- */
   var ckSb = null, ckSbPromise = null;
   function hasSb() {
-    return !!(CONFIG.supabaseUrl && CONFIG.supabaseAnonKey);
+    var c = cfg();
+    return !!(c.supabaseUrl && c.supabaseAnonKey);
   }
   function ensureSb() {
     if (ckSbPromise) { return ckSbPromise; }
@@ -989,7 +1009,7 @@
       if (!hasSb()) { resolve(null); return; }
       function make() {
         try {
-          ckSb = ckSb || window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+          ckSb = ckSb || window.supabase.createClient(cfg().supabaseUrl, cfg().supabaseAnonKey);
           resolve(ckSb);
         } catch (eC) { resolve(null); }
       }
@@ -1004,6 +1024,46 @@
   }
   function gateRedirectUrl() {
     return window.location.origin + window.location.pathname;
+  }
+
+  /* A live token, refreshed by supabase-js when the stored one has expired.
+     findAccessToken() alone reads raw storage and can hand back a stale key —
+     the register answers 401 and the gate loops. Always prefer this. */
+  function getFreshToken() {
+    if (!hasSb()) { return Promise.resolve(findAccessToken()); }
+    return ensureSb().then(function (sb) {
+      if (!sb) { return findAccessToken(); }
+      return sb.auth.getSession().then(function (r) {
+        return (r && r.data && r.data.session && r.data.session.access_token) || '';
+      })['catch'](function () { return ''; });
+    });
+  }
+
+  /* Drop a session the register has refused, so the gate polls for a fresh
+     key instead of bouncing straight back with the same dead token. */
+  function clearStaleSession() {
+    return ensureSb().then(function (sb) {
+      if (sb) { return sb.auth.signOut({ scope: 'local' })['catch'](function () { return null; }); }
+      return null;
+    })['catch'](function () { return null; }).then(function () {
+      try {
+        var i, key, doomed = [];
+        for (i = 0; i < window.localStorage.length; i++) {
+          key = window.localStorage.key(i);
+          if (key && /^sb-.*-auth-token$/.test(key)) { doomed.push(key); }
+        }
+        for (i = 0; i < doomed.length; i++) { window.localStorage.removeItem(doomed[i]); }
+      } catch (eC) { /* storage blocked — nothing to clear */ }
+    });
+  }
+
+  /* Brand-voice line for a key that could not be posted. */
+  function keyErrorLine(error) {
+    var msg = (error && (error.message || error.error_description)) || '';
+    if (error && (error.status === 429 || /rate ?limit/i.test(msg))) {
+      return 'The mill has posted its share of keys this hour. Rest a little, then ask again.';
+    }
+    return 'The key could not be posted just now — try once more in a moment.';
   }
 
   /* ---- draft persistence — the entry survives the key's round trip ---- */
@@ -1045,14 +1105,55 @@
     box.appendChild(el('p', 'ck-notice',
       'The mill posts only a couple of keys an hour. If nothing arrives, look where mail goes to be forgotten, then resend.'));
 
-    var checkBtn = el('button', 'ck-primary', 'I have turned the key — continue');
-    checkBtn.type = 'button';
-    box.appendChild(checkBtn);
-
     var sysline = el('p', 'ck-sysline');
     sysline.style.display = 'none';
     sysline.setAttribute('role', 'status');
+
+    function say(text) {
+      sysline.textContent = text;
+      sysline.style.display = text ? '' : 'none';
+    }
+
+    /* the six figures from the letter — works even when the email opens in
+       another app's browser, where the link's session cannot reach this tab */
+    var otpRow = el('div', 'ck-otprow');
+    var otpInput = document.createElement('input');
+    otpInput.className = 'ck-input ck-otp';
+    otpInput.type = 'text';
+    otpInput.autocomplete = 'one-time-code';
+    otpInput.setAttribute('inputmode', 'numeric');
+    otpInput.setAttribute('maxlength', '6');
+    otpInput.setAttribute('aria-label', 'Six-figure code from the email');
+    otpInput.placeholder = '······';
+    var otpBtn = el('button', 'ck-primary ck-otpbtn', 'Turn the key');
+    otpBtn.type = 'button';
+    otpRow.appendChild(otpInput);
+    otpRow.appendChild(otpBtn);
+    var otpLabel = el('p', 'ck-notice',
+      'The letter also carries six figures — copy them here and the lock turns without leaving this page.');
+    box.appendChild(otpLabel);
+    box.appendChild(otpRow);
     box.appendChild(sysline);
+
+    function tryOtp() {
+      var code = (otpInput.value || '').replace(/\D/g, '');
+      if (code.length !== 6) { say('Six figures — the letter has them under the seal.'); return; }
+      otpBtn.disabled = true;
+      say('');
+      ensureSb().then(function (sb) {
+        if (!sb) { return null; }
+        return sb.auth.verifyOtp({ email: order.email, token: code, type: 'email' });
+      }).then(function (res) {
+        otpBtn.disabled = false;
+        if (!res) { say(ERR_LINE); return; }
+        if (res.error) { say('Those figures do not turn the lock — check them once more, or resend the key.'); return; }
+        showAct(3, 1);
+      })['catch'](function () { otpBtn.disabled = false; say(ERR_LINE); });
+    }
+    otpBtn.addEventListener('click', tryOtp);
+    otpInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); tryOtp(); }
+    });
 
     var backRow = el('div', 'ck-backrow');
     var resend = el('button', 'ck-back', 'Resend the key');
@@ -1068,7 +1169,10 @@
     resend.addEventListener('click', function () {
       if (cool > 0) { return; }
       cool = 30; coolTick();
-      sendKey();
+      sendKey().then(function (res) {
+        if (res && res.error) { say(keyErrorLine(res.error)); }
+        else { say('A fresh key is in the post.'); }
+      })['catch'](function () { say(ERR_LINE); });
     });
     backRow.appendChild(resend);
     var back = el('button', 'ck-back', '← The register entry');
@@ -1076,12 +1180,6 @@
     back.addEventListener('click', function () { showAct(2, -1); });
     backRow.appendChild(back);
     box.appendChild(backRow);
-
-    checkBtn.addEventListener('click', function () {
-      if (findAccessToken()) { showAct(3, 1); return; }
-      sysline.textContent = 'Not yet — the key has not been turned. Open the email on this device, or wait a breath.';
-      sysline.style.display = '';
-    });
 
     /* the key often turns in another tab — notice quietly and move on */
     var watch = setInterval(function () {
@@ -1098,9 +1196,6 @@
       setTimeout(function () { onOk(demoSerial()); }, 900);
       return;
     }
-    var headers = { 'Content-Type': 'application/json' };
-    var token = findAccessToken();
-    if (token) { headers['Authorization'] = 'Bearer ' + token; }
     var body = JSON.stringify({
       name: order.name,
       email: order.email,
@@ -1112,10 +1207,14 @@
       colorway: order.colorway
     });
     try {
-      fetch(commissionEndpoint(), {
-        method: 'POST',
-        headers: headers,
-        body: body
+      getFreshToken().then(function (token) {
+        var headers = { 'Content-Type': 'application/json' };
+        if (token) { headers['Authorization'] = 'Bearer ' + token; }
+        return fetch(commissionEndpoint(), {
+          method: 'POST',
+          headers: headers,
+          body: body
+        });
       }).then(function (res) {
         if (res.status === 401) { var e401 = new Error('401'); e401.code = 401; throw e401; }
         if (!res.ok) { throw new Error('HTTP ' + res.status); }
