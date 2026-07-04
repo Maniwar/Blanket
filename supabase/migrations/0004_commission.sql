@@ -14,7 +14,10 @@
 
 alter table public.orders
   add column name     text,
+  add column address  text,
+  add column address2 text,
   add column state    text,
+  add column zip      text,
   add column colorway text check (colorway in ('ungefaerbt', 'loden', 'graphit'));
 
 -- ----------------------------------------------------------------------------
@@ -39,8 +42,11 @@ insert into public.allocation_counter (id, next_serial) values (1, 14215);
 create function public.commission_order(
   p_email    text,
   p_name     text,
+  p_address  text,
+  p_address2 text,
   p_city     text,
   p_state    text,
+  p_zip      text,
   p_colorway text,
   p_user_id  uuid
 ) returns int
@@ -61,13 +67,16 @@ begin
     set next_serial = v_serial + 1
     where id = 1;
 
-  insert into public.orders (user_id, email, name, city, state, colorway, serial, status)
-    values (p_user_id, p_email, p_name, p_city, p_state, p_colorway, v_serial, 'placed');
+  insert into public.orders
+      (user_id, email, name, address, address2, city, state, zip, colorway, serial, status)
+    values
+      (p_user_id, p_email, p_name, p_address, nullif(p_address2, ''), p_city, p_state, p_zip,
+       p_colorway, v_serial, 'placed');
 
   return v_serial;
 end;
 $$;
 
 -- Only the service role may call this (the commission edge function does).
-revoke execute on function public.commission_order(text, text, text, text, text, uuid)
+revoke execute on function public.commission_order(text, text, text, text, text, text, text, text, uuid)
   from public, anon, authenticated;

@@ -365,8 +365,11 @@
     colorway: '',
     name: '',
     email: '',
+    address: '',
+    address2: '',
     city: '',
-    state: ''
+    state: '',
+    zip: ''
   };
   var commissioned = null;           /* { serial, dateLine } once entered */
   var sending = false;
@@ -643,7 +646,7 @@
     box.setAttribute('aria-label', 'Act two — the register entry');
 
     box.appendChild(el('div', 'ck-kicker', 'Act II — The Register Entry'));
-    box.appendChild(el('p', 'ck-lede', 'Four lines for the mill’s Webbuch. Nothing more is asked.'));
+    box.appendChild(el('p', 'ck-lede', 'A few lines for the mill’s Webbuch. Nothing more is asked.'));
 
     var form = document.createElement('form');
     form.noValidate = true;
@@ -666,6 +669,22 @@
     emailInput.value = order.email;
     var emailField = makeField('Email — for the register card', emailInput, 'email');
     fields.appendChild(emailField);
+
+    var addrInput = document.createElement('input');
+    addrInput.className = 'ck-input';
+    addrInput.type = 'text';
+    addrInput.autocomplete = 'address-line1';
+    addrInput.value = order.address;
+    var addrField = makeField('Street address', addrInput, 'address');
+    fields.appendChild(addrField);
+
+    var addr2Input = document.createElement('input');
+    addr2Input.className = 'ck-input';
+    addr2Input.type = 'text';
+    addr2Input.autocomplete = 'address-line2';
+    addr2Input.value = order.address2;
+    var addr2Field = makeField('Apt, suite — if the register needs it', addr2Input, 'address2');
+    fields.appendChild(addr2Field);
 
     var cityInput = document.createElement('input');
     cityInput.className = 'ck-input';
@@ -699,12 +718,21 @@
     var stateField = makeField('State', stateSel, 'state');
     fields.appendChild(stateField);
 
+    var zipInput = document.createElement('input');
+    zipInput.className = 'ck-input';
+    zipInput.type = 'text';
+    zipInput.autocomplete = 'postal-code';
+    zipInput.setAttribute('inputmode', 'numeric');
+    zipInput.value = order.zip;
+    var zipField = makeField('ZIP', zipInput, 'zip');
+    fields.appendChild(zipField);
+
     form.appendChild(fields);
 
     /* notice at collection — quiet, present, not a checkbox */
     var notice = el('p', 'ck-notice');
     notice.appendChild(document.createTextNode(
-      'We collect only what the register needs: your name, email, and city. ' +
+      'We collect only what the register needs: your name, email, and address. ' +
       'Nothing is sold or shared; delete it any time at hello@feierabend.example. ' +
       'California residents: see our '));
     var privacyA = document.createElement('a');
@@ -730,8 +758,11 @@
     function keep() {
       order.name = (nameInput.value || '').replace(/^\s+|\s+$/g, '');
       order.email = (emailInput.value || '').replace(/^\s+|\s+$/g, '');
+      order.address = (addrInput.value || '').replace(/^\s+|\s+$/g, '');
+      order.address2 = (addr2Input.value || '').replace(/^\s+|\s+$/g, '');
       order.city = (cityInput.value || '').replace(/^\s+|\s+$/g, '');
       order.state = stateSel.value || '';
+      order.zip = (zipInput.value || '').replace(/^\s+|\s+$/g, '');
     }
 
     form.addEventListener('submit', function (e) {
@@ -749,6 +780,16 @@
         ok = false; firstBad = firstBad || emailInput;
       } else { setFieldError(emailField, ''); }
 
+      if (!order.address || order.address.length < 4 || order.address.length > 120) {
+        setFieldError(addrField, 'A street address for the register, please.');
+        ok = false; firstBad = firstBad || addrInput;
+      } else { setFieldError(addrField, ''); }
+
+      if (order.address2.length > 120) {
+        setFieldError(addr2Field, 'Shorter, if it can be.');
+        ok = false; firstBad = firstBad || addr2Input;
+      } else { setFieldError(addr2Field, ''); }
+
       if (!order.city) {
         setFieldError(cityField, 'The register asks for a city.');
         ok = false; firstBad = firstBad || cityInput;
@@ -758,6 +799,11 @@
         setFieldError(stateField, 'Choose a state from the list.');
         ok = false; firstBad = firstBad || stateSel;
       } else { setFieldError(stateField, ''); }
+
+      if (!/^\d{5}(-\d{4})?$/.test(order.zip)) {
+        setFieldError(zipField, 'Five digits — the usual kind.');
+        ok = false; firstBad = firstBad || zipInput;
+      } else { setFieldError(zipField, ''); }
 
       if (!ok) {
         if (firstBad) { try { firstBad.focus(); } catch (eF) { /* ignore */ } }
@@ -769,8 +815,11 @@
     /* keep drafts even if the sheet is abandoned mid-entry */
     nameInput.addEventListener('input', keep);
     emailInput.addEventListener('input', keep);
+    addrInput.addEventListener('input', keep);
+    addr2Input.addEventListener('input', keep);
     cityInput.addEventListener('input', keep);
     stateSel.addEventListener('change', keep);
+    zipInput.addEventListener('input', keep);
 
     box.appendChild(form);
     return box;
@@ -798,10 +847,11 @@
     plate.appendChild(plateRow('Cloth', cw ? (cw.name + ' — ' + cw.desc.charAt(0).toLowerCase() + cw.desc.slice(1)) : '—'));
     plate.appendChild(plateRow('Register name', order.name || '—'));
     plate.appendChild(plateRow('Email', order.email || '—'));
+    plate.appendChild(plateRow('Address', order.address ? (order.address + (order.address2 ? ', ' + order.address2 : '')) : '—'));
     plate.appendChild(plateRow('City', order.city || '—'));
-    plate.appendChild(plateRow('State', order.state ? stateName(order.state) : '—'));
+    plate.appendChild(plateRow('State · ZIP', (order.state ? stateName(order.state) : '—') + ' · ' + (order.zip || '—')));
     plate.appendChild(plateRow('Price', PRICE_LINE));
-    plate.appendChild(plateRow('Nº', 'Assigned at the mill', true));
+    plate.appendChild(plateRow('Nº', slotLabel() + ' — held while you finish'));
     box.appendChild(plate);
 
     box.appendChild(el('p', 'ck-demoline', DEMO_LINE));
@@ -917,8 +967,11 @@
     var body = JSON.stringify({
       name: order.name,
       email: order.email,
+      address: order.address,
+      address2: order.address2,
       city: order.city,
       state: order.state,
+      zip: order.zip,
       colorway: order.colorway
     });
     try {

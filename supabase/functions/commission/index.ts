@@ -37,7 +37,7 @@ function corsHeaders(req: Request): Record<string, string> {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Vary": "Origin",
   };
   if (allowOrigin) headers["Access-Control-Allow-Origin"] = allowOrigin;
@@ -93,7 +93,8 @@ const COLORWAYS = new Set(["ungefaerbt", "loden", "graphit"]);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 interface Commission {
-  name: string; email: string; city: string; state: string; colorway: string;
+  name: string; email: string; address: string; address2: string;
+  city: string; state: string; zip: string; colorway: string;
 }
 
 function validateBody(body: unknown): Commission | string {
@@ -104,8 +105,11 @@ function validateBody(body: unknown): Commission | string {
   const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   const name = str(raw.name);
   const email = str(raw.email);
+  const address = str(raw.address);
+  const address2 = str(raw.address2);
   const city = str(raw.city);
   const state = str(raw.state);
+  const zip = str(raw.zip);
   const colorway = str(raw.colorway);
 
   if (name.length < 1 || name.length > 80) {
@@ -114,16 +118,25 @@ function validateBody(body: unknown): Commission | string {
   if (email.length > 120 || !EMAIL_RE.test(email)) {
     return "email must be a valid address of at most 120 characters.";
   }
+  if (address.length < 4 || address.length > 120) {
+    return "address must be 4 to 120 characters.";
+  }
+  if (address2.length > 120) {
+    return "address2 must be at most 120 characters.";
+  }
   if (city.length < 1 || city.length > 80) {
     return "city must be 1 to 80 characters.";
   }
   if (!/^[A-Z]{2}$/.test(state) || !US_STATES.has(state)) {
     return "state must be a two-letter US state code (or DC), uppercase.";
   }
+  if (!/^\d{5}(-\d{4})?$/.test(zip)) {
+    return "zip must be a 5-digit US ZIP code (ZIP+4 accepted).";
+  }
   if (!COLORWAYS.has(colorway)) {
     return "colorway must be one of: ungefaerbt, loden, graphit.";
   }
-  return { name, email, city, state, colorway };
+  return { name, email, address, address2, city, state, zip, colorway };
 }
 
 // ── Optional signed-in linkage — verify Supabase Auth JWT ────────────────────
@@ -162,8 +175,11 @@ async function commissionOrder(c: Commission, userId: string | null): Promise<nu
       body: JSON.stringify({
         p_email: c.email,
         p_name: c.name,
+        p_address: c.address,
+        p_address2: c.address2,
         p_city: c.city,
         p_state: c.state,
+        p_zip: c.zip,
         p_colorway: c.colorway,
         p_user_id: userId,
       }),
@@ -180,8 +196,23 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(req) });
   }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("next")) {
+    // Public: the next serial to be assigned — keeps the page's number honest.
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/allocation_counter?select=next_serial&id=eq.1`,
+        { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
+      );
+      const rows = res.ok ? await res.json() as Array<{ next_serial: number }> : [];
+      const next = rows.length > 0 ? rows[0].next_serial : null;
+      if (typeof next === "number") {
+        return jsonResponse(req, 200, { next_serial: next });
+      }
+    } catch { /* fall through */ }
+    return jsonError(req, 502, "Counter unavailable.");
+  }
   if (req.method !== "POST") {
-    return jsonError(req, 405, "Method not allowed. Use POST.");
+    return jsonError(req, 405, "Method not allowed. Use POST, or GET ?next=1.");
   }
 
   // Rate limit: 10 requests / 10 minutes per x-forwarded-for IP.
