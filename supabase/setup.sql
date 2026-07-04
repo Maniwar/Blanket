@@ -42,6 +42,8 @@ alter table public.concierge_conversations
   add column if not exists ended_at timestamptz,
   add column if not exists goal_status jsonb,
   add column if not exists goal_status_at timestamptz;
+create index if not exists concierge_conversations_ended_idx
+  on public.concierge_conversations (user_id, ended_at desc) where ended_at is not null;
 
 create table if not exists public.concierge_messages (
   id bigint generated always as identity primary key,
