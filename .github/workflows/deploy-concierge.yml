@@ -43,6 +43,9 @@ jobs:
       - name: Deploy concierge function
         run: supabase functions deploy concierge --no-verify-jwt
 
+      - name: Deploy commission function
+        run: supabase functions deploy commission --no-verify-jwt
+
       - name: Print endpoint
         run: |
           echo "Endpoint: https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/concierge"
