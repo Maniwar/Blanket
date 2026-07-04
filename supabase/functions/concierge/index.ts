@@ -499,6 +499,11 @@ function cacheableAnswer(text: string): boolean {
     if (m[0] !== "15,000") return false; // any other thousands figure is live state
   }
   if (text.includes("{{action:signin}}")) return false;
+  // Visit-specific state that isn't a serial: hold countdowns (09:52),
+  // loom clocks (5d 16h), or talk of "this visit" never crosses visitors.
+  if (/\b\d{1,2}:\d{2}\b/.test(text)) return false;
+  if (/\b\d+\s*d\s+\d+\s*h\b/i.test(text)) return false;
+  if (/\b(this|your) visit\b/i.test(text)) return false;
   return text.length > 0 && text.length <= 4000;
 }
 

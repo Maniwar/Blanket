@@ -375,9 +375,12 @@ Deno.serve(async (req: Request) => {
       const rows = res.ok ? await res.json() as unknown[] : [];
       latest = rows.length > 0 ? rows[0] : null;
     } catch { /* latest stays null */ }
-    return jsonResponse(req, 200, {
+    const res = jsonResponse(req, 200, {
       count, tier: standingTier(count), latest,
     });
+    // Personal payload: nothing between the browser and this function caches it.
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   }
   if (req.method !== "POST") {
     return jsonError(req, 405, "Method not allowed. Use POST, or GET ?next=1.");
