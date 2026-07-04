@@ -229,6 +229,10 @@
   .goal-chip.goal-met{ color:#8fce9b; border-color:rgba(143,206,155,.5); background:rgba(143,206,155,.1); }
   .goal-chip.goal-partial{ color:var(--brass-soft); border-color:var(--hairline); background:rgba(196,155,91,.1); }
   .goal-chip.goal-unmet{ color:var(--wool-faint); }
+  .goal-rows{ display:flex; flex-direction:column; gap:8px; }
+  .goal-row{ display:flex; align-items:flex-start; gap:10px; }
+  .goal-row .goal-chip{ flex:0 0 auto; }
+  .goal-why{ flex:1 1 auto; line-height:1.45; padding-top:2px; }
 
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
@@ -1341,9 +1345,10 @@ function goalEditor(row) {
   return wrap;
 }
 
-/* Goal chips for a conversation's goal_status (met/partial/unmet). */
+/* Goal rows for a conversation's goal_status — each with its status and the
+   factual justification shown inline (not hidden in a tooltip). */
 function goalChips(goalStatus) {
-  const wrap = el('div', 'goal-chips');
+  const wrap = el('div', 'goal-rows');
   if (!goalStatus || typeof goalStatus !== 'object') {
     wrap.appendChild(el('span', 'micro', 'Not yet evaluated.'));
     return wrap;
@@ -1353,9 +1358,11 @@ function goalChips(goalStatus) {
   Object.keys(goalStatus).forEach(function (slug) {
     const v = goalStatus[slug] || {};
     const st = (v.status === 'met' || v.status === 'partial') ? v.status : 'unmet';
-    const chip = el('span', 'goal-chip goal-' + st, (byslug[slug] || slug));
-    if (v.note) chip.title = v.note;
-    wrap.appendChild(chip);
+    const row = el('div', 'goal-row');
+    row.appendChild(el('span', 'goal-chip goal-' + st, (byslug[slug] || slug)));
+    row.appendChild(el('span', 'goal-why micro',
+      v.note ? v.note : (st === 'unmet' ? 'No evidence in this conversation.' : '—')));
+    wrap.appendChild(row);
   });
   return wrap;
 }

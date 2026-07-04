@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-selftest2+adminhealth";
+const BUILD_TAG = "2026-07-04-summaries+silent+goaljustify";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -769,9 +769,15 @@ async function evaluateGoals(
       .join("\n");
     const goalList = data.goals.map((g) => `${g.slug}: ${g.label} — ${g.description}`).join("\n");
     const judgeSystem =
-      "You evaluate a sales conversation against goals. For EACH goal, judge whether it is " +
-      "'met', 'partial', or 'unmet' so far, with a very short reason. Respond ONLY with a JSON " +
-      "object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\"}. No prose.";
+      "You evaluate a sales conversation against goals, strictly and evidence-based. For EACH " +
+      "goal, judge 'met', 'partial', or 'unmet' SO FAR. Be conservative: mark 'met' ONLY when the " +
+      "transcript contains clear evidence it happened, 'partial' when begun but incomplete, and " +
+      "'unmet' when there is no evidence — a short or off-topic exchange leaves most goals 'unmet'. " +
+      "The 'note' MUST justify the status with a specific fact from THIS transcript: quote or " +
+      "paraphrase what the shopper or concierge actually said that proves it (e.g. \"shopper named " +
+      "the east-facing bedroom and chose Loden\"). Never write a generic note; if you cannot cite " +
+      "evidence, the status is 'unmet' and the note says what is still missing. Respond ONLY with a " +
+      "JSON object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\"}. No prose.";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -900,17 +906,26 @@ async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipU
     // Reuse the latest conversation for this session_key, else insert one.
     let cid: string | null = null;
     if (body.sessionKey) {
-      const q = `concierge_conversations?select=id,user_id,user_email&session_key=eq.${
+      const q = `concierge_conversations?select=id,user_id,user_email,ended_at&session_key=eq.${
         encodeURIComponent(body.sessionKey)}&order=created_at.desc&limit=1`;
-      const rows = await pgSelect<{ id: string; user_id: string | null; user_email: string | null }>(q);
+      const rows = await pgSelect<
+        { id: string; user_id: string | null; user_email: string | null; ended_at: string | null }
+      >(q);
       if (rows && rows.length > 0) {
         cid = rows[0].id;
+        const patch: Record<string, unknown> = {};
         // Backfill identity if they signed in after the conversation began —
         // otherwise a signed-in chat keeps showing as anonymous in the Studio.
         if (customer && (!rows[0].user_id || !rows[0].user_email)) {
-          await pgPatch(`concierge_conversations?id=eq.${cid}`, {
-            user_id: customer.id, user_email: customer.email,
-          });
+          patch.user_id = customer.id;
+          patch.user_email = customer.email;
+        }
+        // They wrote again in a conversation we'd marked ended (a plain
+        // panel-close) — it's resuming, so clear the ended flag. (An explicit
+        // close/quiet rotates the session key, so this never revives those.)
+        if (rows[0].ended_at) { patch.status = "active"; patch.ended_at = null; }
+        if (Object.keys(patch).length > 0) {
+          await pgPatch(`concierge_conversations?id=eq.${cid}`, patch);
         }
       }
     }
@@ -1441,21 +1456,75 @@ async function handleWrapup(req: Request): Promise<Response> {
     await pgPatch(`concierge_conversations?id=eq.${cid}`, {
       status, ended_at: new Date().toISOString(),
     });
-    // For a signed-in patron, leave one terse client-book line so the next
-    // visit reads as continuity, not a cold open.
+    // For a signed-in patron, write ONE substantive client-book line that
+    // actually summarizes what happened and what was learned — never lifecycle
+    // bookkeeping. Done asynchronously (a model call), and only when the
+    // conversation had enough substance to be worth remembering.
     const customer = await verifyUser(req);
     if (customer) {
-      const line = reason === "quiet"
-        ? "Asked for room — quiet mode; wants to reach out first next time."
-        : reason === "close"
-        ? "Wrapped up the chat themselves — needs were met for now."
-        : "Chat wound down after our exchange.";
-      await pgInsert("customer_notes", { user_id: customer.id, email: customer.email, note: line });
+      const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+      const data = await loadConciergeData();
+      const model = (typeof data.config?.model === "string" && data.config.model) ||
+        Deno.env.get("MODEL") || "claude-sonnet-4-5";
+      if (apiKey) scheduleClientBookNote(cid, customer, apiKey, model);
     }
-    return jsonResponse(req, 200, { ok: true, noted: true, status });
+    return jsonResponse(req, 200, { ok: true, noted: !!customer, status });
   } catch {
     return jsonResponse(req, 200, { ok: true, noted: false });
   }
+}
+
+/** Fire-and-forget: summarize the wrapped conversation into one client-book
+ *  line, if it had real substance. Skips thin/off-topic chats entirely. */
+function scheduleClientBookNote(
+  cid: string, customer: Customer, apiKey: string, model: string,
+): void {
+  const p = writeClientBookNote(cid, customer, apiKey, model);
+  try {
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+    else p.catch(() => {});
+  } catch { p.catch(() => {}); }
+}
+
+async function writeClientBookNote(
+  cid: string, customer: Customer, apiKey: string, model: string,
+): Promise<void> {
+  try {
+    const msgs = await pgSelect<{ role: string; content: string }>(
+      `concierge_messages?select=role,content&conversation_id=eq.${cid}&order=created_at.asc&limit=40`,
+    );
+    if (!msgs || msgs.length < 2) return;                 // nothing worth noting
+    const userTurns = msgs.filter((m) => m.role === "user").length;
+    if (userTurns < 1) return;
+    const convo = msgs
+      .map((m) => `${m.role === "user" ? "Patron" : "Concierge"}: ${m.content}`)
+      .join("\n").slice(0, 6000);
+    const sys =
+      "You keep a luxury shop's private client book. From this conversation, write ONE line " +
+      "(max 200 chars) capturing only what is worth remembering about THIS patron for next time: " +
+      "rooms, recipients, colorways they favored or rejected, hesitations, decisions, commissions " +
+      "placed or changed. Use concrete facts from the transcript. It is an internal note the patron " +
+      "never sees — third person, no greeting, no fluff. If the conversation held nothing durable " +
+      "(small talk, a test, an unresolved hello), respond with exactly SKIP and nothing else.";
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 120, system: sys,
+        messages: [{ role: "user", content: `CONVERSATION:\n${convo}\n\nWrite the client-book line, or SKIP.` }],
+      }),
+    });
+    if (!res.ok) return;
+    // deno-lint-ignore no-explicit-any
+    const msg = await res.json() as any;
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    // deno-lint-ignore no-explicit-any
+    const note = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    if (!note || note.toUpperCase() === "SKIP" || note.length < 8) return;
+    await pgInsert("customer_notes", {
+      user_id: customer.id, email: customer.email, note: note.slice(0, 220),
+    });
+  } catch { /* best-effort — a missing note never breaks a wrap-up */ }
 }
 
 // ── POST ?form=1 — structured submissions from in-chat forms ─────────────────

@@ -1859,11 +1859,15 @@
     });
   }
 
-  /* Record the wrap once, then rotate so the next turn re-engages. */
+  /* Record the wrap once. Only an EXPLICIT customer signal (close / quiet)
+     starts a brand-new conversation; a plain panel-close does NOT rotate, so
+     browsing away and back stays one conversation instead of fragmenting into
+     many tiny rows. A genuine return in a new browser session (new session key)
+     is what the register reads as a re-engagement. */
   function doWrapup(reason) {
     if (wrappedUp || !hasRealExchange()) { return; }
     postWrapup(reason);
-    rotateSessionKey();
+    if (reason === 'close' || reason === 'quiet') { rotateSessionKey(); }
     wrappedUp = true;
     clearNudge();
   }
