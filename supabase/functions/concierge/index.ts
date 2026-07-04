@@ -246,7 +246,7 @@ interface OrderRow {
   colorway: string | null; address: string | null; address2: string | null;
   city: string | null; state: string | null; zip: string | null;
   placed_at: string | null; recipient_name?: string | null; is_gift?: boolean;
-  cancelled_serial?: number | null;
+  cancelled_serial?: number | null; name?: string | null;
 }
 
 /** Verified user, or null (absent / anon key / invalid token — never errors). */
@@ -280,7 +280,7 @@ async function myOrders(
   customer: Customer, includeCancelled = false,
 ): Promise<OrderRow[] | null> {
   return await pgSelect<OrderRow>(
-    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,cancelled_serial" +
+    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,cancelled_serial,name" +
       (includeCancelled ? "" : "&status=neq.cancelled") +
       `&${ownershipFilter(customer)}&order=placed_at.desc&limit=25`,
   );
@@ -332,7 +332,29 @@ async function customerBlock(customer: Customer): Promise<string> {
     ? ` CLIENT BOOK (weave in naturally, never recite): ${
       notes.map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`).join(" | ")}`
     : "";
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}.${standing}${archive}${book}`;
+
+  // First name (from their most recent order) — for warm, natural address.
+  let firstName = "";
+  if (orders && orders.length > 0) {
+    const named = orders.find((o) => typeof o.name === "string" && o.name.trim());
+    if (named?.name) firstName = named.name.trim().split(/\s+/)[0];
+  }
+  const nameLine = firstName
+    ? `NAME: ${firstName} (use their first name naturally when it fits — never in every line).`
+    : "";
+
+  // Recency — how the register should read the passage of time since they bought.
+  let recency = "";
+  const dated = (orders ?? []).filter((o) => o.placed_at).map((o) => o.placed_at as string).sort();
+  if (dated.length > 0) {
+    const last = new Date(dated[dated.length - 1]).getTime();
+    const days = Math.floor((Date.now() - last) / 86400000);
+    recency = ` LAST PURCHASE: ${
+      days <= 0 ? "today (this visit or earlier today)" : days === 1 ? "yesterday" : `${days} days ago`
+    }.`;
+  }
+
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine} ORDERS: ${summary}.${standing}${recency}${archive}${book}`;
 }
 
 // ── Register tools — definitions + execution (signed-in only) ────────────────
@@ -862,17 +884,22 @@ async function handleChatPost(req: Request): Promise<Response> {
   if (isNudge) {
     const secs = typeof nudge!.seconds === "number" ? Math.round(nudge!.seconds) : 40;
     const cnt = typeof nudge!.count === "number" ? nudge!.count : 1;
+    const decision = cnt >= 2
+      ? "This is your second follow-up — the conversation is winding down. Follow your WRAP-UP " +
+        "procedure: if the shopper is signed in and you learned something durable this visit, " +
+        "call remember_customer with one client-book line first. Then either give space (reply " +
+        "exactly [HOLD] and nothing else if they seem to be reading, deciding, or done) or offer " +
+        "a warm, unhurried close per the SNOOZE procedure — one concrete thread to pull later."
+      : "A good clerk circles back once — so SPEAK now (do not hold). Send one warm, specific line.";
     validated.messages.push({
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(this is possible follow-up #${cnt}). Follow your ENGAGEMENT & PACING procedure. ` +
-        `First DECIDE, as a real clerk reading the room would, whether this is a moment to speak ` +
-        `or to give space. If speaking would intrude — they seem to be reading, deciding, or ` +
-        `filling the register — reply with exactly [HOLD] and nothing else. Otherwise send ONE ` +
-        `brief, warm line drawn from THIS conversation and what you know of them (their client ` +
-        `book, the room or person they mentioned) — never a generic or scripted line. Do not ` +
-        `greet them again; do not repeat yourself. One or two sentences.]`,
+        `(follow-up #${cnt}). Follow your ENGAGEMENT & PACING procedure. ${decision} ` +
+        `Draw the line from THIS conversation and what you know of them — their client book, the ` +
+        `room or person they mentioned, the cloth they lingered on. Never a generic or scripted ` +
+        `line; say something only this shopper would hear. Do not greet them again; do not repeat ` +
+        `yourself. One or two sentences.]`,
     });
   }
 

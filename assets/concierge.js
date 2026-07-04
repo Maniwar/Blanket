@@ -393,6 +393,14 @@
       '.cx-status{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
       'text-transform:uppercase;color:rgba(196,155,91,.75);margin-left:10px;vertical-align:middle;}',
 
+      /* time divider — marks a real pause so re-engagement reads as a return */
+      '.cx-timedivider{display:flex;align-items:center;gap:12px;margin:1.1rem 2px .5rem;',
+      'opacity:.75;}',
+      '.cx-timedivider::before,.cx-timedivider::after{content:"";flex:1;height:1px;',
+      'background:linear-gradient(90deg,transparent,rgba(196,155,91,.28),transparent);}',
+      '.cx-timedivider span{font-family:"IBM Plex Mono",monospace;font-size:.56rem;',
+      'letter-spacing:.18em;text-transform:uppercase;color:rgba(196,155,91,.7);white-space:nowrap;}',
+
       /* the concierge asking a question — set apart from informational prose */
       '.cx-ask{position:relative;padding-left:.9rem;margin-top:.55rem;',
       'color:var(--cx-wool,#F1ECE2);font-style:italic;}',
@@ -1048,7 +1056,7 @@
     launcher.addEventListener('click', function () {
       if (pendingSay && !history.length) {
         entryMode = 'outreach:' + (pendingKind || 'launcher');
-        history.push({ role: 'assistant', content: pendingSay });
+        history.push({ role: 'assistant', content: pendingSay, ts: Date.now() });
         saveHistory();
       }
       pendingSay = ''; pendingKind = '';
@@ -1229,7 +1237,7 @@
       pendingSay = '';
       /* the concierge said it — the conversation resumes from its line */
       entryMode = 'outreach:' + kind;
-      history.push({ role: 'assistant', content: text });
+      history.push({ role: 'assistant', content: text, ts: Date.now() });
       saveHistory();
       openPanel();
     });
@@ -1432,7 +1440,7 @@
       for (i = 0; i < arr.length; i++) {
         t = arr[i];
         if (t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string') {
-          history.push({ role: t.role, content: t.content });
+          history.push({ role: t.role, content: t.content, ts: (typeof t.ts === 'number') ? t.ts : 0 });
         }
       }
     } catch (e) { history = []; }
@@ -1461,7 +1469,33 @@
   function showNewPill() { if (newPill) { newPill.classList.add('cx-on'); } }
   function hideNewPill() { if (newPill) { newPill.classList.remove('cx-on'); } }
 
+  var lastTurnTs = 0;           /* when the last visible turn was placed */
+  var DIVIDER_MS = 20000;      /* a pause longer than this earns a time marker */
+
+  function relGap(ms) {
+    var m = Math.round(ms / 60000);
+    if (ms < 90000) { return 'a moment later'; }
+    if (m < 60) { return m + ' minutes later'; }
+    var h = Math.round(m / 60);
+    if (h < 24) { return h === 1 ? 'an hour later' : h + ' hours later'; }
+    return 'later';
+  }
+
+  /* Insert a divider before the next turn when real time has passed — so a
+     re-engagement reads as the concierge coming back, not one long message. */
+  function maybeTimeDivider(ts) {
+    if (!lastTurnTs) { lastTurnTs = ts; return; }
+    var gap = ts - lastTurnTs;
+    lastTurnTs = ts;
+    if (gap < DIVIDER_MS) { return; }
+    var d = el('div', 'cx-timedivider');
+    d.setAttribute('aria-hidden', 'true');
+    d.appendChild(el('span', null, relGap(gap)));
+    msgsEl.appendChild(d);
+  }
+
   function addUserTurn(text) {
+    maybeTimeDivider(Date.now());
     var turn = el('div', 'cx-turn cx-turn-user', text);
     msgsEl.appendChild(turn);
     scrollToBottom(false);
@@ -1469,6 +1503,7 @@
   }
 
   function addAssistantShell() {
+    maybeTimeDivider(Date.now());
     var turn = el('div', 'cx-turn cx-turn-assistant');
     var body = el('div', 'cx-pre');
     turn.appendChild(body);
@@ -1636,9 +1671,16 @@
       addSuggestChips(kbSuggested(currentSection()));
       return;
     }
-    var i, t;
+    var i, t, prevTs = 0;
     for (i = 0; i < history.length; i++) {
       t = history[i];
+      if (prevTs && t.ts && (t.ts - prevTs) >= DIVIDER_MS) {
+        var d = el('div', 'cx-timedivider');
+        d.setAttribute('aria-hidden', 'true');
+        d.appendChild(el('span', null, relGap(t.ts - prevTs)));
+        msgsEl.appendChild(d);
+      }
+      if (t.ts) { prevTs = t.ts; }
       if (t.role === 'user') {
         msgsEl.appendChild(el('div', 'cx-turn cx-turn-user', t.content));
       } else {
@@ -1647,6 +1689,7 @@
         msgsEl.appendChild(turn);
       }
     }
+    if (history.length) { lastTurnTs = history[history.length - 1].ts || Date.now(); }
   }
 
   /* ----------------------------------------------------------
@@ -1698,7 +1741,7 @@
     pinned = true;
     hideNewPill();
     addUserTurn(text);
-    history.push({ role: 'user', content: text });
+    history.push({ role: 'user', content: text, ts: Date.now() });
     saveHistory();
     performRequest();
     lastSentAt = Date.now();
@@ -1720,9 +1763,28 @@
     performRequest();
   }
 
-  function performRequest() {
+  /* A deferred shell for proactive follow-ups: no turn (and no typing dots)
+     appear until the bot actually commits a word. If it holds, nothing was
+     ever shown — the visitor never sees a phantom "typing" that vanishes. */
+  function lazyShell() {
+    var real = null;
+    var proxy = {
+      held: false, mid: null, cid: null, turn: null,
+      append: function (t) {
+        if (!real) { real = addAssistantShell(); proxy.turn = real.turn; }
+        real.append(t);
+      },
+      status: function () { /* proactive lines show no thinking indicator */ },
+      done: function () { if (real) { real.done(); } },
+      fail: function () { if (real) { real.fail(); } },
+      getText: function () { return real ? real.getText() : ''; }
+    };
+    return proxy;
+  }
+
+  function performRequest(opts) {
     setStreaming(true);
-    var shell = addAssistantShell();
+    var shell = (opts && opts.quiet) ? lazyShell() : addAssistantShell();
     if (isDemo()) { demoRespond(shell); }
     else { liveRespond(shell); }
   }
@@ -1743,7 +1805,7 @@
     shell.done();
     var content = shell.getText();
     if (content) {
-      history.push({ role: 'assistant', content: content });
+      history.push({ role: 'assistant', content: content, ts: Date.now() });
       saveHistory();
     }
     if (content && shell.mid != null && hasSupabase()) {
@@ -1769,8 +1831,8 @@
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
     if (!spoke) { return; }
     var o = orCfg();
-    var first = typeof o.nudge1Ms === 'number' ? o.nudge1Ms : 38000;
-    var second = typeof o.nudge2Ms === 'number' ? o.nudge2Ms : 55000;
+    var first = typeof o.nudge1Ms === 'number' ? o.nudge1Ms : 20000;
+    var second = typeof o.nudge2Ms === 'number' ? o.nudge2Ms : 45000;
     var wait = nudgeCount === 0 ? first : second;
     if (spacious) { wait = Math.round(wait * 1.8); } /* a declined moment earns more room */
     nudgeTimer = setTimeout(function () {
@@ -1779,7 +1841,7 @@
       nudgeCount++;
       entryMode = 'nudge';
       pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount };
-      performRequest(); /* the bot's own turn — no user message */
+      performRequest({ quiet: true }); /* no phantom typing if it holds */
     }, wait);
   }
 
