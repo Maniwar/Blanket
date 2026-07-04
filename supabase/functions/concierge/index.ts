@@ -442,14 +442,39 @@ async function runRegisterTool(
 // Questions about live or personal state must never be answered from cache.
 const CACHE_SKIP = /remain(s|ing)?|left|available|stock|hold|my (order|blanket|deliver|number)|status|track|sign in|signed in/i;
 
-let embedSession: { run: (t: string, o: Record<string, unknown>) => Promise<number[]> } | null = null;
+// deno-lint-ignore no-explicit-any
+let embedSession: { run: (t: string, o: Record<string, unknown>) => Promise<any> } | null = null;
+let embedFailureFiled = false;
+
+/** Files one Studio-visible flag per isolate when embeddings are unavailable. */
+async function fileEmbedFailure(detail: string): Promise<void> {
+  if (embedFailureFiled) return;
+  embedFailureFiled = true;
+  try {
+    await pgInsert("concierge_flags", {
+      question: "(system) semantic cache self-check",
+      answer: "Embedding runtime unavailable — cached answers cannot be written or matched. " + detail.slice(0, 300),
+      reason: "cache_embed_unavailable",
+    });
+  } catch { /* the log line still exists */ }
+  console.error("concierge cache: embedding unavailable:", detail);
+}
 
 async function embed(text: string): Promise<number[] | null> {
   try {
     if (!embedSession) embedSession = new Supabase.ai.Session("gte-small");
     const out = await embedSession!.run(text, { mean_pool: true, normalize: true });
-    return Array.isArray(out) && out.length === 384 ? out : null;
-  } catch { return null; }
+    // gte-small may return number[] or a Float32Array-like — accept both.
+    const arr: number[] | null = Array.isArray(out)
+      ? out as number[]
+      : (out && typeof out.length === "number" ? Array.from(out as ArrayLike<number>) : null);
+    if (arr && arr.length === 384) return arr;
+    await fileEmbedFailure(`unexpected output shape (length ${arr ? arr.length : "n/a"})`);
+    return null;
+  } catch (e) {
+    await fileEmbedFailure(e instanceof Error ? e.message : String(e));
+    return null;
+  }
 }
 
 const vecLiteral = (e: number[]) => `[${e.join(",")}]`;
@@ -463,10 +488,16 @@ async function cacheLookup(embedding: number[]): Promise<CacheHit | null> {
   return rows && rows.length > 0 ? rows[0] : null;
 }
 
-/** An answer is cacheable when it carries no live numbers or register state. */
+/** An answer is cacheable when it carries no live numbers or register state.
+ *  "15,000" (the edition) and "$589" are static product truth and stay
+ *  cacheable; serial-style figures (Nº 14,215 / other comma-thousands) do not. */
 function cacheableAnswer(text: string): boolean {
-  if (text.includes("Nº")) return false;
-  if (/\b\d{1,2},\d{3}\b/.test(text)) return false; // 14,215-style live counts
+  if (/Nº\s*\d/.test(text)) return false; // a specific serial
+  const liveFigure = /\b\d{1,2},\d{3}\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = liveFigure.exec(text)) !== null) {
+    if (m[0] !== "15,000") return false; // any other thousands figure is live state
+  }
   if (text.includes("{{action:signin}}")) return false;
   return text.length > 0 && text.length <= 4000;
 }
