@@ -1,49 +1,11 @@
 -- ============================================================================
--- APPLY_NOW_4.sql — paste into the Supabase SQL Editor and Run (AFTER APPLY_NOW_3).
--- Separates the purchaser from the recipient: the verified buyer remains the
--- account of record (their email, their standing, their register access);
--- recipient_name is what the register card carries when the blanket is a gift.
--- commission_order gains p_recipient / p_is_gift (drop + recreate — adding
--- defaulted parameters would create an ambiguous overload).
+-- 0009_billing.sql — Feierabend (Decke 01) separate billing address
+-- The recorded address is the SHIPPING address (for gifts: the recipient's
+-- door). A billing address is stored only when the buyer says theirs differs
+-- — data minimization holds: no payment is taken, so it is never demanded.
+-- Stored as one nullable jsonb block {address,address2,city,state,zip};
+-- null means "same as shipping".
 -- ============================================================================
-
-alter table public.orders
-  add column recipient_name text,
-  add column is_gift boolean not null default false;
-
--- (commission_order is recreated once, below, with the 0009 signature)
-
--- ----------------------------------------------------------------------------
--- Knowledge-gap flags (migration 0008) — the concierge files what it couldn't
--- answer; review in the Studio's Knowledge tab.
--- ----------------------------------------------------------------------------
-
-create table public.concierge_flags (
-  id              bigint generated always as identity primary key,
-  conversation_id uuid references public.concierge_conversations(id) on delete set null,
-  question        text not null,
-  answer          text not null,
-  reason          text not null default 'knowledge_gap',
-  resolved        boolean not null default false,
-  created_at      timestamptz not null default now()
-);
-
-create index concierge_flags_open_idx
-  on public.concierge_flags (resolved, created_at desc);
-
-alter table public.concierge_flags enable row level security;
-
-create policy "admin all" on public.concierge_flags
-  for all to authenticated
-  using (public.is_concierge_admin())
-  with check (public.is_concierge_admin());
-
--- ----------------------------------------------------------------------------
--- Separate billing address (migration 0009) — stored only when it differs
--- ----------------------------------------------------------------------------
-
-drop function if exists public.commission_order(
-  text, text, text, text, text, text, text, text, uuid, text);
 
 alter table public.orders
   add column billing jsonb;
@@ -123,11 +85,3 @@ $$;
 revoke execute on function public.commission_order(
   text, text, text, text, text, text, text, text, uuid, text, text, boolean, jsonb)
   from public, anon, authenticated;
-
--- ----------------------------------------------------------------------------
--- Mark these repo migrations as applied (so future 'db push' stays clean)
--- ----------------------------------------------------------------------------
-
-insert into supabase_migrations.schema_migrations (version, name)
-values ('0007','gifts'), ('0008','flags'), ('0009','billing')
-on conflict (version) do nothing;

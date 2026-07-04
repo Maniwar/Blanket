@@ -476,6 +476,12 @@
     colorway: '',
     is_gift: false,
     recipient: '',
+    bill_differs: false,
+    bill_address: '',
+    bill_address2: '',
+    bill_city: '',
+    bill_state: '',
+    bill_zip: '',
     name: '',
     email: '',
     address: '',
@@ -865,9 +871,13 @@
     giftRow.appendChild(recField);
     form.appendChild(giftRow);
 
+    var giftNote = el('p', 'ck-notice', 'It ships to the address above — the recipient\u2019s door.');
+    giftNote.style.display = order.is_gift ? '' : 'none';
+    giftRow.appendChild(giftNote);
     giftCb.addEventListener('change', function () {
       order.is_gift = giftCb.checked;
       recField.style.display = giftCb.checked ? '' : 'none';
+      giftNote.style.display = giftCb.checked ? '' : 'none';
       if (giftCb.checked) { try { recInput.focus(); } catch (eG) { /* ignore */ } }
       saveDraft();
     });
@@ -875,6 +885,93 @@
       order.recipient = (recInput.value || '').replace(/^\s+|\s+$/g, '');
       saveDraft();
     });
+
+    /* billing: recorded only when it differs — nothing is demanded */
+    var billRow = el('div', 'ck-giftrow');
+    var billLbl = el('label', 'ck-giftline');
+    var billCb = document.createElement('input');
+    billCb.type = 'checkbox';
+    billCb.checked = !!order.bill_differs;
+    billLbl.appendChild(billCb);
+    billLbl.appendChild(el('span', null, 'My billing address differs from shipping'));
+    billRow.appendChild(billLbl);
+
+    var billWrap = el('div');
+    billWrap.style.display = order.bill_differs ? '' : 'none';
+
+    var bAddrInput = document.createElement('input');
+    bAddrInput.className = 'ck-input';
+    bAddrInput.type = 'text';
+    bAddrInput.autocomplete = 'billing address-line1';
+    bAddrInput.value = order.bill_address;
+    var bAddrField = makeField('Billing street address', bAddrInput, 'baddress');
+    billWrap.appendChild(bAddrField);
+
+    var bAddr2Input = document.createElement('input');
+    bAddr2Input.className = 'ck-input';
+    bAddr2Input.type = 'text';
+    bAddr2Input.autocomplete = 'billing address-line2';
+    bAddr2Input.value = order.bill_address2;
+    var bAddr2Field = makeField('Billing apt, suite — if needed', bAddr2Input, 'baddress2');
+    billWrap.appendChild(bAddr2Field);
+
+    var bCityInput = document.createElement('input');
+    bCityInput.className = 'ck-input';
+    bCityInput.type = 'text';
+    bCityInput.autocomplete = 'billing address-level2';
+    bCityInput.value = order.bill_city;
+    var bCityField = makeField('Billing city', bCityInput, 'bcity');
+    billWrap.appendChild(bCityField);
+
+    var bStateSel = document.createElement('select');
+    bStateSel.className = 'ck-select';
+    bStateSel.autocomplete = 'billing address-level1';
+    var bOpt0 = document.createElement('option');
+    bOpt0.value = '';
+    bOpt0.appendChild(document.createTextNode('Choose a state'));
+    bStateSel.appendChild(bOpt0);
+    var bs;
+    for (bs = 0; bs < STATES.length; bs++) {
+      var bOpt = document.createElement('option');
+      bOpt.value = STATES[bs][0];
+      bOpt.appendChild(document.createTextNode(STATES[bs][1]));
+      bStateSel.appendChild(bOpt);
+    }
+    bStateSel.value = order.bill_state || '';
+    var bStateField = makeField('Billing state', bStateSel, 'bstate');
+    billWrap.appendChild(bStateField);
+
+    var bZipInput = document.createElement('input');
+    bZipInput.className = 'ck-input';
+    bZipInput.type = 'text';
+    bZipInput.autocomplete = 'billing postal-code';
+    bZipInput.setAttribute('inputmode', 'numeric');
+    bZipInput.value = order.bill_zip;
+    var bZipField = makeField('Billing ZIP', bZipInput, 'bzip');
+    billWrap.appendChild(bZipField);
+
+    billRow.appendChild(billWrap);
+    form.appendChild(billRow);
+
+    function keepBilling() {
+      order.bill_differs = billCb.checked;
+      order.bill_address = (bAddrInput.value || '').replace(/^\s+|\s+$/g, '');
+      order.bill_address2 = (bAddr2Input.value || '').replace(/^\s+|\s+$/g, '');
+      order.bill_city = (bCityInput.value || '').replace(/^\s+|\s+$/g, '');
+      order.bill_state = bStateSel.value || '';
+      order.bill_zip = (bZipInput.value || '').replace(/^\s+|\s+$/g, '');
+      saveDraft();
+    }
+    billCb.addEventListener('change', function () {
+      billWrap.style.display = billCb.checked ? '' : 'none';
+      if (billCb.checked) { try { bAddrInput.focus(); } catch (eB) { /* ignore */ } }
+      keepBilling();
+    });
+    bAddrInput.addEventListener('input', keepBilling);
+    bAddr2Input.addEventListener('input', keepBilling);
+    bCityInput.addEventListener('input', keepBilling);
+    bStateSel.addEventListener('change', keepBilling);
+    bZipInput.addEventListener('input', keepBilling);
 
     /* notice at collection — quiet, present, not a checkbox */
     var notice = el('p', 'ck-notice');
@@ -959,6 +1056,30 @@
         ok = false; firstBad = firstBad || recInput;
       } else { setFieldError(recField, ''); }
 
+      keepBilling();
+      if (order.bill_differs) {
+        if (order.bill_address.length < 4 || order.bill_address.length > 120) {
+          setFieldError(bAddrField, 'A billing street address, please.');
+          ok = false; firstBad = firstBad || bAddrInput;
+        } else { setFieldError(bAddrField, ''); }
+        if (order.bill_address2.length > 120) {
+          setFieldError(bAddr2Field, 'Shorter, if it can be.');
+          ok = false; firstBad = firstBad || bAddr2Input;
+        } else { setFieldError(bAddr2Field, ''); }
+        if (!order.bill_city) {
+          setFieldError(bCityField, 'A billing city, please.');
+          ok = false; firstBad = firstBad || bCityInput;
+        } else { setFieldError(bCityField, ''); }
+        if (!isValidState(order.bill_state)) {
+          setFieldError(bStateField, 'Choose a state from the list.');
+          ok = false; firstBad = firstBad || bStateSel;
+        } else { setFieldError(bStateField, ''); }
+        if (!/^\d{5}(-\d{4})?$/.test(order.bill_zip)) {
+          setFieldError(bZipField, 'Five digits — the usual kind.');
+          ok = false; firstBad = firstBad || bZipInput;
+        } else { setFieldError(bZipField, ''); }
+      }
+
       if (!ok) {
         if (firstBad) { try { firstBad.focus(); } catch (eF) { /* ignore */ } }
         return;
@@ -1026,9 +1147,14 @@
     plate.appendChild(plateRow('Register name', order.name || '—'));
     plate.appendChild(plateRow('Email',
       (order.email || '—') + ((!isDemo() && findAccessToken()) ? ' — verified' : '')));
-    plate.appendChild(plateRow('Address', order.address ? (order.address + (order.address2 ? ', ' + order.address2 : '')) : '—'));
+    plate.appendChild(plateRow('Ships to', order.address ? (order.address + (order.address2 ? ', ' + order.address2 : '')) : '—'));
     plate.appendChild(plateRow('City', order.city || '—'));
     plate.appendChild(plateRow('State · ZIP', (order.state ? stateName(order.state) : '—') + ' · ' + (order.zip || '—')));
+    if (order.bill_differs && order.bill_address) {
+      plate.appendChild(plateRow('Billing',
+        order.bill_address + (order.bill_address2 ? ', ' + order.bill_address2 : '') +
+        ' — ' + order.bill_city + ', ' + order.bill_state + ' ' + order.bill_zip, true));
+    }
     plate.appendChild(plateRow('Price', PRICE_LINE));
     plate.appendChild(plateRow('Nº', slotLabel() + ' — held while you finish'));
     box.appendChild(plate);
@@ -1117,7 +1243,9 @@
       try {
         window.localStorage.setItem('feier-patron', JSON.stringify({
           count: st.count, tier: st.tier, serial: serial,
-          name: order.name, colorway: order.colorway, at: Date.now()
+          name: order.name, colorway: order.colorway, at: Date.now(),
+          email: order.email, address: order.address, address2: order.address2,
+          city: order.city, state: order.state, zip: order.zip
         }));
       } catch (eS) { /* storage blocked */ }
       try {
@@ -1387,7 +1515,14 @@
       colorway: order.colorway,
       session_key: visitKey() || undefined,
       is_gift: order.is_gift || undefined,
-      recipient: (order.is_gift && order.recipient) || undefined
+      recipient: (order.is_gift && order.recipient) || undefined,
+      billing: order.bill_differs && order.bill_address ? {
+        address: order.bill_address,
+        address2: order.bill_address2 || undefined,
+        city: order.bill_city,
+        state: order.bill_state,
+        zip: order.bill_zip
+      } : undefined
     });
     try {
       getFreshToken().then(function (token) {
@@ -1600,10 +1735,45 @@
     document.documentElement.style.overflow = savedHtmlOverflow;
   }
 
+  /* Prefill for returning patrons: never overwrite anything typed. */
+  function prefillFrom(src) {
+    if (!src || typeof src !== 'object') { return; }
+    var map = {
+      name: 'name', email: 'email', address: 'address', address2: 'address2',
+      city: 'city', state: 'state', zip: 'zip'
+    };
+    var k;
+    for (k in map) {
+      if (!order[map[k]] && typeof src[k] === 'string' && src[k]) {
+        order[map[k]] = src[k];
+      }
+    }
+  }
+  var meFetched = false;
+  function prefillReturning() {
+    try {
+      prefillFrom(JSON.parse(window.localStorage.getItem('feier-patron') || 'null'));
+    } catch (eP) { /* fresh visitor */ }
+    if (meFetched || isDemo() || !hasSb()) { return; }
+    meFetched = true;
+    getFreshToken().then(function (token) {
+      if (!token) { return; }
+      return fetch(commissionEndpoint() + '?me=1', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (j && j.latest) {
+          prefillFrom(j.latest);
+          if (panelOpen && act === 2) { showAct(2, 0); } /* re-render with the prefill */
+        }
+      });
+    })['catch'](function () { /* the form is still a form */ });
+  }
+
   function openPanel() {
     if (!panel || panelOpen) { return; }
     panelOpen = true;
     refreshHold();
+    prefillReturning();
     lastFocused = (document.activeElement && document.activeElement !== document.body)
       ? document.activeElement : null;
     /* resume where the visitor left off; a finished commission shows its card */

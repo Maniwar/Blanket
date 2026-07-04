@@ -97,10 +97,14 @@ const COLORWAYS = new Set(["ungefaerbt", "loden", "graphit"]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+interface Billing {
+  address: string; address2: string; city: string; state: string; zip: string;
+}
+
 interface Commission {
   name: string; email: string; address: string; address2: string;
   city: string; state: string; zip: string; colorway: string;
-  recipient: string; isGift: boolean;
+  recipient: string; isGift: boolean; billing: Billing | null;
 }
 
 function validateBody(body: unknown): Commission | string {
@@ -150,7 +154,37 @@ function validateBody(body: unknown): Commission | string {
   if (isGift && recipient.length < 2) {
     return "recipient is required when is_gift is true.";
   }
-  return { name, email, address, address2, city, state, zip, colorway, recipient, isGift };
+
+  // Billing: optional, all-or-nothing; stored only when it differs.
+  let billing: Billing | null = null;
+  if (raw.billing !== undefined && raw.billing !== null) {
+    if (typeof raw.billing !== "object" || Array.isArray(raw.billing)) {
+      return "billing, if provided, must be an object.";
+    }
+    const b = raw.billing as Record<string, unknown>;
+    const bAddress = str(b.address);
+    const bAddress2 = str(b.address2);
+    const bCity = str(b.city);
+    const bState = str(b.state);
+    const bZip = str(b.zip);
+    if (bAddress.length < 4 || bAddress.length > 120) {
+      return "billing.address must be 4 to 120 characters.";
+    }
+    if (bAddress2.length > 120) {
+      return "billing.address2 must be at most 120 characters.";
+    }
+    if (bCity.length < 1 || bCity.length > 80) {
+      return "billing.city must be 1 to 80 characters.";
+    }
+    if (!/^[A-Z]{2}$/.test(bState) || !US_STATES.has(bState)) {
+      return "billing.state must be a two-letter US state code (or DC), uppercase.";
+    }
+    if (!/^\d{5}(-\d{4})?$/.test(bZip)) {
+      return "billing.zip must be a 5-digit US ZIP code (ZIP+4 accepted).";
+    }
+    billing = { address: bAddress, address2: bAddress2, city: bCity, state: bState, zip: bZip };
+  }
+  return { name, email, address, address2, city, state, zip, colorway, recipient, isGift, billing };
 }
 
 // ── Optional signed-in linkage — verify Supabase Auth JWT ────────────────────
@@ -267,6 +301,8 @@ async function commissionOrder(
     p_user_id: userId,
   };
   const attempts: Record<string, unknown>[] = [
+    { ...legacyArgs, p_session: session, p_recipient: c.recipient || null,
+      p_is_gift: c.isGift, p_billing: c.billing },
     { ...legacyArgs, p_session: session, p_recipient: c.recipient || null, p_is_gift: c.isGift },
     { ...legacyArgs, p_session: session },
     legacyArgs,
@@ -333,7 +369,7 @@ Deno.serve(async (req: Request) => {
         ? `or=${encodeURIComponent(`(user_id.eq.${me.id},email.eq."${safeEmail}")`)}`
         : `user_id=eq.${encodeURIComponent(me.id)}`;
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/orders?select=serial,status,colorway,name,recipient_name,is_gift&${filter}&status=neq.cancelled&order=placed_at.desc&limit=1`,
+        `${SUPABASE_URL}/rest/v1/orders?select=serial,status,colorway,name,recipient_name,is_gift,email,address,address2,city,state,zip&${filter}&status=neq.cancelled&order=placed_at.desc&limit=1`,
         { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
       );
       const rows = res.ok ? await res.json() as unknown[] : [];

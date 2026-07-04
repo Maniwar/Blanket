@@ -218,6 +218,31 @@
     flex:1 1 160px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
 
+  /* customers */
+  .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
+    background:rgba(38,51,43,.28); overflow:hidden; }
+  .cust-head{ display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+    padding:14px 18px; cursor:pointer; user-select:none; }
+  .cust-head:hover{ background:rgba(241,236,226,.03); }
+  .cust-name{ font-size:16px; color:var(--wool); }
+  .cust-email{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool-dim); }
+  .cust-tier{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--brass-soft); border:1px solid var(--hairline);
+    border-radius:20px; padding:3px 11px; }
+  .cust-meta{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:12px;
+    color:var(--wool-dim); white-space:nowrap; }
+  .cust-meta b{ color:var(--wool); font-weight:500; }
+  .cust-orders{ display:none; border-top:1px solid var(--hairline-dim); padding:6px 18px 12px; }
+  .cust-row.open .cust-orders{ display:block; }
+  .cust-order{ display:flex; gap:14px; flex-wrap:wrap; align-items:baseline;
+    padding:9px 2px; border-bottom:1px solid var(--hairline-dim); font-size:13.5px; }
+  .cust-order:last-child{ border-bottom:none; }
+  .cust-order .serial{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft); }
+  .cust-order .st{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--wool-dim); }
+  .cust-order .gift{ color:var(--brass-soft); font-size:12.5px; }
+  .cust-order .place{ color:var(--wool-faint); font-size:12.5px; }
+
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
   .metrics.two{ grid-template-columns:repeat(2, 1fr); }
@@ -356,6 +381,7 @@
     <button class="tab" data-tab="knowledge" role="tab">Knowledge</button>
     <button class="tab" data-tab="procedures" role="tab">Procedures</button>
     <button class="tab" data-tab="cache" role="tab">Cache</button>
+    <button class="tab" data-tab="customers" role="tab">Customers</button>
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
   </nav>
 
@@ -499,7 +525,29 @@
       <div id="cache-list"></div>
     </div>
 
-    <!-- ============ TAB 5 : CONVERSATIONS ============ -->
+    <!-- ============ TAB 5 : CUSTOMERS ============ -->
+    <div id="panel-customers" class="panel">
+      <div class="panel-head">
+        <span class="micro">The register's patrons</span>
+        <h2>Customers</h2>
+        <p class="note">Every buyer on the register — their standing, lifetime value at $589 a blanket, and each entry under their name. Gift orders count toward the buyer who commissioned them.</p>
+      </div>
+
+      <div class="metrics">
+        <div class="stat"><span class="micro">Patrons</span><div class="val" id="m-cust-count">—</div></div>
+        <div class="stat"><span class="micro">Orders</span><div class="val" id="m-cust-orders">—</div></div>
+        <div class="stat"><span class="micro">Register value</span><div class="val" id="m-cust-ltv">—</div></div>
+      </div>
+
+      <div class="row-tools">
+        <input type="text" id="cust-search" placeholder="Search name or email…" style="max-width:280px;">
+        <button id="cust-refresh" class="btn">Refresh</button>
+      </div>
+
+      <div id="cust-list"></div>
+    </div>
+
+    <!-- ============ TAB 6 : CONVERSATIONS ============ -->
     <div id="panel-conversations" class="panel">
       <div class="panel-head">
         <span class="micro">The floor</span>
@@ -567,6 +615,7 @@ const state = {
   cache: [],
   actions: [],
   gaps: [],
+  customers: [],
   convos: [],
   activeConvoId: null,
   loaded: false
@@ -691,6 +740,7 @@ async function route() {
     loadActions();
     loadCache();
     loadGaps();
+    loadCustomers();
     loadConversations();
   }
 }
@@ -759,6 +809,11 @@ function wireStatic() {
   $('convo-refresh').addEventListener('click', function () {
     withBusy($('convo-refresh'), loadConversations);
   });
+
+  $('cust-refresh').addEventListener('click', function () {
+    withBusy($('cust-refresh'), loadCustomers);
+  });
+  $('cust-search').addEventListener('input', renderCustomers);
 }
 
 async function doSignOut() {
@@ -772,7 +827,7 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'conversations'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
   if (name === 'knowledge') autoGrowAll('#kb-list');
@@ -1223,7 +1278,110 @@ function cacheEditor(row) {
 }
 
 /* ============================================================
-   TAB 5 — CONVERSATIONS
+   TAB 5 — CUSTOMERS (aggregated from orders)
+   ============================================================ */
+
+const PRICE = 589;
+
+function tierFor(n) {
+  if (n >= 5) return 'Stifter';
+  if (n >= 3) return 'Hausfreund';
+  if (n === 2) return 'Wiederkehr';
+  return 'Eintrag';
+}
+
+async function loadCustomers() {
+  const res = await sb.from('orders')
+    .select('email,name,serial,status,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing')
+    .order('placed_at', { ascending: false })
+    .limit(1000);
+  if (res.error) { fail('Load customers', res.error); return; }
+
+  const byKey = new Map();
+  (res.data || []).forEach(function (o) {
+    const key = (o.email || o.user_id || 'unknown').toLowerCase();
+    if (!byKey.has(key)) {
+      byKey.set(key, { email: o.email || '—', name: o.name || '', orders: [], latest: o.placed_at });
+    }
+    const c = byKey.get(key);
+    c.orders.push(o);
+    if (!c.name && o.name) c.name = o.name;
+  });
+  state.customers = [...byKey.values()].map(function (c) {
+    const active = c.orders.filter(function (o) { return o.status !== 'cancelled'; }).length;
+    return {
+      email: c.email, name: c.name || '—', orders: c.orders,
+      count: active, tier: tierFor(Math.max(1, active)),
+      ltv: active * PRICE, latest: c.orders[0].placed_at
+    };
+  }).sort(function (a, b) {
+    return b.count - a.count || new Date(b.latest) - new Date(a.latest);
+  });
+  renderCustomers();
+}
+
+function renderCustomers() {
+  const list = $('cust-list');
+  list.textContent = '';
+
+  const q = ($('cust-search').value || '').trim().toLowerCase();
+  const rows = state.customers.filter(function (c) {
+    return !q || c.email.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
+  });
+
+  let totalOrders = 0, totalActive = 0;
+  state.customers.forEach(function (c) { totalOrders += c.orders.length; totalActive += c.count; });
+  $('m-cust-count').textContent = String(state.customers.length);
+  $('m-cust-orders').textContent = String(totalOrders);
+  $('m-cust-ltv').textContent = '$' + (totalActive * PRICE).toLocaleString('en-US');
+
+  if (!rows.length) {
+    list.appendChild(el('div', 'empty micro',
+      q ? 'No patron matches that.' : 'No entries in the register yet.'));
+    return;
+  }
+
+  rows.forEach(function (c) {
+    const row = el('div', 'cust-row');
+    const head = el('div', 'cust-head');
+    head.appendChild(el('span', 'cust-name', c.name));
+    head.appendChild(el('span', 'cust-email', c.email));
+    head.appendChild(el('span', 'cust-tier', c.tier));
+    const meta = el('span', 'cust-meta');
+    const bLtv = el('b', null, '$' + c.ltv.toLocaleString('en-US'));
+    meta.appendChild(bLtv);
+    meta.appendChild(document.createTextNode(
+      ' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets') +
+      ' · last ' + fmtWhen(c.latest)));
+    head.appendChild(meta);
+    row.appendChild(head);
+
+    const orders = el('div', 'cust-orders');
+    c.orders.forEach(function (o) {
+      const line = el('div', 'cust-order');
+      line.appendChild(el('span', 'serial', 'Nº ' + Number(o.serial).toLocaleString('en-US')));
+      line.appendChild(el('span', null, o.colorway || '—'));
+      line.appendChild(el('span', 'st', o.status || '—'));
+      if (o.is_gift && o.recipient_name) {
+        line.appendChild(el('span', 'gift', 'gift → ' + o.recipient_name));
+      }
+      if (o.billing && o.billing.city) {
+        line.appendChild(el('span', 'place', 'billing: ' + o.billing.city + ', ' + (o.billing.state || '')));
+      }
+      const place = (o.city ? o.city + ', ' : '') + (o.state || '');
+      line.appendChild(el('span', 'place',
+        (place ? place + ' · ' : '') + fmtWhen(o.placed_at)));
+      orders.appendChild(line);
+    });
+    row.appendChild(orders);
+
+    head.addEventListener('click', function () { row.classList.toggle('open'); });
+    list.appendChild(row);
+  });
+}
+
+/* ============================================================
+   TAB 6 — CONVERSATIONS
    ============================================================ */
 
 async function loadConversations() {
