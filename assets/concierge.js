@@ -135,6 +135,38 @@
   var remoteGreeting = '';
   var remoteStarters = null;    /* replaces FEIER_KB.suggested when present */
   var remoteAuth = null;
+  var remoteForms = {};        /* slug -> {title, fields[], submit_tool} */
+
+  function sanitizeForms(raw) {
+    var out = {}, i, f, def, fields, j, fd;
+    if (Object.prototype.toString.call(raw) !== '[object Array]') { return out; }
+    for (i = 0; i < raw.length && i < 12; i++) {
+      f = raw[i];
+      if (!f || typeof f !== 'object') { continue; }
+      if (typeof f.slug !== 'string' || !/^[a-z0-9-]{2,40}$/.test(f.slug)) { continue; }
+      if (Object.prototype.toString.call(f.fields) !== '[object Array]') { continue; }
+      fields = [];
+      for (j = 0; j < f.fields.length && j < 12; j++) {
+        fd = f.fields[j];
+        if (!fd || typeof fd.name !== 'string' || !/^[a-z0-9_]{1,32}$/.test(fd.name)) { continue; }
+        fields.push({
+          name: fd.name,
+          label: typeof fd.label === 'string' ? fd.label.slice(0, 60) : fd.name,
+          type: (fd.type === 'state' || fd.type === 'zip') ? fd.type : 'text',
+          required: fd.required === true,
+          maxlength: (typeof fd.maxlength === 'number' && fd.maxlength > 0) ? fd.maxlength : 120,
+          autocomplete: typeof fd.autocomplete === 'string' ? fd.autocomplete.slice(0, 40) : ''
+        });
+      }
+      if (!fields.length) { continue; }
+      def = {
+        title: typeof f.title === 'string' ? f.title.slice(0, 80) : f.slug,
+        fields: fields
+      };
+      out[f.slug] = def;
+    }
+    return out;
+  }
 
   function sanitizeStarters(raw) {
     if (!raw || typeof raw !== 'object') { return null; }
@@ -180,6 +212,7 @@
           var st = sanitizeStarters(j.starters);
           if (st) { remoteStarters = st; }
           if (j.auth != null) { remoteAuth = j.auth; }
+          remoteForms = sanitizeForms(j.forms);
         }
         clearTimeout(timer);
         finish();
@@ -357,6 +390,22 @@
       'border-color:var(--cx-brass-soft);}',
       '.cx-reply:disabled{opacity:.35;cursor:default;}',
       '.cx-replies-used .cx-reply{opacity:.35;}',
+
+      /* in-chat forms */
+      '.cx-form{border:1px solid rgba(196,155,91,.4);background:rgba(196,155,91,.05);',
+      'padding:1rem 1rem .9rem;margin:.65rem 0 .3rem;display:flex;flex-direction:column;gap:.6rem;}',
+      '.cx-form-title{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.18em;',
+      'text-transform:uppercase;color:var(--cx-brass-soft);margin-bottom:.15rem;}',
+      '.cx-form-field{display:flex;flex-direction:column;gap:4px;}',
+      '.cx-form-label{font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.14em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.55);}',
+      '.cx-form-input{background:rgba(23,31,26,.6);border:1px solid rgba(196,155,91,.3);',
+      'border-radius:2px;color:#F1ECE2;font-size:.9rem;padding:.55em .7em;outline:none;}',
+      '.cx-form-input:focus{border-color:var(--cx-brass-soft);}',
+      '.cx-form-err{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.12em;',
+      'text-transform:uppercase;color:#d3766a;line-height:1.7;}',
+      '.cx-form-done{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
+      'text-transform:uppercase;color:var(--cx-brass-soft);line-height:1.8;}',
 
       /* error + system lines */
       '.cx-sysline{font-family:"IBM Plex Mono",monospace;font-size:.64rem;letter-spacing:.14em;',
@@ -597,6 +646,99 @@
     return out;
   }
 
+  var US_STATE_CODES = ['AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+
+  /* An in-chat form. Collects structured input and submits it to the edge
+     function's ?form=1 endpoint — the same verified, audited write path the
+     concierge's own tools use. Definitions come from the Studio via config. */
+  function buildChatForm(slug, serial, def) {
+    var card = el('div', 'cx-form cx-fade-in');
+    card.appendChild(el('div', 'cx-form-title',
+      def.title + ' — N\u00ba ' + serial.toLocaleString('en-US')));
+
+    var controls = {};
+    def.fields.forEach(function (f) {
+      var wrap = el('label', 'cx-form-field');
+      wrap.appendChild(el('span', 'cx-form-label', f.label));
+      var input;
+      if (f.type === 'state') {
+        input = document.createElement('select');
+        var o0 = document.createElement('option');
+        o0.value = '';
+        o0.appendChild(document.createTextNode('State\u2026'));
+        input.appendChild(o0);
+        US_STATE_CODES.forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = c;
+          o.appendChild(document.createTextNode(c));
+          input.appendChild(o);
+        });
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = f.maxlength;
+        if (f.type === 'zip') { input.setAttribute('inputmode', 'numeric'); }
+        if (f.autocomplete) { input.autocomplete = f.autocomplete; }
+      }
+      input.className = 'cx-form-input';
+      wrap.appendChild(input);
+      controls[f.name] = input;
+      card.appendChild(wrap);
+    });
+
+    var err = el('div', 'cx-form-err');
+    err.style.display = 'none';
+    var submit = el('button', 'cx-action', '\u2733 Enter it in the register');
+    submit.type = 'button';
+    card.appendChild(submit);
+    card.appendChild(err);
+
+    function say(msg) { err.textContent = msg; err.style.display = msg ? '' : 'none'; }
+
+    submit.addEventListener('click', function () {
+      var values = {}, bad = null;
+      def.fields.forEach(function (f) {
+        var v = (controls[f.name].value || '').replace(/^\s+|\s+$/g, '');
+        if (f.required && !v) { bad = bad || (f.label + ' is needed.'); }
+        if (f.type === 'zip' && v && !/^\d{5}(-\d{4})?$/.test(v)) { bad = bad || 'ZIP: five digits, the usual kind.'; }
+        values[f.name] = v;
+      });
+      if (bad) { say(bad); return; }
+      say('');
+      submit.disabled = true;
+      ensureSupabase();
+      getAccessToken().then(function (token) {
+        if (!token) {
+          submit.disabled = false;
+          say('The register takes signed entries \u2014 sign in first.');
+          return null;
+        }
+        return fetch(endpoint() + '?form=1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ form: slug, serial: serial, values: values, session_key: sessionKey() })
+        }).then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+          .then(function (r) {
+            if (r.ok && r.j && r.j.ok) {
+              var msg = typeof r.j.message === 'string' ? r.j.message : 'Recorded.';
+              while (card.firstChild) { card.removeChild(card.firstChild); }
+              card.appendChild(el('div', 'cx-form-done', '\u2733 ' + msg));
+              history.push({ role: 'assistant', content: '(The register recorded a form submission for N\u00ba ' + serial + ': ' + msg + ')' });
+              saveHistory();
+            } else {
+              submit.disabled = false;
+              say((r.j && r.j.error) ? String(r.j.error) : 'The register is briefly unavailable \u2014 try again.');
+            }
+          });
+      })['catch'](function () {
+        submit.disabled = false;
+        say('The register is briefly unavailable \u2014 try again.');
+      });
+    });
+
+    return card;
+  }
+
   function mdRender(text) {
     var frag = document.createDocumentFragment();
     if (typeof text !== 'string' || !text.length) { return frag; }
@@ -691,6 +833,15 @@
           frag.appendChild(row);
         }
         continue;
+      }
+
+      /* {{form:slug:serial}} line — structured input defined in the Studio */
+      var fm = /^\{\{form:([a-z0-9-]{2,40}):(\d{1,6})\}\}$/.exec(trimmed);
+      if (fm) {
+        flushPara();
+        var fdef = remoteForms[fm[1]];
+        if (fdef) { frag.appendChild(buildChatForm(fm[1], parseInt(fm[2], 10), fdef)); }
+        i++; continue;
       }
 
       /* pipe table: needs header row + separator row */

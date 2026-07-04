@@ -132,10 +132,15 @@ async function pgRpc<T>(fn: string, args: Record<string, unknown>): Promise<T | 
 
 // ── Config + KB + SOPs — DB reads cached in module memory for 60 seconds ─────
 
+interface FormDef {
+  slug: string; title: string; submit_tool: string; fields: unknown;
+}
+
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
   kbText: string | null; // enabled concierge_kb rows; null -> KB_MARKDOWN fallback
   sopText: string | null; // enabled concierge_sops rows; null -> none
+  forms: FormDef[]; // enabled concierge_forms rows
   at: number; // Date.now() of the read; refreshed after CACHE_TTL_MS
 }
 
@@ -144,13 +149,16 @@ let dataCache: ConciergeData | null = null;
 
 async function loadConciergeData(): Promise<ConciergeData> {
   if (dataCache && Date.now() - dataCache.at < CACHE_TTL_MS) return dataCache;
-  const [cfgRows, kbRows, sopRows] = await Promise.all([
+  const [cfgRows, kbRows, sopRows, formRows] = await Promise.all([
     pgSelect<{ key: string; value: unknown }>("concierge_config?select=key,value"),
     pgSelect<{ title: string; content_md: string }>(
       "concierge_kb?select=title,content_md&enabled=is.true&order=sort_order.asc",
     ),
     pgSelect<{ title: string; content_md: string }>(
       "concierge_sops?select=title,content_md&enabled=is.true&order=sort_order.asc",
+    ),
+    pgSelect<FormDef>(
+      "concierge_forms?select=slug,title,submit_tool,fields&enabled=is.true",
     ),
   ]);
   dataCache = {
@@ -163,6 +171,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
     sopText: sopRows && sopRows.length > 0
       ? sopRows.map((r) => `### ${r.title}\n${r.content_md}`).join("\n\n")
       : null,
+    forms: formRows ?? [],
     at: Date.now(),
   };
   return dataCache;
@@ -587,6 +596,10 @@ function renderLiveState(ctx: Record<string, unknown>, customerLine: string | nu
   return customerLine ? `${line}\n${customerLine}` : line;
 }
 
+function formCatalog(data: ConciergeData): string {
+  return data.forms.map((f) => `${f.slug} — ${f.title}`).join("; ");
+}
+
 function buildSystemPrompt(
   data: ConciergeData, liveState: string, signedIn: boolean,
 ): string {
@@ -608,12 +621,23 @@ function buildSystemPrompt(
       "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n" +
       "- This pattern governs EVERY register action (status detail, cancellation, address change, " +
       "anything that modifies an order): when more than one order could be meant, FIRST list the " +
-      "eligible orders — Nº, cloth, status — then offer one {{reply:...}} pill per order (e.g. " +
-      "{{reply:Cancel Nº 14,228}} or {{reply:Change the address on Nº 14,228}}), each on its own " +
-      "line, at most 6. For any change, after they pick, restate the consequence in one line and " +
+      "eligible orders, then offer one {{reply:...}} pill per order, each on its own line, at most 6. " +
+      "For any change, after they pick, restate the consequence in one line and " +
       "offer exactly two pills — {{reply:Yes, cancel Nº X}} / {{reply:Keep Nº X}} (or the matching " +
       "pair for the action). Call the tool only after the explicit Yes. Never make the owner type " +
       "what a tap can say.\n" +
+      "- Identify orders the way a person remembers them, not by number alone. In lists, lead with " +
+      "the cloth and what distinguishes it — placed date, gift recipient, destination when they " +
+      "differ ('Graphit, placed July 4 — a gift for Anna Weber'); the Nº is the receipt, not the " +
+      "identity. Pills carry the cloth with the number: {{reply:Cancel the Graphit — Nº 14,228}}; " +
+      "when several orders share a cloth, add the placed date or recipient to the pill so no two " +
+      "read alike.\n" +
+      (data.forms.length > 0
+        ? "- FORMS: for structured input, emit {{form:<slug>:<serial>}} on its own line once the " +
+          "order is chosen — it renders a proper form and the register records the submission " +
+          "directly (the chat will show the confirmation). Available forms: " + formCatalog(data) +
+          ". Never dictate form fields through chat, and never invent form slugs.\n"
+        : "") +
       "- LIVE STATE may carry the owner's STANDING in the Webbuch (Eintrag — first entry; " +
       "Wiederkehr — one who returns; Hausfreund — friend of the house; Stifter — patron of the mill). " +
       "Acknowledge it once, lightly, when greeting or thanking — never as a gimmick or a sales lever. " +
@@ -712,11 +736,13 @@ function* chunked(text: string): Generator<string> {
 async function handleConfigGet(req: Request): Promise<Response> {
   const { config } = await loadConciergeData();
   const starters = config?.starters;
+  const { forms } = await loadConciergeData();
   return jsonResponse(req, 200, {
     enabled: config?.enabled === false ? false : true,
     greeting: typeof config?.greeting === "string" ? config.greeting : null,
     starters: starters && typeof starters === "object" && !Array.isArray(starters) ? starters : null,
     auth: true,
+    forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
   });
 }
 
@@ -975,6 +1001,56 @@ async function handleChatPost(req: Request): Promise<Response> {
   return sseResponse(req, stream);
 }
 
+// ── POST ?form=1 — structured submissions from in-chat forms ─────────────────
+// Same trust boundary as the model's own tool calls: verified JWT, the tool's
+// ownership filters and validation, the concierge_actions audit log.
+
+async function handleFormPost(req: Request): Promise<Response> {
+  const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  if (rateLimited("f:" + ip)) {
+    return jsonError(req, 429, "A short pause, please — the register is writing.");
+  }
+  const customer = await verifyUser(req);
+  if (!customer) {
+    return jsonError(req, 401, "The register takes signed entries — sign in first.");
+  }
+  let body: Record<string, unknown>;
+  try { body = await req.json() as Record<string, unknown>; } catch {
+    return jsonError(req, 400, "Request body must be valid JSON.");
+  }
+  const slug = typeof body.form === "string" ? body.form : "";
+  const serial = typeof body.serial === "number" ? Math.floor(body.serial) : NaN;
+  const values = (body.values && typeof body.values === "object" && !Array.isArray(body.values))
+    ? body.values as Record<string, unknown>
+    : null;
+  if (!slug || !Number.isFinite(serial) || !values) {
+    return jsonError(req, 400, "form, serial, and values are required.");
+  }
+  const data = await loadConciergeData();
+  const def = data.forms.find((f) => f.slug === slug);
+  if (!def) return jsonError(req, 404, "No such form.");
+
+  // Build the tool input strictly from the form's own field definitions.
+  const input: Record<string, unknown> = { serial };
+  const fields = Array.isArray(def.fields) ? def.fields as Array<Record<string, unknown>> : [];
+  for (const f of fields) {
+    const name = typeof f.name === "string" ? f.name : "";
+    if (!name) continue;
+    const raw = values[name];
+    const v = typeof raw === "string" ? raw.trim().slice(0, 200) : "";
+    if (f.required === true && !v) {
+      return jsonError(req, 400, `${name} is required.`);
+    }
+    input[name] = v;
+  }
+
+  const result = await runRegisterTool(def.submit_tool, input, customer, null);
+  if (result.startsWith("ERROR:")) {
+    return jsonError(req, 400, result.slice(6).trim());
+  }
+  return jsonResponse(req, 200, { ok: true, message: result });
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -1052,5 +1128,6 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, report);
   }
   if (req.method !== "POST") return jsonError(req, 405, "Method not allowed. Use POST, or GET ?config=1.");
+  if (new URL(req.url).searchParams.get("form")) return await handleFormPost(req);
   return await handleChatPost(req);
 });

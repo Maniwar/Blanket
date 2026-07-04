@@ -495,6 +495,18 @@
 
       <section class="card">
         <div class="card-head">
+          <h3>Forms</h3>
+          <span class="micro">structured input the concierge can hand out</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">Each form renders inside the chat when the concierge emits its token. Fields are JSON: name, label, type (text · state · zip), required, maxlength, autocomplete. Submissions run through the same verified, audited write path as the concierge's own tools.</p>
+        <div id="forms-list"></div>
+        <div class="card-foot">
+          <button id="forms-refresh" class="btn">Refresh</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Recent register actions by the concierge</h3>
           <span class="micro">concierge_actions</span>
         </div>
@@ -616,6 +628,7 @@ const state = {
   actions: [],
   gaps: [],
   customers: [],
+  forms: [],
   convos: [],
   activeConvoId: null,
   loaded: false
@@ -741,6 +754,7 @@ async function route() {
     loadCache();
     loadGaps();
     loadCustomers();
+    loadForms();
     loadConversations();
   }
 }
@@ -801,6 +815,9 @@ function wireStatic() {
   });
   $('gaps-refresh').addEventListener('click', function () {
     withBusy($('gaps-refresh'), loadGaps);
+  });
+  $('forms-refresh').addEventListener('click', function () {
+    withBusy($('forms-refresh'), loadForms);
   });
   $('cache-refresh').addEventListener('click', function () {
     withBusy($('cache-refresh'), loadCache);
@@ -1095,6 +1112,91 @@ function kbEditor(row, spec) {
       state[spec.stateKey] = state[spec.stateKey].filter(function (r) { return r !== row; });
       wrap.remove();
       toast(spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' deleted — ' + label);
+    });
+  });
+
+  return wrap;
+}
+
+/* ============================================================
+   TAB 3a — FORMS (concierge_forms)
+   ============================================================ */
+
+async function loadForms() {
+  const res = await sb.from('concierge_forms')
+    .select('*')
+    .order('slug', { ascending: true });
+  if (res.error) { fail('Load forms', res.error); return; }
+  state.forms = res.data || [];
+  renderForms();
+}
+
+function renderForms() {
+  const list = $('forms-list');
+  list.textContent = '';
+  if (!state.forms.length) {
+    list.appendChild(el('div', 'empty micro', 'No forms yet — run the forms migration, or add rows to concierge_forms.'));
+    return;
+  }
+  state.forms.forEach(function (row) { list.appendChild(formEditor(row)); });
+  if ($('panel-procedures').classList.contains('on')) autoGrowAll('#forms-list');
+}
+
+function formEditor(row) {
+  const wrap = el('div', 'kb-row');
+
+  const top = el('div', 'kb-top');
+  const chk = el('label', 'checkline');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = row.enabled !== false;
+  chk.appendChild(cb);
+  chk.appendChild(el('span', 'micro', 'Enabled'));
+  top.appendChild(chk);
+  top.appendChild(el('span', 'slug', '{{form:' + row.slug + ':<serial>}}'));
+  top.appendChild(el('span', 'micro ord', '→ ' + (row.submit_tool || '')));
+  wrap.appendChild(top);
+
+  const fTitle = el('div', 'field');
+  fTitle.appendChild(el('span', 'micro', 'Title (shown on the form)'));
+  const title = el('input');
+  title.type = 'text';
+  title.value = row.title || '';
+  fTitle.appendChild(title);
+  wrap.appendChild(fTitle);
+
+  const fBody = el('div', 'field');
+  fBody.appendChild(el('span', 'micro', 'Fields (JSON array)'));
+  const body = el('textarea');
+  body.rows = 6;
+  body.value = JSON.stringify(row.fields || [], null, 2);
+  body.addEventListener('input', function () { autoGrow(body); });
+  fBody.appendChild(body);
+  wrap.appendChild(fBody);
+
+  const actions = el('div', 'kb-actions');
+  const btnSave = el('button', 'btn primary', 'Save');
+  actions.appendChild(btnSave);
+  wrap.appendChild(actions);
+
+  btnSave.addEventListener('click', function () {
+    withBusy(btnSave, async function () {
+      let fields;
+      try {
+        fields = JSON.parse(body.value);
+        if (!Array.isArray(fields)) throw new Error('fields must be a JSON array');
+      } catch (e) {
+        toast('Fields JSON does not parse: ' + e.message, true);
+        return;
+      }
+      const res = await sb.from('concierge_forms').update({
+        title: title.value.trim() || row.slug,
+        fields: fields,
+        enabled: cb.checked,
+        updated_at: nowIso()
+      }).eq('id', row.id);
+      if (res.error) { fail('Save form', res.error); return; }
+      toast('Form saved — ' + row.slug);
     });
   });
 
