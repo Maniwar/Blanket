@@ -134,7 +134,7 @@ begin
   select c.id into v_id
     from public.concierge_cache c
     where c.enabled
-    order by c.embedding <#> query_embedding
+    order by c.embedding operator(extensions.<#>) query_embedding
     limit 1;
 
   if v_id is null then return; end if;
@@ -143,9 +143,9 @@ begin
     update public.concierge_cache c
       set hits = c.hits + 1, last_hit_at = now()
       where c.id = v_id
-        and (c.embedding <#> query_embedding) * -1 >= match_threshold
+        and (c.embedding operator(extensions.<#>) query_embedding) * -1 >= match_threshold
       returning c.id, c.question, c.answer_md,
-                (c.embedding <#> query_embedding) * -1;
+                (c.embedding operator(extensions.<#>) query_embedding) * -1;
 end;
 $$;
 
