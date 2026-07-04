@@ -983,12 +983,61 @@ Deno.serve(async (req: Request) => {
     return await handleConfigGet(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("cachecheck")) {
-    // Self-diagnosis for the semantic cache: is the embedding runtime alive,
-    // and how many rows does the cache hold? Safe to expose — counts only.
-    let embedding = "ok";
+    // Self-diagnosis: run the semantic cache's WHOLE round trip — embed a
+    // probe, write it, semantically match it back, delete it — and report
+    // which step fails, with the raw error. Exposes no data beyond counts.
+    const report: Record<string, unknown> = {};
     const v = await embed("a quiet diagnostic sentence for the register");
-    if (!v) embedding = "unavailable — see concierge_flags for detail";
-    let rows = -1;
+    report.embed = v ? `ok (${v.length} dims)` : "FAILED — see concierge_flags for detail";
+    if (v) {
+      // write
+      let probeId: string | null = null;
+      try {
+        const ins = await fetch(`${SUPABASE_URL}/rest/v1/concierge_cache`, {
+          method: "POST",
+          headers: { ...PG_HEADERS, "Prefer": "return=representation" },
+          body: JSON.stringify({
+            question: "(diagnostic probe)", answer_md: "(probe)",
+            embedding: vecLiteral(v), model: "probe",
+          }),
+        });
+        if (ins.ok) {
+          const rows = await ins.json() as Array<{ id: string }>;
+          probeId = rows[0]?.id ?? null;
+          report.write = probeId ? "ok" : "FAILED — insert returned no row";
+        } else {
+          report.write = `FAILED — ${ins.status}: ${(await ins.text()).slice(0, 200)}`;
+        }
+      } catch (e) {
+        report.write = `FAILED — ${e instanceof Error ? e.message : String(e)}`;
+      }
+      // match
+      if (probeId) {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/match_cached_answer`, {
+            method: "POST",
+            headers: PG_HEADERS,
+            body: JSON.stringify({ query_embedding: vecLiteral(v), match_threshold: 0.9 }),
+          });
+          if (res.ok) {
+            const hits = await res.json() as Array<{ id: string }>;
+            report.match = hits.some((h) => h.id === probeId)
+              ? "ok — probe matched itself"
+              : `unexpected — ${hits.length} row(s), probe not among them`;
+          } else {
+            report.match = `FAILED — ${res.status}: ${(await res.text()).slice(0, 200)}`;
+          }
+        } catch (e) {
+          report.match = `FAILED — ${e instanceof Error ? e.message : String(e)}`;
+        }
+        // clean up the probe
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/concierge_cache?id=eq.${probeId}`, {
+            method: "DELETE", headers: PG_HEADERS,
+          });
+        } catch { /* a stray probe row is visible in the Studio and deletable */ }
+      }
+    }
     try {
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/concierge_cache?select=id`,
@@ -996,13 +1045,11 @@ Deno.serve(async (req: Request) => {
       );
       const range = res.headers.get("content-range") ?? "";
       const total = parseInt(range.split("/")[1] ?? "", 10);
-      if (Number.isFinite(total)) rows = total;
-    } catch { /* rows stays -1 */ }
-    return jsonResponse(req, 200, {
-      embedding,
-      cache_rows: rows,
-      note: "cache engages only for anonymous visitors' first question of a conversation",
-    });
+      report.cache_rows = Number.isFinite(total) ? total : "unknown";
+    } catch { report.cache_rows = "unknown"; }
+    report.note =
+      "cache engages only for anonymous (signed-out) visitors' first question of a conversation";
+    return jsonResponse(req, 200, report);
   }
   if (req.method !== "POST") return jsonError(req, 405, "Method not allowed. Use POST, or GET ?config=1.");
   return await handleChatPost(req);
