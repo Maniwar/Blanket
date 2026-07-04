@@ -122,8 +122,8 @@ create policy "admin all" on public.concierge_kb
 
 create policy "admin all" on public.concierge_admins
   for all to authenticated
-  using (public.is_concierge_admin())
-  with check (public.is_concierge_admin());
+  using (email = coalesce(auth.jwt()->>'email',''))
+  with check (email = coalesce(auth.jwt()->>'email',''));
 
 create policy "admin all" on public.concierge_conversations
   for all to authenticated
