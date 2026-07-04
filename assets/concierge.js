@@ -93,8 +93,6 @@
   var SECTIONS = ['top', 'why', 'wool', 'label', 'ritual', 'arrival', 'reserve'];
   var INLINE_SECTIONS = ['why', 'wool', 'label', 'ritual', 'arrival'];
   var HISTORY_KEY = 'cx-history';
-  var CHIP_COUNT_KEY = 'cx-chip-count';
-  var CHIP_SEEN_KEY = 'cx-chip-seen';
   var SKEY_KEY = 'cx-skey';
   var HISTORY_CAP = 40;
   var SEND_TURNS = 12;
@@ -326,10 +324,14 @@
       '.cx-fade-in{animation:cxFade .6s ease both;}',
       '@keyframes cxFade{from{opacity:0;}to{opacity:1;}}',
 
-      /* caret + dots */
-      '.cx-caret{display:inline-block;width:1px;height:1em;background:var(--cx-brass-soft);',
-      'vertical-align:text-bottom;margin-left:1px;animation:cxBlink 1s steps(1) infinite;}',
-      '@keyframes cxBlink{0%,55%{opacity:1;}56%,100%{opacity:0;}}',
+      /* caret (weaving shuttle) + woven-word entrance + dots */
+      '.cx-caret{display:inline-block;width:13px;height:2px;background:var(--cx-brass-soft);',
+      'vertical-align:baseline;margin-left:3px;border-radius:1px;transform-origin:left center;',
+      'animation:cxShuttle .9s ease-in-out infinite;}',
+      '@keyframes cxShuttle{0%,100%{transform:scaleX(1);opacity:.9;}50%{transform:scaleX(.35);opacity:.45;}}',
+      '.cx-w{opacity:0;filter:blur(2.5px);color:var(--cx-brass-soft);',
+      'transition:opacity .3s ease,filter .42s ease,color .8s ease;}',
+      '.cx-w.cx-w-in{opacity:1;filter:blur(0);color:inherit;}',
       '.cx-dots{display:inline-flex;gap:6px;align-items:center;padding:.3em 0;}',
       '.cx-dots i{width:3px;height:3px;border-radius:50%;background:var(--cx-brass-soft);',
       'animation:cxWeave 1.1s ease-in-out infinite;}',
@@ -912,24 +914,25 @@
   function ssSet(key, val) {
     try { window.sessionStorage.setItem(key, val); } catch (e) { /* ignore */ }
   }
-  function chipCount() { return parseInt(ssGet(CHIP_COUNT_KEY) || '0', 10) || 0; }
-  function chipSeen() {
-    try {
-      var raw = ssGet(CHIP_SEEN_KEY);
-      var arr = raw ? JSON.parse(raw) : [];
-      return (Object.prototype.toString.call(arr) === '[object Array]') ? arr : [];
-    } catch (e) { return []; }
-  }
+
+  /* Per-pageview chip state — in memory, so a reload starts fresh and the
+     nudges behave predictably. Caps: once per section, CHIP_CAP per view. */
+  var chipShownCount = 0;
+  var chipSeenSections = [];
+  var CHIP_CAP = 5;
+  var CHIP_DWELL_MS = 1100;
+  var CHIP_LINGER_MS = 9000;
 
   function onSectionChange(sectionId) {
     updateLauncher();
     if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
     hideChip();
     if (panelOpen) { return; }
-    if (chipCount() >= 3) { return; }
-    var seen = chipSeen();
+    if (chipShownCount >= CHIP_CAP) { return; }
     var k;
-    for (k = 0; k < seen.length; k++) { if (seen[k] === sectionId) { return; } }
+    for (k = 0; k < chipSeenSections.length; k++) {
+      if (chipSeenSections[k] === sectionId) { return; }
+    }
     var sugg = suggestedMap();
     if (!sugg) { return; }
     var list = sugg[sectionId];
@@ -937,17 +940,15 @@
     var question = String(list[0]);
     dwellTimer = setTimeout(function () {
       dwellTimer = null;
-      if (panelOpen || currentSection() !== sectionId || chipCount() >= 3) { return; }
+      if (panelOpen || currentSection() !== sectionId || chipShownCount >= CHIP_CAP) { return; }
       showChip(sectionId, question);
-    }, 2500);
+    }, CHIP_DWELL_MS);
   }
 
   function showChip(sectionId, question) {
     hideChip();
-    var seen = chipSeen();
-    seen.push(sectionId);
-    ssSet(CHIP_SEEN_KEY, JSON.stringify(seen));
-    ssSet(CHIP_COUNT_KEY, String(chipCount() + 1));
+    chipSeenSections.push(sectionId);
+    chipShownCount++;
     chipEl = el('button', 'cx-chip', question);
     chipEl.type = 'button';
     if (REDUCED) { chipEl.classList.add('cx-reduced'); }
@@ -960,7 +961,7 @@
     /* force layout, then fade in */
     void chipEl.offsetWidth;
     chipEl.classList.add('cx-on');
-    chipHideTimer = setTimeout(hideChip, 6000);
+    chipHideTimer = setTimeout(hideChip, CHIP_LINGER_MS);
   }
 
   function hideChip() {
@@ -1037,7 +1038,11 @@
     var body = el('div', 'cx-pre');
     turn.appendChild(body);
     msgsEl.appendChild(turn);
-    var buffer = '';
+    var buffer = '';          /* everything received */
+    var queue = '';           /* received but not yet woven into the DOM */
+    var loom = null;          /* drain interval */
+    var ended = false;        /* stream finished; finalize when queue drains */
+    var started = false;
     var caret = el('span', 'cx-caret');
     caret.setAttribute('aria-hidden', 'true');
     var dots = el('span', 'cx-dots');
@@ -1050,24 +1055,73 @@
     think.appendChild(dots);
     if (!REDUCED) { body.appendChild(think); }
     scrollToBottom(false);
+
+    function beginWeave() {
+      if (started) { return; }
+      started = true;
+      if (think.parentNode) { think.parentNode.removeChild(think); }
+      body.appendChild(caret);
+    }
+    /* Weave one word (with its leading whitespace) before the caret. */
+    function placeNext() {
+      var m = queue.match(/^\s*\S+\s?|^\s+/);
+      if (!m) { return false; }
+      var tok = m[0];
+      queue = queue.slice(tok.length);
+      var node = el('span', 'cx-w', tok);
+      body.insertBefore(node, caret);
+      void node.offsetWidth;
+      node.className = 'cx-w cx-w-in';
+      return true;
+    }
+    function finalize() {
+      if (loom) { clearInterval(loom); loom = null; }
+      while (body.firstChild) { body.removeChild(body.firstChild); }
+      body.className = '';
+      body.appendChild(mdRender(buffer));
+      if (!REDUCED) { body.classList.add('cx-fade-in'); }
+      scrollToBottom(false);
+    }
+    /* Steady drain: ~1 word / 36ms, weaving faster when a burst backs up. */
+    function ensureLoom() {
+      if (loom) { return; }
+      loom = setInterval(function () {
+        var steps = 1 + Math.min(3, Math.floor(queue.length / 140));
+        var wove = false, i;
+        for (i = 0; i < steps; i++) { if (placeNext()) { wove = true; } }
+        if (wove) { scrollToBottom(false); }
+        if (!queue.length) {
+          clearInterval(loom); loom = null;
+          if (ended) { finalize(); }
+        }
+      }, 36);
+    }
+
     return {
       turn: turn,
       getText: function () { return buffer; },
       append: function (chunk) {
         buffer += chunk;
-        /* streaming: escaped plain text via textContent + caret */
-        while (body.firstChild) { body.removeChild(body.firstChild); }
-        body.appendChild(document.createTextNode(buffer));
-        body.appendChild(caret);
-        scrollToBottom(false);
+        if (REDUCED) {
+          /* reduced motion: plain immediate text, no weave */
+          beginWeave();
+          while (body.firstChild) { body.removeChild(body.firstChild); }
+          body.appendChild(document.createTextNode(buffer));
+          scrollToBottom(false);
+          return;
+        }
+        queue += chunk;
+        beginWeave();
+        ensureLoom();
       },
       done: function () {
-        while (body.firstChild) { body.removeChild(body.firstChild); }
-        body.className = '';
-        body.appendChild(mdRender(buffer));
-        scrollToBottom(false);
+        ended = true;
+        if (REDUCED || (!queue.length && !loom)) { finalize(); }
+        /* otherwise the loom finalizes when the queue drains */
       },
       fail: function () {
+        ended = true;
+        if (loom) { clearInterval(loom); loom = null; }
         while (body.firstChild) { body.removeChild(body.firstChild); }
         if (buffer) {
           body.className = '';
@@ -1905,7 +1959,7 @@
         lastKnownSection = s;
         onSectionChange(s);
       }
-    }, 800);
+    }, 250);
   }
 
   /* ----------------------------------------------------------

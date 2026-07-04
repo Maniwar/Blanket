@@ -1273,6 +1273,12 @@ footer{
   }
   pubFeierState();
   setInterval(pubFeierState, 1000);
+  var pubTick = false;
+  window.addEventListener('scroll', function(){
+    if(pubTick) return;
+    pubTick = true;
+    requestAnimationFrame(function(){ pubTick = false; pubFeierState(); });
+  }, {passive:true});
 })();
 </script>
 
@@ -1287,7 +1293,7 @@ window.FEIER_CONCIERGE_CONFIG = {
   supabaseAnonKey: 'sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy'
 };
 </script>
-<script defer src="assets/concierge-kb.js?v=3"></script>
-<script defer src="assets/concierge.js?v=3"></script>
+<script defer src="assets/concierge-kb.js?v=4"></script>
+<script defer src="assets/concierge.js?v=4"></script>
 </body>
 </html>
