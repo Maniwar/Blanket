@@ -41,6 +41,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// Bump when deploying so ?selftest=1 confirms which build is actually live.
+const BUILD_TAG = "2026-07-04-selftest+lifecycle+ltv";
+
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "*")
@@ -128,6 +131,28 @@ async function pgRpc<T>(fn: string, args: Record<string, unknown>): Promise<T | 
     });
     return res.ok ? await res.json() as T : null;
   } catch { return null; }
+}
+
+/** Probe a table/column for existence + row count (for the self-test). A 400
+ *  usually means a missing column/table; 200 with count 0 means it's empty. */
+async function pgProbe(
+  query: string,
+): Promise<{ ok: boolean; status: number; count: number | null; error?: string }> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return { ok: false, status: 0, count: null, error: "no service key" };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${query}`, {
+      headers: { ...PG_HEADERS, "Prefer": "count=exact", "Range": "0-0" },
+    });
+    const total = parseInt((res.headers.get("content-range") ?? "").split("/")[1] ?? "", 10);
+    return {
+      ok: res.ok,
+      status: res.status,
+      count: Number.isFinite(total) ? total : null,
+      error: res.ok ? undefined : (await res.text()).slice(0, 160),
+    };
+  } catch (e) {
+    return { ok: false, status: 0, count: null, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 // ── Config + KB + SOPs — DB reads cached in module memory for 60 seconds ─────
@@ -971,6 +996,50 @@ async function handleConfigGet(req: Request): Promise<Response> {
   });
 }
 
+// ── GET ?selftest=1 — "what does the concierge actually know about me?" ───────
+// Call it with the same Authorization the widget sends. It reports whether the
+// caller is recognized as signed in, whether the newer tables/columns exist in
+// THIS database, how many orders/notes are attributed to them, and the exact
+// CUSTOMER block the model is handed. This is how we tell apart "code not
+// deployed" (never — this endpoint proves the build is live) from "schema not
+// applied" from "sign-in / attribution not landing".
+async function handleSelfTest(req: Request): Promise<Response> {
+  const customer = await verifyUser(req);
+  const report: Record<string, unknown> = {
+    build: BUILD_TAG,
+    signed_in: customer !== null,
+    email: customer?.email ?? null,
+    user_id: customer?.id ?? null,
+  };
+  // Schema presence in THIS database (a 400/PGRST error ⇒ table/column missing).
+  report.schema = {
+    customer_notes: await pgProbe("customer_notes?select=id"),
+    conversation_lifecycle: await pgProbe("concierge_conversations?select=status,ended_at"),
+    goals: await pgProbe("concierge_goals?select=id"),
+    order_events: await pgProbe("order_events?select=id"),
+  };
+  if (customer) {
+    const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+    report.orders = {
+      by_user_id: await pgProbe(`orders?select=serial&user_id=eq.${encodeURIComponent(customer.id)}`),
+      by_email: safeEmail ? await pgProbe(`orders?select=serial&email=eq."${safeEmail}"`) : null,
+    };
+    const nf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    report.my_notes = await pgProbe(`customer_notes?select=id&${nf}`);
+    // The literal block the model sees — orders, standing, client book, recency.
+    try { report.customer_block = await customerBlock(customer); } catch (e) {
+      report.customer_block = `ERROR: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  } else {
+    report.hint = "Not recognized as signed in. The widget must send Authorization: " +
+      "Bearer <your user JWT> (not the anon key). If you ARE signed in on the site and this " +
+      "still says false, the token isn't reaching the function.";
+  }
+  return jsonResponse(req, 200, report);
+}
+
 // ── POST — streaming chat ────────────────────────────────────────────────────
 
 async function handleChatPost(req: Request): Promise<Response> {
@@ -1423,6 +1492,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   if (req.method === "GET" && new URL(req.url).searchParams.get("config")) {
     return await handleConfigGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("selftest")) {
+    return await handleSelfTest(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("cachecheck")) {
     // Self-diagnosis: run the semantic cache's WHOLE round trip — embed a

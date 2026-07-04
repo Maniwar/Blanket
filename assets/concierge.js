@@ -1325,6 +1325,13 @@
   /* congrats after a commission — waits for the register card to be put down */
   window.addEventListener('ck:commissioned', function (ev) {
     var d = (ev && ev.detail) || {};
+    /* Persist a marker so the NEXT visit/refresh can check back \u2014 the immediate
+       congrats below fires now; the post-purchase check-in fires next load. */
+    try {
+      window.localStorage.setItem('feier_last_purchase', JSON.stringify({
+        serial: d.serial || null, count: d.count || 1, ts: Date.now()
+      }));
+    } catch (ePM) { /* ignore */ }
     var no = d.serial ? 'N\u00ba ' + Number(d.serial).toLocaleString('en-US') : 'Your number';
     var line = 'Congratulations \u2014 ' + no + ' is entered in the Webbuch under your name.';
     if (d.count === 1) {
@@ -1347,6 +1354,30 @@
       }
     }, 1000);
   });
+
+  /* Post-purchase check-back — the piece that was missing. On a LATER load
+     (a refresh or return visit) after a recent commission, the concierge
+     reaches out once to make sure every need was met and to open the next
+     door. Fires from a persisted marker, so it survives the refresh; the
+     immediate congrats above handles the purchase moment itself. */
+  (function () {
+    var mark = null;
+    try { mark = JSON.parse(window.localStorage.getItem('feier_last_purchase') || 'null'); } catch (e) { mark = null; }
+    if (!mark || !mark.ts) { return; }
+    var age = Date.now() - mark.ts;
+    if (age > 48 * 3600000) { return; }            /* only recent purchases */
+    var doneKey = 'feier_checkin_' + (mark.serial || 'x');
+    try { if (window.localStorage.getItem(doneKey) === '1') { return; } } catch (e2) { /* ignore */ }
+    setTimeout(function () {
+      if (panelOpen || quietMode) { return; }
+      try { window.localStorage.setItem(doneKey, '1'); } catch (e3) { /* ignore */ }
+      var no = mark.serial ? 'Nº ' + Number(mark.serial).toLocaleString('en-US') : 'your number';
+      var line = 'Welcome back — ' + no + ' is safely in the Webbuch. Before anything else: is ' +
+        'there anything you still need from me? A shipping detail, a gift card, or a companion ' +
+        'cloth for another room.';
+      showOutreach('checkin-' + (mark.serial || 'x'), line, true);
+    }, 7000);
+  })();
 
   /* a dwell opener — one considered line, once, after real attention */
   (function () {
@@ -1862,6 +1893,31 @@
     }
   }
 
+  /* Diagnostic: type "selftest" in the chat to see exactly what the register
+     knows about you — recognized as signed in? your orders, standing, notes,
+     which tables exist. Renders the raw report so it can be pasted for support. */
+  function runSelfTest() {
+    addUserTurn('selftest');
+    if (isDemo()) { addSysLine('Self-test needs the live endpoint (demo mode is on).'); return; }
+    var el2 = el('div', 'cx-turn cx-sysline', 'Running self-test…');
+    el2.style.whiteSpace = 'pre-wrap';
+    el2.style.fontFamily = '"IBM Plex Mono",monospace';
+    el2.style.fontSize = '.66rem';
+    msgsEl.appendChild(el2);
+    scrollToBottom(false);
+    getAccessToken().then(function (token) {
+      var headers = {};
+      if (token) { headers['Authorization'] = 'Bearer ' + token; }
+      return fetch(endpoint() + (endpoint().indexOf('?') === -1 ? '?selftest=1' : '&selftest=1'),
+        { headers: headers });
+    }).then(function (res) { return res.json(); }).then(function (j) {
+      el2.textContent = 'SELF-TEST\n' + JSON.stringify(j, null, 2);
+      scrollToBottom(false);
+    })['catch'](function () {
+      el2.textContent = 'Self-test could not reach the register.';
+    });
+  }
+
   function setStreaming(on) {
     streaming = on;
     if (sendBtn) { sendBtn.disabled = on; }
@@ -1898,6 +1954,10 @@
 
   function sendMessage(text) {
     if (streaming) { return; }
+    if (text && text.replace(/^\s+|\s+$/g, '').toLowerCase() === 'selftest') {
+      pinned = true; hideNewPill(); runSelfTest();
+      return;
+    }
     pinned = true;
     hideNewPill();
     addUserTurn(text);
