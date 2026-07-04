@@ -200,8 +200,27 @@
   .checkline{ display:inline-flex; align-items:center; gap:9px; cursor:pointer; user-select:none; }
   .checkline input{ accent-color:var(--brass); width:15px; height:15px; cursor:pointer; }
 
+  /* cache */
+  .cache-q{ font-size:16px; font-style:italic; color:var(--wool); margin-top:2px; overflow-wrap:anywhere; }
+
+  /* register actions */
+  .action-row{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    padding:10px 2px; border-bottom:1px solid var(--hairline-dim);
+    font-size:13.5px;
+  }
+  .action-row:last-child{ border-bottom:none; }
+  .action-row .who{ color:var(--wool-dim); font-size:13px; }
+  .action-row .act{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft); letter-spacing:.06em; }
+  .action-row .serial{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool); }
+  .action-row .payload{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--wool-faint);
+    flex:1 1 160px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
+  .metrics.two{ grid-template-columns:repeat(2, 1fr); }
   .stat{ border:1px solid var(--hairline-dim); border-radius:3px; padding:16px 18px 14px; background:rgba(38,51,43,.28); }
   .stat .val{ font-family:'IBM Plex Mono', monospace; font-size:26px; color:var(--wool); margin-top:6px; }
   .convo-wrap{ display:grid; grid-template-columns:360px 1fr; gap:22px; align-items:start; }
@@ -265,7 +284,7 @@
     nav.tabs{ padding:0 18px; }
     main{ padding:24px 18px 70px; }
     .grid-3{ grid-template-columns:1fr; gap:16px; }
-    .metrics{ grid-template-columns:1fr; }
+    .metrics, .metrics.two{ grid-template-columns:1fr; }
     .convo-wrap{ grid-template-columns:1fr; }
     .convo-list{ max-height:38vh; }
     .msg{ max-width:92%; }
@@ -335,6 +354,8 @@
   <nav class="tabs" role="tablist">
     <button class="tab on" data-tab="tuning" role="tab">Tuning</button>
     <button class="tab" data-tab="knowledge" role="tab">Knowledge</button>
+    <button class="tab" data-tab="procedures" role="tab">Procedures</button>
+    <button class="tab" data-tab="cache" role="tab">Cache</button>
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
   </nav>
 
@@ -423,7 +444,51 @@
       <div id="kb-list"></div>
     </div>
 
-    <!-- ============ TAB 3 : CONVERSATIONS ============ -->
+    <!-- ============ TAB 3 : PROCEDURES ============ -->
+    <div id="panel-procedures" class="panel">
+      <div class="panel-head">
+        <span class="micro">The handbook</span>
+        <h2>Procedures</h2>
+        <p class="note">Standard operating procedures — the concierge follows these exactly. It can read the register on its own; for signed-in owners it can also change a shipping address (before shipment) and cancel unshipped orders. Write procedures the way you would brief a careful new hire.</p>
+      </div>
+      <div class="row-tools">
+        <button id="sop-add" class="btn">Add procedure</button>
+      </div>
+      <div id="sop-list"></div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Recent register actions by the concierge</h3>
+          <span class="micro">concierge_actions</span>
+        </div>
+        <div id="actions-list"></div>
+        <div class="card-foot">
+          <button id="actions-refresh" class="btn">Refresh</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ TAB 4 : CACHE ============ -->
+    <div id="panel-cache" class="panel">
+      <div class="panel-head">
+        <span class="micro">Instant answers</span>
+        <h2>Cache</h2>
+        <p class="note">Answers served instantly when a visitor asks something similar to a past question. Edit anything wrong, or disable it — the concierge will think fresh on the next miss. New entries appear automatically.</p>
+      </div>
+
+      <div class="metrics two">
+        <div class="stat"><span class="micro">Entries</span><div class="val" id="m-cache-entries">—</div></div>
+        <div class="stat"><span class="micro">Total hits</span><div class="val" id="m-cache-hits">—</div></div>
+      </div>
+
+      <div class="row-tools">
+        <button id="cache-refresh" class="btn">Refresh</button>
+      </div>
+
+      <div id="cache-list"></div>
+    </div>
+
+    <!-- ============ TAB 5 : CONVERSATIONS ============ -->
     <div id="panel-conversations" class="panel">
       <div class="panel-head">
         <span class="micro">The floor</span>
@@ -487,6 +552,9 @@ const state = {
   adminFor: null,     // user id the current adminPromise belongs to
   config: {},
   kb: [],
+  sops: [],
+  cache: [],
+  actions: [],
   convos: [],
   activeConvoId: null,
   loaded: false
@@ -546,8 +614,8 @@ function autoGrow(t) {
   t.style.height = (t.scrollHeight + 2) + 'px';
 }
 
-function autoGrowAll() {
-  document.querySelectorAll('#kb-list textarea').forEach(autoGrow);
+function autoGrowAll(rootSel) {
+  document.querySelectorAll((rootSel || '#kb-list') + ' textarea').forEach(autoGrow);
 }
 
 /* ---------------- boot / auth ---------------- */
@@ -606,7 +674,10 @@ async function route() {
   if (!state.loaded) {
     state.loaded = true;
     loadConfig();
-    loadKb();
+    loadSections(KB_SPEC);
+    loadSections(SOP_SPEC);
+    loadActions();
+    loadCache();
     loadConversations();
   }
 }
@@ -659,7 +730,15 @@ function wireStatic() {
     $('cfg-enabled-label').textContent = $('cfg-enabled').checked ? 'Live' : 'Paused';
   });
 
-  $('kb-add').addEventListener('click', addKbSection);
+  $('kb-add').addEventListener('click', function () { addSection(KB_SPEC); });
+  $('sop-add').addEventListener('click', function () { addSection(SOP_SPEC); });
+
+  $('actions-refresh').addEventListener('click', function () {
+    withBusy($('actions-refresh'), loadActions);
+  });
+  $('cache-refresh').addEventListener('click', function () {
+    withBusy($('cache-refresh'), loadCache);
+  });
 
   $('convo-refresh').addEventListener('click', function () {
     withBusy($('convo-refresh'), loadConversations);
@@ -677,10 +756,12 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'conversations'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'conversations'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
-  if (name === 'knowledge') autoGrowAll();
+  if (name === 'knowledge') autoGrowAll('#kb-list');
+  if (name === 'procedures') autoGrowAll('#sop-list');
+  if (name === 'cache') autoGrowAll('#cache-list');
 }
 
 /* ---------------- header pill ---------------- */
@@ -779,49 +860,66 @@ async function saveStarters() {
 }
 
 /* ============================================================
-   TAB 2 — KNOWLEDGE (concierge_kb)
+   TABS 2 & 3 — KNOWLEDGE (concierge_kb) + PROCEDURES (concierge_sops)
+   Same table shape, same editor; a SPEC picks the table and wording.
    ============================================================ */
 
-async function loadKb() {
-  const res = await sb.from('concierge_kb').select('*')
+const KB_SPEC = {
+  table: 'concierge_kb', stateKey: 'kb', listId: 'kb-list',
+  panelId: 'panel-knowledge', noun: 'section',
+  placeholder: 'What the concierge may say about this…',
+  empty: 'No sections yet — add the first one.',
+  deleteWarn: 'The concierge will forget it.'
+};
+
+const SOP_SPEC = {
+  table: 'concierge_sops', stateKey: 'sops', listId: 'sop-list',
+  panelId: 'panel-procedures', noun: 'procedure',
+  placeholder: 'Step by step, the way you would brief a careful new hire…',
+  empty: 'No procedures yet — add the first one.',
+  deleteWarn: 'The concierge will stop following it.'
+};
+
+async function loadSections(spec) {
+  const res = await sb.from(spec.table).select('*')
     .order('sort_order', { ascending: true });
-  if (res.error) { fail('Load knowledge', res.error); return; }
-  state.kb = res.data || [];
-  renderKb();
+  if (res.error) { fail('Load ' + spec.noun + 's', res.error); return; }
+  state[spec.stateKey] = res.data || [];
+  renderSections(spec);
 }
 
-function renderKb() {
-  const list = $('kb-list');
+function renderSections(spec) {
+  const list = $(spec.listId);
   list.textContent = '';
-  if (!state.kb.length) {
-    list.appendChild(el('div', 'empty micro', 'No sections yet — add the first one.'));
+  if (!state[spec.stateKey].length) {
+    list.appendChild(el('div', 'empty micro', spec.empty));
     return;
   }
-  state.kb.forEach(function (row) { list.appendChild(kbEditor(row)); });
-  if ($('panel-knowledge').classList.contains('on')) autoGrowAll();
+  state[spec.stateKey].forEach(function (row) { list.appendChild(kbEditor(row, spec)); });
+  if ($(spec.panelId).classList.contains('on')) autoGrowAll('#' + spec.listId);
 }
 
-function addKbSection() {
+function addSection(spec) {
   let maxOrder = 0;
-  state.kb.forEach(function (r) {
+  state[spec.stateKey].forEach(function (r) {
     if (typeof r.sort_order === 'number' && r.sort_order > maxOrder) maxOrder = r.sort_order;
   });
   const fresh = {
     id: null, slug: '', title: '', content_md: '',
     enabled: true, sort_order: maxOrder + 10
   };
-  state.kb.push(fresh);
-  const list = $('kb-list');
+  state[spec.stateKey].push(fresh);
+  const list = $(spec.listId);
   const firstEmpty = list.querySelector('.empty');
   if (firstEmpty) firstEmpty.remove();
-  const node = kbEditor(fresh);
+  const node = kbEditor(fresh, spec);
   list.appendChild(node);
   node.scrollIntoView({ behavior: 'smooth', block: 'center' });
   const titleInput = node.querySelector('input[type=text]');
   if (titleInput) titleInput.focus();
 }
 
-function kbEditor(row) {
+function kbEditor(row, spec) {
   const wrap = el('div', 'kb-row' + (row.id ? '' : ' is-new'));
 
   // -- top line: enabled / slug / sort order
@@ -844,7 +942,7 @@ function kbEditor(row) {
   fTitle.appendChild(el('span', 'micro', 'Title'));
   const title = el('input');
   title.type = 'text';
-  title.placeholder = 'Section title';
+  title.placeholder = spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' title';
   title.value = row.title || '';
   fTitle.appendChild(title);
   wrap.appendChild(fTitle);
@@ -861,7 +959,7 @@ function kbEditor(row) {
   fBody.appendChild(el('span', 'micro', 'Content (markdown)'));
   const body = el('textarea');
   body.rows = 4;
-  body.placeholder = 'What the concierge may say about this…';
+  body.placeholder = spec.placeholder;
   body.value = row.content_md || '';
   body.addEventListener('input', function () { autoGrow(body); });
   fBody.appendChild(body);
@@ -878,22 +976,22 @@ function kbEditor(row) {
   btnSave.addEventListener('click', function () {
     withBusy(btnSave, async function () {
       const t = title.value.trim();
-      if (!t) { toast('A section needs a title', true); return; }
+      if (!t) { toast('A ' + spec.noun + ' needs a title', true); return; }
 
       if (row.id) {
-        const res = await sb.from('concierge_kb').update({
+        const res = await sb.from(spec.table).update({
           title: t,
           content_md: body.value,
           enabled: cb.checked,
           updated_at: nowIso()
         }).eq('id', row.id);
-        if (res.error) { fail('Save section', res.error); return; }
+        if (res.error) { fail('Save ' + spec.noun, res.error); return; }
         row.title = t; row.content_md = body.value; row.enabled = cb.checked;
-        toast('Section saved — ' + (row.slug || t));
+        toast(spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' saved — ' + (row.slug || t));
       } else {
         const slug = kebab(t);
         if (!slug) { toast('Could not derive a slug from that title', true); return; }
-        const res = await sb.from('concierge_kb').insert({
+        const res = await sb.from(spec.table).insert({
           slug: slug,
           title: t,
           content_md: body.value,
@@ -901,13 +999,13 @@ function kbEditor(row) {
           sort_order: row.sort_order,
           updated_at: nowIso()
         }).select().single();
-        if (res.error) { fail('Add section', res.error); return; }
+        if (res.error) { fail('Add ' + spec.noun, res.error); return; }
         row.id = res.data.id;
         row.slug = res.data.slug;
         row.title = t; row.content_md = body.value; row.enabled = cb.checked;
         slugEl.textContent = row.slug;
         wrap.classList.remove('is-new');
-        toast('Section added — ' + row.slug);
+        toast(spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' added — ' + row.slug);
       }
     });
   });
@@ -915,17 +1013,17 @@ function kbEditor(row) {
   btnDel.addEventListener('click', function () {
     withBusy(btnDel, async function () {
       if (!row.id) { // never persisted — just discard
-        state.kb = state.kb.filter(function (r) { return r !== row; });
+        state[spec.stateKey] = state[spec.stateKey].filter(function (r) { return r !== row; });
         wrap.remove();
         return;
       }
-      const label = row.slug || row.title || 'section';
-      if (!window.confirm('Delete "' + label + '"? The concierge will forget it.')) return;
-      const res = await sb.from('concierge_kb').delete().eq('id', row.id);
-      if (res.error) { fail('Delete section', res.error); return; }
-      state.kb = state.kb.filter(function (r) { return r !== row; });
+      const label = row.slug || row.title || spec.noun;
+      if (!window.confirm('Delete "' + label + '"? ' + spec.deleteWarn)) return;
+      const res = await sb.from(spec.table).delete().eq('id', row.id);
+      if (res.error) { fail('Delete ' + spec.noun, res.error); return; }
+      state[spec.stateKey] = state[spec.stateKey].filter(function (r) { return r !== row; });
       wrap.remove();
-      toast('Section deleted — ' + label);
+      toast(spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' deleted — ' + label);
     });
   });
 
@@ -933,7 +1031,132 @@ function kbEditor(row) {
 }
 
 /* ============================================================
-   TAB 3 — CONVERSATIONS
+   TAB 3b — REGISTER ACTIONS (concierge_actions, read-only)
+   ============================================================ */
+
+async function loadActions() {
+  const res = await sb.from('concierge_actions')
+    .select('created_at,email,action,serial,payload,result')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (res.error) { fail('Load actions', res.error); return; }
+  state.actions = res.data || [];
+  renderActions();
+}
+
+function renderActions() {
+  const list = $('actions-list');
+  list.textContent = '';
+  if (!state.actions.length) {
+    list.appendChild(el('div', 'empty micro', 'No register actions yet — the concierge has not needed its tools.'));
+    return;
+  }
+  state.actions.forEach(function (a) {
+    const row = el('div', 'action-row');
+    row.appendChild(el('span', 'micro', fmtWhen(a.created_at)));
+    row.appendChild(el('span', 'act', a.action || ''));
+    if (a.serial != null) row.appendChild(el('span', 'serial', 'Nº ' + a.serial));
+    row.appendChild(el('span', 'who', a.email || ''));
+    const detail = a.result || (a.payload ? JSON.stringify(a.payload) : '');
+    if (detail) row.appendChild(el('span', 'payload', detail));
+    list.appendChild(row);
+  });
+}
+
+/* ============================================================
+   TAB 4 — CACHE (concierge_cache)
+   ============================================================ */
+
+async function loadCache() {
+  const res = await sb.from('concierge_cache')
+    .select('id,question,answer_md,hits,enabled,model,created_at,last_hit_at')
+    .order('hits', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (res.error) { fail('Load cache', res.error); return; }
+  state.cache = res.data || [];
+  renderCache();
+}
+
+function renderCache() {
+  const list = $('cache-list');
+  list.textContent = '';
+
+  let hits = 0;
+  state.cache.forEach(function (r) { hits += (r.hits || 0); });
+  $('m-cache-entries').textContent = String(state.cache.length);
+  $('m-cache-hits').textContent = String(hits);
+
+  if (!state.cache.length) {
+    list.appendChild(el('div', 'empty micro',
+      'Nothing cached yet — entries appear as visitors ask questions.'));
+    return;
+  }
+  state.cache.forEach(function (row) { list.appendChild(cacheEditor(row)); });
+  if ($('panel-cache').classList.contains('on')) autoGrowAll('#cache-list');
+}
+
+function cacheEditor(row) {
+  const wrap = el('div', 'kb-row');
+
+  const top = el('div', 'kb-top');
+  const chk = el('label', 'checkline');
+  const cb = el('input');
+  cb.type = 'checkbox';
+  cb.checked = row.enabled !== false;
+  chk.appendChild(cb);
+  chk.appendChild(el('span', 'micro', 'Enabled'));
+  top.appendChild(chk);
+  top.appendChild(el('span', 'micro', (row.hits || 0) + ' hit' + (row.hits === 1 ? '' : 's')));
+  top.appendChild(el('span', 'micro ord', fmtWhen(row.last_hit_at || row.created_at)));
+  wrap.appendChild(top);
+
+  wrap.appendChild(el('div', 'cache-q', '“' + (row.question || '') + '”'));
+
+  const fBody = el('div', 'field');
+  fBody.appendChild(el('span', 'micro', 'Cached answer (markdown)'));
+  const body = el('textarea');
+  body.rows = 4;
+  body.value = row.answer_md || '';
+  body.addEventListener('input', function () { autoGrow(body); });
+  fBody.appendChild(body);
+  wrap.appendChild(fBody);
+
+  const actions = el('div', 'kb-actions');
+  const btnDel = el('button', 'btn danger', 'Delete');
+  const btnSave = el('button', 'btn primary', 'Save');
+  actions.appendChild(btnDel);
+  actions.appendChild(btnSave);
+  wrap.appendChild(actions);
+
+  btnSave.addEventListener('click', function () {
+    withBusy(btnSave, async function () {
+      const res = await sb.from('concierge_cache').update({
+        answer_md: body.value,
+        enabled: cb.checked
+      }).eq('id', row.id);
+      if (res.error) { fail('Save cache entry', res.error); return; }
+      row.answer_md = body.value; row.enabled = cb.checked;
+      toast('Cache entry saved');
+    });
+  });
+
+  btnDel.addEventListener('click', function () {
+    withBusy(btnDel, async function () {
+      if (!window.confirm('Delete this cached answer? The concierge will think fresh next time.')) return;
+      const res = await sb.from('concierge_cache').delete().eq('id', row.id);
+      if (res.error) { fail('Delete cache entry', res.error); return; }
+      state.cache = state.cache.filter(function (r) { return r !== row; });
+      wrap.remove();
+      toast('Cache entry deleted');
+    });
+  });
+
+  return wrap;
+}
+
+/* ============================================================
+   TAB 5 — CONVERSATIONS
    ============================================================ */
 
 async function loadConversations() {

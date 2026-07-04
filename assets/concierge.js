@@ -344,6 +344,8 @@
       '.cx-dots i:nth-child(2){animation-delay:.18s;}',
       '.cx-dots i:nth-child(3){animation-delay:.36s;}',
       '@keyframes cxWeave{0%,100%{transform:translateY(0);opacity:.4;}50%{transform:translateY(-4px);opacity:1;}}',
+      '.cx-status{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
+      'text-transform:uppercase;color:rgba(196,155,91,.75);margin-left:10px;vertical-align:middle;}',
 
       /* error + system lines */
       '.cx-sysline{font-family:"IBM Plex Mono",monospace;font-size:.64rem;letter-spacing:.14em;',
@@ -1077,10 +1079,12 @@
     dots.appendChild(el('i'));
     dots.appendChild(el('i'));
     dots.appendChild(el('i'));
+    var statusEl = el('span', 'cx-status');
     var think = el('span', 'cx-think');
     think.setAttribute('aria-hidden', 'true');
     think.appendChild(stampImg('cx-stamp-mini'));
     think.appendChild(dots);
+    think.appendChild(statusEl);
     if (!REDUCED) { body.appendChild(think); }
     scrollToBottom(false);
 
@@ -1128,6 +1132,13 @@
     return {
       turn: turn,
       getText: function () { return buffer; },
+      /* server status caption ("Reading the register…") shown by the
+         thinking dots until the first text chunk starts the weave */
+      status: function (text) {
+        if (started) { return; }
+        statusEl.textContent = String(text || '');
+        scrollToBottom(false);
+      },
       append: function (chunk) {
         buffer += chunk;
         if (REDUCED) {
@@ -1417,6 +1428,7 @@
             try {
               obj = JSON.parse(payload);
               if (obj && typeof obj.t === 'string') { shell.append(obj.t); }
+              if (obj && typeof obj.s === 'string' && shell.status) { shell.status(obj.s); }
               if (obj && obj.m && typeof obj.m === 'object') {
                 if (obj.m.mid != null) { shell.mid = obj.m.mid; }
                 if (obj.m.cid != null) { shell.cid = obj.m.cid; }
@@ -1460,6 +1472,7 @@
         try {
           obj = JSON.parse(payload);
           if (obj && typeof obj.t === 'string') { shell.append(obj.t); }
+          if (obj && typeof obj.s === 'string' && shell.status) { shell.status(obj.s); }
           if (obj && obj.m && typeof obj.m === 'object') {
             if (obj.m.mid != null) { shell.mid = obj.m.mid; }
             if (obj.m.cid != null) { shell.cid = obj.m.cid; }

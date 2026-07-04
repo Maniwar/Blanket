@@ -1,17 +1,27 @@
 /**
- * Feierabend — Decke 01 · AI Sales Concierge v2 (Supabase Edge Function, Deno)
+ * Feierabend — Decke 01 · AI Sales Concierge v3 (Supabase Edge Function, Deno)
  *
  * v1 proxied streaming chat to the Anthropic Messages API (server-side key,
- * validation, rate limiting, SSE re-shaping). v2 keeps that wire contract and
- * adds: DB-driven config + knowledge base (60s cache), a public GET ?config=1
- * bootstrap endpoint, signed-in order awareness via Supabase Auth JWTs, and
- * conversation/message logging with an SSE meta event carrying the row ids.
+ * validation, rate limiting, SSE re-shaping). v2 added DB-driven config + KB,
+ * GET ?config=1, signed-in order awareness, and conversation logging.
+ * v3 adds:
+ *   - Register tools (Anthropic tool use) for signed-in owners: the model can
+ *     read their orders, change a shipping address before shipment, and cancel
+ *     an order that hasn't started weaving. Every mutation is written to
+ *     concierge_actions for the admin Studio.
+ *   - Standard operating procedures from concierge_sops, injected into the
+ *     system prompt so the admin can teach the concierge process.
+ *   - A semantic answer cache (pgvector + gte-small embeddings) for anonymous
+ *     first-turn questions, editable from the Studio's Cache tab.
  *
  * Wire contract:
  *   GET  <fn>?config=1 -> 200 {"enabled","greeting","starters","auth":true}
  *   POST <fn> {"messages":[{role,content}], "context"?:{}, "session_key"?:str}
- *     -> SSE: data: {"t":"…"} per text delta (as v1), then once
- *        data: {"m":{"cid":"<uuid>","mid":<int>}} (NEW), then data: [DONE].
+ *     -> SSE: data: {"t":"…"} per text delta, then once
+ *        data: {"m":{"cid":"<uuid>","mid":<int>}}, then data: [DONE].
+ *        v3 may also send data: {"s":"…"} (a status caption while the
+ *        concierge works the register) and data: {"c":1} (answer served
+ *        from the cache). Unknown keys are ignored by older clients.
  *   Errors: non-200 JSON {"error":"..."} with CORS headers; 503 when disabled.
  *
  * Dependencies: ./kb.ts only — BRAND_SYSTEM / KB_MARKDOWN are the fallbacks
@@ -20,6 +30,10 @@
  */
 
 import { BRAND_SYSTEM, KB_MARKDOWN } from "./kb.ts";
+
+// Supabase edge runtime global (embeddings); typed loosely on purpose.
+// deno-lint-ignore no-explicit-any
+declare const Supabase: any;
 
 // ── Environment ──────────────────────────────────────────────────────────────
 
@@ -90,11 +104,38 @@ async function pgInsert<T>(table: string, row: Record<string, unknown>): Promise
   } catch { return null; }
 }
 
-// ── Config + KB — DB reads cached in module memory for 60 seconds ────────────
+/** PATCH rows matching <query>, returning the updated rows (null on error). */
+async function pgPatch<T>(query: string, patch: Record<string, unknown>): Promise<T[] | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${query}`, {
+      method: "PATCH",
+      headers: { ...PG_HEADERS, "Prefer": "return=representation" },
+      body: JSON.stringify(patch),
+    });
+    return res.ok ? await res.json() as T[] : null;
+  } catch { return null; }
+}
+
+/** POST /rest/v1/rpc/<fn>. Returns the result, or null on error. */
+async function pgRpc<T>(fn: string, args: Record<string, unknown>): Promise<T | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: PG_HEADERS,
+      body: JSON.stringify(args),
+    });
+    return res.ok ? await res.json() as T : null;
+  } catch { return null; }
+}
+
+// ── Config + KB + SOPs — DB reads cached in module memory for 60 seconds ─────
 
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
   kbText: string | null; // enabled concierge_kb rows; null -> KB_MARKDOWN fallback
+  sopText: string | null; // enabled concierge_sops rows; null -> none
   at: number; // Date.now() of the read; refreshed after CACHE_TTL_MS
 }
 
@@ -103,10 +144,13 @@ let dataCache: ConciergeData | null = null;
 
 async function loadConciergeData(): Promise<ConciergeData> {
   if (dataCache && Date.now() - dataCache.at < CACHE_TTL_MS) return dataCache;
-  const [cfgRows, kbRows] = await Promise.all([
+  const [cfgRows, kbRows, sopRows] = await Promise.all([
     pgSelect<{ key: string; value: unknown }>("concierge_config?select=key,value"),
     pgSelect<{ title: string; content_md: string }>(
       "concierge_kb?select=title,content_md&enabled=is.true&order=sort_order.asc",
+    ),
+    pgSelect<{ title: string; content_md: string }>(
+      "concierge_sops?select=title,content_md&enabled=is.true&order=sort_order.asc",
     ),
   ]);
   dataCache = {
@@ -115,6 +159,9 @@ async function loadConciergeData(): Promise<ConciergeData> {
       : null,
     kbText: kbRows && kbRows.length > 0
       ? kbRows.map((r) => `## ${r.title}\n${r.content_md}`).join("\n\n")
+      : null,
+    sopText: sopRows && sopRows.length > 0
+      ? sopRows.map((r) => `### ${r.title}\n${r.content_md}`).join("\n\n")
       : null,
     at: Date.now(),
   };
@@ -187,7 +234,9 @@ function validateBody(body: unknown): ValidatedBody | string {
 interface Customer { id: string; email: string | null }
 interface OrderRow {
   serial: number; status: string | null; tracking: string | null;
-  city: string | null; placed_at: string | null;
+  colorway: string | null; address: string | null; address2: string | null;
+  city: string | null; state: string | null; zip: string | null;
+  placed_at: string | null;
 }
 
 /** Verified user, or null (absent / anon key / invalid token — never errors). */
@@ -209,16 +258,24 @@ async function verifyUser(req: Request): Promise<Customer | null> {
   } catch { return null; }
 }
 
-/** Builds the CUSTOMER line for LIVE STATE (orders via service-role call). */
-async function customerBlock(customer: Customer): Promise<string> {
-  // Match by user_id OR email; strip chars that would break PostgREST syntax.
+/** PostgREST ownership filter: orders tied to this user's id OR email. */
+function ownershipFilter(customer: Customer): string {
   const safeEmail = customer.email?.replace(/["\\,()]/g, "");
-  const filter = safeEmail
+  return safeEmail
     ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
     : `user_id=eq.${encodeURIComponent(customer.id)}`;
-  const orders = await pgSelect<OrderRow>(
-    `orders?select=serial,status,tracking,city,placed_at&${filter}&order=placed_at.desc&limit=10`,
+}
+
+async function myOrders(customer: Customer): Promise<OrderRow[] | null> {
+  return await pgSelect<OrderRow>(
+    "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at" +
+      `&${ownershipFilter(customer)}&order=placed_at.desc&limit=10`,
   );
+}
+
+/** Builds the CUSTOMER line for LIVE STATE (orders via service-role call). */
+async function customerBlock(customer: Customer): Promise<string> {
+  const orders = await myOrders(customer);
   const fmt = (o: OrderRow) =>
     [
       `Nº ${o.serial} — ${o.status ?? "status unknown"}`,
@@ -239,6 +296,170 @@ async function customerBlock(customer: Customer): Promise<string> {
   return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}`;
 }
 
+// ── Register tools — definitions + execution (signed-in only) ────────────────
+
+const MUTABLE_STATUSES = ["placed", "weaving", "finishing"];
+
+// deno-lint-ignore no-explicit-any
+const REGISTER_TOOLS: any[] = [
+  {
+    name: "get_my_orders",
+    description:
+      "Read every order on the register for the signed-in owner: serial number, " +
+      "status, tracking (when shipped), colorway, shipping address, and the date placed. " +
+      "Always call this before answering questions about the owner's orders.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "update_shipping_address",
+    description:
+      "Change the shipping address on one of the owner's orders. Allowed only while " +
+      "the order has not shipped (status placed, weaving, or finishing). Confirm the " +
+      "complete new address with the owner before calling.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+        address: { type: "string", description: "Street address." },
+        address2: { type: "string", description: "Apartment, suite, unit (optional)." },
+        city: { type: "string" },
+        state: { type: "string", description: "Two-letter US state code." },
+        zip: { type: "string", description: "ZIP code, 12345 or 12345-6789." },
+      },
+      required: ["serial", "address", "city", "state", "zip"],
+    },
+  },
+  {
+    name: "cancel_order",
+    description:
+      "Cancel one of the owner's orders. Allowed only while the order is still 'placed' " +
+      "(weaving has not begun). Ask the owner to explicitly confirm before calling. " +
+      "The number returns to the year's edition and cannot be held again.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+      },
+      required: ["serial"],
+    },
+  },
+];
+
+/** Writes one row to the concierge_actions audit log. Never throws. */
+async function logAction(
+  cid: string | null, customer: Customer, action: string,
+  serial: number | null, payload: unknown, result: string,
+): Promise<void> {
+  try {
+    await pgInsert("concierge_actions", {
+      conversation_id: cid, user_id: customer.id, email: customer.email,
+      action, serial, payload: payload ?? null, result: result.slice(0, 500),
+    });
+  } catch { /* audit failures never break the chat */ }
+}
+
+/** Executes one register tool; returns the tool_result content string. */
+async function runRegisterTool(
+  name: string, input: Record<string, unknown>,
+  customer: Customer, cid: string | null,
+): Promise<string> {
+  if (name === "get_my_orders") {
+    const orders = await myOrders(customer);
+    if (orders === null) return "ERROR: the register is unreachable right now.";
+    await logAction(cid, customer, "get_my_orders", null, null, `${orders.length} orders read`);
+    if (orders.length === 0) return "No orders on the register for this owner.";
+    return JSON.stringify(orders);
+  }
+
+  const serial = typeof input.serial === "number" ? Math.floor(input.serial) : NaN;
+  if (!Number.isFinite(serial)) return "ERROR: serial must be a number.";
+
+  // Ownership check first: the order must exist AND belong to this owner.
+  const rows = await pgSelect<OrderRow>(
+    `orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at` +
+      `&serial=eq.${serial}&${ownershipFilter(customer)}&limit=1`,
+  );
+  if (rows === null) return "ERROR: the register is unreachable right now.";
+  if (rows.length === 0) return `ERROR: no order Nº ${serial} on this owner's register.`;
+  const order = rows[0];
+
+  if (name === "update_shipping_address") {
+    if (!MUTABLE_STATUSES.includes(order.status ?? "")) {
+      return `ERROR: Nº ${serial} is '${order.status}' — the register is closed on it. ` +
+        "Address changes are possible only before shipment.";
+    }
+    const address = String(input.address ?? "").trim();
+    const address2 = String(input.address2 ?? "").trim();
+    const city = String(input.city ?? "").trim();
+    const state = String(input.state ?? "").trim().toUpperCase();
+    const zip = String(input.zip ?? "").trim();
+    if (address.length < 4 || address.length > 120) return "ERROR: street address must be 4-120 characters.";
+    if (address2.length > 120) return "ERROR: address line 2 is too long.";
+    if (city.length < 1 || city.length > 80) return "ERROR: city must be 1-80 characters.";
+    if (!/^[A-Z]{2}$/.test(state)) return "ERROR: state must be a two-letter US code.";
+    if (!/^\d{5}(-\d{4})?$/.test(zip)) return "ERROR: zip must be 12345 or 12345-6789.";
+    const patch = { address, address2: address2 || null, city, state, zip };
+    const updated = await pgPatch<OrderRow>(
+      `orders?serial=eq.${serial}&${ownershipFilter(customer)}`, patch,
+    );
+    if (!updated || updated.length === 0) return "ERROR: the register did not accept the change.";
+    await logAction(cid, customer, "update_shipping_address", serial, patch, "address updated");
+    const u = updated[0];
+    return `Recorded. Nº ${serial} now ships to: ${u.address}` +
+      `${u.address2 ? ", " + u.address2 : ""}, ${u.city}, ${u.state} ${u.zip}.`;
+  }
+
+  if (name === "cancel_order") {
+    if (order.status !== "placed") {
+      return `ERROR: Nº ${serial} is '${order.status}' — only 'placed' orders can be cancelled. ` +
+        "Once weaving begins the cloth carries the owner's number; the 30-night trial applies on arrival.";
+    }
+    const updated = await pgPatch<OrderRow>(
+      `orders?serial=eq.${serial}&status=eq.placed&${ownershipFilter(customer)}`,
+      { status: "cancelled" },
+    );
+    if (!updated || updated.length === 0) return "ERROR: the register did not accept the cancellation.";
+    await logAction(cid, customer, "cancel_order", serial, null, "order cancelled");
+    return `Done. Nº ${serial} is cancelled; the number returns to the year's edition.`;
+  }
+
+  return `ERROR: unknown tool '${name}'.`;
+}
+
+// ── Semantic cache — gte-small embeddings + match_cached_answer RPC ──────────
+
+// Questions about live or personal state must never be answered from cache.
+const CACHE_SKIP = /remain(s|ing)?|left|available|stock|hold|my (order|blanket|deliver|number)|status|track|sign in|signed in/i;
+
+let embedSession: { run: (t: string, o: Record<string, unknown>) => Promise<number[]> } | null = null;
+
+async function embed(text: string): Promise<number[] | null> {
+  try {
+    if (!embedSession) embedSession = new Supabase.ai.Session("gte-small");
+    const out = await embedSession!.run(text, { mean_pool: true, normalize: true });
+    return Array.isArray(out) && out.length === 384 ? out : null;
+  } catch { return null; }
+}
+
+const vecLiteral = (e: number[]) => `[${e.join(",")}]`;
+
+interface CacheHit { id: string; question: string; answer_md: string; similarity: number }
+
+async function cacheLookup(embedding: number[]): Promise<CacheHit | null> {
+  const rows = await pgRpc<CacheHit[]>("match_cached_answer", {
+    query_embedding: vecLiteral(embedding), match_threshold: 0.90,
+  });
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
+/** An answer is cacheable when it carries no live numbers or register state. */
+function cacheableAnswer(text: string): boolean {
+  if (text.includes("Nº")) return false;
+  if (/\b\d{1,2},\d{3}\b/.test(text)) return false; // 14,215-style live counts
+  if (text.includes("{{action:signin}}")) return false;
+  return text.length > 0 && text.length <= 4000;
+}
+
 // ── System prompt assembly ───────────────────────────────────────────────────
 
 function renderLiveState(ctx: Record<string, unknown>, customerLine: string | null): string {
@@ -252,12 +473,27 @@ function renderLiveState(ctx: Record<string, unknown>, customerLine: string | nu
   return customerLine ? `${line}\n${customerLine}` : line;
 }
 
-function buildSystemPrompt(data: ConciergeData, liveState: string): string {
+function buildSystemPrompt(
+  data: ConciergeData, liveState: string, signedIn: boolean,
+): string {
   const kb = data.kbText ?? KB_MARKDOWN; // DB rows, else compiled-in fallback
   // Function replacements so "$" sequences in content are never interpreted.
   let system = BRAND_SYSTEM
     .replace("{{LIVE_STATE}}", () => liveState)
     .replace("{{KB}}", () => kb);
+  if (signedIn) {
+    system += "\nREGISTER TOOLS\n" +
+      "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
+      "get_my_orders (read their orders), update_shipping_address (before shipment), " +
+      "cancel_order (only while 'placed').\n" +
+      "- Call get_my_orders before answering any question about their orders — never rely on memory.\n" +
+      "- For any change (address, cancellation): state exactly what you are about to do and get the " +
+      "owner's explicit confirmation in this conversation before calling the tool. Report the tool's " +
+      "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n";
+  }
+  if (data.sopText) {
+    system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
+  }
   const notes = data.config?.voice_notes;
   if (typeof notes === "string" && notes.trim().length > 0) {
     system += "\nADMIN TUNING NOTES (follow these):\n" + notes;
@@ -298,6 +534,49 @@ async function logUserTurn(body: ValidatedBody, customer: Customer | null): Prom
     }
     return cid;
   } catch { return null; }
+}
+
+async function logAssistantTurn(
+  cid: string | null, text: string, model: string, latencyMs: number,
+): Promise<string | null> {
+  if (!cid || text.length === 0) return null;
+  const row = await pgInsert<{ id: number }>("concierge_messages", {
+    conversation_id: cid, role: "assistant", content: text,
+    model, latency_ms: latencyMs,
+  });
+  return row && typeof row.id === "number"
+    ? JSON.stringify({ m: { cid, mid: row.id } })
+    : null;
+}
+
+// ── SSE plumbing ─────────────────────────────────────────────────────────────
+
+const encoder = new TextEncoder();
+
+function sseFrame(obj: unknown): Uint8Array {
+  return encoder.encode("data: " + JSON.stringify(obj) + "\n\n");
+}
+
+function sseResponse(req: Request, stream: ReadableStream<Uint8Array>): Response {
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...corsHeaders(req),
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    },
+  });
+}
+
+/** Splits text into small chunks so cached / tool-loop replies still weave. */
+function* chunked(text: string): Generator<string> {
+  const words = text.split(/(?<=\s)/); // keep whitespace attached
+  let buf = "";
+  for (const w of words) {
+    buf += w;
+    if (buf.length >= 24) { yield buf; buf = ""; }
+  }
+  if (buf) yield buf;
 }
 
 // ── GET ?config=1 — public widget bootstrap ──────────────────────────────────
@@ -349,14 +628,133 @@ async function handleChatPost(req: Request): Promise<Response> {
   // Signed-in awareness (anonymous on absent/invalid token; never errors).
   const customer = await verifyUser(req);
   const customerLine = customer ? await customerBlock(customer) : null;
-  const system = buildSystemPrompt(data, renderLiveState(validated.context, customerLine));
+  const system = buildSystemPrompt(
+    data, renderLiveState(validated.context, customerLine), customer !== null,
+  );
 
   // Logging: resolve conversation + store the user turn, concurrently with
-  // the Anthropic call; awaited again in the stream's finally.
+  // the model work; awaited again before the stream finishes.
   const conversationPromise = logUserTurn(validated, customer);
+  const startedAt = Date.now();
 
-  // Anthropic call (identical to v1, with config-driven model/max_tokens).
-  const upstreamStart = Date.now();
+  // ── Semantic cache — anonymous, single-turn questions only ────────────────
+  // Multi-turn answers depend on conversation context; signed-in answers on
+  // the register. Neither may be cached or served from cache.
+  let queryEmbedding: number[] | null = null;
+  const lastUser = [...validated.messages].reverse().find((m) => m.role === "user");
+  const cacheEligible = !customer &&
+    validated.messages.length === 1 &&
+    !!lastUser && lastUser.content.length <= 300 &&
+    !CACHE_SKIP.test(lastUser.content);
+
+  if (cacheEligible && lastUser) {
+    queryEmbedding = await embed(lastUser.content);
+    if (queryEmbedding) {
+      const hit = await cacheLookup(queryEmbedding);
+      if (hit) {
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            try {
+              controller.enqueue(sseFrame({ c: 1 }));
+              for (const piece of chunked(hit.answer_md)) {
+                controller.enqueue(sseFrame({ t: piece }));
+              }
+              const cid = await conversationPromise;
+              const meta = await logAssistantTurn(
+                cid, hit.answer_md, "cache", Date.now() - startedAt,
+              );
+              if (meta) controller.enqueue(encoder.encode(`data: ${meta}\n\n`));
+            } catch { /* still close cleanly */ }
+            try {
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              controller.close();
+            } catch { /* consumer gone */ }
+          },
+        });
+        return sseResponse(req, stream);
+      }
+    }
+  }
+
+  // ── Signed-in path: agentic tool loop (non-streaming turns, chunked out) ──
+  if (customer) {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (obj: unknown) => {
+          try { controller.enqueue(sseFrame(obj)); } catch { /* consumer gone */ }
+        };
+        let finalText = "";
+        try {
+          const cid = await conversationPromise;
+          // deno-lint-ignore no-explicit-any
+          const convo: any[] = validated.messages.map((m) => ({ role: m.role, content: m.content }));
+          for (let round = 0; round < 4; round++) {
+            if (round === 0) send({ s: "Consulting the register…" });
+            const res = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                model, max_tokens: maxTokens, system,
+                messages: convo, tools: REGISTER_TOOLS,
+              }),
+            });
+            if (!res.ok) {
+              finalText = finalText ||
+                "The register is briefly unreachable. Ask me again in a moment.";
+              break;
+            }
+            // deno-lint-ignore no-explicit-any
+            const msg = await res.json() as any;
+            const blocks = Array.isArray(msg.content) ? msg.content : [];
+            const textOut = blocks
+              .filter((b: { type: string }) => b.type === "text")
+              // deno-lint-ignore no-explicit-any
+              .map((b: any) => b.text).join("");
+
+            if (msg.stop_reason !== "tool_use") { finalText = textOut; break; }
+
+            // Execute every requested tool, then continue the loop.
+            convo.push({ role: "assistant", content: blocks });
+            // deno-lint-ignore no-explicit-any
+            const results: any[] = [];
+            for (const block of blocks) {
+              if (block.type !== "tool_use") continue;
+              const label = block.name === "get_my_orders"
+                ? "Reading the register…"
+                : block.name === "update_shipping_address"
+                ? "Amending the register…"
+                : "Striking the entry…";
+              send({ s: label });
+              const out = await runRegisterTool(
+                block.name, block.input ?? {}, customer, cid,
+              );
+              results.push({ type: "tool_result", tool_use_id: block.id, content: out });
+            }
+            convo.push({ role: "user", content: results });
+            if (round === 3) {
+              finalText = textOut ||
+                "The register kept me longer than it should. Ask me once more.";
+            }
+          }
+
+          for (const piece of chunked(finalText)) send({ t: piece });
+          const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
+          if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
+        } catch { /* fall through to [DONE] */ }
+        try {
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        } catch { /* consumer gone */ }
+      },
+    });
+    return sseResponse(req, stream);
+  }
+
+  // ── Anonymous path: plain streaming, then a cache write on the way out ────
   const upstream = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -374,11 +772,8 @@ async function handleChatPost(req: Request): Promise<Response> {
     return jsonError(req, 502, detail || `Upstream error (${upstream.status}).`);
   }
 
-  // SSE transform (as v1: content_block_delta/text_delta -> data: {"t":...}),
-  // plus accumulation of the full reply for logging.
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
   let assistantText = "";
 
   const stream = new ReadableStream<Uint8Array>({
@@ -402,9 +797,7 @@ async function handleChatPost(req: Request): Promise<Response> {
                 if (evt.type === "content_block_delta" &&
                   evt.delta?.type === "text_delta" && typeof evt.delta.text === "string") {
                   assistantText += evt.delta.text;
-                  controller.enqueue(encoder.encode(
-                    "data: " + JSON.stringify({ t: evt.delta.text }) + "\n\n",
-                  ));
+                  controller.enqueue(sseFrame({ t: evt.delta.text }));
                 }
                 // Other event types (message_start/stop, ping, ...) ignored.
               } catch { /* ignore unparseable event payloads */ }
@@ -420,16 +813,19 @@ async function handleChatPost(req: Request): Promise<Response> {
         let meta: string | null = null;
         try {
           const cid = await conversationPromise;
-          if (cid && assistantText.length > 0) {
-            const row = await pgInsert<{ id: number }>("concierge_messages", {
-              conversation_id: cid, role: "assistant", content: assistantText,
-              model, latency_ms: Date.now() - upstreamStart,
-            });
-            if (row && typeof row.id === "number") {
-              meta = JSON.stringify({ m: { cid, mid: row.id } });
-            }
-          }
+          meta = await logAssistantTurn(cid, assistantText, model, Date.now() - startedAt);
         } catch { /* skip the meta event; still finish the stream */ }
+        // Cache write: single-turn anonymous miss with a state-free answer.
+        try {
+          if (cacheEligible && queryEmbedding && lastUser && cacheableAnswer(assistantText)) {
+            await pgInsert("concierge_cache", {
+              question: lastUser.content,
+              answer_md: assistantText,
+              embedding: vecLiteral(queryEmbedding),
+              model,
+            });
+          }
+        } catch { /* cache is best-effort */ }
         try {
           if (meta) controller.enqueue(encoder.encode(`data: ${meta}\n\n`));
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -442,14 +838,7 @@ async function handleChatPost(req: Request): Promise<Response> {
     },
   });
 
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      ...corsHeaders(req),
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-    },
-  });
+  return sseResponse(req, stream);
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────

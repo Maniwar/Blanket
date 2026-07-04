@@ -1385,7 +1385,20 @@
      16. Public API
   ---------------------------------------------------------- */
   window.FeierabendCheckout = {
-    open: function () { openPanel(); },
+    open: function (opts) {
+      var cw = opts && typeof opts === 'object' ? colorwayById(opts.colorway) : null;
+      if (cw) {
+        /* a colorway arrived with the open — start (or restart) the
+           commission at Act I with that cloth already chosen */
+        commissioned = null;
+        order.colorway = cw.id;
+        act = 1;
+        saveDraft();
+        if (panelOpen) { showAct(1, 0); } else { openPanel(); }
+        return;
+      }
+      openPanel();
+    },
     close: function () { closePanel(); }
   };
 })();
