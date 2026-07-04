@@ -267,16 +267,21 @@ function ownershipFilter(customer: Customer): string {
     : `user_id=eq.${encodeURIComponent(customer.id)}`;
 }
 
-async function myOrders(customer: Customer): Promise<OrderRow[] | null> {
+async function myOrders(
+  customer: Customer, includeCancelled = false,
+): Promise<OrderRow[] | null> {
   return await pgSelect<OrderRow>(
     "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,cancelled_serial" +
-      `&${ownershipFilter(customer)}&order=placed_at.desc&limit=10`,
+      (includeCancelled ? "" : "&status=neq.cancelled") +
+      `&${ownershipFilter(customer)}&order=placed_at.desc&limit=25`,
   );
 }
 
 /** Builds the CUSTOMER line for LIVE STATE (orders via service-role call). */
 async function customerBlock(customer: Customer): Promise<string> {
-  const orders = await myOrders(customer);
+  const all = await myOrders(customer, true);
+  const orders = all ? all.filter((o) => o.status !== "cancelled") : null;
+  const struck = all ? all.length - (orders?.length ?? 0) : 0;
   const fmt = (o: OrderRow) =>
     [
       `Nº ${o.serial ?? o.cancelled_serial ?? "—"} — ${o.status ?? "status unknown"}`,
@@ -305,7 +310,8 @@ async function customerBlock(customer: Customer): Promise<string> {
       : "Eintrag";
     standing = ` STANDING: ${tier} (${active} on the register).`;
   }
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}.${standing}`;
+  const archive = struck > 0 ? ` ARCHIVE: ${struck} struck (cancelled) — mention only if asked.` : "";
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ORDERS: ${summary}.${standing}${archive}`;
 }
 
 // ── Register tools — definitions + execution (signed-in only) ────────────────
@@ -317,10 +323,21 @@ const REGISTER_TOOLS: any[] = [
   {
     name: "get_my_orders",
     description:
-      "Read every order on the register for the signed-in owner: serial number, " +
+      "Read the orders on the register for the signed-in owner: serial number, " +
       "status, tracking (when shipped), colorway, shipping address, and the date placed. " +
-      "Always call this before answering questions about the owner's orders.",
-    input_schema: { type: "object", properties: {}, required: [] },
+      "Always call this before answering questions about the owner's orders. " +
+      "Struck (cancelled) entries are omitted unless include_cancelled is true — " +
+      "pass it only when the owner asks about cancelled or past entries.",
+    input_schema: {
+      type: "object",
+      properties: {
+        include_cancelled: {
+          type: "boolean",
+          description: "Also return struck (cancelled) entries. Default false.",
+        },
+      },
+      required: [],
+    },
   },
   {
     name: "update_shipping_address",
@@ -376,7 +393,7 @@ async function runRegisterTool(
   customer: Customer, cid: string | null,
 ): Promise<string> {
   if (name === "get_my_orders") {
-    const orders = await myOrders(customer);
+    const orders = await myOrders(customer, input.include_cancelled === true);
     if (orders === null) return "ERROR: the register is unreachable right now.";
     await logAction(cid, customer, "get_my_orders", null, null, `${orders.length} orders read`);
     if (orders.length === 0) return "No orders on the register for this owner.";
@@ -583,7 +600,9 @@ function buildSystemPrompt(
       "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
       "get_my_orders (read their orders), update_shipping_address (before shipment), " +
       "cancel_order (only while 'placed').\n" +
-      "- Call get_my_orders before answering any question about their orders — never rely on memory.\n" +
+      "- Call get_my_orders before answering any question about their orders — never rely on memory. " +
+      "Struck (cancelled) entries are archive: leave them out of lists and counts unless the owner " +
+      "asks about cancellations or history (then call get_my_orders with include_cancelled).\n" +
       "- For any change (address, cancellation): state exactly what you are about to do and get the " +
       "owner's explicit confirmation in this conversation before calling the tool. Report the tool's " +
       "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n" +
