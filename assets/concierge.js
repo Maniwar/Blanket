@@ -2398,6 +2398,29 @@
     });
   }
 
+  /* Start a completely fresh conversation — used when the identity changes so
+     one person's chat never bleeds into another's (or into an anonymous view). */
+  function resetConversation() {
+    abortStream();
+    history = [];
+    try { ssSet(HISTORY_KEY, '[]'); } catch (eRC) { /* ignore */ }
+    rotateSessionKey();
+    reengagedThisOpen = false;
+    wrappedUp = false;
+    nudgeCount = 0;
+    holdAttempts = 0;
+    pendingNudge = null;
+    pendingOpener = null;
+    clearNudge();
+    setStreaming(false);
+    if (panelOpen && msgsEl) {
+      renderHistory();
+      maybeOpenerOnOpen();
+    }
+  }
+
+  var authResolved = false;     /* the first auth read on load is not a change */
+
   function setAuthState(session) {
     var em = '';
     try {
@@ -2405,11 +2428,19 @@
         ? session.user.email : '';
     } catch (eE) { em = ''; }
     if (em === authEmail) { return; }
+    var wasResolved = authResolved;
+    authResolved = true;
     authEmail = em;
     if (em) { closeAuthRow(); }
     updateAuthUI();
-    /* fresh conversation on screen — refresh greeting + chips in place */
-    if (panelOpen && !streaming && !history.length && msgsEl) { renderHistory(); }
+    if (wasResolved) {
+      /* an actual sign-in / sign-out / account switch during the visit — wipe
+         the visible thread and open a fresh conversation for the new identity */
+      resetConversation();
+    } else if (panelOpen && !streaming && !history.length && msgsEl) {
+      /* first resolution on load (e.g. a restored session) — keep continuity */
+      renderHistory();
+    }
   }
 
   function shortEmail(em) {
