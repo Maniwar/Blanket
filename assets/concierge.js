@@ -102,7 +102,19 @@
   var SECTIONS = ['top', 'why', 'wool', 'label', 'ritual', 'arrival', 'reserve'];
   var INLINE_SECTIONS = ['why', 'wool', 'label', 'ritual', 'arrival'];
   var HISTORY_KEY = 'cx-history';
+  var OWNER_KEY = 'cx-owner';   /* whose identity the stored conversation belongs to */
   var SKEY_KEY = 'cx-skey';
+  var CONVO_VER = '2';          /* bump to force-clear stale local conversations once */
+  /* One-time cleanup of any conversation stored before identity-tagging existed,
+     so leftover signed-in chat can't linger in a signed-out view. */
+  try {
+    if (window.sessionStorage.getItem('cx-ver') !== CONVO_VER) {
+      window.sessionStorage.removeItem(HISTORY_KEY);
+      window.sessionStorage.removeItem(OWNER_KEY);
+      window.sessionStorage.removeItem(SKEY_KEY);
+      window.sessionStorage.setItem('cx-ver', CONVO_VER);
+    }
+  } catch (eVer) { /* ignore */ }
   var HISTORY_CAP = 40;
   var SEND_TURNS = 12;
   var ERROR_LINE = 'The line to the mill is quiet. Try once more, or write hello@feierabend.example.';
@@ -1546,6 +1558,10 @@
   function saveHistory() {
     if (history.length > HISTORY_CAP) { history = history.slice(history.length - HISTORY_CAP); }
     ssSet(HISTORY_KEY, JSON.stringify(history));
+    ssSet(OWNER_KEY, authEmail || '');   /* tag whose conversation this is */
+  }
+  function storedHistoryLen() {
+    try { var a = JSON.parse(ssGet(HISTORY_KEY) || '[]'); return (Object.prototype.toString.call(a) === '[object Array]') ? a.length : 0; } catch (e) { return 0; }
   }
 
   /* ----------------------------------------------------------
@@ -2404,6 +2420,7 @@
     abortStream();
     history = [];
     try { ssSet(HISTORY_KEY, '[]'); } catch (eRC) { /* ignore */ }
+    ssSet(OWNER_KEY, authEmail || '');
     rotateSessionKey();
     reengagedThisOpen = false;
     wrappedUp = false;
@@ -2419,6 +2436,20 @@
     }
   }
 
+  /* On sign-out, drop the device-level purchase traces too, so the
+     "welcome back Nº …" bubble can't surface to a signed-out viewer. */
+  function clearDevicePurchaseTraces() {
+    try {
+      window.localStorage.removeItem('feier_last_purchase');
+      var i, keys = [];
+      for (i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (k && k.indexOf('feier_checkin_') === 0) { keys.push(k); }
+      }
+      for (i = 0; i < keys.length; i++) { window.localStorage.removeItem(keys[i]); }
+    } catch (e) { /* ignore */ }
+  }
+
   var authResolved = false;     /* the first auth read on load is not a change */
 
   function setAuthState(session) {
@@ -2427,19 +2458,39 @@
       em = (session && session.user && typeof session.user.email === 'string')
         ? session.user.email : '';
     } catch (eE) { em = ''; }
-    if (em === authEmail) { return; }
-    var wasResolved = authResolved;
+    var firstResolve = !authResolved;
     authResolved = true;
-    authEmail = em;
-    if (em) { closeAuthRow(); }
-    updateAuthUI();
-    if (wasResolved) {
-      /* an actual sign-in / sign-out / account switch during the visit — wipe
-         the visible thread and open a fresh conversation for the new identity */
-      resetConversation();
-    } else if (panelOpen && !streaming && !history.length && msgsEl) {
-      /* first resolution on load (e.g. a restored session) — keep continuity */
-      renderHistory();
+
+    if (em !== authEmail) {
+      var wasSignedIn = !!authEmail;
+      var wasResolved = !firstResolve;
+      authEmail = em;
+      if (em) { closeAuthRow(); }
+      updateAuthUI();
+      if (wasResolved) {
+        /* an actual sign-in / sign-out / switch during the visit */
+        if (!em && wasSignedIn) { clearDevicePurchaseTraces(); }
+        resetConversation();
+        return;
+      }
+      /* first resolve WITH a restored identity — fall through to reconcile */
+    } else if (!firstResolve) {
+      return; /* no change and not the first read — nothing to do */
+    }
+
+    if (firstResolve) {
+      /* Reconcile the stored conversation with who is actually signed in now.
+         If the saved thread belongs to a different identity (e.g. leftover
+         signed-in chat while now signed out), wipe it rather than show it. */
+      var owner = '';
+      try { owner = ssGet(OWNER_KEY) || ''; } catch (eO) { owner = ''; }
+      if (storedHistoryLen() > 0 && owner !== em) {
+        if (!em) { clearDevicePurchaseTraces(); }
+        resetConversation();
+      } else {
+        ssSet(OWNER_KEY, em);
+        if (panelOpen && !streaming && !history.length && msgsEl) { renderHistory(); }
+      }
     }
   }
 
@@ -2500,19 +2551,23 @@
     function fail(err) {
       send.disabled = false;
       send.textContent = 'Send key';
+      var noClient = !!(err && err.noClient);
       var msg = '';
       try {
-        if (err && typeof err === 'object') { msg = err.message || (err.error && err.error.message) || ''; }
+        if (err && typeof err === 'object' && !noClient) { msg = err.message || (err.error && err.error.message) || ''; }
         else if (typeof err === 'string') { msg = err; }
       } catch (eM) { msg = ''; }
-      /* Surface the real reason (rate limit, invalid email, etc.) instead of a
-         blanket message — most often it's Supabase's send cooldown. */
-      if (/rate|too many|seconds|limit/i.test(msg)) {
+      try { if (window.console && window.console.warn) { window.console.warn('[concierge] sign-in failed:', err); } } catch (eC) { /* ignore */ }
+      /* Distinguish "the sign-in library never loaded" (Supabase is never even
+         contacted, so its logs are empty) from a real send failure. */
+      if (noClient) {
+        cap.textContent = 'The sign-in service didn’t load — check your connection or a script/ad blocker, then retry.';
+      } else if (/rate|too many|seconds|limit/i.test(msg)) {
         cap.textContent = 'Too many key requests just now — wait a minute and try again.';
       } else if (msg) {
         cap.textContent = 'Could not send the key: ' + msg;
       } else {
-        cap.textContent = 'The key could not be sent. Try once more.';
+        cap.textContent = 'The key could not be sent. Try once more (see the browser console for details).';
       }
     }
     function submit() {
@@ -2528,7 +2583,7 @@
          previous magic link, which can fail the redirect allow-list. */
       var redirectTo = location.origin + location.pathname;
       ensureSupabase().then(function (client) {
-        if (!client) { fail(); return; }
+        if (!client) { fail({ noClient: true }); return; }
         try {
           client.auth.signInWithOtp({
             email: em,
