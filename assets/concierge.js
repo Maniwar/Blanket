@@ -1820,6 +1820,17 @@
   var pendingNudge = null;      /* {seconds,count} carried into the next request */
   var pendingOpener = null;     /* 'reengage' | 'greet' — carried into the next request */
   var reengagedThisOpen = false;/* the bot has already opened contextually this panel session */
+  var unacked = 0;              /* proactive reach-outs since the visitor last showed a sign of life */
+
+  /* Any sign the visitor is actually present — a scroll, tap, key, or the tab
+     coming back into view. This is our stand-in for a read receipt: it clears
+     the "unacknowledged" count so the concierge resumes a light presence, and
+     if it had gone quiet (paused), it picks the thread back up. */
+  function noteActivity() {
+    if (unacked === 0) { return; }
+    unacked = 0;
+    if (panelOpen && !streaming && !quietMode && !nudgeTimer) { scheduleNudge(); }
+  }
 
   /* ----------------------------------------------------------
      Conversation lifecycle — closing / snoozing (a mix of both:
@@ -1993,6 +2004,7 @@
     entryMode = 'typed'; /* until the next tap says otherwise */
     nudgeCount = 0;      /* they spoke — the follow-up budget resets */
     holdAttempts = 0;
+    unacked = 0;         /* a reply is the clearest sign of life */
     /* the visitor wrote back — quiet mode lifts, and this begins a fresh
        (possibly re-engaged) conversation the register can wrap again later */
     if (quietMode) { setQuiet(false); }
@@ -2085,10 +2097,15 @@
      good clerk lingers nearby without hovering. Quiet mode stops it entirely. */
   var NUDGE_DELAYS = [20000, 45000, 90000, 180000, 300000]; /* last value repeats */
   var NUDGE_CAP = 6;            /* total proactive check-ins before it fully rests */
+  var UNACKED_CAP = 2;          /* stop after this many reach-outs with no sign of life */
   function scheduleNudge(spacious) {
     clearNudge();
     if (isDemo() || !panelOpen || quietMode) { return; }
     if (nudgeCount >= NUDGE_CAP) { return; }
+    /* Don't talk into the void: if the last couple of reach-outs went completely
+       unacknowledged (no scroll, tap, type, or return to the tab), the visitor
+       isn't watching — pause. Any sign of life resets this and resumes us. */
+    if (unacked >= UNACKED_CAP) { return; }
     /* only when a real exchange is underway and the last word was the bot's */
     if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
     /* Normally we only circle back once the visitor has spoken — but a signed-in
@@ -2106,6 +2123,7 @@
       if (streaming || !panelOpen || quietMode) { return; }
       if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
       nudgeCount++;
+      unacked++;                 /* this reach-out is unacknowledged until they show a sign of life */
       entryMode = 'nudge';
       pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount, signedIn: !!authEmail };
       performRequest({ quiet: true }); /* no phantom typing if it holds */
@@ -2435,6 +2453,7 @@
     wrappedUp = false;
     nudgeCount = 0;
     holdAttempts = 0;
+    unacked = 0;
     pendingNudge = null;
     pendingOpener = null;
     clearNudge();
@@ -2965,8 +2984,24 @@
       if (panelOpen) { doWrapup('auto'); }
     });
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'hidden' && panelOpen) { doWrapup('auto'); }
+      if (document.visibilityState === 'hidden') {
+        if (panelOpen) { doWrapup('auto'); } /* record the wind-down on leave */
+      } else if (document.visibilityState === 'visible') {
+        noteActivity();                        /* they came back — a sign of life */
+      }
     });
+    /* Presence signals — any of these means the visitor is here and could see a
+       message, so they acknowledge the concierge's reach-outs and resume it. */
+    var actOpts = { passive: true };
+    document.addEventListener('pointerdown', noteActivity, actOpts);
+    document.addEventListener('keydown', noteActivity, actOpts);
+    document.addEventListener('touchstart', noteActivity, actOpts);
+    document.addEventListener('scroll', noteActivity, actOpts);
+    var lastMove = 0;
+    document.addEventListener('pointermove', function () {
+      var now = Date.now();
+      if (now - lastMove > 4000) { lastMove = now; noteActivity(); }
+    }, actOpts);
     updateLauncher();
     /* Resolve any signed-in session early (and collect a magic-link redirect if
        present), so the concierge knows who they are BEFORE the panel opens —
