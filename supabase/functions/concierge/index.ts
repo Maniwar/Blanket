@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-address-via-form";
+const BUILD_TAG = "2026-07-05-journey-goals";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -163,7 +163,7 @@ interface FormDef {
   slug: string; title: string; submit_tool: string; fields: unknown;
 }
 
-interface GoalDef { slug: string; label: string; description: string }
+interface GoalDef { slug: string; label: string; description: string; section?: string | null }
 
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
@@ -191,7 +191,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
       "concierge_forms?select=slug,title,submit_tool,fields&enabled=is.true",
     ),
     pgSelect<GoalDef>(
-      "concierge_goals?select=slug,label,description&enabled=is.true&order=sort_order.asc",
+      "concierge_goals?select=slug,label,description,section&enabled=is.true&order=sort_order.asc",
     ),
   ]);
   dataCache = {
@@ -1091,6 +1091,7 @@ function assertivenessLevel(data: ConciergeData): number {
 function buildSystemPrompt(
   data: ConciergeData, liveState: string, signedIn: boolean,
   goalStatus?: Record<string, { status?: string; note?: string }> | null,
+  section?: string | null,
 ): string {
   const kb = data.kbText ?? KB_MARKDOWN; // DB rows, else compiled-in fallback
   // Function replacements so "$" sequences in content are never interpreted.
@@ -1149,14 +1150,21 @@ function buildSystemPrompt(
       system += "\nCONVERSATION GOALS — all met so far. Confirm the patron has everything they " +
         "need, then close warmly; do not manufacture new needs.\n";
     } else {
+      const here = typeof section === "string" ? section.toLowerCase() : "";
       system += "\nCONVERSATION GOALS (your active agenda — pursue naturally, never announce them; " +
         "keep advancing the OPEN ones, and when genuine interest allows, move the conversation " +
         "toward a commission or a companion cloth. Before you wrap up, make sure every open goal " +
         "here has been genuinely addressed — especially leaving no need unmet):\n" +
         open.map((g) => {
           const st = goalStatus ? (goalStatus[g.slug]?.status ?? "unmet") : null;
-          return `- ${g.label}${st ? ` [${st}]` : ""}: ${g.description}`;
+          const onJourney = here && typeof g.section === "string" && g.section.toLowerCase() === here;
+          return `- ${g.label}${st ? ` [${st}]` : ""}${onJourney ? " ← fits where they are right now" : ""}: ${g.description}`;
         }).join("\n") + "\n";
+      const hereGoals = open.filter((g) => here && typeof g.section === "string" && g.section.toLowerCase() === here);
+      if (hereGoals.length > 0) {
+        system += `The shopper is reading the '${here}' section right now — lead with the goal(s) marked "fits where they are" (` +
+          hereGoals.map((g) => g.label).join("; ") + "), tying your move to what's in front of them, before the others.\n";
+      }
     }
   }
   // ASSERTIVENESS — how far to lean toward driving the sale this conversation.
@@ -1560,8 +1568,9 @@ async function handleChatPost(req: Request): Promise<Response> {
     );
     goalStatus = gsRows && gsRows[0] ? gsRows[0].goal_status : null;
   }
+  const currentSection = typeof validated.context.section === "string" ? validated.context.section : null;
   const system = buildSystemPrompt(
-    data, renderLiveState(validated.context, customerLine), customer !== null, goalStatus,
+    data, renderLiveState(validated.context, customerLine), customer !== null, goalStatus, currentSection,
   );
 
   // Logging: resolve conversation + store the user turn, concurrently with
@@ -2051,6 +2060,87 @@ async function handleFormPost(req: Request): Promise<Response> {
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
+// ── POST ?reengage=1 — a goal + journey aware line for the closed-panel bubble ─
+// The client shows this instead of a hardcoded line. Reads the freshest
+// goal_status, picks the open goal that fits the section the visitor is reading,
+// and composes one short outreach line. Returns { text: null } to fall back to
+// the client's own line (all goals met, disabled, no key, or any failure).
+async function handleReengage(req: Request): Promise<Response> {
+  const fallback = () => jsonResponse(req, 200, { text: null });
+  try {
+    const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+    if (await rateLimited("re:" + ip)) return fallback();
+    let body: Record<string, unknown>;
+    try { body = await req.json() as Record<string, unknown>; } catch { return fallback(); }
+    const sessionKey = typeof body.session_key === "string" ? body.session_key.slice(0, 64) : "";
+    const section = typeof body.section === "string" ? body.section.slice(0, 32).toLowerCase() : "";
+    const data = await loadConciergeData();
+    if (data.config?.enabled === false || data.goals.length === 0) return fallback();
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!apiKey) return fallback();
+    const model = (typeof data.config?.model === "string" && data.config.model) ||
+      Deno.env.get("MODEL") || "claude-sonnet-4-5";
+    const customer = await verifyUser(req);
+
+    let cid: string | null = null;
+    let goalStatus: Record<string, { status?: string }> | null = null;
+    if (sessionKey) {
+      const rows = await pgSelect<{ id: string; goal_status: Record<string, { status?: string }> | null }>(
+        `concierge_conversations?select=id,goal_status&session_key=eq.${
+          encodeURIComponent(sessionKey)}&order=created_at.desc&limit=1`,
+      );
+      if (rows && rows[0]) { cid = rows[0].id; goalStatus = rows[0].goal_status; }
+    }
+
+    // Optional synchronous re-grade for the freshest possible status (admin
+    // toggle, default off). One extra model call; then re-read goal_status.
+    if (cid && data.config?.reengage_regrade === true) {
+      const msgs = await pgSelect<{ role: string; content: string }>(
+        `concierge_messages?select=role,content&conversation_id=eq.${cid}&order=created_at.asc&limit=20`,
+      );
+      if (msgs && msgs.filter((m) => m.role === "user").length >= 2) {
+        await evaluateGoals(cid, data, msgs as ChatMessage[], apiKey, model);
+        const rows2 = await pgSelect<{ goal_status: Record<string, { status?: string }> | null }>(
+          `concierge_conversations?select=goal_status&id=eq.${cid}&limit=1`,
+        );
+        if (rows2 && rows2[0]) goalStatus = rows2[0].goal_status;
+      }
+    }
+
+    const open = goalStatus
+      ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
+      : data.goals;
+    if (open.length === 0) return fallback();                 // all met — don't push
+    const goal = open.find((g) => section && typeof g.section === "string" &&
+      g.section.toLowerCase() === section) || open[0];
+
+    const signed = customer !== null;
+    const sys =
+      "You are the Mill Concierge for Feierabend, a numbered German wool blanket. Write ONE short " +
+      "outreach line (max 30 words) to a shopper who is reading the '" + (section || "page") +
+      "' section and has paused with the chat closed. Advance THIS goal, tied to what's in front of " +
+      "them: " + goal.label + " — " + goal.description + ". Warm, specific, ending in one light " +
+      "question. " + (signed ? "They are a signed-in patron; a small nod to that is welcome." :
+      "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
+      "{{tokens}}, no greeting boilerplate. Just the line.";
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: 90, system: sys,
+        messages: [{ role: "user", content: "Write the line now." }] }),
+    });
+    if (!res.ok) return fallback();
+    // deno-lint-ignore no-explicit-any
+    const msg = await res.json() as any;
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    // deno-lint-ignore no-explicit-any
+    let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    text = stripPlumbing(text).replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 240);
+    if (text.length < 4) return fallback();
+    return jsonResponse(req, 200, { text });
+  } catch { return fallback(); }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   if (req.method === "GET" && new URL(req.url).searchParams.get("config")) {
@@ -2130,6 +2220,7 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method !== "POST") return jsonError(req, 405, "Method not allowed. Use POST, or GET ?config=1.");
   if (new URL(req.url).searchParams.get("wrapup")) return await handleWrapup(req);
+  if (new URL(req.url).searchParams.get("reengage")) return await handleReengage(req);
   if (new URL(req.url).searchParams.get("form")) return await handleFormPost(req);
   return await handleChatPost(req);
 });

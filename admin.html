@@ -602,6 +602,10 @@
           <input type="number" id="cfg-goalrate" class="mono-field" min="0" max="1" step="0.05" placeholder="1" style="max-width:120px;">
           <p class="note" style="margin-top:4px;">How often to run the (background LLM) goal grader — 1 = every conversation, 0.2 = one in five. Lower it to cut model cost at scale; analytics stay representative.</p>
         </div>
+        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+          <input type="checkbox" id="cfg-reengage-regrade">
+          <span class="micro">Re-grade goals right before a closed-panel re-engagement — freshest possible status in the outreach line, at one extra model call per reach-out. Off by default (uses the latest already-graded status).</span>
+        </label>
         <div class="card-foot">
           <button id="save-engagement" class="btn primary">Save engagement</button>
         </div>
@@ -1336,6 +1340,7 @@ async function loadConfig() {
   $('cfg-reengage-anon-max').value = (typeof o.reengageMaxAnon === 'number') ? o.reengageMaxAnon : '';
   $('cfg-reengage-signed-idle').value = ms2s(o.reengageIdleSignedMs);
   $('cfg-reengage-signed-max').value = (typeof o.reengageMaxSigned === 'number') ? o.reengageMaxSigned : '';
+  $('cfg-reengage-regrade').checked = cfg.reengage_regrade === true;
 
   // Selling style
   const av = (typeof cfg.assertiveness === 'number') ? Math.min(5, Math.max(1, Math.round(cfg.assertiveness))) : 3;
@@ -1412,6 +1417,7 @@ async function saveEngagement() {
   if ($('cfg-goalrate').value !== '' && Number.isFinite(gr) && gr >= 0 && gr <= 1) {
     rows.push({ key: 'goal_sample_rate', value: gr, updated_at: nowIso() });
   }
+  rows.push({ key: 'reengage_regrade', value: $('cfg-reengage-regrade').checked, updated_at: nowIso() });
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save engagement', res.error); return; }
   toast('Engagement saved');
@@ -1995,6 +2001,18 @@ function goalEditor(row) {
   desc.addEventListener('input', function () { autoGrow(desc); });
   fDesc.appendChild(desc); wrap.appendChild(fDesc);
 
+  const fSec = el('div', 'field');
+  fSec.appendChild(el('span', 'micro', 'Page section it fits (journey stage) — the concierge leads with this goal when the visitor is reading that section. Leave as “anywhere” for goals that apply throughout.'));
+  const secSel = document.createElement('select');
+  [['', 'anywhere'], ['top', 'top / hero'], ['why', 'why'], ['wool', 'wool (the 5 decisions)'],
+   ['label', 'label / specs'], ['ritual', 'ritual'], ['arrival', 'arrival'], ['reserve', 'reserve / CTA']]
+    .forEach(function (o) {
+      const opt = document.createElement('option'); opt.value = o[0]; opt.textContent = o[1];
+      if ((row.section || '') === o[0]) opt.selected = true;
+      secSel.appendChild(opt);
+    });
+  fSec.appendChild(secSel); wrap.appendChild(fSec);
+
   const actions = el('div', 'kb-actions');
   const btnDel = el('button', 'btn danger', 'Delete');
   const btnSave = el('button', 'btn primary', 'Save');
@@ -2004,18 +2022,19 @@ function goalEditor(row) {
     withBusy(btnSave, async function () {
       const l = label.value.trim();
       if (!l) { toast('A goal needs a name', true); return; }
+      const section = secSel.value || null;
       if (row.id) {
         const res = await sb.from('concierge_goals').update({
-          label: l, description: desc.value.trim(), enabled: cb.checked, updated_at: nowIso()
+          label: l, description: desc.value.trim(), enabled: cb.checked, section: section, updated_at: nowIso()
         }).eq('id', row.id);
         if (res.error) { fail('Save goal', res.error); return; }
-        row.label = l; row.description = desc.value.trim(); row.enabled = cb.checked;
+        row.label = l; row.description = desc.value.trim(); row.enabled = cb.checked; row.section = section;
         toast('Goal saved');
       } else {
         const slug = kebab(l);
         if (!slug) { toast('Could not derive a slug', true); return; }
         const res = await sb.from('concierge_goals').insert({
-          slug: slug, label: l, description: desc.value.trim(), enabled: cb.checked, sort_order: row.sort_order, updated_at: nowIso()
+          slug: slug, label: l, description: desc.value.trim(), enabled: cb.checked, section: section, sort_order: row.sort_order, updated_at: nowIso()
         }).select().single();
         if (res.error) { fail('Add goal', res.error); return; }
         row.id = res.data.id; row.slug = res.data.slug; slugEl.textContent = row.slug;

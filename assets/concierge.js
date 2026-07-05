@@ -1991,16 +1991,41 @@
     };
     return a[sec] || 'Guten Abend — I’m the mill’s concierge. Tell me the room it’s for and I’ll tell you the cloth.';
   }
+  var reengageBusy = false;
+  /* Ask the server for a goal + journey aware line (it reads the open goals and
+     the section the visitor is in). Falls back to the client line on any failure
+     so the beat still fires offline / if the endpoint is unavailable. */
+  function fetchReengageLine(cb) {
+    if (isDemo()) { cb(reengageLine()); return; }
+    var body = JSON.stringify({ session_key: sessionKey(), section: currentSection() });
+    var url = endpoint() + (endpoint().indexOf('?') === -1 ? '?reengage=1' : '&reengage=1');
+    getAccessToken().then(function (token) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) { headers['Authorization'] = 'Bearer ' + token; }
+      fetch(url, { method: 'POST', headers: headers, body: body })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { cb(j && typeof j.text === 'string' && j.text ? j.text : reengageLine()); })
+        ['catch'](function () { cb(reengageLine()); });
+    })['catch'](function () { cb(reengageLine()); });
+  }
   function reengageTick() {
-    if (isDemo() || panelOpen || quietMode || streaming || outreachEl) { return; }
+    if (isDemo() || panelOpen || quietMode || streaming || outreachEl || reengageBusy) { return; }
     if (!hadActivity || !activeSinceReengage) { return; }        /* need fresh activity */
     var c = reengageCfg();
     if (!c.enabled || reengageCount >= c.max) { return; }
     if (Date.now() - lastActivityTs < c.idleMs) { return; }      /* not idle long enough yet */
-    if (showOutreach('reengage-' + reengageCount, reengageLine(), true, true)) {
-      reengageCount++;
-      activeSinceReengage = false;                               /* require fresh activity before the next */
-    }
+    reengageBusy = true;
+    fetchReengageLine(function (line) {
+      reengageBusy = false;
+      /* re-check — state may have changed while the line was being composed */
+      if (panelOpen || quietMode || streaming || outreachEl) { return; }
+      var c2 = reengageCfg();
+      if (!c2.enabled || reengageCount >= c2.max) { return; }
+      if (showOutreach('reengage-' + reengageCount, line, true, true)) {
+        reengageCount++;
+        activeSinceReengage = false;                             /* require fresh activity before the next */
+      }
+    });
   }
   setInterval(reengageTick, 4000);
 

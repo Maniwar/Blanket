@@ -175,6 +175,8 @@ create table if not exists public.concierge_goals (
   slug text unique not null, label text not null, description text not null,
   enabled boolean not null default true, sort_order int not null default 0,
   updated_at timestamptz not null default now());
+-- journey stage this goal is most relevant to (page section), nullable = anywhere
+alter table public.concierge_goals add column if not exists section text;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. ROW LEVEL SECURITY + the admin-check helper
@@ -614,16 +616,23 @@ on conflict (key) do nothing;
 -- the Studio are never overwritten by re-running this file. To reset any of
 -- them, delete the rows first, then re-run.
 
-insert into public.concierge_goals (slug, label, description, sort_order)
+insert into public.concierge_goals (slug, label, description, sort_order, section)
 select * from (values
-  ('discover','Understand the customer','Learn who the blanket is for and where it will live before presenting.',1),
-  ('match-cloth','Match the right cloth','Guide them to the colorway that suits their need or room.',2),
-  ('handle-doubt','Address hesitations','Meet any hesitation — price, care, fit, gift timing — honestly and fully.',3),
-  ('advance','Advance toward a commission','Move the conversation toward an entry in the Webbuch when genuine interest allows.',4),
-  ('needs-met','Leave no need unmet','Confirm every question the customer raised was resolved before the conversation ends.',5),
-  ('remember','Record for next time','For a signed-in patron, note what was learned in the client book.',6)
-) as v(slug,label,description,sort_order)
+  ('discover','Understand the customer','Learn who the blanket is for and where it will live before presenting.',1,'why'),
+  ('match-cloth','Match the right cloth','Guide them to the colorway that suits their need or room.',2,'wool'),
+  ('handle-doubt','Address hesitations','Meet any hesitation — price, care, fit, gift timing — honestly and fully.',3,'label'),
+  ('advance','Advance toward a commission','Move the conversation toward an entry in the Webbuch when genuine interest allows.',4,'reserve'),
+  ('needs-met','Leave no need unmet','Confirm every question the customer raised was resolved before the conversation ends.',5,null),
+  ('remember','Record for next time','For a signed-in patron, note what was learned in the client book.',6,null)
+) as v(slug,label,description,sort_order,section)
 where not exists (select 1 from public.concierge_goals);
+
+-- Backfill the journey mapping on existing installs (only where unset, so admin
+-- edits are preserved).
+update public.concierge_goals set section = 'why'     where slug = 'discover'     and section is null;
+update public.concierge_goals set section = 'wool'    where slug = 'match-cloth'   and section is null;
+update public.concierge_goals set section = 'label'   where slug = 'handle-doubt'  and section is null;
+update public.concierge_goals set section = 'reserve' where slug = 'advance'       and section is null;
 
 -- The full knowledge base, SOPs, and forms follow — so this ONE file stands
 -- alone as a complete, runnable setup. Each block seeds only if its table is

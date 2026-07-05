@@ -293,14 +293,23 @@ rather than merely reacting:
   live bot also reads the stage each turn to choose a stage-appropriate move.
 
 - **Proactive re-engagement (closed panel).** When a visitor is active
-  (scrolls) then goes idle with the widget closed, the concierge reaches out with
-  a contextual line — section-aware for anons, warmer for signed-in patrons. It
+  (scrolls) then goes idle with the widget closed, the concierge reaches out. It
   re-arms only on *fresh* activity, so a visitor who truly left isn't nagged.
   Cadence derives from the assertiveness dial (Attentive baseline), with
   per-audience admin overrides (idle interval + max, anon vs signed-in) and an
-  on/off. The post-purchase "welcome back" bubble now marks itself done only once
-  it actually renders, so it reliably reappears on a later refresh if it couldn't
-  show — and opens the chat when tapped.
+  on/off. The reach-out line is **goal + journey aware**: the client asks the
+  `?reengage=1` endpoint, which reads the freshest `goal_status`, picks the open
+  goal mapped to the section the visitor is reading, and composes one short line
+  (falling back to a client line if unavailable). An admin `reengage_regrade`
+  toggle (default off) re-grades goals synchronously first for maximum freshness,
+  at one extra model call. The post-purchase "welcome back" bubble now marks
+  itself done only once it actually renders, so it reliably reappears on a later
+  refresh if it couldn't show — and opens the chat when tapped.
+- **Journey-aware goals.** Each goal can carry a `section` (page/journey stage);
+  `buildSystemPrompt` flags the open goals that match where the visitor is and
+  tells the concierge to lead with them, so the agenda tracks the shopper's path
+  down the page (discover→why, match-cloth→wool, handle-doubt→specs,
+  advance→reserve by default; all admin-editable).
 
 Admin-editable selling inputs (all config keys): `assertiveness`, `hooks`
 (selling angles woven in to build desire), `objections` (`{trigger, response}`
