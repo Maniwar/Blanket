@@ -110,3 +110,13 @@ It prints a report. Confirm:
   removal is restricted to the **super admin** (`is_super_admin()`).
 - `ALLOWED_ORIGINS` restricts browser CORS; rate limits bound abuse
   (concierge 20/10min, commission 10/10min per IP).
+
+---
+
+## License
+
+**All rights reserved** — see [`LICENSE`](LICENSE). This repository is public
+for **viewing and evaluation only** (e.g. reviewing the author's work); it is
+not open-source and no reuse is permitted without written permission. The brand
+and all imagery/video are fictional, AI-generated demo assets. To license any
+other use, contact mberenji@gmail.com.
