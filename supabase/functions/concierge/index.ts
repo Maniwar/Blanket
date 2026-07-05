@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-hold-leak-fix";
+const BUILD_TAG = "2026-07-05-commission-button";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1488,6 +1488,16 @@ function buildSystemPrompt(
     "NEVER write [HOLD] (or the word 'hold' alone) in reply to a message the visitor " +
     "actually sent — to anything they type, including a bare 'hey', always give a real, " +
     "warm answer. Never let the token [HOLD] appear in what the customer reads.\n";
+
+  // Don't interrogate a ready buyer — the register sheet collects the details.
+  system += "\nCOMMISSION BUTTON: The moment the shopper signals they want to commission, buy, " +
+    "order, or 'do it' — an explicit 'I want to commission', 'let's do it', 'open the register', " +
+    "'I'll take it' — put {{action:commission}} on its own line IMMEDIATELY, in that same reply. " +
+    "Do NOT ask which cloth or where it ships first: the register sheet itself collects the cloth " +
+    "and the shipping details, so asking beforehand is redundant friction that loses the sale. " +
+    "NEVER propose opening the register ('shall I open the register?') without the {{action:commission}} " +
+    "button in the same message — if you offer it, a single tap must be able to act. One clear buying " +
+    "signal = show the button; do not ask the same qualifying question twice.\n";
 
   // SELLING ANGLES — admin-curated true lines the bot may weave in to build desire.
   const hooks = data.config?.hooks;
