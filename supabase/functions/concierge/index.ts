@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-no-plumbing-leak";
+const BUILD_TAG = "2026-07-05-no-xml-toolcalls";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1114,6 +1114,25 @@ function sseFrame(obj: unknown): Uint8Array {
   return encoder.encode("data: " + JSON.stringify(obj) + "\n\n");
 }
 
+/** Scrub any tool-call plumbing the model wrote as *text* instead of invoking
+ *  — function-call XML or a {{action:tool}} token. Never reaches the shopper,
+ *  never gets logged. (The opener path calls the model without tools, so a
+ *  model that "decides" to call one can only render it as text — this catches
+ *  that.) */
+function stripPlumbing(t: string): string {
+  if (!t) return t;
+  if (t.indexOf("<function_calls") < 0 && t.indexOf("<invoke") < 0 &&
+      t.indexOf("{{") < 0) return t;
+  return t
+    .replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "")
+    .replace(/<function_calls>[\s\S]*$/i, "")
+    .replace(/<\/?(function_calls|invoke|parameter)(\s[^>]*)?>/gi, "")
+    .replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function sseResponse(req: Request, stream: ReadableStream<Uint8Array>): Response {
   return new Response(stream, {
     status: 200,
@@ -1301,17 +1320,18 @@ async function handleChatPost(req: Request): Promise<Response> {
           "spoken yet. They already see a brief house greeting, so do NOT repeat a generic hello. " +
           "Add ONE warm, specific line that opens toward a conversation goal. If CUSTOMER is present, " +
           "make it personal — greet them by first name and nod to their standing or a real order/note " +
-          "(a returning patron is never a stranger); if a RE-ENGAGEMENT line is present, welcome them " +
-          "back to where you left off, calling recall_context first if you need older notes. If there " +
-          "is NO CUSTOMER (an anonymous visitor), open from what they're browsing (the BROWSING " +
-          "section and page) — e.g. the cloth they're reading about, gift vs. their own home — and " +
-          "invite them in. End with a single light question. Do not mention this note. One or two " +
-          "sentences.]"
+          "(a returning patron is never a stranger), drawing on the CUSTOMER block and CLIENT BOOK " +
+          "already provided above. If there is NO CUSTOMER (an anonymous visitor), open from what " +
+          "they're browsing (the BROWSING section and page) — e.g. the cloth they're reading about, " +
+          "gift vs. their own home — and invite them in. End with a single light question. This is a " +
+          "plain spoken line: do NOT use any tools and do NOT write any tool call — just speak. Do " +
+          "not mention this note. One or two sentences.]"
         : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
-          "from the conversation so far and what you know of them — never a generic greeting, never " +
-          "repeating yourself. If you need older context or notes you don't see, call recall_context " +
-          "first. Do not mention this note. One or two sentences ending in a light question.]",
+          "from the conversation so far and the CUSTOMER block / CLIENT BOOK already above — never a " +
+          "generic greeting, never repeating yourself. This is a plain spoken line: do NOT use any " +
+          "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
+          "mention this note. One or two sentences ending in a light question.]",
     });
   }
 
@@ -1422,6 +1442,9 @@ async function handleChatPost(req: Request): Promise<Response> {
               .map((b: any) => b.text).join("").trim();
           }
         } catch { /* fall through to hold */ }
+        // This path runs the model WITHOUT tools; if it "decides" to call one it
+        // can only write the call as text. Scrub that before anything sees it.
+        text = stripPlumbing(text);
 
         const held = text.length === 0 || /^\[?hold\]?\.?$/i.test(text) ||
           /^\[hold\]/i.test(text);
@@ -1509,6 +1532,7 @@ async function handleChatPost(req: Request): Promise<Response> {
             }
           }
 
+          finalText = stripPlumbing(finalText);
           for (const piece of chunked(finalText)) send({ t: piece });
           const lastUserMsg = [...validated.messages].reverse().find((m) => m.role === "user");
           await maybeFlagGap(cid, lastUserMsg?.content, finalText);

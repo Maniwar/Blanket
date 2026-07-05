@@ -836,9 +836,26 @@
     return frag;
   }
 
+  /* The model sometimes writes its tool calls as literal text instead of
+     invoking them — function-call XML (<function_calls><invoke …>…) or a
+     {{action:tool}} token. None of it is ever meant for the shopper's eyes;
+     scrub it before rendering, whatever path it arrived by. */
+  function stripPlumbing(t) {
+    if (typeof t !== 'string' || t.indexOf('<function_calls') < 0 &&
+        t.indexOf('<invoke') < 0 && t.indexOf('{{') < 0) { return t; }
+    t = t.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '');
+    /* an unclosed block still streaming in: drop from the marker to the end */
+    t = t.replace(/<function_calls>[\s\S]*$/i, '');
+    t = t.replace(/<\/?(function_calls|invoke|parameter)(\s[^>]*)?>/gi, '');
+    t = t.replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, '');
+    return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+  }
+
   function mdRender(text) {
     var frag = document.createDocumentFragment();
     if (typeof text !== 'string' || !text.length) { return frag; }
+    text = stripPlumbing(text);
+    if (!text.length) { return frag; }
     var lines = text.replace(/\r\n?/g, '\n').split('\n');
     var i = 0, n = lines.length;
     var para = [];
