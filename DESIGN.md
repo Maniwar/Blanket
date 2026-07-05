@@ -78,6 +78,15 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 - **As a customer with an order**, I want to check status, change the shipping
   address or colorway, or cancel — in chat, myself — so that I'm not emailing
   support. *(Register tools, gated to still-mutable orders, fully audited.)*
+- **As a customer who lost the email**, I want the concierge to re-send my order
+  confirmation, shipping note, or cancellation to the address on file, so that a
+  missing note isn't a support ticket. *(`resend_confirmation` tool → service-only
+  commission `?custresend=1`, kind checked against the order's real status.)*
+- **As a customer with a question about my blanket**, I want to track where it is,
+  ask how to care for the wool, fix the name on a gift card, or open a mending
+  request — all in chat — so that the concierge is a real service desk, not just a
+  salesperson. *(`track_shipment`, `get_care_guide`, `update_gift_details`,
+  `request_mending` — ownership-scoped, audited; see* [`TOOLS.md`](TOOLS.md)*.)*
 - **As a valued patron**, I want to be treated according to my standing — more
   deference the more I've bought — so that loyalty is felt, not just logged.
   *(LTV tiers: Eintrag → Wiederkehr → Hausfreund → Stifter.)*
@@ -104,7 +113,7 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 ### 2.4 Merchant — content & operations admin
 
 *Everything below is a tab or control in the admin studio (`admin.html`): Tuning,
-Knowledge, Procedures, Cache, Customers, Conversations.*
+Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 
 **Tuning the concierge**
 
@@ -126,6 +135,13 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
 - **As the merchant**, I want in-chat forms for structured order changes, so that
   the concierge can collect exactly what a change needs. *(Procedures tab:
   admin-defined forms.)*
+- **As the merchant**, I want to see every action the concierge can take on a
+  customer's behalf, turn any of them on or off, and rewrite the instruction that
+  governs when it's used — without a deploy — so that the bot's powers are mine to
+  shape. *(Tools tab: the built-in tool catalog from `?tools=1`, with per-tool
+  enable/disable and description overrides stored in `concierge_tools` and merged
+  over the code defaults before the tool list reaches the model. Full design:*
+  [`TOOLS.md`](TOOLS.md)*.)*
 
 **Running the register (orders, fulfillment, edition)**
 

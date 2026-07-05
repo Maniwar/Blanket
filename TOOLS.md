@@ -1,0 +1,122 @@
+# Concierge tools
+
+The concierge doesn't just talk — it can **act** on a signed-in patron's behalf:
+read their orders, change a cloth, cancel, re-send a confirmation, log a mending
+request, and more. Each action is a **tool** the model may call mid-conversation.
+This document covers what the tools are, how they're gated, and how an admin can
+turn them on/off or re-instruct them from the Studio.
+
+---
+
+## 1. What a tool is
+
+A tool is a named capability with a JSON input schema, defined in the concierge
+function's code (`supabase/functions/concierge/index.ts`, the `REGISTER_TOOLS`
+array). When a signed-in patron chats, the function sends the model the tool list;
+the model may call one, the function **executes** it (`runRegisterTool`) and feeds
+the result back, then the model replies in words.
+
+Two hard rules apply to every tool:
+
+- **Signed-in only.** Tools run only for a verified magic-link session. Anonymous
+  shoppers get conversation, never register writes.
+- **Ownership-scoped + logged.** Any tool that touches an order first confirms the
+  order exists **and belongs to the caller** (`ownershipFilter`). Every call is
+  written to `concierge_actions` (the admin audit log). A tool can only ever act on
+  the caller's own entries.
+
+Address edits are deliberately **not** a free-text tool — the model once mis-mapped
+a city into the street line, so address changes go through an in-chat **form**
+(`{{form:address-change:…}}`) where a human types each labelled field. See FORMS.md.
+
+---
+
+## 2. The built-in tools
+
+| Tool | Reads / writes | What it does | Guard beyond ownership |
+| --- | --- | --- | --- |
+| `get_my_orders` | read | The caller's orders — Nº, status, tracking, cloth, address, date. Called before answering any order question. | — |
+| `recall_context` | read | The caller's full client-book notes + the tail of earlier conversations, to re-engage a returning patron faithfully. | — |
+| `remember_customer` | write | Adds one short factual line to the client book. De-duplicates against existing notes; refuses sensitive content. | — |
+| `update_colorway` | write | Changes the cloth on an order. | Only while `placed` (loom not started). |
+| `cancel_order` | write | Cancels an order; the number returns to the edition. | Only while `placed`; explicit confirmation. |
+| `join_waitlist` | write | Adds the patron to a future-edition waitlist. | — |
+| `resend_confirmation` | action | Re-sends the order confirmation / shipping / cancellation email to the address on file. Proxies to the commission function's service-only `?custresend=1`. | `kind` must match the order's real status. |
+| `track_shipment` | read | Where an order stands — status and, once shipped, the tracking number. | — |
+| `get_care_guide` | read | Cloth-tailored wool care instructions. | — |
+| `update_gift_details` | write | Changes the gift recipient's name on the enclosed card. | Gift orders only, before shipment. |
+| `request_mending` | write | Logs a repair/mending request with the workshop (to `concierge_actions`). | — |
+
+`resend_confirmation` is the only tool that reaches outside the concierge: it calls
+`${SUPABASE_URL}/functions/v1/commission?custresend=1` with the **service key** as a
+bearer token (so no browser can hit that endpoint), and only **after** it has
+verified the caller owns the order. The commission side re-checks the `kind`
+against the order's status and re-uses the same `orderEmail` templates the
+confirmation/shipping/cancellation notes are built from.
+
+---
+
+## 3. Admin control — the Tools tab
+
+**Studio → Tools** lets an admin, without a deploy:
+
+- **Enable / disable** any tool. A disabled tool is dropped from the list sent to
+  the model — the concierge can no longer call it at all. Tools the bot leans on
+  (`get_my_orders`, `recall_context`) are marked **core**; turning one off works but
+  visibly dulls the concierge, and the UI warns you.
+- **Re-instruct** a tool. The description shown to the model is what tells it *when*
+  and *how* to use the tool. Rewriting it (e.g. "only offer mending for orders older
+  than 30 days") changes behaviour immediately. A blank instruction falls back to the
+  built-in default; a "custom instruction" badge shows when you've overridden one.
+
+### How it's stored
+
+Overrides live in the `concierge_tools` table — **one row per deviation only**:
+
+| Column | Meaning |
+| --- | --- |
+| `name` | the built-in tool name |
+| `enabled` | `false` withholds it from the model |
+| `description` | non-empty → replaces the model-facing instruction |
+
+A tool with **no row** runs at its default (enabled, built-in instruction). Saving
+"enabled + default instruction" deletes the row rather than storing a no-op. The
+built-in set itself is never in the table — only your changes to it.
+
+### How it reaches the model
+
+`loadConciergeData` reads `concierge_tools` (cached ~60 s with the rest of the
+config). `buildToolsForModel` merges it over the code defaults — dropping disabled
+tools, swapping in overridden descriptions — and the result is the `tools` array
+sent on each turn. The admin tab reads the built-in **catalog** from the public
+`GET ?tools=1` manifest (names, defaults, core flags — which only the server knows)
+and the live override state straight from the table, then writes changes back under
+RLS (`is_concierge_admin()`).
+
+---
+
+## 4. Standard operating procedures
+
+Tools give the concierge the *ability* to act; **SOPs** (`concierge_sops`, editable
+in Studio → Procedures) tell it *how to behave* around them — confirmation steps,
+what to say, when to hand off to the desk. The customer-service tools ship with
+matching SOPs (`resend-email`, `mending`, `gift-details`, `care-guide`) so the bot
+uses them with the house's manners, not just mechanically. Edit an SOP to change the
+choreography; disable/re-instruct the tool to change the capability itself.
+
+---
+
+## 5. Adding a new tool (developer)
+
+A genuinely new capability still needs code (it must *do* something):
+
+1. Add the definition to `REGISTER_TOOLS` (name, description, `input_schema`).
+2. Add its handler in `runRegisterTool` — ownership check, validation, the write,
+   `logAction`, and a human-readable result string.
+3. If it should appear as a labelled step in the chat, add a status line in the
+   agentic loop's label map.
+4. It shows up in the Tools tab automatically (the manifest is derived from
+   `REGISTER_TOOLS`); add an SOP if it needs house choreography.
+
+The registry table is for **admin overrides**, not for defining new tools — a row
+whose `name` doesn't match a built-in is simply ignored by the merge.

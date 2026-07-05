@@ -275,7 +275,7 @@ post-purchase behavior. **Written by:** admin (Procedures tab). **Read by:**
 | `id` | bigint identity PK | Row id. |
 | `conversation_id` | uuid → conversations | Where it happened. |
 | `user_id`,`email` | — | Who. |
-| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, …). |
+| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …). |
 | `serial` | int | Affected order, if any. |
 | `payload` | jsonb | The tool input. |
 | `result` | text | Outcome summary. |
@@ -375,6 +375,23 @@ line recording the wind-down: quiet mode / closed / wound down). **Read by:**
 scores each into `concierge_conversations.goal_status`). **Seeded by:**
 `setup.sql` (six starter goals, only if the table is empty).
 
+### `concierge_tools` — admin overrides for the model-callable tools
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `name` | text PK | Must match a built-in tool name (from the function's `REGISTER_TOOLS`). |
+| `enabled` | boolean | `false` withholds the tool from the model entirely. Default `true`. |
+| `description` | text | Non-empty → overrides the model-facing instruction; null/blank → built-in default. |
+| `sort_order` | int | Reserved for display ordering. |
+| `updated_at` | timestamptz | Last edit. |
+
+The built-in tool **set** lives in code (`REGISTER_TOOLS`); this table only holds
+**deviations** from the defaults, so an absent row means "enabled, default
+instruction." **Written by:** admin (Tools tab). **Read by:** `loadConciergeData`
+→ `buildToolsForModel` merges it over the code defaults before the `tools` array
+is sent to the model (disabled dropped, descriptions overridden). The admin Tools
+tab reads the built-in catalog from `GET ?tools=1` and the live override state
+straight from this table. No seed — every tool starts at its default.
+
 ---
 
 ## Functions (RPCs) — all `security definer`, `search_path = ''`
@@ -405,6 +422,8 @@ edition RPCs are the exception — granted to `authenticated` (they self-gate on
 | Method / query | Handler | Purpose |
 | --- | --- | --- |
 | `GET ?config=1` | `handleConfigGet` | Public bootstrap: enabled, greeting, starters, forms, images, outreach timings, assertiveness. |
+| `GET ?site=1` | `handleSiteGet` | Storefront CMS slot values (`site_content`) for the runtime hydrator + head bake. |
+| `GET ?tools=1` | `handleToolsGet` | The built-in tools manifest (name, enabled, core, effective + default instruction, overridden) for the admin Tools tab. |
 | `GET ?cachecheck=1` | inline | Self-diagnosis of the semantic cache round-trip. |
 | `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, **proactive openers** (`context.opener` = `reengage`/`greet` — the bot speaks first on panel open), tools (incl. `recall_context` to pull prior notes/conversation), cache, logging, goal scheduling. |
 | `POST ?wrapup=1` | `handleWrapup` | **Records a conversation as closed/snoozed.** Body `{session_key, reason}` where reason is `quiet` (→ snoozed), `close` or `auto` (→ closed). Stamps `status`+`ended_at` **once** (already-ended threads are left alone), and for a signed-in patron adds one `customer_notes` line. |
@@ -424,6 +443,8 @@ meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
 | `POST ?fulfill=1` | **Admin only** (`verifyUser` + `is_concierge_admin`). Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
 | `POST ?waitlist=1` | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (rate-limited; no auth required, links `user_id` if signed in). |
 | `POST ?resend=1` | **Admin only.** Re-send an order email: `{serial, kind}` (`placed`/`shipped`/`cancelled`) → rebuilds from the order and sends, logging to `email_log`. |
+| `POST ?editaddr=1` | **Admin only.** Correct a shipping address on a not-yet-shipped order (validated field-by-field). |
+| `POST ?custresend=1` | **Service key only** (bearer = `SUPABASE_SERVICE_ROLE_KEY`; no browser can reach it). Re-send an order email on a customer's behalf, reusing `orderEmail`. Called internally by the concierge's `resend_confirmation` tool **after** it has verified the signed-in owner owns the order; guards the `kind` against the order's real status. |
 
 Transactional email uses Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`,
 default `Feierabend <onboarding@resend.dev>`). With the default Resend sender,

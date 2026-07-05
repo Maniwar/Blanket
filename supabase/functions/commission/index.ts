@@ -733,6 +733,43 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, { ok: true, serial, ...patch });
   }
 
+  // ── POST ?custresend=1 — SERVICE-ONLY re-send, called by the concierge ──────
+  // The concierge's resend_confirmation tool calls this AFTER it has verified the
+  // signed-in owner actually owns the order. Auth here is the service key (bearer),
+  // so a browser can never reach it — only server-to-server. It reuses the same
+  // orderEmail templates, and guards the kind against the order's real status so a
+  // "shipped" note can't go out for something that hasn't shipped.
+  if (new URL(req.url).searchParams.get("custresend")) {
+    const auth = req.headers.get("authorization") ?? "";
+    const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+    if (!SERVICE_KEY || token !== SERVICE_KEY) {
+      return jsonError(req, 403, "Not permitted.");
+    }
+    let rb: Record<string, unknown>;
+    try { rb = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const serial = typeof rb.serial === "number" ? Math.floor(rb.serial) : NaN;
+    const kind = typeof rb.kind === "string" ? rb.kind : "";
+    if (!Number.isFinite(serial) || !["placed", "shipped", "cancelled"].includes(kind)) {
+      return jsonError(req, 400, "serial (number) and kind (placed|shipped|cancelled) are required.");
+    }
+    const order = await fetchOrder(serial);
+    if (!order) return jsonError(req, 404, `No order Nº ${serial}.`);
+    const st = order.status ?? "";
+    // Guard: the note has to match reality.
+    if (kind === "shipped" && !["shipped", "delivered"].includes(st)) {
+      return jsonError(req, 409, `Nº ${serial} has not shipped yet (${st}); a shipping note would be wrong.`);
+    }
+    if (kind === "cancelled" && !["cancelled", "returned"].includes(st)) {
+      return jsonError(req, 409, `Nº ${serial} is '${st}', not cancelled; that note doesn't apply.`);
+    }
+    const mail = orderEmail(kind as "placed" | "shipped" | "cancelled", order);
+    const logKind = (kind === "cancelled" && st === "returned") ? "returned" : kind;
+    await sendEmail(order.email, mail.subject, mail.html, { kind: logKind, serial });
+    return jsonResponse(req, 200, { ok: true, to: order.email });
+  }
+
   // ── POST ?resend=1 — admin re-sends a transactional email for an order ──────
   if (new URL(req.url).searchParams.get("resend")) {
     const admin = await verifyUser(req);

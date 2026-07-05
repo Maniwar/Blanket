@@ -157,6 +157,16 @@ create table if not exists public.site_content (
   alt text,
   updated_at timestamptz not null default now());
 
+-- Admin overrides for the concierge's model-callable tools. The built-in tool
+-- set lives in the concierge function's code; a row here disables a tool or
+-- replaces its model-facing description. No row → the tool runs at its default.
+create table if not exists public.concierge_tools (
+  name text primary key,                 -- must match a built-in tool name
+  enabled boolean not null default true, -- false → withheld from the model
+  description text,                       -- non-empty → overrides the model copy
+  sort_order int not null default 100,
+  updated_at timestamptz not null default now());
+
 create table if not exists public.customer_notes (
   id bigint generated always as identity primary key,
   user_id uuid, email text, note text not null,
@@ -201,7 +211,8 @@ begin
     'concierge_config','concierge_kb','concierge_admins','concierge_conversations',
     'concierge_messages','concierge_feedback','customers','orders','allocation_counter',
     'serial_holds','concierge_sops','concierge_actions','concierge_cache','concierge_flags',
-    'concierge_forms','customer_notes','order_events','concierge_goals','site_content'
+    'concierge_forms','customer_notes','order_events','concierge_goals','site_content',
+    'concierge_tools'
   ] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
@@ -214,7 +225,7 @@ begin
   foreach t in array array[
     'concierge_config','concierge_kb','concierge_conversations','concierge_messages',
     'concierge_sops','concierge_cache','concierge_forms','customer_notes',
-    'concierge_goals','concierge_flags','site_content'
+    'concierge_goals','concierge_flags','site_content','concierge_tools'
   ] loop
     execute format('drop policy if exists "admin all" on public.%I', t);
     execute format($f$create policy "admin all" on public.%I for all to authenticated
@@ -858,8 +869,34 @@ on conflict (slug) do update
   end if;
 end $seed$;
 
--- In-chat forms: seed only when the table is empty, so Studio edits are never
--- overwritten by re-running this file. To reset, delete the rows then re-run.
+-- SOPs for the customer-service tools added after the first seed. These use
+-- new slugs, so they land in an already-populated database too; 'do nothing'
+-- means a re-run never clobbers a Studio edit to them. To reset one, delete the
+-- row and re-run.
+insert into public.concierge_sops (slug, title, content_md, sort_order) values
+('resend-email', 'Re-sending a confirmation', $sop$An owner may not have received (or may want another copy of) a transactional email — the order confirmation, the shipping note, or the cancellation note.
+1. Call get_my_orders first to find the order and read its real status — never guess.
+2. Choose the note from the status: a 'placed'/'weaving'/'finishing' order gets the order confirmation; only a 'shipped'/'delivered' order has a shipping note; only a 'cancelled'/'returned' order has a cancellation note. Don't offer a note that doesn't exist yet.
+3. Confirm the destination in one line ("I'll send Nº 14,228's confirmation to the email on your account") and call resend_confirmation with the serial and the right kind (confirmation | shipping | cancellation).
+4. Read the result back — it re-sends to the email on file, not to a typed address. Suggest they check spam if it's shy. Nothing is charged; this only re-sends an existing note.
+5. If they want it sent to a DIFFERENT address, the register can't do that — offer hello@feierabend.example.$sop$, 11),
+('mending', 'Mending & repairs', $sop$Wool is meant to be mended, not discarded — the mill offers lifetime mending, and this is a point of pride, not a chore.
+1. When an owner mentions damage — a pull, a loose bind, a moth nibble, a worn edge — respond with reassurance first: this is exactly what the mill is for, and the piece can almost always be brought back.
+2. Call get_my_orders to find which blanket it is (by cloth or Nº). If it's ambiguous, ask which one with a pill per candidate.
+3. Ask them to describe what's wrong in a sentence or two, then call request_mending with the serial and their description.
+4. Confirm warmly that the request is logged with the workshop and someone will follow up by email. Do NOT promise a specific repair, cost, or timeline — this opens a request; the desk arranges the rest.
+5. This is relationship work: an owner whose blanket was mended is an owner for life.$sop$, 12),
+('gift-details', 'Gift recipient & card', $sop$A gift order carries a card in the recipient's name. The owner may want to set or fix that name before it ships.
+1. Only gift orders have a recipient card, and only before shipment (status placed, weaving, or finishing). Call get_my_orders to confirm both.
+2. Confirm the exact spelling with the owner, reading it back, before you change anything ("the card will read 'für Anneliese' — spelled A-N-N-E-L-I-E-S-E?").
+3. Call update_gift_details with the serial and the recipient_name. Read the confirmation back.
+4. This changes ONLY the name on the card — it does not change where the gift ships. If they also want a new address, that goes through the address-change form separately.
+5. If the order has shipped, the card is already enclosed — apologize once and offer hello@feierabend.example.$sop$, 13),
+('care-guide', 'Care & keeping the wool', $sop$Owners often ask how to look after the blanket. The care guide is tailored to the cloth.
+1. If they have an order, call get_care_guide with the serial for cloth-specific notes; otherwise give the general wool care from the knowledge base.
+2. The heart of it: air, don't wash — wool is self-cleaning. Spot-clean spills at once; hand-wash cool only when truly needed, dry flat, never tumble. Store folded and breathing with cedar or lavender against moth.
+3. Frame care as part of the value, not a burden: cared for this way, the blanket outlives its owner — which is what the price and the lifetime mending are really about.$sop$, 14)
+on conflict (slug) do nothing;
 do $seed$
 begin
   if not exists (select 1 from public.concierge_forms) then

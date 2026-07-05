@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-postsale-reengage";
+const BUILD_TAG = "2026-07-05-tools-registry";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -165,12 +165,18 @@ interface FormDef {
 
 interface GoalDef { slug: string; label: string; description: string; section?: string | null }
 
+// Admin overrides for the model-callable tools (concierge_tools table). A tool
+// absent from this table runs with its built-in default (enabled, code default
+// description); a row can disable it or override the model-facing description.
+interface ToolReg { name: string; enabled: boolean; description: string | null }
+
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
   kbText: string | null; // enabled concierge_kb rows; null -> KB_MARKDOWN fallback
   sopText: string | null; // enabled concierge_sops rows; null -> none
   forms: FormDef[]; // enabled concierge_forms rows
   goals: GoalDef[]; // enabled concierge_goals rows
+  tools: ToolReg[]; // concierge_tools overrides (may be empty -> all defaults)
   at: number; // Date.now() of the read; refreshed after CACHE_TTL_MS
 }
 
@@ -179,7 +185,7 @@ let dataCache: ConciergeData | null = null;
 
 async function loadConciergeData(): Promise<ConciergeData> {
   if (dataCache && Date.now() - dataCache.at < CACHE_TTL_MS) return dataCache;
-  const [cfgRows, kbRows, sopRows, formRows, goalRows] = await Promise.all([
+  const [cfgRows, kbRows, sopRows, formRows, goalRows, toolRows] = await Promise.all([
     pgSelect<{ key: string; value: unknown }>("concierge_config?select=key,value"),
     pgSelect<{ title: string; content_md: string }>(
       "concierge_kb?select=title,content_md&enabled=is.true&order=sort_order.asc",
@@ -193,6 +199,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
     pgSelect<GoalDef>(
       "concierge_goals?select=slug,label,description,section&enabled=is.true&order=sort_order.asc",
     ),
+    pgSelect<ToolReg>("concierge_tools?select=name,enabled,description"),
   ]);
   dataCache = {
     config: cfgRows && cfgRows.length > 0
@@ -206,6 +213,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
       : null,
     forms: formRows ?? [],
     goals: goalRows ?? [],
+    tools: toolRows ?? [],
     at: Date.now(),
   };
   return dataCache;
@@ -624,7 +632,140 @@ const REGISTER_TOOLS: any[] = [
       required: ["email"],
     },
   },
+  {
+    name: "resend_confirmation",
+    description:
+      "Re-send a transactional email the owner already should have — the order " +
+      "confirmation, the shipping note, or the cancellation note — to their email on " +
+      "file. Use when a patron says they didn't receive it or want another copy. " +
+      "Pick 'kind' from what the order actually is: 'confirmation' for a placed order, " +
+      "'shipping' only once it has shipped, 'cancellation' only if it was cancelled. " +
+      "Nothing is charged; this only re-sends an existing note.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+        kind: {
+          type: "string", enum: ["confirmation", "shipping", "cancellation"],
+          description: "Which note to re-send.",
+        },
+      },
+      required: ["serial", "kind"],
+    },
+  },
+  {
+    name: "track_shipment",
+    description:
+      "Look up where one of the owner's orders stands: its status and, once it has " +
+      "shipped, the tracking number. Read-only. Call this before answering 'where is my " +
+      "blanket' rather than guessing — it reads the live register.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+      },
+      required: ["serial"],
+    },
+  },
+  {
+    name: "get_care_guide",
+    description:
+      "Give the owner the care instructions for their blanket, tailored to its cloth " +
+      "(colorway). Read-only — use it when they ask how to wash, store, air, or look after " +
+      "the wool. If they have no order, you may still explain general care from the KB.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+      },
+      required: ["serial"],
+    },
+  },
+  {
+    name: "update_gift_details",
+    description:
+      "Change the gift recipient's name on one of the owner's gift orders — the name that " +
+      "goes on the enclosed card. Allowed only before the order ships, and only on orders " +
+      "marked as a gift. Confirm the exact spelling with the owner before calling. This does " +
+      "NOT change the shipping address (that goes through the address-change form).",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+        recipient_name: {
+          type: "string",
+          description: "The gift recipient's name for the card (1–80 characters).",
+        },
+      },
+      required: ["serial", "recipient_name"],
+    },
+  },
+  {
+    name: "request_mending",
+    description:
+      "Log a mending / repair request for one of the owner's blankets — a pull, a loose " +
+      "bind, a moth nibble, anything the mill should look at. Records the request and the " +
+      "owner's description so the workshop can follow up; confirm warmly that it's noted. " +
+      "This opens a request only — it does not schedule or promise a specific repair.",
+    input_schema: {
+      type: "object",
+      properties: {
+        serial: { type: "integer", description: "The order's serial number (Nº)." },
+        note: {
+          type: "string",
+          description: "The owner's description of what needs mending (a sentence or two).",
+        },
+      },
+      required: ["serial", "note"],
+    },
+  },
 ];
+
+// Core tools the concierge leans on for basic competence. They can still be
+// disabled from the admin, but the manifest flags them so the UI can warn.
+const CORE_TOOLS = new Set(["get_my_orders", "recall_context"]);
+
+/** The tools array sent to the model, with admin overrides applied:
+ *  disabled tools are dropped; a non-empty description override replaces the
+ *  built-in copy. An empty/absent registry leaves every tool at its default. */
+// deno-lint-ignore no-explicit-any
+function buildToolsForModel(data: ConciergeData): any[] {
+  const reg = new Map((data.tools ?? []).map((t) => [t.name, t]));
+  // deno-lint-ignore no-explicit-any
+  const out: any[] = [];
+  for (const tool of REGISTER_TOOLS) {
+    const o = reg.get(tool.name);
+    if (o && o.enabled === false) continue;
+    if (o && typeof o.description === "string" && o.description.trim().length > 0) {
+      out.push({ ...tool, description: o.description });
+    } else {
+      out.push(tool);
+    }
+  }
+  return out;
+}
+
+/** The admin-facing tools manifest: every built-in tool, its current enabled
+ *  state, the effective (possibly overridden) description, and whether the
+ *  description is a custom override or the code default. */
+function toolsManifest(data: ConciergeData): Array<{
+  name: string; enabled: boolean; core: boolean;
+  description: string; default_description: string; overridden: boolean;
+}> {
+  const reg = new Map((data.tools ?? []).map((t) => [t.name, t]));
+  return REGISTER_TOOLS.map((tool) => {
+    const o = reg.get(tool.name);
+    const overridden = !!(o && typeof o.description === "string" && o.description.trim().length > 0);
+    return {
+      name: tool.name,
+      enabled: !(o && o.enabled === false),
+      core: CORE_TOOLS.has(tool.name),
+      description: overridden ? (o!.description as string) : tool.description,
+      default_description: tool.description,
+      overridden,
+    };
+  });
+}
 
 /** Writes one row to the concierge_actions audit log. Never throws. */
 async function logAction(
@@ -737,7 +878,7 @@ async function runRegisterTool(
 
   // Ownership check first: the order must exist AND belong to this owner.
   const rows = await pgSelect<OrderRow>(
-    `orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at` +
+    `orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift` +
       `&serial=eq.${serial}&${ownershipFilter(customer)}&limit=1`,
   );
   if (rows === null) return "ERROR: the register is unreachable right now.";
@@ -821,6 +962,131 @@ async function runRegisterTool(
       return `Done. Nº ${serial} is cancelled.`;
     }
     return `ERROR: the register declined — ${result}.`;
+  }
+
+  if (name === "track_shipment") {
+    await logAction(cid, customer, "track_shipment", serial, null, `status ${order.status}`);
+    const status = order.status ?? "unknown";
+    if (["shipped", "delivered"].includes(status)) {
+      return JSON.stringify({
+        serial, status,
+        tracking: order.tracking ?? null,
+        note: order.tracking
+          ? `Nº ${serial} is ${status}. Tracking: ${order.tracking}.`
+          : `Nº ${serial} is ${status}, but no tracking number is on the register yet.`,
+      });
+    }
+    const stage = status === "placed" ? "entered and queued to weave"
+      : status === "weaving" ? "on the loom"
+      : status === "finishing" ? "off the loom, being finished and sealed"
+      : status === "cancelled" ? "struck from the register (cancelled)"
+      : status === "returned" ? "returned"
+      : status;
+    return JSON.stringify({
+      serial, status, tracking: null,
+      note: `Nº ${serial} has not shipped yet — it is ${stage}. Woven to order, 3–5 weeks door to door. Tracking appears here the moment it leaves the mill.`,
+    });
+  }
+
+  if (name === "get_care_guide") {
+    await logAction(cid, customer, "get_care_guide", serial, null, `colorway ${order.colorway}`);
+    const cw = order.colorway ?? "";
+    const clothName = EMAIL_COLORWAY[cw] ?? "your cloth";
+    const clothNote = cw === "ungefaerbt"
+      ? "Ungefärbt is undyed wool in its own colour, so it wears its natural lanolin longest — air it and it freshens itself; it needs washing least often of the three."
+      : cw === "loden"
+      ? "Loden is a dense, fulled cloth — it sheds light rain and resists pilling; a firm shake and an airing is usually all it wants."
+      : cw === "graphit"
+      ? "Graphit is piece-dyed deep grey — keep strong direct sun off it over years so the depth of colour holds."
+      : "";
+    return JSON.stringify({
+      serial, colorway: clothName,
+      care: [
+        "Air, don't wash. Wool is self-cleaning — a few hours over a rail outdoors lifts most odours and creases.",
+        "Spot-clean spills at once with cool water and a little wool-safe soap; blot, never rub.",
+        "When it truly needs it: hand-wash cool with a wool detergent, no wringing. Press water out flat, dry flat away from heat. Never tumble-dry.",
+        "Store it folded and breathing — a cotton bag, never plastic — with cedar or lavender against moth. Airing a few times a year is the best moth defence.",
+        "A gentle de-pill with a wool comb keeps the face clean; a cool iron under a damp cloth relaxes a hard crease.",
+        clothNote,
+      ].filter(Boolean),
+    });
+  }
+
+  if (name === "update_gift_details") {
+    if (!order.is_gift) {
+      return `ERROR: Nº ${serial} isn't marked as a gift, so there's no recipient card to name. ` +
+        "If it should be a gift, that's set when the order is placed.";
+    }
+    if (!MUTABLE_STATUSES.includes(order.status ?? "")) {
+      return `ERROR: Nº ${serial} is '${order.status}' — the card is already enclosed. ` +
+        "Gift-name changes are possible only before shipment.";
+    }
+    const rn = String(input.recipient_name ?? "").trim();
+    if (rn.length < 1 || rn.length > 80) return "ERROR: the recipient's name must be 1–80 characters.";
+    const updated = await pgPatch<OrderRow>(
+      `orders?serial=eq.${serial}&${ownershipFilter(customer)}`,
+      { recipient_name: rn },
+    );
+    if (!updated || updated.length === 0) return "ERROR: the register did not accept the change.";
+    await logAction(cid, customer, "update_gift_details", serial, { recipient_name: rn }, "gift name updated");
+    return `Recorded. The card on Nº ${serial} now reads for ${rn}.`;
+  }
+
+  if (name === "request_mending") {
+    const note = typeof input.note === "string" ? input.note.trim().slice(0, 500) : "";
+    if (note.length < 4) return "ERROR: a mending request needs a short description of what's wrong.";
+    const row = await pgInsert("concierge_actions", {
+      conversation_id: cid, user_id: customer.id, email: customer.email,
+      action: "request_mending", serial, payload: { note },
+      result: "mending requested",
+    });
+    if (!row) return "ERROR: the workshop log is unreachable right now — ask them to try again shortly.";
+    return `Noted — a mending request for Nº ${serial} is logged with the workshop: "${note}". ` +
+      "Someone will follow up by email. Wool is meant to be mended, not discarded — this is exactly what the mill is for.";
+  }
+
+  if (name === "resend_confirmation") {
+    const KIND_MAP: Record<string, "placed" | "shipped" | "cancelled"> = {
+      confirmation: "placed", shipping: "shipped", cancellation: "cancelled",
+    };
+    const rawKind = String(input.kind ?? "").toLowerCase();
+    const mapped = KIND_MAP[rawKind];
+    if (!mapped) return "ERROR: kind must be confirmation, shipping, or cancellation.";
+    const st = order.status ?? "";
+    if (mapped === "shipped" && !["shipped", "delivered"].includes(st)) {
+      return `ERROR: Nº ${serial} hasn't shipped yet (it's '${st}'), so there's no shipping note to re-send. ` +
+        "Offer the order confirmation instead, or track the shipment.";
+    }
+    if (mapped === "cancelled" && !["cancelled", "returned"].includes(st)) {
+      return `ERROR: Nº ${serial} is '${st}', not cancelled — a cancellation note wouldn't apply.`;
+    }
+    if (!SUPABASE_URL || !SERVICE_KEY) return "ERROR: the mail service is unreachable right now.";
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/commission?custresend=1`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "Authorization": `Bearer ${SERVICE_KEY}`,
+        },
+        body: JSON.stringify({ serial, kind: mapped }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({} as Record<string, unknown>));
+        const em = typeof (detail as { error?: unknown }).error === "string"
+          ? (detail as { error: string }).error : "the mail service declined";
+        return `ERROR: ${em}`;
+      }
+      const okBody = await res.json().catch(() => ({} as Record<string, unknown>));
+      const to = typeof (okBody as { to?: unknown }).to === "string"
+        ? (okBody as { to: string }).to : (customer.email ?? "your email on file");
+      await logAction(cid, customer, "resend_confirmation", serial, { kind: rawKind }, `re-sent ${mapped}`);
+      const label = mapped === "placed" ? "order confirmation"
+        : mapped === "shipped" ? "shipping note" : "cancellation note";
+      return `Done — the ${label} for Nº ${serial} is on its way to ${to} again. ` +
+        "Give it a minute, and do check the spam folder if it's shy.";
+    } catch {
+      return "ERROR: the mail service didn't respond — ask them to try again in a moment.";
+    }
   }
 
   return `ERROR: unknown tool '${name}'.`;
@@ -1375,6 +1641,17 @@ async function handleConfigGet(req: Request): Promise<Response> {
   });
 }
 
+// ── GET ?tools=1 — the built-in tools manifest for the admin Tools tab ────────
+// Public read (the descriptions are the model-facing copy, not customer data).
+// The admin UI needs the full built-in list (which only the server knows from
+// REGISTER_TOOLS) plus the current enabled/override state, so it can render the
+// enable/disable toggles and description editors. Writes go straight to the
+// concierge_tools table under RLS, like the other config tables.
+async function handleToolsGet(req: Request): Promise<Response> {
+  const data = await loadConciergeData();
+  return jsonResponse(req, 200, { tools: toolsManifest(data) });
+}
+
 // ── GET ?selftest=1 — "what does the concierge actually know about me?" ───────
 // Call it with the same Authorization the widget sends. It reports whether the
 // caller is recognized as signed in, whether the newer tables/columns exist in
@@ -1678,6 +1955,7 @@ async function handleChatPost(req: Request): Promise<Response> {
 
   // ── Signed-in path: agentic tool loop (non-streaming turns, chunked out) ──
   if (customer) {
+    const modelTools = buildToolsForModel(data);
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const send = (obj: unknown) => {
@@ -1699,7 +1977,7 @@ async function handleChatPost(req: Request): Promise<Response> {
               },
               body: JSON.stringify({
                 model, max_tokens: maxTokens, system,
-                messages: convo, tools: REGISTER_TOOLS,
+                messages: convo, tools: modelTools,
               }),
             });
             if (!res.ok) {
@@ -1723,11 +2001,20 @@ async function handleChatPost(req: Request): Promise<Response> {
             const results: any[] = [];
             for (const block of blocks) {
               if (block.type !== "tool_use") continue;
-              const label = block.name === "get_my_orders"
-                ? "Reading the register…"
-                : block.name === "update_shipping_address"
-                ? "Amending the register…"
-                : "Striking the entry…";
+              const label = ({
+                get_my_orders: "Reading the register…",
+                recall_context: "Turning back the pages…",
+                track_shipment: "Checking where it stands…",
+                get_care_guide: "Finding the care notes…",
+                resend_confirmation: "Sending it along again…",
+                request_mending: "Logging it with the workshop…",
+                update_gift_details: "Naming the card…",
+                update_colorway: "Amending the register…",
+                update_shipping_address: "Amending the register…",
+                join_waitlist: "Adding to the waitlist…",
+                remember_customer: "Noting the client book…",
+                cancel_order: "Striking the entry…",
+              } as Record<string, string>)[block.name] ?? "Consulting the register…";
               send({ s: label });
               const out = await runRegisterTool(
                 block.name, block.input ?? {}, customer, cid,
@@ -2185,6 +2472,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("site")) {
     return await handleSiteGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("tools")) {
+    return await handleToolsGet(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("selftest")) {
     return await handleSelfTest(req);
