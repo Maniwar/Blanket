@@ -6,8 +6,10 @@ this review; re-check as it changes.
 
 **Short version:** the *shape* is sound — static front end on a CDN, stateless
 edge functions, Postgres with RLS as the boundary. Nothing here needs a rewrite
-to scale. But a handful of specific things are built for a demo's volume and
-would bite at scale. They're ranked below, worst first.
+to scale. A handful of things were built for a demo's volume; the blockers below
+(#1–#4) have now been addressed — shared rate limiting, bounded-growth retention,
+indexed admin search, and estimate-based dashboard counts. The remaining items
+(#5–#8) are "plan for them," not blockers. Ranked below, worst first.
 
 ---
 
@@ -39,13 +41,22 @@ outage never blocks legitimate traffic. The table self-prunes to ~one row per
 active key. *(Migration `0025` / `setup.sql`.)* A whole-table sweep of stale
 windows (pg_cron) is the optional belt-and-suspenders for very high key churn.
 
-### 2. Unbounded high-write tables — `concierge_messages`, `concierge_actions`, `order_events`
-Every chat turn writes a message row; every tool call writes an action row.
-At millions of users these become billions of rows in a single table — heavy
-autovacuum, bloated indexes, slow range scans.
-**Fix:** partition by time (monthly range partitions) and add a retention/archival
-policy (drop or cold-store partitions older than N months). Decide a retention
-window per table (messages can be shorter than orders).
+### 2. Unbounded high-write tables — ✅ bounded (retention); partitioning is the next step
+Every chat turn writes a message row; every tool call writes an action row —
+without a policy these grow to billions of rows.
+*Now:* a `prune_high_write(days)` function (migration `0030` / `setup.sql`)
+enforces a retention window — deleting old conversations cascades to their
+messages and feedback; `concierge_actions`, `email_log`, and stale `rate_limits`
+prune by their own timestamps; `order_events` is left (bounded by the edition's
+order count). Schedule it nightly with pg_cron (snippet in the file) or any cron.
+This keeps the tables bounded so autovacuum, indexes, and range scans stay
+healthy.
+*Further, at true web-scale:* convert the high-write tables to **monthly range
+partitions** so retention becomes an instant `drop partition` (no delete bloat)
+and scans prune by partition. That's a heavier, data-migrating change best done
+against the real table sizes, so it's deliberately left as the next step rather
+than force-converting a live table here — retention delivers the bounded-growth
+win today.
 
 ### 3. Admin panel can't search — only shows the latest slice
 Every admin loader fetches the most recent N with **no filtering and no real

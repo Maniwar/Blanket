@@ -539,6 +539,33 @@ create policy "admin read email_log" on public.email_log
   using (public.is_concierge_admin());
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3f. RETENTION — bound the high-write tables' growth (SCALING.md #2). Deleting
+--     old conversations cascades to their messages/feedback; actions, email_log,
+--     and stale rate-limit rows prune by their own timestamps. Schedule with
+--     pg_cron (see the commented example) or a scheduled job.
+-- ─────────────────────────────────────────────────────────────────────────────
+create or replace function public.prune_high_write(p_days int default 180)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  cutoff   timestamptz := now() - make_interval(days => greatest(coalesce(p_days, 180), 1));
+  c_convos bigint; c_actions bigint; c_email bigint; c_rate bigint;
+begin
+  delete from public.concierge_conversations where created_at < cutoff;
+  get diagnostics c_convos = row_count;
+  delete from public.concierge_actions where created_at < cutoff;
+  get diagnostics c_actions = row_count;
+  delete from public.email_log where created_at < cutoff;
+  get diagnostics c_email = row_count;
+  delete from public.rate_limits where window_start < now() - interval '2 hours';
+  get diagnostics c_rate = row_count;
+  return jsonb_build_object('cutoff', cutoff, 'conversations_deleted', c_convos,
+    'actions_deleted', c_actions, 'email_log_deleted', c_email, 'rate_limits_deleted', c_rate);
+end $$;
+revoke execute on function public.prune_high_write(int) from public, anon, authenticated;
+-- Nightly with pg_cron (enable the extension first), uncomment:
+--   select cron.schedule('prune-high-write', '0 3 * * *', $$select public.prune_high_write(180)$$);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 4. SEED DATA (admins, config, KB, SOPs, forms, goals) — safe to re-run
 -- ─────────────────────────────────────────────────────────────────────────────
 
