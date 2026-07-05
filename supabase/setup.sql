@@ -286,8 +286,13 @@ begin
   returning h.serial into v_serial;
   if v_serial is not null then return query select v_serial, v_exp; return; end if;
 
-  select next_serial, run_size into v_serial, v_run from public.allocation_counter where id = 1 for update;
-  if v_serial is null or v_serial > v_run then return; end if;
+  begin
+    select next_serial, run_size into v_serial, v_run from public.allocation_counter where id = 1 for update;
+  exception when undefined_column then
+    select next_serial into v_serial from public.allocation_counter where id = 1 for update;
+    v_run := 15000;
+  end;
+  if v_serial is null or v_serial > coalesce(v_run, 15000) then return; end if;
   update public.allocation_counter set next_serial = v_serial + 1 where id = 1;
   insert into public.serial_holds (serial, session_key, expires_at) values (v_serial, p_session, v_exp);
   return query select v_serial, v_exp;
@@ -318,8 +323,15 @@ begin
     returning h.serial into v_serial;
   end if;
   if v_serial is null then
-    select next_serial, run_size into v_serial, v_run from public.allocation_counter where id = 1 for update;
-    if v_serial is null or v_serial > v_run then return -1; end if;
+    -- Read the run size; self-heal if the run_size column hasn't been added yet
+    -- (schema drift) so placement never hard-fails on a slightly-behind DB.
+    begin
+      select next_serial, run_size into v_serial, v_run from public.allocation_counter where id = 1 for update;
+    exception when undefined_column then
+      select next_serial into v_serial from public.allocation_counter where id = 1 for update;
+      v_run := 15000;
+    end;
+    if v_serial is null or v_serial > coalesce(v_run, 15000) then return -1; end if;
     update public.allocation_counter set next_serial = v_serial + 1 where id = 1;
   end if;
   insert into public.orders (user_id, email, name, address, address2, city, state, zip, colorway,
