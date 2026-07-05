@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-goal-multisection";
+const BUILD_TAG = "2026-07-05-pills-narrowing";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1396,7 +1396,13 @@ function buildSystemPrompt(
       "in substance — never claim a change happened unless the tool confirmed it.\n" +
       "- This pattern governs EVERY register action (status detail, cancellation, address change, " +
       "anything that modifies an order): when more than one order could be meant, FIRST list the " +
-      "eligible orders, then offer one {{reply:...}} pill per order, each on its own line, at most 6. " +
+      "eligible orders, then give tappable {{reply:...}} pills so they never have to type a number " +
+      "back. If SIX OR FEWER are eligible, offer one pill per order, each on its own line. If there " +
+      "are MORE than six, do NOT fall back to a prose-only list with no pills — that strands them. " +
+      "Instead offer a small set of NARROWING pills first: by cloth when the clothes differ " +
+      "({{reply:Show the Graphit}} / {{reply:Show the Loden}} / {{reply:Show the Ungefärbt}}), or the " +
+      "most recent few — then, once they narrow, give one pill per order within that group. However " +
+      "long the list, always leave at least one tappable way forward. " +
       "For any change, after they pick, restate the consequence in one line and " +
       "offer exactly two pills — {{reply:Yes, cancel Nº X}} / {{reply:Keep Nº X}} (or the matching " +
       "pair for the action). Call the tool only after the explicit Yes. Never make the owner type " +
