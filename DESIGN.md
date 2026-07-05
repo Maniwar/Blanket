@@ -291,6 +291,10 @@ signed-in patrons are in §2.2; the merchant's control over all of this is §2.4
 
 ### 2.8 The selling engine — moves, assertiveness, and stages
 
+*The behavioral guardrails that govern the concierge — reading the register
+before it answers, always leaving a tappable path, confirming before writes,
+never free-typing an address — are collected in [`BEHAVIOR.md`](BEHAVIOR.md).*
+
 The concierge is a *seller*, not a Q&A bot. Three mechanisms keep it driving
 rather than merely reacting:
 
