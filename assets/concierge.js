@@ -840,6 +840,13 @@
      invoking them — function-call XML (<function_calls><invoke …>…) or a
      {{action:tool}} token. None of it is ever meant for the shopper's eyes;
      scrub it before rendering, whatever path it arrived by. */
+  function isLegitToken(m) {
+    var low = m.toLowerCase();
+    /* the real vocabulary the block renderer turns into UI — keep these */
+    return low.indexOf('{{img:') === 0 || low.indexOf('{{reply:') === 0 ||
+      low.indexOf('{{form:') === 0 || low === '{{action:commission}}' ||
+      low === '{{action:signin}}';
+  }
   function stripPlumbing(t) {
     if (typeof t !== 'string' || t.indexOf('<function_calls') < 0 &&
         t.indexOf('<invoke') < 0 && t.indexOf('{{') < 0) { return t; }
@@ -847,7 +854,12 @@
     /* an unclosed block still streaming in: drop from the marker to the end */
     t = t.replace(/<function_calls>[\s\S]*$/i, '');
     t = t.replace(/<\/?(function_calls|invoke|parameter)(\s[^>]*)?>/gi, '');
-    t = t.replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, '');
+    /* strip ONLY plumbing tokens ({{action:recall_context}}, {{tool:…}}) —
+       never the legit img/reply/form/commission/signin tokens the renderer
+       needs to build images, pills, buttons, and forms */
+    t = t.replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, function (m) {
+      return isLegitToken(m) ? m : '';
+    });
     return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
   }
 

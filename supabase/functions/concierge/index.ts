@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-shared-ratelimit";
+const BUILD_TAG = "2026-07-05-keep-media-tokens";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1141,7 +1141,16 @@ function stripPlumbing(t: string): string {
     .replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "")
     .replace(/<function_calls>[\s\S]*$/i, "")
     .replace(/<\/?(function_calls|invoke|parameter)(\s[^>]*)?>/gi, "")
-    .replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, "")
+    // strip ONLY plumbing tokens — keep the legit img/reply/form/commission/
+    // signin vocabulary the client turns into images, pills, buttons, forms
+    .replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, (m) => {
+      const low = m.toLowerCase();
+      return (low.startsWith("{{img:") || low.startsWith("{{reply:") ||
+          low.startsWith("{{form:") || low === "{{action:commission}}" ||
+          low === "{{action:signin}}")
+        ? m
+        : "";
+    })
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
