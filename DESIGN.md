@@ -408,7 +408,12 @@ you receive, idle holds expire, and a cancelled number returns to the edition.
 - `serial_holds` reserves a number for a visit with an expiry; `hold_serial()`
   hands out the **lowest free** number using `FOR UPDATE SKIP LOCKED`, so
   concurrent visitors never block each other or collide.
-- `commission_order()` consumes the visit's hold atomically at placement.
+- `commission_order()` consumes the visit's hold atomically at placement. It is
+  **collision-tolerant**: `orders.serial` is `UNIQUE`, so if the chosen number is
+  somehow already on the register (counter/hold drift — e.g. after heavy testing or
+  a reused hold), it catches the `unique_violation` and advances to the next
+  genuinely-free number (`max(serial)+1`, counter kept ahead) rather than failing
+  the placement. A placement never 502s just because a number was taken.
 - On cancel, `cancel_order_return()` moves `serial → cancelled_serial`, nulls the
   live `serial` (a partial-unique column ignores nulls, so the number frees), and
   re-inserts it as an already-lapsed hold so it's reclaimable — **lowest-first**,
