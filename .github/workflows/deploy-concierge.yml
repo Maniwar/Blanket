@@ -12,6 +12,7 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
     steps:
@@ -35,6 +36,18 @@ jobs:
         run: |
           supabase db push -p "$SUPABASE_DB_PASSWORD" \
             || echo "::warning::db push skipped — schema is managed via supabase/setup.sql; run it in the SQL editor for schema changes."
+
+      # Canonical schema: apply the idempotent supabase/setup.sql on every deploy.
+      # Requires a SUPABASE_DB_URL secret — the Session pooler connection string
+      # (IPv4, so it works from GitHub runners; the direct db.<ref> host is
+      # IPv6-only). Non-blocking so a bad URL never halts the function deploy;
+      # ON_ERROR_STOP surfaces any real SQL error in the log.
+      - name: Apply setup.sql (canonical schema)
+        if: env.SUPABASE_DB_URL != ''
+        continue-on-error: true
+        run: |
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/setup.sql
 
       - name: Set allowed origins
         run: supabase secrets set ALLOWED_ORIGINS="https://maniwar.github.io"
