@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-no-xml-toolcalls";
+const BUILD_TAG = "2026-07-05-openers-buffered";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1412,8 +1412,11 @@ async function handleChatPost(req: Request): Promise<Response> {
     }
   }
 
-  // ── Nudge path: the model decides to speak or to give space (hold) ──
-  if (isNudge) {
+  // ── Proactive path (nudge OR opener): the bot speaks on its own, with no
+  //    tools. It buffers the full reply, scrubs any tool-call plumbing, and may
+  //    give space (hold). Openers route here too — signed-in or not — so a
+  //    tools-less opener can never stream raw tool-call text to anyone. ──
+  if (isNudge || isOpener) {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const send = (obj: unknown) => {
