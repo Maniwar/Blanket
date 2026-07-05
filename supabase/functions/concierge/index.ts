@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-journey-goals";
+const BUILD_TAG = "2026-07-05-site-cms";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -2060,6 +2060,27 @@ async function handleFormPost(req: Request): Promise<Response> {
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
+// ── GET ?site=1 — storefront CMS content for the page hydrator ────────────────
+// Public read of site_content (service role bypasses RLS; the copy is public
+// anyway). Returns { slots: { slug: {value, alt, kind} } }; the page overrides
+// only the slots present here, falling back to its hardcoded defaults.
+async function handleSiteGet(req: Request): Promise<Response> {
+  try {
+    const rows = await pgSelect<{ slug: string; kind: string | null; value: string | null; alt: string | null }>(
+      "site_content?select=slug,kind,value,alt",
+    );
+    const slots: Record<string, { value: string | null; alt: string | null; kind: string }> = {};
+    for (const r of rows ?? []) {
+      if (r && typeof r.slug === "string" && r.slug) {
+        slots[r.slug] = { value: r.value ?? null, alt: r.alt ?? null, kind: r.kind ?? "text" };
+      }
+    }
+    return jsonResponse(req, 200, { slots });
+  } catch {
+    return jsonResponse(req, 200, { slots: {} });
+  }
+}
+
 // ── POST ?reengage=1 — a goal + journey aware line for the closed-panel bubble ─
 // The client shows this instead of a hardcoded line. Reads the freshest
 // goal_status, picks the open goal that fits the section the visitor is reading,
@@ -2145,6 +2166,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   if (req.method === "GET" && new URL(req.url).searchParams.get("config")) {
     return await handleConfigGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("site")) {
+    return await handleSiteGet(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("selftest")) {
     return await handleSelfTest(req);

@@ -1604,6 +1604,61 @@ window.FEIER_CONCIERGE_CONFIG = {
   supabaseAnonKey: 'sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy'
 };
 </script>
+
+<!-- Storefront CMS hydrator: the HTML holds the defaults (instant paint + SEO);
+     admin overrides in site_content swap in via ?site=1. Cached in localStorage
+     so repeat visits apply overrides with no flash. Plain text only. -->
+<script>
+(function () {
+  var cfg = window.FEIER_CONCIERGE_CONFIG || {};
+  var base = cfg.endpoint || '';
+  if (!base) { return; }                 /* demo mode — keep hardcoded defaults */
+  var CACHE_KEY = 'feier_site_v1';
+
+  function setMeta(attr, name, val) {
+    if (typeof val !== 'string' || !val) { return; }
+    var sel = 'meta[' + attr + '="' + name + '"]';
+    var m = document.head.querySelector(sel);
+    if (!m) { m = document.createElement('meta'); m.setAttribute(attr, name); document.head.appendChild(m); }
+    m.setAttribute('content', val);
+  }
+  function applySlots(slots) {
+    if (!slots || typeof slots !== 'object') { return; }
+    var nodes = document.querySelectorAll('[data-cms]'), i, el, key, s;
+    for (i = 0; i < nodes.length; i++) {
+      el = nodes[i]; key = el.getAttribute('data-cms'); s = slots[key];
+      if (!s) { continue; }
+      if (el.tagName === 'IMG') {
+        if (typeof s.value === 'string' && s.value) { el.setAttribute('src', s.value); }
+        if (typeof s.alt === 'string' && s.alt) { el.setAttribute('alt', s.alt); }
+      } else if (typeof s.value === 'string' && s.value) {
+        el.textContent = s.value;        /* plain text — no HTML injection */
+      }
+    }
+    if (slots['seo.title'] && slots['seo.title'].value) { document.title = slots['seo.title'].value; }
+    if (slots['seo.description']) { setMeta('name', 'description', slots['seo.description'].value); }
+    if (slots['seo.og_title']) { setMeta('property', 'og:title', slots['seo.og_title'].value); }
+    if (slots['seo.og_description']) { setMeta('property', 'og:description', slots['seo.og_description'].value); }
+    if (slots['seo.og_image']) { setMeta('property', 'og:image', slots['seo.og_image'].value); }
+  }
+
+  try {
+    var cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (cached && cached.slots) { applySlots(cached.slots); }   /* no flash on repeat visits */
+  } catch (e) { /* ignore */ }
+
+  try {
+    fetch(base + (base.indexOf('?') === -1 ? '?site=1' : '&site=1'), { method: 'GET' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j && j.slots) {
+          applySlots(j.slots);
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify({ slots: j.slots })); } catch (e2) { /* ignore */ }
+        }
+      })['catch'](function () { /* keep defaults */ });
+  } catch (e) { /* ignore */ }
+})();
+</script>
 <script defer src="assets/concierge-kb.js?v=8"></script>
 <script defer src="assets/concierge.js?v=37"></script>
 <script defer src="assets/checkout.js?v=11"></script>

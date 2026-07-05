@@ -450,6 +450,7 @@
     <button class="tab" data-tab="cache" role="tab">Cache</button>
     <button class="tab" data-tab="customers" role="tab">Customers</button>
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
+    <button class="tab" data-tab="website" role="tab">Website</button>
   </nav>
 
   <main>
@@ -899,6 +900,21 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       </div>
     </div>
 
+    <!-- ============ TAB 7 : WEBSITE (storefront CMS) ============ -->
+    <div id="panel-website" class="panel">
+      <div class="panel-head">
+        <span class="micro">Storefront copy &amp; SEO</span>
+        <h2>Website</h2>
+      </div>
+      <p class="note" style="max-width:680px;">Edit the storefront's copy and page metadata without a deploy. A blank field uses the page's built-in default; type to override it. Changes are live within a minute (copy/SEO update in the browser instantly; social link previews update on the next site publish). Plain text only — no HTML.</p>
+      <div id="site-list"></div>
+      <div class="card-foot" style="margin-top:16px;">
+        <button id="site-save" class="btn primary">Save changes</button>
+        <button id="site-refresh" class="btn">Refresh</button>
+        <span class="micro" id="site-status" style="color:var(--wool-faint);"></span>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1073,6 +1089,7 @@ async function route() {
     loadForms();
     loadGoalDefs();
     loadConversations();
+    loadSite();
   }
 }
 
@@ -1198,6 +1215,8 @@ function wireStatic() {
     withBusy($('save-selling'), saveSelling);
   });
   $('cfg-assert').addEventListener('input', renderAssertLabel);
+  $('site-save').addEventListener('click', function () { withBusy($('site-save'), saveSite); });
+  $('site-refresh').addEventListener('click', function () { withBusy($('site-refresh'), loadSite); });
   $('img-add').addEventListener('click', addImageRow);
   $('save-images').addEventListener('click', function () {
     withBusy($('save-images'), saveImages);
@@ -1290,12 +1309,13 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'website'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
   if (name === 'knowledge') autoGrowAll('#kb-list');
   if (name === 'procedures') autoGrowAll('#sop-list');
   if (name === 'cache') autoGrowAll('#cache-list');
+  if (name === 'website') autoGrowAll('#site-list');
 }
 
 /* ---------------- header pill ---------------- */
@@ -1436,6 +1456,144 @@ async function saveSelling() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save selling style', res.error); return; }
   toast('Selling style saved');
+}
+
+/* ============================================================
+   TAB 7 — WEBSITE (storefront CMS, site_content)
+   ============================================================ */
+function siteItems(prefix, n, hasBody) {
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    out.push({ key: prefix + '.item' + i + '.title', label: i + ' · Title', type: 'text' });
+    if (hasBody) out.push({ key: prefix + '.item' + i + '.body', label: i + ' · Body', type: 'area' });
+  }
+  return out;
+}
+const SITE_SLOTS = [
+  { group: 'SEO & social sharing', items: [
+    { key: 'seo.title', label: 'Browser / SEO title', type: 'text', kind: 'meta' },
+    { key: 'seo.description', label: 'Meta description', type: 'area', kind: 'meta' },
+    { key: 'seo.og_title', label: 'Social title (Open Graph)', type: 'text', kind: 'meta' },
+    { key: 'seo.og_description', label: 'Social description (Open Graph)', type: 'area', kind: 'meta' },
+    { key: 'seo.og_image', label: 'Social image URL (Open Graph)', type: 'text', kind: 'meta' }
+  ] },
+  { group: 'Hero', items: [
+    { key: 'hero.eyebrow', label: 'Eyebrow', type: 'text' },
+    { key: 'hero.subcopy', label: 'Sub-copy (the definition)', type: 'area' },
+    { key: 'hero.cue', label: 'Scroll cue', type: 'text' }
+  ] },
+  { group: 'Why it exists', items: [
+    { key: 'why.eyebrow', label: 'Eyebrow', type: 'text' },
+    { key: 'why.body', label: 'Body', type: 'area' }
+  ] },
+  { group: 'Wool — the five decisions', items: [
+    { key: 'wool.eyebrow', label: 'Eyebrow', type: 'text' },
+    { key: 'wool.headline', label: 'Headline', type: 'area' }
+  ].concat(siteItems('wool', 5, true)) },
+  { group: 'Read the label', items: [
+    { key: 'label.eyebrow', label: 'Eyebrow', type: 'text' },
+    { key: 'label.headline', label: 'Headline', type: 'area' },
+    { key: 'label.lede', label: 'Lede', type: 'area' },
+    { key: 'spec.fiber', label: 'Spec · Fiber', type: 'text' },
+    { key: 'spec.weight', label: 'Spec · Weight', type: 'text' },
+    { key: 'spec.size', label: 'Spec · Size', type: 'text' },
+    { key: 'spec.weave', label: 'Spec · Weave', type: 'text' },
+    { key: 'spec.mill', label: 'Spec · Mill', type: 'text' },
+    { key: 'spec.edition', label: 'Spec · Edition', type: 'text' },
+    { key: 'spec.certified', label: 'Spec · Certified', type: 'text' },
+    { key: 'spec.guarantee', label: 'Spec · Guarantee', type: 'text' },
+    { key: 'spec.care', label: 'Spec · Care', type: 'text' }
+  ] },
+  { group: 'Ritual', items: [
+    { key: 'ritual.eyebrow', label: 'Eyebrow', type: 'text' },
+    { key: 'ritual.headline', label: 'Headline', type: 'area' },
+    { key: 'ritual.line1', label: 'Line 1', type: 'text' },
+    { key: 'ritual.line2', label: 'Line 2', type: 'text' },
+    { key: 'ritual.line3', label: 'Line 3', type: 'text' },
+    { key: 'ritual.line4', label: 'Line 4', type: 'text' }
+  ] },
+  { group: 'Arrival', items: [
+    { key: 'arrival.eyebrow', label: 'Eyebrow', type: 'text' },
+    { key: 'arrival.headline', label: 'Headline', type: 'area' }
+  ].concat(siteItems('arrival', 4, true)).concat([
+    { key: 'arrival.close', label: 'Closing line', type: 'text' }
+  ]) },
+  { group: 'Reserve & footer', items: [
+    { key: 'reserve.cw1.name', label: 'Colorway 1 · name', type: 'text' },
+    { key: 'reserve.cw1.desc', label: 'Colorway 1 · description', type: 'text' },
+    { key: 'reserve.cw2.name', label: 'Colorway 2 · name', type: 'text' },
+    { key: 'reserve.cw2.desc', label: 'Colorway 2 · description', type: 'text' },
+    { key: 'reserve.cw3.name', label: 'Colorway 3 · name', type: 'text' },
+    { key: 'reserve.cw3.desc', label: 'Colorway 3 · description', type: 'text' },
+    { key: 'reserve.price_headline', label: 'Price headline', type: 'text' },
+    { key: 'reserve.terms', label: 'Terms line', type: 'area' },
+    { key: 'reserve.button_waitlist', label: 'Waitlist button', type: 'text' },
+    { key: 'reserve.note', label: 'Footnote (duties & delivery)', type: 'text' },
+    { key: 'footer.disclaimer', label: 'Footer · disclaimer', type: 'text' },
+    { key: 'footer.mill', label: 'Footer · mill line', type: 'text' },
+    { key: 'footer.copyright', label: 'Footer · copyright', type: 'text' }
+  ] }
+];
+
+async function loadSite() {
+  const res = await sb.from('site_content').select('slug,kind,value,alt');
+  if (res.error) { fail('Load website content', res.error); return; }
+  const map = {};
+  (res.data || []).forEach(function (r) { map[r.slug] = r; });
+  state.site = map;
+  renderSite();
+}
+
+function renderSite() {
+  const list = $('site-list');
+  if (!list) return;
+  list.textContent = '';
+  SITE_SLOTS.forEach(function (grp) {
+    const card = el('section', 'card');
+    const head = el('div', 'card-head');
+    head.appendChild(el('h3', null, grp.group));
+    card.appendChild(head);
+    grp.items.forEach(function (it) {
+      const field = el('div', 'field');
+      field.appendChild(el('span', 'micro', it.label + '  ·  ' + it.key));
+      const cur = state.site && state.site[it.key] ? (state.site[it.key].value || '') : '';
+      let input;
+      if (it.type === 'area') { input = el('textarea'); input.rows = 2; input.addEventListener('input', function () { autoGrow(input); }); }
+      else { input = document.createElement('input'); input.type = 'text'; }
+      input.value = cur;
+      input.setAttribute('placeholder', 'Using page default — type to override');
+      input.setAttribute('data-slot', it.key);
+      input.setAttribute('data-kind', it.kind || 'text');
+      field.appendChild(input);
+      card.appendChild(field);
+    });
+    list.appendChild(card);
+  });
+  if ($('panel-website').classList.contains('on')) autoGrowAll('#site-list');
+}
+
+async function saveSite() {
+  const inputs = document.querySelectorAll('#site-list [data-slot]');
+  const upserts = [], deletes = [];
+  inputs.forEach(function (inp) {
+    const slug = inp.getAttribute('data-slot');
+    const kind = inp.getAttribute('data-kind') || 'text';
+    const val = (inp.value || '').trim();
+    const had = state.site && state.site[slug];
+    if (val) { upserts.push({ slug: slug, kind: kind, value: val, updated_at: nowIso() }); }
+    else if (had) { deletes.push(slug); }          /* cleared → revert to page default */
+  });
+  if (upserts.length) {
+    const r = await sb.from('site_content').upsert(upserts, { onConflict: 'slug' });
+    if (r.error) { fail('Save website content', r.error); return; }
+  }
+  if (deletes.length) {
+    const r2 = await sb.from('site_content').delete().in('slug', deletes);
+    if (r2.error) { fail('Reset website content', r2.error); return; }
+  }
+  $('site-status').textContent = 'Saved ' + upserts.length + ' · reset ' + deletes.length + ' · live within a minute';
+  toast('Website content saved');
+  loadSite();
 }
 
 /* ---- Bot images (config key 'images') ---- */
