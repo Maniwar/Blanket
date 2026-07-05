@@ -2,9 +2,24 @@
 
 The concierge doesn't just talk — it can **act** on a signed-in patron's behalf:
 read their orders, change a cloth, cancel, re-send a confirmation, log a mending
-request, and more. Each action is a **tool** the model may call mid-conversation.
-This document covers what the tools are, how they're gated, and how an admin can
-turn them on/off or re-instruct them from the Studio.
+request, and more. This document covers what the tools are, how they're gated, and
+how an admin manages — and **creates** — them from the Studio's **Tools** tab.
+
+## 0. Two kinds of tool
+
+Everything the concierge can *do* is one of two kinds, and they're **added in two
+different ways**:
+
+| | **Model tools** | **Form tools** |
+| --- | --- | --- |
+| What it is | A named capability the model chooses to call mid-conversation. | An in-chat form the concierge hands out; the patron fills it in and it writes to an order. |
+| Lives in | Code (`REGISTER_TOOLS`) + overrides in `concierge_tools`. | Data (`concierge_forms`). |
+| Who invokes it | The model, when it decides. | The patron, by submitting the form the model offered. |
+| **Created by** | **A developer** — it runs real server logic, so it needs a handler. Admins can enable/disable and re-instruct existing ones. | **The admin, in the panel** — pure configuration, no deploy. |
+| Example | `resend_confirmation`, `cancel_order` | the `address-change` form |
+
+Both appear on the **Tools** tab: model tools in the first card, form tools in the
+second. The rest of this doc goes kind by kind.
 
 ---
 
@@ -56,9 +71,9 @@ confirmation/shipping/cancellation notes are built from.
 
 ---
 
-## 3. Admin control — the Tools tab
+## 3. Admin control — the Tools tab (model tools)
 
-**Studio → Tools** lets an admin, without a deploy:
+**Studio → Tools → Model tools** lets an admin, without a deploy:
 
 - **Enable / disable** any tool. A disabled tool is dropped from the list sent to
   the model — the concierge can no longer call it at all. Tools the bot leans on
@@ -95,7 +110,41 @@ RLS (`is_concierge_admin()`).
 
 ---
 
-## 4. Standard operating procedures
+## 4. Creating a form tool (admin, no code)
+
+Form tools are the capability you **add yourself** in the panel. A form tool
+collects labelled fields from the patron in the chat and writes them to one of
+their orders — the safe way to let a patron make a change the model shouldn't
+free-type (an address, a gift name).
+
+**Studio → Tools → Form tools → "Create form tool":**
+
+1. **Slug** — the handle used in the token, e.g. `gift-name`. The concierge emits
+   `{{form:gift-name:14228}}` and the widget renders the form for that order.
+2. **Title** — what the patron sees at the top of the form.
+3. **Write path** — the register action the submission runs. Pick from the offered
+   list; today: `update_shipping_address`, `update_colorway`, `update_gift_details`,
+   `request_mending`. (These are the model tools that take a serial + fields; the
+   server rejects any other target at submit time.) Choosing one loads a starter set
+   of fields you can adjust.
+4. **Fields** — the labelled inputs (JSON): `name` (must match what the write path
+   expects), `label`, `type` (`text` · `state` · `zip`), `required`, `maxlength`. At
+   least one field is required.
+5. Save. It's live within a minute; **disable** it any time to stop the bot offering
+   it (the row stays so you can turn it back on).
+
+Because a form tool routes through an existing write path, it can only do what that
+path already does — you're composing a **new labelled flow** over an existing
+action, not a new action. To collect for something no write path handles yet, a
+developer adds the write path first (§5), then you build the form over it.
+
+Stored in `concierge_forms` (`slug`, `title`, `submit_tool`, `fields`, `enabled`);
+the bot is told which enabled forms exist so it knows it may offer them. Full field
+reference: [`FORMS.md`](FORMS.md).
+
+---
+
+## 5. Standard operating procedures
 
 Tools give the concierge the *ability* to act; **SOPs** (`concierge_sops`, editable
 in Studio → Procedures) tell it *how to behave* around them — confirmation steps,
@@ -106,17 +155,23 @@ choreography; disable/re-instruct the tool to change the capability itself.
 
 ---
 
-## 5. Adding a new tool (developer)
+## 6. Adding a new model tool (developer)
 
-A genuinely new capability still needs code (it must *do* something):
+A genuinely new *model* capability needs code — it must actually *do* something on
+the server, which no amount of configuration can conjure. In
+`supabase/functions/concierge/index.ts`:
 
 1. Add the definition to `REGISTER_TOOLS` (name, description, `input_schema`).
 2. Add its handler in `runRegisterTool` — ownership check, validation, the write,
    `logAction`, and a human-readable result string.
 3. If it should appear as a labelled step in the chat, add a status line in the
    agentic loop's label map.
-4. It shows up in the Tools tab automatically (the manifest is derived from
-   `REGISTER_TOOLS`); add an SOP if it needs house choreography.
+4. It shows up in the Tools tab's **Model tools** card automatically (the manifest
+   is derived from `REGISTER_TOOLS`); add an SOP (Studio → Procedures) if it needs
+   house choreography, and — if it takes a serial + fields — it also becomes an
+   available **write path** an admin can build a form tool over (§4).
 
-The registry table is for **admin overrides**, not for defining new tools — a row
-whose `name` doesn't match a built-in is simply ignored by the merge.
+The `concierge_tools` registry table is for **admin overrides**, not for defining
+new tools — a row whose `name` doesn't match a built-in is simply ignored by the
+merge. So the division is firm: **admins add form tools; developers add model
+tools; everyone manages both from the same Tools tab.**

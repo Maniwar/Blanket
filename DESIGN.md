@@ -132,16 +132,21 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   per chat, which were met — with the evidence — so that I can measure quality.
   *(Procedures tab: admin-editable goals; LLM-judge scoring with cited
   justifications.)*
-- **As the merchant**, I want in-chat forms for structured order changes, so that
-  the concierge can collect exactly what a change needs. *(Procedures tab:
-  admin-defined forms.)*
-- **As the merchant**, I want to see every action the concierge can take on a
-  customer's behalf, turn any of them on or off, and rewrite the instruction that
-  governs when it's used — without a deploy — so that the bot's powers are mine to
-  shape. *(Tools tab: the built-in tool catalog from `?tools=1`, with per-tool
-  enable/disable and description overrides stored in `concierge_tools` and merged
-  over the code defaults before the tool list reaches the model. Full design:*
-  [`TOOLS.md`](TOOLS.md)*.)*
+- **As the merchant**, I want one place that shows everything the concierge can
+  *do*, lets me switch each capability on or off and re-instruct it, **and lets me
+  create new capabilities myself** — so that the bot's powers are mine to shape
+  without waiting on a deploy. *(Tools tab, two kinds:*
+  - ***Model tools** — code-backed actions the model calls (`get_my_orders`,
+    `resend_confirmation`, `cancel_order`, …). Enable/disable + description overrides
+    live in `concierge_tools`, merged over the code defaults (`buildToolsForModel`)
+    before the tool list reaches the model; the catalog comes from `?tools=1`. New
+    model tools need a handler (developer).*
+  - ***Form tools** — in-chat forms the bot hands out (`concierge_forms`), which the
+    merchant **creates, edits, enables, and removes right in the panel**: pick a
+    write path, define the labelled fields, done. This is the no-code way to add a
+    new capability — and the safe way to collect what the model shouldn't free-type
+    (an address).*
+  *Full design:* [`TOOLS.md`](TOOLS.md)*,* [`FORMS.md`](FORMS.md)*.)*
 
 **Running the register (orders, fulfillment, edition)**
 

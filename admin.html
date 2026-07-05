@@ -722,7 +722,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <div class="panel-head">
         <span class="micro">The handbook</span>
         <h2>Procedures</h2>
-        <p class="note">Standard operating procedures — the concierge follows these exactly. It can read the register on its own; for signed-in owners it can also change a shipping address (before shipment) and cancel unshipped orders. Write procedures the way you would brief a careful new hire.</p>
+        <p class="note">Standard operating procedures — the concierge follows these exactly. It can read the register on its own; for signed-in owners it can also change a shipping address (before shipment) and cancel unshipped orders. Write procedures the way you would brief a careful new hire. <em>(The tools it acts with — and the in-chat forms it hands out — now live on the <strong>Tools</strong> tab.)</em></p>
       </div>
       <div class="row-tools">
         <button id="sop-add" class="btn">Add procedure</button>
@@ -741,19 +741,6 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <div id="goals-def-list"></div>
         <div class="card-foot">
           <button id="goals-def-refresh" class="btn">Refresh</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h3>Forms</h3>
-          <span class="micro">structured input the concierge can hand out</span>
-        </div>
-        <p class="note" style="margin-bottom:16px;">Each form renders inside the chat when the concierge emits its <code>{{form:slug:serial}}</code> token — so forms are <strong>order-scoped</strong> (they carry a serial). A form binds to one <strong>submit tool</strong> (a register write path); pick it when adding. Fields are JSON: name, label, type (text · state · zip), required, maxlength, autocomplete — at least one field is required. Submissions run through the same verified, audited path as the concierge's own tools. See <code>FORMS.md</code> for the full guide.</p>
-        <div id="forms-list"></div>
-        <div class="card-foot">
-          <button id="forms-add" class="btn primary">Add form</button>
-          <button id="forms-refresh" class="btn">Refresh</button>
         </div>
       </section>
 
@@ -933,16 +920,38 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
 
     <div id="panel-tools" class="panel">
       <div class="panel-head">
-        <span class="micro">Concierge actions</span>
+        <span class="micro">What the concierge can do</span>
         <h2>Tools</h2>
       </div>
-      <p class="note" style="max-width:680px;">These are the actions the concierge can take on a signed-in patron's behalf — read their orders, re-send a confirmation, log a mending request, change a gift name, and so on. Turn one off to withhold it from the bot entirely, or rewrite its instruction to change when and how the bot uses it. A blank instruction uses the built-in default. Every tool is ownership-scoped and logged; turning a core tool off will noticeably dull the concierge.</p>
-      <div id="tools-list"></div>
-      <div class="card-foot" style="margin-top:16px;">
-        <button id="tools-save" class="btn primary">Save changes</button>
-        <button id="tools-refresh" class="btn">Refresh</button>
-        <span class="micro" id="tools-status" style="color:var(--wool-faint);"></span>
-      </div>
+      <p class="note" style="max-width:720px;">Everything the concierge can <em>do</em> for a signed-in patron lives here. There are two kinds, and they're added in two different ways:</p>
+      <p class="note" style="max-width:720px;">• <strong>Model tools</strong> run code on our side — read the register, cancel, re-send a confirmation, log a mending request. The bot decides when to call them. You control which are switched on and how they're instructed; <strong>creating a brand-new model tool needs a developer</strong> (it has to run real server logic — see <code>TOOLS.md</code>).<br>• <strong>Form tools</strong> hand the patron a little form in the chat and write the result to an order. These are pure configuration — <strong>you can create, edit, and remove them right here</strong>, no deploy.</p>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Model tools</h3>
+          <span class="micro">code-backed actions the bot can call</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">Turn one off to withhold it from the bot entirely, or rewrite its instruction to change when and how the bot uses it. A blank instruction uses the built-in default. Every tool is ownership-scoped and logged; turning a <strong>core</strong> tool off will noticeably dull the concierge. To add a new one, see the developer note in <code>TOOLS.md</code> — a model tool needs a handler in the concierge function.</p>
+        <div id="tools-list"></div>
+        <div class="card-foot" style="margin-top:16px;">
+          <button id="tools-save" class="btn primary">Save changes</button>
+          <button id="tools-refresh" class="btn">Refresh</button>
+          <span class="micro" id="tools-status" style="color:var(--wool-faint);"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Form tools</h3>
+          <span class="micro">capabilities you can create — the bot hands these out in chat</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;"><strong>This is how you give the concierge a new capability without code.</strong> A form tool renders inside the chat when the concierge emits its <code>{{form:slug:serial}}</code> token, so it's <strong>order-scoped</strong> (it carries a serial). Each binds to one <strong>write path</strong> (a register action such as <code>update_shipping_address</code> or <code>update_gift_details</code>) — pick it when you create the tool. <strong>Fields</strong> are the labelled inputs the patron fills in (JSON: name, label, type <code>text · state · zip</code>, required, maxlength); at least one is required. Submissions run through the same verified, audited path as the bot's own tools, and — because the patron types each labelled field — this is the safe way to collect things the model shouldn't free-type (like an address). Turn one off to stop the bot offering it. Full guide: <code>FORMS.md</code>.</p>
+        <div id="forms-list"></div>
+        <div class="card-foot">
+          <button id="forms-add" class="btn primary">Create form tool</button>
+          <button id="forms-refresh" class="btn">Refresh</button>
+        </div>
+      </section>
     </div>
 
   </main>
@@ -1354,7 +1363,7 @@ function activateTab(name) {
   if (name === 'procedures') autoGrowAll('#sop-list');
   if (name === 'cache') autoGrowAll('#cache-list');
   if (name === 'website') autoGrowAll('#site-list');
-  if (name === 'tools') autoGrowAll('#tools-list');
+  if (name === 'tools') { autoGrowAll('#tools-list'); autoGrowAll('#forms-list'); }
 }
 
 /* ---------------- header pill ---------------- */
@@ -2217,6 +2226,20 @@ const SUBMIT_TOOLS = [
     fields: [
       { name: 'colorway', label: 'Colorway — ungefaerbt, loden, or graphit', type: 'text', required: true, maxlength: 12 }
     ]
+  },
+  {
+    tool: 'update_gift_details',
+    label: 'update_gift_details — change the gift recipient card name (gift orders, before shipment)',
+    fields: [
+      { name: 'recipient_name', label: 'Recipient name for the card', type: 'text', required: true, maxlength: 80 }
+    ]
+  },
+  {
+    tool: 'request_mending',
+    label: 'request_mending — log a repair request with the workshop',
+    fields: [
+      { name: 'note', label: 'What needs mending', type: 'text', required: true, maxlength: 500 }
+    ]
   }
 ];
 function submitToolMeta(tool) {
@@ -2232,7 +2255,7 @@ function renderForms() {
   } else {
     state.forms.forEach(function (row) { list.appendChild(formEditor(row)); });
   }
-  if ($('panel-procedures').classList.contains('on')) autoGrowAll('#forms-list');
+  if ($('panel-tools').classList.contains('on')) autoGrowAll('#forms-list');
 }
 
 function addForm() {
