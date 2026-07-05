@@ -2014,24 +2014,38 @@
         ['catch'](function () { cb(reengageLine(postSale)); });
     })['catch'](function () { cb(reengageLine(postSale)); });
   }
-  var REENGAGE_GRACE_MS = 4 * 60000;   /* let congrats + the check-in own the sale moment */
   function purchaseAgeMs() {
     try {
       var lp = JSON.parse(window.localStorage.getItem('feier_last_purchase') || 'null');
       return (lp && lp.ts) ? (Date.now() - lp.ts) : null;
     } catch (e) { return null; }
   }
+  /* Admin-tunable post-sale behaviour (from ?config outreach). */
+  function reengagePostCfg() {
+    var o = orCfg();
+    return {
+      graceMs: (typeof o.reengageGraceMs === 'number' && o.reengageGraceMs >= 0) ? o.reengageGraceMs : 4 * 60000,
+      windowMs: (typeof o.reengagePostSaleWindowMs === 'number' && o.reengagePostSaleWindowMs > 0) ? o.reengagePostSaleWindowMs : 48 * 3600000,
+      enabled: o.reengagePostSaleEnabled !== false   /* default on */
+    };
+  }
   function reengageTick() {
     if (isDemo() || panelOpen || quietMode || streaming || outreachEl || reengageBusy) { return; }
+    var pc = reengagePostCfg();
     var pa = purchaseAgeMs();
-    if (pa !== null && pa < REENGAGE_GRACE_MS) { return; }       /* fresh sale — congrats owns it */
+    if (pa !== null && pa < pc.graceMs) { return; }              /* fresh sale — congrats owns it */
     if (!hadActivity || !activeSinceReengage) { return; }        /* need fresh activity */
     var c = reengageCfg();
     if (!c.enabled || reengageCount >= c.max) { return; }
     if (Date.now() - lastActivityTs < c.idleMs) { return; }      /* not idle long enough yet */
-    /* Past the grace window but recently purchased → re-engage for a SECOND sale
-       (companion cloth / gift), not "still eyeing the thing". */
-    var postSale = (pa !== null && pa < 48 * 3600000);
+    /* Past the grace but recently purchased → re-engage for a SECOND sale
+       (companion cloth / gift), not "still eyeing" — unless the admin turned the
+       post-sale beat off, in which case stay quiet through the window. */
+    var postSale = false;
+    if (pa !== null && pa < pc.windowMs) {
+      if (!pc.enabled) { return; }
+      postSale = true;
+    }
     reengageBusy = true;
     fetchReengageLine(postSale, function (line) {
       reengageBusy = false;

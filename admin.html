@@ -601,6 +601,17 @@
             <div><label class="micro" for="cfg-reengage-signed-max">Signed-in · max re-engagements</label>
               <input type="number" id="cfg-reengage-signed-max" class="mono-field" min="0" step="1" placeholder="3"></div>
           </div>
+          <p class="note" style="margin:10px 0 6px;">After a <strong>sale</strong>: stay quiet briefly (congrats owns the moment), then re-engage for a <em>second</em> blanket — a companion cloth or a gift — rather than "still eyeing it".</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-reengage-grace">Quiet grace after a sale (seconds)</label>
+              <input type="number" id="cfg-reengage-grace" class="mono-field" min="0" step="1" placeholder="240"></div>
+            <div><label class="micro" for="cfg-reengage-postwindow">Post-sale upsell window (hours)</label>
+              <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="0" step="1" placeholder="48"></div>
+          </div>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <input type="checkbox" id="cfg-reengage-postsale">
+            <span class="micro">Re-engage for a second sale after a purchase (companion cloth / gift). Off = stay quiet through the post-sale window.</span>
+          </label>
         </div>
         <div style="margin-top:12px;">
           <label class="micro" for="cfg-goalrate">Goal-scoring sample rate (0–1)</label>
@@ -1369,6 +1380,9 @@ async function loadConfig() {
   $('cfg-reengage-anon-max').value = (typeof o.reengageMaxAnon === 'number') ? o.reengageMaxAnon : '';
   $('cfg-reengage-signed-idle').value = ms2s(o.reengageIdleSignedMs);
   $('cfg-reengage-signed-max').value = (typeof o.reengageMaxSigned === 'number') ? o.reengageMaxSigned : '';
+  $('cfg-reengage-grace').value = (typeof o.reengageGraceMs === 'number') ? Math.round(o.reengageGraceMs / 1000) : '';
+  $('cfg-reengage-postwindow').value = (typeof o.reengagePostSaleWindowMs === 'number') ? Math.round(o.reengagePostSaleWindowMs / 3600000) : '';
+  $('cfg-reengage-postsale').checked = o.reengagePostSaleEnabled !== false;
   $('cfg-reengage-regrade').checked = cfg.reengage_regrade === true;
 
   // Selling style
@@ -1441,6 +1455,11 @@ async function saveEngagement() {
   if ($('cfg-reengage-anon-max').value !== '' && Number.isFinite(rMaxAnon) && rMaxAnon >= 0) o.reengageMaxAnon = Math.round(rMaxAnon);
   const rMaxSigned = Number($('cfg-reengage-signed-max').value);
   if ($('cfg-reengage-signed-max').value !== '' && Number.isFinite(rMaxSigned) && rMaxSigned >= 0) o.reengageMaxSigned = Math.round(rMaxSigned);
+  const rGrace = Number($('cfg-reengage-grace').value);
+  if ($('cfg-reengage-grace').value !== '' && Number.isFinite(rGrace) && rGrace >= 0) o.reengageGraceMs = Math.round(rGrace * 1000);
+  const rPostWin = Number($('cfg-reengage-postwindow').value);
+  if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin >= 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * 3600000);
+  o.reengagePostSaleEnabled = $('cfg-reengage-postsale').checked;
   const rows = [{ key: 'outreach', value: o, updated_at: nowIso() }];
   const gr = Number($('cfg-goalrate').value);
   if ($('cfg-goalrate').value !== '' && Number.isFinite(gr) && gr >= 0 && gr <= 1) {

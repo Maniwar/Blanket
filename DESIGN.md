@@ -305,6 +305,14 @@ rather than merely reacting:
   at one extra model call. The post-purchase "welcome back" bubble now marks
   itself done only once it actually renders, so it reliably reappears on a later
   refresh if it couldn't show — and opens the chat when tapped.
+- **Post-sale re-engagement.** After a commission the concierge stays quiet for a
+  short **grace** window (congrats + the post-purchase check-in own that moment),
+  then re-engages in **post-sale mode** — inviting a *second* entry (a companion
+  cloth for another room, or one as a gift), never treating the buyer as still
+  undecided. The `?reengage=1` endpoint has a `post_sale` branch for this; the
+  grace, the post-sale window length, and whether to re-engage at all after a
+  sale are admin-tunable (`outreach.reengageGraceMs`,
+  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
 - **Journey-aware goals.** Each goal can carry a `section` (page/journey stage);
   `buildSystemPrompt` flags the open goals that match where the visitor is and
   tells the concierge to lead with them, so the agenda tracks the shopper's path
@@ -316,8 +324,14 @@ Admin-editable selling inputs (all config keys): `assertiveness`, `hooks`
 playbook for the Reassure move), plus engagement pacing (`outreach.nudgeCap`,
 `outreach.maxAmbient`, `outreach.dwell2Ms`, re-engagement
 (`outreach.reengageEnabled`, `reengageIdleAnonMs`/`reengageMaxAnon`,
-`reengageIdleSignedMs`/`reengageMaxSigned`), and the existing nudge/dwell/draft
-timings and `goal_sample_rate`).
+`reengageIdleSignedMs`/`reengageMaxSigned`, post-sale
+`reengageGraceMs`/`reengagePostSaleWindowMs`/`reengagePostSaleEnabled`), and the
+existing nudge/dwell/draft timings and `goal_sample_rate`).
+
+The **storefront itself** is admin-editable too — copy, section images, and
+SEO/meta — via the Studio's **Website** tab, backed by the `site_content` table,
+delivered by `?site=1`, and hydrated on the page with the hardcoded HTML as the
+fallback. Full design: [`CMS.md`](CMS.md).
 
 ---
 
