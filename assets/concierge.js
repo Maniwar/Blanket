@@ -2014,7 +2014,9 @@
 
   function performRequest(opts) {
     setStreaming(true);
-    var shell = (opts && opts.quiet) ? lazyShell() : addAssistantShell();
+    var proactive = !!(opts && opts.quiet);
+    var shell = proactive ? lazyShell() : addAssistantShell();
+    shell.proactive = proactive;   /* a proactive follow-up may hold; a reply may not */
     if (isDemo()) { demoRespond(shell); }
     else { liveRespond(shell); }
   }
@@ -2022,9 +2024,10 @@
   var holdAttempts = 0;         /* times the bot chose to give space */
 
   function finishTurn(shell) {
-    if (shell.held) {
-      /* the concierge chose to give space — remove the empty turn, refund the
-         follow-up budget, and try again later (a few times, then rest) */
+    /* Giving space (a hold) is ONLY valid for a proactive follow-up the bot
+       started itself. A direct message from the visitor must never be met with
+       silence — fall through to a graceful line below. */
+    if (shell.held && shell.proactive) {
       shell.fail();
       if (nudgeCount > 0) { nudgeCount--; }
       holdAttempts++;
@@ -2032,8 +2035,15 @@
       if (holdAttempts < 3) { scheduleNudge(true); }
       return;
     }
-    shell.done();
     var content = shell.getText();
+    if (!content && !shell.proactive) {
+      /* the reply came back empty (a bare tool call, or a stray hold) — never
+         leave the visitor's message hanging; acknowledge and stay present */
+      content = 'Of course — I’m right here whenever you need anything at all.';
+      shell.append(content);
+    }
+    shell.done();
+    content = shell.getText();
     if (content) {
       history.push({ role: 'assistant', content: content, ts: Date.now() });
       saveHistory();
@@ -2622,26 +2632,30 @@
 
   function openPanel(prefillQuestion) {
     if (!panel) { return; } /* not mounted (yet), or remotely disabled */
-    if (panelOpen) {
+    /* Only short-circuit if the panel is TRULY open on screen. If panelOpen got
+       stuck true (e.g. a prior open threw before it finished), recover and open
+       anyway rather than swallowing the click. */
+    if (panelOpen && panel.classList.contains('cx-open')) {
       if (typeof prefillQuestion === 'string' && prefillQuestion && !streaming) {
         sendMessage(prefillQuestion);
       }
       return;
     }
     panelOpen = true;
-    if (hasSupabase()) { ensureSupabase(); }
+    /* Make it visible FIRST, so nothing below (a render hiccup, Supabase load)
+       can leave the panel invisible while panelOpen is true. */
     hideChip();
-    lastFocused = (document.activeElement && document.activeElement !== document.body)
-      ? document.activeElement : launcher;
-    loadHistory();
-    renderHistory();
-    pinned = true;
     scrim.classList.add('cx-on');
     panel.classList.add('cx-open');
-    runShimmer();
     lockBody();
     updateLauncher();
-    scrollToBottom(true);
+    if (hasSupabase()) { try { ensureSupabase(); } catch (eSb) { /* ignore */ } }
+    lastFocused = (document.activeElement && document.activeElement !== document.body)
+      ? document.activeElement : launcher;
+    try { loadHistory(); renderHistory(); } catch (eR) { /* a render hiccup must not block opening */ }
+    pinned = true;
+    runShimmer();
+    try { scrollToBottom(true); } catch (eSc) { /* ignore */ }
     setTimeout(function () {
       try { panel.focus(); } catch (e) { /* ignore */ }
     }, REDUCED ? 0 : 80);

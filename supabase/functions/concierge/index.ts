@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-opener+recall+proactive";
+const BUILD_TAG = "2026-07-04-nosilence+goalfocus";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -898,6 +898,7 @@ function formCatalog(data: ConciergeData): string {
 
 function buildSystemPrompt(
   data: ConciergeData, liveState: string, signedIn: boolean,
+  goalStatus?: Record<string, { status?: string; note?: string }> | null,
 ): string {
   const kb = data.kbText ?? KB_MARKDOWN; // DB rows, else compiled-in fallback
   // Function replacements so "$" sequences in content are never interpreted.
@@ -941,8 +942,25 @@ function buildSystemPrompt(
       "Orders marked as gifts carry the recipient's name on the card; the buyer remains the owner of record.\n";
   }
   if (data.goals.length > 0) {
-    system += "\nCONVERSATION GOALS (pursue these naturally across the conversation; do not announce them)\n" +
-      data.goals.map((g) => `- ${g.label}: ${g.description}`).join("\n") + "\n";
+    // Live status (from the last evaluation) turns the goals from a static list
+    // into an active agenda: the concierge sees which are still open and drives
+    // them — especially advancing toward a commission when interest allows.
+    const open = goalStatus
+      ? data.goals.filter((g) => (goalStatus[g.slug]?.status ?? "unmet") !== "met")
+      : data.goals;
+    if (goalStatus && open.length === 0) {
+      system += "\nCONVERSATION GOALS — all met so far. Confirm the patron has everything they " +
+        "need, then close warmly; do not manufacture new needs.\n";
+    } else {
+      system += "\nCONVERSATION GOALS (your active agenda — pursue naturally, never announce them; " +
+        "keep advancing the OPEN ones, and when genuine interest allows, move the conversation " +
+        "toward a commission or a companion cloth. Before you wrap up, make sure every open goal " +
+        "here has been genuinely addressed — especially leaving no need unmet):\n" +
+        open.map((g) => {
+          const st = goalStatus ? (goalStatus[g.slug]?.status ?? "unmet") : null;
+          return `- ${g.label}${st ? ` [${st}]` : ""}: ${g.description}`;
+        }).join("\n") + "\n";
+    }
   }
   if (data.sopText) {
     system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
@@ -1231,8 +1249,18 @@ async function handleChatPost(req: Request): Promise<Response> {
   // Signed-in awareness (anonymous on absent/invalid token; never errors).
   const customer = await verifyUser(req);
   const customerLine = customer ? await customerBlock(customer) : null;
+  // Live goal status from the last evaluation, so the prompt shows which goals
+  // are still open and the concierge actively drives them.
+  let goalStatus: Record<string, { status?: string; note?: string }> | null = null;
+  if (validated.sessionKey && data.goals.length > 0) {
+    const gsRows = await pgSelect<{ goal_status: Record<string, { status?: string; note?: string }> | null }>(
+      `concierge_conversations?select=goal_status&session_key=eq.${
+        encodeURIComponent(validated.sessionKey)}&order=created_at.desc&limit=1`,
+    );
+    goalStatus = gsRows && gsRows[0] ? gsRows[0].goal_status : null;
+  }
   const system = buildSystemPrompt(
-    data, renderLiveState(validated.context, customerLine), customer !== null,
+    data, renderLiveState(validated.context, customerLine), customer !== null, goalStatus,
   );
 
   // Logging: resolve conversation + store the user turn, concurrently with
