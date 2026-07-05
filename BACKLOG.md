@@ -27,6 +27,14 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Product / features
 
+- **Admin-managed images.** The bot's `{{img:…}}` photos are hardcoded in
+  `assets/concierge-kb.js` (three: `pack-wide`, `pack-seal`, `hero`). Make them
+  DB/config-driven (token → `{src, alt}`), delivered via `?config=1` and merged
+  into the client image map, with an admin editor — *and* inject the available
+  image tokens + descriptions into the system prompt so the bot knows to use the
+  new ones. `src` could be an image URL or a data-URI (or Supabase Storage upload
+  for real files). *Effort:* moderate (client merge + config + prompt injection +
+  admin UI). *Trigger:* wanting to add product/lifestyle photos without a deploy.
 - **Configurable colorways per run.** Currently hardcoded (`ungefaerbt/loden/
   graphit`) across ~13 places incl. a DB `CHECK`. Make them admin-editable
   (name/description/swatch), replacing the constraint, wired through checkout,

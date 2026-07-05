@@ -367,6 +367,21 @@ Because the pitch is "it's a virtual sales associate," it has to be measurable:
   Conversations (transcripts + goal scorecards). All writes are governed by RLS
   or an admin-gated endpoint.
 
+**Concierge content tokens.** The concierge can place special `{{…}}` markers in
+a reply, which the widget renders as UI. Admins can embed `{{reply:…}}` pills
+directly in the greeting; the rest the bot emits per its procedures (shape *when*
+via SOPs / tuning notes). The full set is documented in the admin studio
+(Tuning → *Concierge tokens*):
+
+- `{{img:pack-wide}}`, `{{img:pack-seal}}`, `{{img:hero}}` — a photo on its own
+  line. **These three are the only images**; they're defined in
+  `assets/concierge-kb.js` (token → `{src, alt}`), not in the database, so adding
+  a new one is a code change today (add the asset + a map entry + redeploy).
+  Making images admin-managed is on the backlog.
+- `{{action:commission}}` / `{{action:signin}}` — the commission / sign-in
+  buttons. `{{reply:<text>}}` — a tappable pill. `{{form:<slug>:<serial>}}` — an
+  in-chat form (defined under Procedures → Forms).
+
 Data model rationale is documented field-by-field in
 [`supabase/SCHEMA.md`](supabase/SCHEMA.md).
 

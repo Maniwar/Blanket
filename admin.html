@@ -257,6 +257,10 @@
   .emails{ display:flex; align-items:center; gap:8px; padding:0 0 12px 0; flex-wrap:wrap; }
   .emails .micro{ color:var(--wool-faint); }
   .emails .btn{ padding:4px 10px; font-size:11px; }
+  .tok-ref{ width:100%; border-collapse:collapse; font-size:13px; }
+  .tok-ref td{ padding:8px 10px; border-top:1px solid var(--hairline-dim); vertical-align:top; color:var(--wool); }
+  .tok-ref td:first-child{ white-space:nowrap; width:1%; }
+  .tok-ref code{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft); background:rgba(196,155,91,.08); padding:1px 5px; border-radius:4px; }
 
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
@@ -489,6 +493,22 @@
         <div class="card-foot">
           <button id="save-voice" class="btn primary">Save voice</button>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Concierge tokens</h3>
+          <span class="micro">special {{…}} markers that render as UI</span>
+        </div>
+        <p class="note">You can drop <code>{{reply:…}}</code> pills straight into the greeting. The rest, the concierge emits itself as its procedures call for — shape <em>when</em> via the SOPs (Procedures) and the tuning notes above.</p>
+        <table class="tok-ref">
+          <tr><td><code>{{img:pack-wide}}</code><br><code>{{img:pack-seal}}</code><br><code>{{img:hero}}</code></td>
+            <td>A photograph, on its own line. <strong>These three are the only images available</strong> (defined in <code>assets/concierge-kb.js</code>); adding more is a code change today.</td></tr>
+          <tr><td><code>{{action:commission}}</code></td><td>A “Begin the commission” button.</td></tr>
+          <tr><td><code>{{action:signin}}</code></td><td>A “Sign in” button.</td></tr>
+          <tr><td><code>{{reply:Some text}}</code></td><td>A tappable pill that sends “Some text” as the shopper’s next message. One per line; consecutive lines group; up to 6.</td></tr>
+          <tr><td><code>{{form:slug:serial}}</code></td><td>Renders an in-chat form (forms are defined under Procedures → Forms).</td></tr>
+        </table>
       </section>
 
       <section class="card">
