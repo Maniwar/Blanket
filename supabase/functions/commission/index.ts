@@ -390,6 +390,44 @@ function emailShell(heading: string, lines: string[]): string {
 interface OrderRow {
   serial: number | null; email: string; name?: string | null; colorway?: string | null;
   tracking?: string | null; recipient_name?: string | null; is_gift?: boolean; status?: string | null;
+  address?: string | null; address2?: string | null; city?: string | null;
+  state?: string | null; zip?: string | null;
+}
+
+const PRICE_USD = 589; // the edition's fixed price; duties + U.S. delivery included
+
+/** The shipping-address block (or empty if we don't have one). */
+function shipToHtml(o: OrderRow): string {
+  const lines = [
+    o.name,
+    o.address,
+    o.address2,
+    [o.city, o.state].filter(Boolean).join(", ") + (o.zip ? " " + o.zip : ""),
+  ].map((s) => (s ?? "").trim()).filter(Boolean);
+  if (lines.length <= 1) return ""; // nothing but a name — skip
+  const rows = lines.map((l) =>
+    `<span style="display:block;color:#c9c3b6;">${l}</span>`
+  ).join("");
+  const gift = o.is_gift && o.recipient_name
+    ? `<span style="display:block;color:#c49b5b;margin-top:6px;">A gift — the card carries ${o.recipient_name}'s name.</span>`
+    : "";
+  return `<span style="display:block;font-family:'Courier New',monospace;color:#7f7a6e;font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">Ship to</span>${rows}${gift}`;
+}
+
+/** The itemized order summary (item · price · duties · total). */
+function orderSummaryHtml(o: OrderRow): string {
+  const no = "Nº " + Number(o.serial).toLocaleString("en-US");
+  const cw = o.colorway && COLORWAY_NAME[o.colorway] ? COLORWAY_NAME[o.colorway] : "—";
+  const price = "$" + PRICE_USD.toLocaleString("en-US");
+  const cell = "font-family:Helvetica,Arial,sans-serif;font-size:13px;";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #3a4139;border-radius:8px;">` +
+    `<tr><td style="padding:12px 14px 4px;${cell}color:#e7e1d4;">Decke 01 — ${cw}<br><span style="color:#9a9484;font-size:11px;">${no} · woven to order</span></td>` +
+    `<td align="right" style="padding:12px 14px 4px;${cell}color:#e7e1d4;white-space:nowrap;">${price}</td></tr>` +
+    `<tr><td style="padding:0 14px 12px;${cell}color:#9a9484;font-size:12px;">Duties &amp; U.S. delivery</td>` +
+    `<td align="right" style="padding:0 14px 12px;${cell}color:#9a9484;font-size:12px;white-space:nowrap;">Included</td></tr>` +
+    `<tr><td style="padding:10px 14px;border-top:1px solid #3a4139;${cell}color:#f1ece2;font-weight:bold;">Total</td>` +
+    `<td align="right" style="padding:10px 14px;border-top:1px solid #3a4139;${cell}color:#f1ece2;font-weight:bold;white-space:nowrap;">${price}</td></tr>` +
+    `</table>`;
 }
 
 function orderEmail(
@@ -404,8 +442,10 @@ function orderEmail(
       subject: `${no} is entered in the Webbuch`,
       html: emailShell("Your number is entered", [
         `${greet} thank you — <strong>${no}</strong>${cloth} is entered in the Webbuch under your name.`,
-        o.is_gift && o.recipient_name ? `It will carry ${o.recipient_name}'s name on the card.` : "",
-        "It is woven to order — 3–5 weeks. When it ships, the tracking will appear in your register and in a note from us.",
+        orderSummaryHtml(o),
+        shipToHtml(o),
+        "It is woven to order — <strong>3–5 weeks</strong> to your door. When it ships, the tracking will appear in your register and in a note from us.",
+        "This is a concept demonstration: <strong>nothing was charged and nothing ships</strong>. The total above is shown only to make the confirmation feel real.",
       ]),
     };
   }
@@ -641,6 +681,8 @@ Deno.serve(async (req: Request) => {
     const mail = orderEmail("placed", {
       serial, email: validated.email, name: validated.name, colorway: validated.colorway,
       recipient_name: validated.recipient || null, is_gift: !!validated.isGift,
+      address: validated.address, address2: validated.address2, city: validated.city,
+      state: validated.state, zip: validated.zip,
     });
     const p = sendEmail(validated.email, mail.subject, mail.html);
     if (typeof (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime
