@@ -187,6 +187,10 @@ create table if not exists public.concierge_goals (
   updated_at timestamptz not null default now());
 -- journey stage this goal is most relevant to (page section), nullable = anywhere
 alter table public.concierge_goals add column if not exists section text;
+-- a goal may fit MORE THAN ONE journey stage; sections[] is the source of truth
+-- (empty/null = anywhere). section (singular) is kept, backfilled below, for
+-- back-compat with any not-yet-deployed reader.
+alter table public.concierge_goals add column if not exists sections text[];
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. ROW LEVEL SECURITY + the admin-check helper
@@ -644,6 +648,13 @@ update public.concierge_goals set section = 'why'     where slug = 'discover'   
 update public.concierge_goals set section = 'wool'    where slug = 'match-cloth'   and section is null;
 update public.concierge_goals set section = 'label'   where slug = 'handle-doubt'  and section is null;
 update public.concierge_goals set section = 'reserve' where slug = 'advance'       and section is null;
+
+-- Multi-section source of truth: backfill sections[] from the single section on
+-- any goal that has one but no array yet (preserves admin edits to sections[]).
+update public.concierge_goals
+  set sections = array[section]
+  where section is not null and section <> ''
+    and (sections is null or cardinality(sections) = 0);
 
 -- The full knowledge base, SOPs, and forms follow — so this ONE file stands
 -- alone as a complete, runnable setup. Each block seeds only if its table is

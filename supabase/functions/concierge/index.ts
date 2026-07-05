@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-tools-registry";
+const BUILD_TAG = "2026-07-05-goal-multisection";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -163,7 +163,20 @@ interface FormDef {
   slug: string; title: string; submit_tool: string; fields: unknown;
 }
 
-interface GoalDef { slug: string; label: string; description: string; section?: string | null }
+interface GoalDef {
+  slug: string; label: string; description: string;
+  section?: string | null;      // legacy single section (kept for back-compat)
+  sections?: string[] | null;   // journey stages this goal fits; empty/null = anywhere
+}
+
+/** The journey sections a goal fits, lowercased. Prefers the multi-value
+ *  `sections` array; falls back to the legacy single `section` column. */
+function goalSections(g: GoalDef): string[] {
+  if (Array.isArray(g.sections) && g.sections.length > 0) {
+    return g.sections.filter((s) => typeof s === "string").map((s) => s.toLowerCase());
+  }
+  return typeof g.section === "string" && g.section ? [g.section.toLowerCase()] : [];
+}
 
 // Admin overrides for the model-callable tools (concierge_tools table). A tool
 // absent from this table runs with its built-in default (enabled, code default
@@ -197,7 +210,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
       "concierge_forms?select=slug,title,submit_tool,fields&enabled=is.true",
     ),
     pgSelect<GoalDef>(
-      "concierge_goals?select=slug,label,description,section&enabled=is.true&order=sort_order.asc",
+      "concierge_goals?select=slug,label,description,section,sections&enabled=is.true&order=sort_order.asc",
     ),
     pgSelect<ToolReg>("concierge_tools?select=name,enabled,description"),
   ]);
@@ -1423,10 +1436,10 @@ function buildSystemPrompt(
         "here has been genuinely addressed — especially leaving no need unmet):\n" +
         open.map((g) => {
           const st = goalStatus ? (goalStatus[g.slug]?.status ?? "unmet") : null;
-          const onJourney = here && typeof g.section === "string" && g.section.toLowerCase() === here;
+          const onJourney = !!here && goalSections(g).includes(here);
           return `- ${g.label}${st ? ` [${st}]` : ""}${onJourney ? " ← fits where they are right now" : ""}: ${g.description}`;
         }).join("\n") + "\n";
-      const hereGoals = open.filter((g) => here && typeof g.section === "string" && g.section.toLowerCase() === here);
+      const hereGoals = open.filter((g) => !!here && goalSections(g).includes(here));
       if (hereGoals.length > 0) {
         system += `The shopper is reading the '${here}' section right now — lead with the goal(s) marked "fits where they are" (` +
           hereGoals.map((g) => g.label).join("; ") + "), tying your move to what's in front of them, before the others.\n";
@@ -2436,8 +2449,7 @@ async function handleReengage(req: Request): Promise<Response> {
         ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
         : data.goals;
       if (open.length === 0) return fallback();               // all met — don't push
-      const goal = open.find((g) => section && typeof g.section === "string" &&
-        g.section.toLowerCase() === section) || open[0];
+      const goal = open.find((g) => !!section && goalSections(g).includes(section)) || open[0];
       sys =
         "You are the Mill Concierge for Feierabend, a numbered German wool blanket. Write ONE short " +
         "outreach line (max 30 words) to a shopper who is reading the '" + (section || "page") +

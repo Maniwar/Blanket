@@ -2464,16 +2464,25 @@ function goalEditor(row) {
   fDesc.appendChild(desc); wrap.appendChild(fDesc);
 
   const fSec = el('div', 'field');
-  fSec.appendChild(el('span', 'micro', 'Page section it fits (journey stage) — the concierge leads with this goal when the visitor is reading that section. Leave as “anywhere” for goals that apply throughout.'));
-  const secSel = document.createElement('select');
-  [['', 'anywhere'], ['top', 'top / hero'], ['why', 'why'], ['wool', 'wool (the 5 decisions)'],
-   ['label', 'label / specs'], ['ritual', 'ritual'], ['arrival', 'arrival'], ['reserve', 'reserve / CTA']]
-    .forEach(function (o) {
-      const opt = document.createElement('option'); opt.value = o[0]; opt.textContent = o[1];
-      if ((row.section || '') === o[0]) opt.selected = true;
-      secSel.appendChild(opt);
-    });
-  fSec.appendChild(secSel); wrap.appendChild(fSec);
+  fSec.appendChild(el('span', 'micro', 'Journey stages it fits — the concierge leads with this goal when the visitor is reading ANY checked section. Check more than one if it fits several; check none for a goal that applies anywhere.'));
+  const GOAL_SECTIONS = [['top', 'top / hero'], ['why', 'why'], ['wool', 'wool (the 5 decisions)'],
+    ['label', 'label / specs'], ['ritual', 'ritual'], ['arrival', 'arrival'], ['reserve', 'reserve / CTA']];
+  const current = (Array.isArray(row.sections) && row.sections.length) ? row.sections
+    : (row.section ? [row.section] : []);
+  const curSet = {};
+  current.forEach(function (s) { if (s != null) curSet[String(s).toLowerCase()] = true; });
+  const secWrap = el('div');
+  secWrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:8px;';
+  const secBoxes = [];
+  GOAL_SECTIONS.forEach(function (o) {
+    const lab = el('label');
+    lab.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer;';
+    const c = el('input'); c.type = 'checkbox'; c.value = o[0]; c.checked = !!curSet[o[0]];
+    secBoxes.push(c);
+    lab.appendChild(c); lab.appendChild(el('span', 'micro', o[1]));
+    secWrap.appendChild(lab);
+  });
+  fSec.appendChild(secWrap); wrap.appendChild(fSec);
 
   const actions = el('div', 'kb-actions');
   const btnDel = el('button', 'btn danger', 'Delete');
@@ -2484,19 +2493,21 @@ function goalEditor(row) {
     withBusy(btnSave, async function () {
       const l = label.value.trim();
       if (!l) { toast('A goal needs a name', true); return; }
-      const section = secSel.value || null;
+      const sections = secBoxes.filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
+      const secArr = sections.length ? sections : null;   // source of truth (null = anywhere)
+      const secOne = sections.length ? sections[0] : null; // legacy single-column mirror
       if (row.id) {
         const res = await sb.from('concierge_goals').update({
-          label: l, description: desc.value.trim(), enabled: cb.checked, section: section, updated_at: nowIso()
+          label: l, description: desc.value.trim(), enabled: cb.checked, sections: secArr, section: secOne, updated_at: nowIso()
         }).eq('id', row.id);
         if (res.error) { fail('Save goal', res.error); return; }
-        row.label = l; row.description = desc.value.trim(); row.enabled = cb.checked; row.section = section;
+        row.label = l; row.description = desc.value.trim(); row.enabled = cb.checked; row.sections = secArr; row.section = secOne;
         toast('Goal saved');
       } else {
         const slug = kebab(l);
         if (!slug) { toast('Could not derive a slug', true); return; }
         const res = await sb.from('concierge_goals').insert({
-          slug: slug, label: l, description: desc.value.trim(), enabled: cb.checked, section: section, sort_order: row.sort_order, updated_at: nowIso()
+          slug: slug, label: l, description: desc.value.trim(), enabled: cb.checked, sections: secArr, section: secOne, sort_order: row.sort_order, updated_at: nowIso()
         }).select().single();
         if (res.error) { fail('Add goal', res.error); return; }
         row.id = res.data.id; row.slug = res.data.slug; slugEl.textContent = row.slug;
@@ -2554,8 +2565,13 @@ const pageState = { act: 0, convo: 0, wl: 0 };
 
 function fval(id) { const e = $(id); return e ? (e.value || '').replace(/^\s+|\s+$/g, '') : ''; }
 function fkw(id) { return fval(id).replace(/[,()%*]/g, ''); }           // safe for or()
-function fFrom(id) { const v = fval(id); return v || null; }           // YYYY-MM-DD → UTC midnight
-function fTo(id) { const v = fval(id); return v ? v + 'T23:59:59.999Z' : null; } // inclusive end of day
+/* A <input type="date"> gives a local calendar day (YYYY-MM-DD). Turn it into
+   the UTC instants that bound that day *in the viewer's own timezone*, so
+   "July 5 → July 5" captures everything the admin thinks of as July 5 — not a
+   UTC day that's shifted hours off. `new Date('...T00:00:00')` (no Z) parses as
+   local time; toISOString() converts to the matching UTC instant. */
+function fFrom(id) { const v = fval(id); return v ? new Date(v + 'T00:00:00.000').toISOString() : null; }      // local start of day → UTC
+function fTo(id) { const v = fval(id); return v ? new Date(v + 'T23:59:59.999').toISOString() : null; }        // local end of day → UTC
 function orIlike(cols, kw) { return cols.map(function (c) { return c + '.ilike.*' + kw + '*'; }).join(','); }
 function showMore(id, on) { const b = $(id); if (b) b.style.display = on ? '' : 'none'; }
 
