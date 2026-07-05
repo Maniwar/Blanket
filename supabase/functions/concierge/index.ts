@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-commission-button";
+const BUILD_TAG = "2026-07-05-prompt-caching";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1391,12 +1391,15 @@ function buildSystemPrompt(
   data: ConciergeData, liveState: string, signedIn: boolean,
   goalStatus?: Record<string, { status?: string; note?: string }> | null,
   section?: string | null,
-): string {
+): { prefix: string; suffix: string } {
   const kb = data.kbText ?? KB_MARKDOWN; // DB rows, else compiled-in fallback
-  // Function replacements so "$" sequences in content are never interpreted.
-  let system = BRAND_SYSTEM
-    .replace("{{LIVE_STATE}}", () => liveState)
-    .replace("{{KB}}", () => kb);
+  // The STATIC prompt (brand, KB, tools, SOPs, tuning) is assembled into `system`
+  // and returned as `prefix` — marked cacheable at the call site. The DYNAMIC bits
+  // (live state, goal status) collect separately and are returned as `suffix`, so
+  // they never bust the cached prefix. Function replacements so "$" sequences in
+  // content are never interpreted.
+  const goalsAgenda: string[] = [];
+  let system = BRAND_SYSTEM.replace("{{KB}}", () => kb);
   if (signedIn) {
     system += "\nREGISTER TOOLS\n" +
       "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
@@ -1409,7 +1412,7 @@ function buildSystemPrompt(
       "claim an address changed unless the form's confirmation came back — mistyping a field (a city " +
       "into the street line) is exactly what the form prevents.\n" +
       "- Call get_my_orders before answering ANY question about their orders — never rely on memory " +
-      "or on the CUSTOMER summary above. This includes every count ('how many…') and every filtered " +
+      "or on the CUSTOMER block in LIVE STATE. This includes every count ('how many…') and every filtered " +
       "list: call the tool and build your answer, count, and pills ONLY from its result, listing " +
       "every row it returns and no others. When the owner is narrowing to one cloth, call it with the " +
       "colorway filter and read back its exact count — do NOT tally or filter a long list in your head " +
@@ -1458,11 +1461,11 @@ function buildSystemPrompt(
       ? data.goals.filter((g) => (goalStatus[g.slug]?.status ?? "unmet") !== "met")
       : data.goals;
     if (goalStatus && open.length === 0) {
-      system += "\nCONVERSATION GOALS — all met so far. Confirm the patron has everything they " +
-        "need, then close warmly; do not manufacture new needs.\n";
+      goalsAgenda.push("\nCONVERSATION GOALS — all met so far. Confirm the patron has everything they " +
+        "need, then close warmly; do not manufacture new needs.\n");
     } else {
       const here = typeof section === "string" ? section.toLowerCase() : "";
-      system += "\nCONVERSATION GOALS (your active agenda — pursue naturally, never announce them; " +
+      goalsAgenda.push("\nCONVERSATION GOALS (your active agenda — pursue naturally, never announce them; " +
         "keep advancing the OPEN ones, and when genuine interest allows, move the conversation " +
         "toward a commission or a companion cloth. Before you wrap up, make sure every open goal " +
         "here has been genuinely addressed — especially leaving no need unmet):\n" +
@@ -1470,11 +1473,11 @@ function buildSystemPrompt(
           const st = goalStatus ? (goalStatus[g.slug]?.status ?? "unmet") : null;
           const onJourney = !!here && goalSections(g).includes(here);
           return `- ${g.label}${st ? ` [${st}]` : ""}${onJourney ? " ← fits where they are right now" : ""}: ${g.description}`;
-        }).join("\n") + "\n";
+        }).join("\n") + "\n");
       const hereGoals = open.filter((g) => !!here && goalSections(g).includes(here));
       if (hereGoals.length > 0) {
-        system += `The shopper is reading the '${here}' section right now — lead with the goal(s) marked "fits where they are" (` +
-          hereGoals.map((g) => g.label).join("; ") + "), tying your move to what's in front of them, before the others.\n";
+        goalsAgenda.push(`The shopper is reading the '${here}' section right now — lead with the goal(s) marked "fits where they are" (` +
+          hereGoals.map((g) => g.label).join("; ") + "), tying your move to what's in front of them, before the others.\n");
       }
     }
   }
@@ -1554,7 +1557,11 @@ function buildSystemPrompt(
   if (typeof notes === "string" && notes.trim().length > 0) {
     system += "\nADMIN TUNING NOTES (follow these):\n" + notes;
   }
-  return system;
+  // Dynamic tail: live state (ground truth, changes every turn) + the goal agenda
+  // (per-conversation status). Kept OUT of `system` so the static prefix caches.
+  const suffix = "\nLIVE STATE (server-substituted; treat as ground truth for availability):\n" +
+    liveState + goalsAgenda.join("");
+  return { prefix: system, suffix };
 }
 
 // ── Logging — concierge_conversations / concierge_messages ───────────────────
@@ -1936,9 +1943,21 @@ async function handleChatPost(req: Request): Promise<Response> {
     goalStatus = gsRows && gsRows[0] ? gsRows[0].goal_status : null;
   }
   const currentSection = typeof validated.context.section === "string" ? validated.context.section : null;
-  const system = buildSystemPrompt(
+  const sysParts = buildSystemPrompt(
     data, renderLiveState(validated.context, customerLine), customer !== null, goalStatus, currentSection,
   );
+  // Prompt caching: the large static prefix (brand + KB + tools + SOPs + tuning)
+  // is sent as a cache_control:ephemeral block, so every later call that shares it
+  // — the 2nd–4th agentic rounds, nudges, back-to-back turns within 5 min — pays
+  // ~10% of that input instead of 100%. The dynamic tail (live state, goals) is a
+  // second, uncached block so it never busts the cache.
+  // deno-lint-ignore no-explicit-any
+  const system: any[] = [
+    { type: "text", text: sysParts.prefix, cache_control: { type: "ephemeral" } },
+  ];
+  if (sysParts.suffix && sysParts.suffix.trim().length > 0) {
+    system.push({ type: "text", text: sysParts.suffix });
+  }
 
   // Logging: resolve conversation + store the user turn, concurrently with
   // the model work; awaited again before the stream finishes.
@@ -2002,6 +2021,7 @@ async function handleChatPost(req: Request): Promise<Response> {
             headers: {
               "x-api-key": apiKey,
               "anthropic-version": "2023-06-01",
+              "anthropic-beta": "prompt-caching-2024-07-31",
               "content-type": "application/json",
             },
             body: JSON.stringify({
@@ -2063,6 +2083,7 @@ async function handleChatPost(req: Request): Promise<Response> {
               headers: {
                 "x-api-key": apiKey,
                 "anthropic-version": "2023-06-01",
+                "anthropic-beta": "prompt-caching-2024-07-31",
                 "content-type": "application/json",
               },
               body: JSON.stringify({
@@ -2158,6 +2179,7 @@ async function handleChatPost(req: Request): Promise<Response> {
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": "prompt-caching-2024-07-31",
       "content-type": "application/json",
     },
     body: JSON.stringify(

@@ -1,6 +1,8 @@
 // kb.ts — server-side knowledge for the Feierabend concierge (Supabase Edge Function).
-// Exports BRAND_SYSTEM (system-prompt scaffold with {{LIVE_STATE}} and {{KB}} placeholders
+// Exports BRAND_SYSTEM (the STATIC system-prompt scaffold with a {{KB}} placeholder
 // substituted at request time) and KB_MARKDOWN (the complete product knowledge).
+// Live state is appended by buildSystemPrompt as a separate, uncached tail so the
+// static prefix here can be prompt-cached.
 // Dependency-free.
 
 export const KB_MARKDOWN: string = `
@@ -139,8 +141,6 @@ SCOPE
 - You ARE the register desk for signed-in shoppers: read their orders, numbers, statuses, and tracking (when present) yourself — do not deflect these to email. When an order has no tracking yet, say tracking begins when it ships and will appear right here.
 - For signed-in owners you also handle address changes (before shipment), colorway changes (while still 'placed'), and cancellations (while still 'placed') yourself, using your register tools and following the procedures. Hand off to hello@feierabend.example only what the register cannot do: carrier redirects after shipment, returns in motion, mending arrangements, anything involving payment — and say it lightly.
 
-LIVE STATE (server-substituted; treat as ground truth for availability):
-{{LIVE_STATE}}
 KNOWLEDGE (the only product facts you may state):
 {{KB}}
 `;
