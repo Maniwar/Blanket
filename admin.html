@@ -331,6 +331,8 @@
   .msg .meta .fbnote{ display:block; margin-top:3px; color:var(--wool-dim); font-style:normal; }
   .empty{ color:var(--wool-faint); padding:26px 20px; text-align:center; }
   .row-tools{ display:flex; gap:12px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+  .filters{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .filters input[type="date"]{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
 
   /* toasts */
   #toasts{ position:fixed; right:22px; bottom:22px; z-index:50; display:flex; flex-direction:column; gap:10px; }
@@ -601,11 +603,19 @@
 
       <section class="card">
         <div class="card-head">
-          <h3>Recent register actions by the concierge</h3>
+          <h3>Register actions by the concierge</h3>
           <span class="micro">concierge_actions</span>
+        </div>
+        <div class="filters">
+          <input type="date" id="act-from" title="From date">
+          <input type="date" id="act-to" title="To date">
+          <input type="text" id="act-q" placeholder="email, action, or keyword…" style="max-width:240px;">
+          <button id="act-apply" class="btn">Search</button>
+          <button id="act-clear" class="btn ghost">Clear</button>
         </div>
         <div id="actions-list"></div>
         <div class="card-foot">
+          <button id="actions-more" class="btn ghost" style="display:none;">Load more</button>
           <button id="actions-refresh" class="btn">Refresh</button>
         </div>
       </section>
@@ -645,8 +655,12 @@
         <div class="stat"><span class="micro">Register value</span><div class="val" id="m-cust-ltv">—</div></div>
       </div>
 
-      <div class="row-tools">
-        <input type="text" id="cust-search" placeholder="Search name or email…" style="max-width:280px;">
+      <div class="row-tools filters">
+        <input type="date" id="cust-from" title="Ordered from">
+        <input type="date" id="cust-to" title="Ordered to">
+        <input type="text" id="cust-search" placeholder="Search name or email…" style="max-width:260px;">
+        <button id="cust-apply" class="btn">Search</button>
+        <button id="cust-clear" class="btn ghost">Clear</button>
         <button id="cust-refresh" class="btn">Refresh</button>
       </div>
 
@@ -668,7 +682,13 @@
         <div class="stat"><span class="micro">👍 rate</span><div class="val" id="m-rate">—</div></div>
       </div>
 
-      <div class="row-tools">
+      <div class="row-tools filters">
+        <input type="date" id="convo-from" title="From date">
+        <input type="date" id="convo-to" title="To date">
+        <input type="text" id="convo-q" placeholder="patron email, or a word in the chat…" style="max-width:280px;">
+        <button id="convo-apply" class="btn">Search</button>
+        <button id="convo-clear" class="btn ghost">Clear</button>
+        <button id="convo-more" class="btn ghost" style="display:none;">Load more</button>
         <button id="convo-refresh" class="btn">Refresh</button>
         <span class="micro" id="convo-count" style="color:var(--wool-faint);"></span>
       </div>
@@ -1014,7 +1034,33 @@ function wireStatic() {
   $('cust-refresh').addEventListener('click', function () {
     withBusy($('cust-refresh'), loadCustomers);
   });
-  $('cust-search').addEventListener('input', renderCustomers);
+  $('cust-search').addEventListener('input', renderCustomers); // instant within-page narrowing
+
+  // ---- Audit filters: Search / Clear / Load more + Enter-to-search ----
+  wireFilter('act', loadActions, ['act-q'], $('act-apply'), $('act-clear'), $('actions-more'));
+  wireFilter('cust', loadCustomers, ['cust-search'], $('cust-apply'), $('cust-clear'), null);
+  wireFilter('convo', loadConversations, ['convo-q'], $('convo-apply'), $('convo-clear'), $('convo-more'));
+}
+
+/* Wire one audit surface's filter controls to its loader. */
+function wireFilter(prefix, loader, textIds, applyBtn, clearBtn, moreBtn) {
+  const run = function () { withBusy(applyBtn || document.createElement('button'), loader); };
+  if (applyBtn) applyBtn.addEventListener('click', run);
+  if (clearBtn) clearBtn.addEventListener('click', function () {
+    [prefix + '-from', prefix + '-to'].concat(textIds).forEach(function (id) {
+      const e = $(id); if (e) e.value = '';
+    });
+    withBusy(clearBtn, loader);
+  });
+  if (moreBtn) moreBtn.addEventListener('click', function () {
+    withBusy(moreBtn, function () { return loader(true); });
+  });
+  textIds.forEach(function (id) {
+    const e = $(id);
+    if (e) e.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); run(); }
+    });
+  });
 }
 
 async function doSignOut() {
@@ -1512,14 +1558,40 @@ function goalChips(goalStatus) {
    TAB 3b — REGISTER ACTIONS (concierge_actions, read-only)
    ============================================================ */
 
-async function loadActions() {
-  const res = await sb.from('concierge_actions')
+/* ---- Server-side audit filters (date range, email, keyword) + pagination ----
+   At scale the admin can't scroll a million rows, so filters are pushed INTO
+   the query (gte/lte on the timestamp, ilike on email/keyword) rather than
+   filtering a capped client-side fetch. Keyword uses PostgREST or(); its
+   wildcard is * (not %), and commas/parens/wildcards are stripped so a search
+   term can't break the filter grammar. */
+const PAGE = 40;
+const pageState = { act: 0, convo: 0 };
+
+function fval(id) { const e = $(id); return e ? (e.value || '').replace(/^\s+|\s+$/g, '') : ''; }
+function fkw(id) { return fval(id).replace(/[,()%*]/g, ''); }           // safe for or()
+function fFrom(id) { const v = fval(id); return v || null; }           // YYYY-MM-DD → UTC midnight
+function fTo(id) { const v = fval(id); return v ? v + 'T23:59:59.999Z' : null; } // inclusive end of day
+function orIlike(cols, kw) { return cols.map(function (c) { return c + '.ilike.*' + kw + '*'; }).join(','); }
+function showMore(id, on) { const b = $(id); if (b) b.style.display = on ? '' : 'none'; }
+
+async function loadActions(more) {
+  if (!more) pageState.act = 0;
+  const from = pageState.act * PAGE;
+  let q = sb.from('concierge_actions')
     .select('created_at,email,action,serial,payload,result')
     .order('created_at', { ascending: false })
-    .limit(20);
+    .range(from, from + PAGE - 1);
+  const df = fFrom('act-from'), dt = fTo('act-to'), kw = fkw('act-q');
+  if (df) q = q.gte('created_at', df);
+  if (dt) q = q.lte('created_at', dt);
+  if (kw) q = q.or(orIlike(['email', 'action', 'result'], kw));
+  const res = await q;
   if (res.error) { fail('Load actions', res.error); return; }
-  state.actions = res.data || [];
+  const rows = res.data || [];
+  state.actions = more ? state.actions.concat(rows) : rows;
+  pageState.act++;
   renderActions();
+  showMore('actions-more', rows.length === PAGE);
 }
 
 function renderActions() {
@@ -1746,10 +1818,15 @@ async function saveEdition() {
 }
 
 async function loadCustomers() {
-  const res = await sb.from('orders')
+  let q = sb.from('orders')
     .select('email,name,serial,status,tracking,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
     .order('placed_at', { ascending: false })
     .limit(1000);
+  const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
+  if (df) q = q.gte('placed_at', df);
+  if (dt) q = q.lte('placed_at', dt);
+  if (kw) q = q.or(orIlike(['email', 'name', 'recipient_name'], kw)); // server search, not just the fetched page
+  const res = await q;
   if (res.error) { fail('Load customers', res.error); return; }
   let notesByKey = new Map();
   const nres = await sb.from('customer_notes')
@@ -1918,23 +1995,53 @@ function renderCustomers() {
    TAB 6 — CONVERSATIONS
    ============================================================ */
 
-async function loadConversations() {
+async function loadConversations(more) {
   loadMetrics();
+  if (!more) pageState.convo = 0;
+  const df = fFrom('convo-from'), dt = fTo('convo-to'), kw = fkw('convo-q');
 
-  const res = await sb.from('concierge_conversations').select('*')
+  // Keyword also searches transcript CONTENT: find conversations whose messages
+  // contain the term (capped so the id list can't bloat the URL), then match on
+  // patron email OR one of those conversations.
+  let msgIds = null;
+  if (kw) {
+    const mm = await sb.from('concierge_messages')
+      .select('conversation_id')
+      .ilike('content', '%' + kw + '%')
+      .order('created_at', { ascending: false })
+      .limit(300);
+    if (!mm.error) {
+      const seen = {};
+      (mm.data || []).forEach(function (m) { seen[m.conversation_id] = 1; });
+      msgIds = Object.keys(seen).slice(0, 100);
+    }
+  }
+
+  const from = pageState.convo * PAGE;
+  let q = sb.from('concierge_conversations').select('*')
     .order('created_at', { ascending: false })
-    .limit(50);
+    .range(from, from + PAGE - 1);
+  if (df) q = q.gte('created_at', df);
+  if (dt) q = q.lte('created_at', dt);
+  if (kw) {
+    const ids = (msgIds && msgIds.length) ? msgIds : ['00000000-0000-0000-0000-000000000000'];
+    q = q.or('user_email.ilike.*' + kw + '*,id.in.(' + ids.join(',') + ')');
+  }
+  const res = await q;
   if (res.error) { fail('Load conversations', res.error); return; }
-  state.convos = res.data || [];
+  const rows = res.data || [];
+  state.convos = more ? state.convos.concat(rows) : rows;
+  pageState.convo++;
+  showMore('convo-more', rows.length === PAGE);
 
-  // message counts — second query, tallied client-side
+  // message counts for everything currently shown
   const counts = {};
   const ids = state.convos.map(function (c) { return c.id; });
   if (ids.length) {
     const mres = await sb.from('concierge_messages')
       .select('conversation_id')
       .in('conversation_id', ids)
-      .limit(10000);
+      .limit(20000);
     if (mres.error) fail('Message counts', mres.error);
     else (mres.data || []).forEach(function (r) {
       counts[r.conversation_id] = (counts[r.conversation_id] || 0) + 1;

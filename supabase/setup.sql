@@ -414,6 +414,32 @@ create trigger orders_audit after insert or update on public.orders
   for each row execute function public.log_order_event();
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3b. AUDIT-SEARCH INDEXES — make the admin surfaces filterable at scale
+--     (date range, email, keyword). Keyword/ILIKE needs trigram (pg_trgm).
+-- ─────────────────────────────────────────────────────────────────────────────
+create extension if not exists pg_trgm with schema extensions;
+
+create index if not exists orders_placed_at_idx on public.orders (placed_at desc);
+create index if not exists orders_status_idx on public.orders (status);
+create index if not exists orders_email_trgm_idx
+  on public.orders using gin (email extensions.gin_trgm_ops);
+create index if not exists orders_name_trgm_idx
+  on public.orders using gin (name extensions.gin_trgm_ops);
+
+create index if not exists concierge_actions_email_idx
+  on public.concierge_actions (email, created_at desc);
+create index if not exists concierge_actions_result_trgm_idx
+  on public.concierge_actions using gin (result extensions.gin_trgm_ops);
+
+create index if not exists concierge_conversations_email_idx
+  on public.concierge_conversations (user_email, created_at desc);
+
+create index if not exists concierge_messages_content_trgm_idx
+  on public.concierge_messages using gin (content extensions.gin_trgm_ops);
+create index if not exists concierge_messages_created_at_idx
+  on public.concierge_messages (created_at desc);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 4. SEED DATA (admins, config, KB, SOPs, forms, goals) — safe to re-run
 -- ─────────────────────────────────────────────────────────────────────────────
 
