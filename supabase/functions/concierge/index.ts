@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-nosilence+goalfocus";
+const BUILD_TAG = "2026-07-04-openengage+authdiag";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1217,12 +1217,14 @@ async function handleChatPost(req: Request): Promise<Response> {
       content: opener === "greet"
         ? "[Context note, not the shopper's words: they just opened the concierge and have not " +
           "spoken yet. They already see a brief house greeting, so do NOT repeat a generic hello. " +
-          "Add ONE personal, specific line that shows you already know this patron — greet them by " +
-          "first name and nod to their standing or a real order/note (a returning patron is never a " +
-          "stranger). If a RE-ENGAGEMENT line is present, welcome them back to where you left off. " +
-          "End with a single light question that moves toward a conversation goal. If you need prior " +
-          "notes or an earlier conversation you don't see here, call recall_context first. Do not " +
-          "mention this note. One or two sentences.]"
+          "Add ONE warm, specific line that opens toward a conversation goal. If CUSTOMER is present, " +
+          "make it personal — greet them by first name and nod to their standing or a real order/note " +
+          "(a returning patron is never a stranger); if a RE-ENGAGEMENT line is present, welcome them " +
+          "back to where you left off, calling recall_context first if you need older notes. If there " +
+          "is NO CUSTOMER (an anonymous visitor), open from what they're browsing (the BROWSING " +
+          "section and page) — e.g. the cloth they're reading about, gift vs. their own home — and " +
+          "invite them in. End with a single light question. Do not mention this note. One or two " +
+          "sentences.]"
         : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
           "from the conversation so far and what you know of them — never a generic greeting, never " +

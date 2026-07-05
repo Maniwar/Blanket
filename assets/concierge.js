@@ -2102,18 +2102,27 @@
     }
     var hadUser = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { hadUser = true; break; } }
-    var kind = '';
-    if (last && last.role === 'assistant' && hadUser) { kind = 'reengage'; }
-    else if (authEmail && !history.length) { kind = 'greet'; }
+    var kind = '', delay = 1100;
+    if (last && last.role === 'assistant' && hadUser) {
+      kind = 'reengage'; delay = 1100;           /* came back to a live thread — pick it up now */
+    } else if (!history.length) {
+      kind = 'greet';
+      /* a known patron is greeted personally right away; a fresh/anonymous
+         visitor gets a warm follow-up on the house greeting after an idle beat,
+         so they're never left in an open, silent panel */
+      delay = authEmail ? 1200 : 16000;
+    }
     if (!kind) { return; }
     reengagedThisOpen = true;
     nudgeCount = 0; holdAttempts = 0; clearNudge();
-    setTimeout(function () {
+    nudgeTimer = setTimeout(function () {
       if (!panelOpen || streaming || quietMode) { return; }
+      /* if they engaged during the wait (tapped a pill, typed), let them lead */
+      if (kind === 'greet' && history.length) { return; }
       pendingOpener = kind;
       entryMode = 'opener:' + kind;
       performRequest({ quiet: true }); /* lazy shell — no phantom typing if it holds */
-    }, 1100);
+    }, delay);
   }
 
   function failTurn(shell) {
@@ -2457,10 +2466,23 @@
     input.setAttribute('aria-label', 'Email for sign-in key');
     var send = el('button', 'cx-authsend', 'Send key');
     send.type = 'button';
-    function fail() {
+    function fail(err) {
       send.disabled = false;
       send.textContent = 'Send key';
-      cap.textContent = 'The key could not be sent. Try once more.';
+      var msg = '';
+      try {
+        if (err && typeof err === 'object') { msg = err.message || (err.error && err.error.message) || ''; }
+        else if (typeof err === 'string') { msg = err; }
+      } catch (eM) { msg = ''; }
+      /* Surface the real reason (rate limit, invalid email, etc.) instead of a
+         blanket message — most often it's Supabase's send cooldown. */
+      if (/rate|too many|seconds|limit/i.test(msg)) {
+        cap.textContent = 'Too many key requests just now — wait a minute and try again.';
+      } else if (msg) {
+        cap.textContent = 'Could not send the key: ' + msg;
+      } else {
+        cap.textContent = 'The key could not be sent. Try once more.';
+      }
     }
     function submit() {
       if (send.disabled) { return; }
@@ -2471,20 +2493,23 @@
       }
       send.disabled = true;
       send.textContent = 'Sending…';
+      /* Clean redirect target — never carry a leftover #access_token hash from a
+         previous magic link, which can fail the redirect allow-list. */
+      var redirectTo = location.origin + location.pathname;
       ensureSupabase().then(function (client) {
         if (!client) { fail(); return; }
         try {
           client.auth.signInWithOtp({
             email: em,
-            options: { emailRedirectTo: location.href }
+            options: { emailRedirectTo: redirectTo }
           }).then(function (r) {
-            if (r && r.error) { fail(); return; }
+            if (r && r.error) { fail(r.error); return; }
             var row = authRow;
             if (!row) { return; }
             while (row.firstChild) { row.removeChild(row.firstChild); }
             row.appendChild(el('div', 'cx-authcap', 'Sent. Check your inbox.'));
           }, fail);
-        } catch (eS) { fail(); }
+        } catch (eS) { fail(eS); }
       });
     }
     send.addEventListener('click', submit);
