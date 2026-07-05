@@ -56,12 +56,14 @@ cannot find a specific customer's conversation, an order from last month, or an
 action by a given email. **This is the feature this review triggers — see
 [Immediate work](#immediate-work-admin-filtering) below.**
 
-### 4. Analytics counts do full-table `count(exact)`
-The Conversations summary runs `count('*', { count: 'exact' })` over
-`concierge_conversations`, `concierge_messages`, `orders`, `feedback`. Exact
-counts are full scans; on huge tables each one is seconds-to-minutes.
-**Fix:** time-bound them (already partly done for two), or use Postgres
-`reltuples` estimates for headline totals.
+### 4. Analytics counts do full-table `count(exact)` — ✅ FIXED
+*Was:* the Conversations summary ran `count: 'exact'` over whole tables
+(`feedback`, `orders`) — full scans, seconds-to-minutes on huge tables.
+*Now:* the date-bounded counts (today's conversations/messages, on the
+`created_at` index) stay exact and cheap; the whole-table counts (feedback total,
+👍 count, assisted orders) use `count: 'estimated'`, which PostgREST serves from
+the planner's `reltuples` estimate on large tables (and still returns exact on
+small ones) — O(1) regardless of size.
 
 ---
 

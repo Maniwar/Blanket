@@ -2110,11 +2110,14 @@ async function loadMetrics() {
   const iso = dayStart.toISOString();
   try {
     const results = await Promise.all([
+      // Today's counts are date-bounded (created_at index) so exact stays cheap.
       sb.from('concierge_conversations').select('*', { count: 'exact', head: true }).gte('created_at', iso),
       sb.from('concierge_messages').select('*', { count: 'exact', head: true }).gte('created_at', iso),
-      sb.from('concierge_feedback').select('*', { count: 'exact', head: true }),
-      sb.from('concierge_feedback').select('*', { count: 'exact', head: true }).eq('rating', 1),
-      sb.from('orders').select('*', { count: 'exact', head: true })
+      // These scan whole tables — use planner estimates so they stay O(1) at
+      // scale (PostgREST returns exact for small tables, estimated for large).
+      sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }),
+      sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }).eq('rating', 1),
+      sb.from('orders').select('*', { count: 'estimated', head: true })
         .not('chat_session', 'is', null).neq('status', 'cancelled')
     ]);
     const convosToday = results[0], msgsToday = results[1], fbAll = results[2], fbUp = results[3];
