@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-cancel-email";
+const BUILD_TAG = "2026-07-05-no-plumbing-leak";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 

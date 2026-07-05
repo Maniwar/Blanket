@@ -668,6 +668,10 @@
   }
 
   function renderInline(text, target) {
+    /* strip any control token that leaked mid-line ({{action:…}}, {{tool:…}},
+       a stray {{reply:…}}) — these are the model's plumbing, never prose, and
+       the on-their-own-line ones are handled above; this catches inline leaks */
+    text = text.replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, '');
     /* per-call regex instance: the shared global's lastIndex gets clobbered
        by recursive calls (nested bold/italic), which loops forever */
     var re = new RegExp(INLINE_RE.source, 'g');
@@ -937,6 +941,12 @@
         if (fdef) { frag.appendChild(buildChatForm(fm[1], parseInt(fm[2], 10), fdef)); }
         i++; continue;
       }
+
+      /* Any OTHER {{token}} on its own line is internal plumbing the model
+         leaked — an un-whitelisted action (e.g. a tool name like
+         {{action:recall_context}}), a malformed form, etc. Swallow it so it
+         never reaches the shopper as raw text. */
+      if (/^\{\{[a-z_]+(?::[^}]*)?\}\}$/i.test(trimmed)) { i++; continue; }
 
       /* pipe table: needs header row + separator row */
       if (trimmed.charAt(0) === '|' && i + 1 < n && isTableSep(lines[i + 1])) {
