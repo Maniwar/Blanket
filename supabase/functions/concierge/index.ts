@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-openengage+authdiag";
+const BUILD_TAG = "2026-07-05-persistent-engage+emailinvite";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1186,22 +1186,38 @@ async function handleChatPost(req: Request): Promise<Response> {
   if (isNudge) {
     const secs = typeof nudge!.seconds === "number" ? Math.round(nudge!.seconds) : 40;
     const cnt = typeof nudge!.count === "number" ? nudge!.count : 1;
-    const decision = cnt >= 2
-      ? "This is your second follow-up — the conversation is winding down. Follow your WRAP-UP " +
-        "procedure: if the shopper is signed in and you learned something durable this visit, " +
-        "call remember_customer with one client-book line first. Then either give space (reply " +
-        "exactly [HOLD] and nothing else if they seem to be reading, deciding, or done) or offer " +
-        "a warm, unhurried close per the SNOOZE procedure — one concrete thread to pull later."
-      : "A good clerk circles back once — so SPEAK now (do not hold). Send one warm, specific line.";
+    const signedIn = (nudge as Record<string, unknown>)?.signedIn === true;
+    let decision: string;
+    if (cnt <= 2) {
+      // First couple: engage with substance drawn from the conversation.
+      decision = "SPEAK now (do not hold). Send one warm, specific line drawn from THIS " +
+        "conversation and what you know of them — the room or person they mentioned, the cloth " +
+        "they lingered on, an open goal. Never generic; something only this shopper would hear.";
+    } else {
+      // Later: a light, human "still here" presence — brief, low-pressure, and
+      // sometimes just checking they're alright. You MAY reply exactly [HOLD] to
+      // give space, but lean toward a short human line most of the time.
+      decision = "This is a later check-in — keep a light, HUMAN presence, the way a clerk " +
+        "lingers nearby: a brief, low-pressure line (\"Still here whenever you'd like to pick " +
+        "this up\", \"Anything else on your mind?\"), warm and unhurried, at most one sentence. " +
+        "Do not re-pitch or repeat yourself. If they truly seem done, you may reply exactly " +
+        "[HOLD] to give space — but most of the time, a short human check-in is right.";
+    }
+    // For an anonymous visitor, occasionally invite them to leave their email so
+    // the house can remember them — an account is how their orders and client
+    // book persist. Not every time; roughly every other later check-in.
+    const inviteEmail = !signedIn && cnt >= 2 && (cnt % 2 === 0);
+    const emailNote = inviteEmail
+      ? " Since they are NOT signed in, warmly invite them (once) to leave their email so the " +
+        "house remembers them next time — put {{action:signin}} on its own line. Frame it as being " +
+        "known and welcomed back, never as a form to fill."
+      : "";
     validated.messages.push({
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(follow-up #${cnt}). Follow your ENGAGEMENT & PACING procedure. ${decision} ` +
-        `Draw the line from THIS conversation and what you know of them — their client book, the ` +
-        `room or person they mentioned, the cloth they lingered on. Never a generic or scripted ` +
-        `line; say something only this shopper would hear. Do not greet them again; do not repeat ` +
-        `yourself. One or two sentences.]`,
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure. ${decision}${emailNote} ` +
+        `Do not greet them again as if they just arrived.]`,
     });
   }
 

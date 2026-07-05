@@ -2048,7 +2048,7 @@
       if (nudgeCount > 0) { nudgeCount--; }
       holdAttempts++;
       setStreaming(false);
-      if (holdAttempts < 3) { scheduleNudge(true); }
+      if (holdAttempts < 4) { scheduleNudge(true); } /* keep a light presence a while longer */
       return;
     }
     var content = shell.getText();
@@ -2061,6 +2061,7 @@
     shell.done();
     content = shell.getText();
     if (content) {
+      if (shell.proactive) { holdAttempts = 0; } /* it spoke — refresh the give-space budget */
       history.push({ role: 'assistant', content: content, ts: Date.now() });
       saveHistory();
     }
@@ -2075,12 +2076,16 @@
     if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
   }
 
-  /* The concierge picks the thread back up when the visitor falls quiet —
-     once, then once more, then it rests (the snooze procedure does the rest). */
+  /* The concierge keeps a light, human presence while the panel is open — it
+     circles back a couple of times with substance, then settles into occasional
+     "still here whenever you need me" check-ins at growing intervals, the way a
+     good clerk lingers nearby without hovering. Quiet mode stops it entirely. */
+  var NUDGE_DELAYS = [20000, 45000, 90000, 180000, 300000]; /* last value repeats */
+  var NUDGE_CAP = 6;            /* total proactive check-ins before it fully rests */
   function scheduleNudge(spacious) {
     clearNudge();
     if (isDemo() || !panelOpen || quietMode) { return; }
-    if (nudgeCount >= 2) { return; }
+    if (nudgeCount >= NUDGE_CAP) { return; }
     /* only when a real exchange is underway and the last word was the bot's */
     if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
     /* Normally we only circle back once the visitor has spoken — but a signed-in
@@ -2089,16 +2094,17 @@
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
     if (!spoke && !authEmail) { return; }
     var o = orCfg();
-    var first = typeof o.nudge1Ms === 'number' ? o.nudge1Ms : 20000;
-    var second = typeof o.nudge2Ms === 'number' ? o.nudge2Ms : 45000;
-    var wait = nudgeCount === 0 ? first : second;
-    if (spacious) { wait = Math.round(wait * 1.8); } /* a declined moment earns more room */
+    var idx = Math.min(nudgeCount, NUDGE_DELAYS.length - 1);
+    var wait = NUDGE_DELAYS[idx];
+    if (idx === 0 && typeof o.nudge1Ms === 'number') { wait = o.nudge1Ms; }
+    if (idx === 1 && typeof o.nudge2Ms === 'number') { wait = o.nudge2Ms; }
+    if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
     nudgeTimer = setTimeout(function () {
-      if (streaming || !panelOpen) { return; }
+      if (streaming || !panelOpen || quietMode) { return; }
       if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
       nudgeCount++;
       entryMode = 'nudge';
-      pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount };
+      pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount, signedIn: !!authEmail };
       performRequest({ quiet: true }); /* no phantom typing if it holds */
     }, wait);
   }
@@ -2938,14 +2944,11 @@
       if (panelOpen) { doWrapup('auto'); }
     });
     updateLauncher();
-    /* a magic-link redirect landed here — let supabase-js collect it now */
+    /* Resolve any signed-in session early (and collect a magic-link redirect if
+       present), so the concierge knows who they are BEFORE the panel opens —
+       otherwise a signed-in patron gets the slow anonymous greeting timing. */
     if (authEnabled()) {
-      var loc = '';
-      try { loc = String(location.hash || '') + String(location.search || ''); } catch (eH) { loc = ''; }
-      if (loc.indexOf('access_token=') !== -1 || loc.indexOf('type=magiclink') !== -1 ||
-          loc.indexOf('code=') !== -1) {
-        ensureSupabase();
-      }
+      ensureSupabase();
     }
   }
 
