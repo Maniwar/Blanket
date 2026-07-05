@@ -1973,7 +1973,13 @@
     if (typeof cm === 'number' && cm >= 0) { maxN = cm; }
     return { idleMs: idleMs, max: maxN, enabled: o.reengageEnabled !== false };
   }
-  function reengageLine() {
+  function reengageLine(postSale) {
+    if (postSale) {
+      /* they already commissioned — invite a SECOND entry, never "still eyeing" */
+      return authEmail
+        ? 'Your number’s in the Webbuch. When you’re ready — a companion cloth for another room, or one as a gift with the card in another name?'
+        : 'Your number is safely in the Webbuch. A companion cloth for another room, or one sent as a gift — I can arrange either.';
+    }
     var sec = currentSection();
     if (authEmail) {
       var s = {
@@ -1995,27 +2001,39 @@
   /* Ask the server for a goal + journey aware line (it reads the open goals and
      the section the visitor is in). Falls back to the client line on any failure
      so the beat still fires offline / if the endpoint is unavailable. */
-  function fetchReengageLine(cb) {
-    if (isDemo()) { cb(reengageLine()); return; }
-    var body = JSON.stringify({ session_key: sessionKey(), section: currentSection() });
+  function fetchReengageLine(postSale, cb) {
+    if (isDemo()) { cb(reengageLine(postSale)); return; }
+    var body = JSON.stringify({ session_key: sessionKey(), section: currentSection(), post_sale: !!postSale });
     var url = endpoint() + (endpoint().indexOf('?') === -1 ? '?reengage=1' : '&reengage=1');
     getAccessToken().then(function (token) {
       var headers = { 'Content-Type': 'application/json' };
       if (token) { headers['Authorization'] = 'Bearer ' + token; }
       fetch(url, { method: 'POST', headers: headers, body: body })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { cb(j && typeof j.text === 'string' && j.text ? j.text : reengageLine()); })
-        ['catch'](function () { cb(reengageLine()); });
-    })['catch'](function () { cb(reengageLine()); });
+        .then(function (j) { cb(j && typeof j.text === 'string' && j.text ? j.text : reengageLine(postSale)); })
+        ['catch'](function () { cb(reengageLine(postSale)); });
+    })['catch'](function () { cb(reengageLine(postSale)); });
+  }
+  var REENGAGE_GRACE_MS = 4 * 60000;   /* let congrats + the check-in own the sale moment */
+  function purchaseAgeMs() {
+    try {
+      var lp = JSON.parse(window.localStorage.getItem('feier_last_purchase') || 'null');
+      return (lp && lp.ts) ? (Date.now() - lp.ts) : null;
+    } catch (e) { return null; }
   }
   function reengageTick() {
     if (isDemo() || panelOpen || quietMode || streaming || outreachEl || reengageBusy) { return; }
+    var pa = purchaseAgeMs();
+    if (pa !== null && pa < REENGAGE_GRACE_MS) { return; }       /* fresh sale — congrats owns it */
     if (!hadActivity || !activeSinceReengage) { return; }        /* need fresh activity */
     var c = reengageCfg();
     if (!c.enabled || reengageCount >= c.max) { return; }
     if (Date.now() - lastActivityTs < c.idleMs) { return; }      /* not idle long enough yet */
+    /* Past the grace window but recently purchased → re-engage for a SECOND sale
+       (companion cloth / gift), not "still eyeing the thing". */
+    var postSale = (pa !== null && pa < 48 * 3600000);
     reengageBusy = true;
-    fetchReengageLine(function (line) {
+    fetchReengageLine(postSale, function (line) {
       reengageBusy = false;
       /* re-check — state may have changed while the line was being composed */
       if (panelOpen || quietMode || streaming || outreachEl) { return; }

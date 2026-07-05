@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-site-cms";
+const BUILD_TAG = "2026-07-05-postsale-reengage";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -2128,22 +2128,38 @@ async function handleReengage(req: Request): Promise<Response> {
       }
     }
 
-    const open = goalStatus
-      ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
-      : data.goals;
-    if (open.length === 0) return fallback();                 // all met — don't push
-    const goal = open.find((g) => section && typeof g.section === "string" &&
-      g.section.toLowerCase() === section) || open[0];
-
     const signed = customer !== null;
-    const sys =
-      "You are the Mill Concierge for Feierabend, a numbered German wool blanket. Write ONE short " +
-      "outreach line (max 30 words) to a shopper who is reading the '" + (section || "page") +
-      "' section and has paused with the chat closed. Advance THIS goal, tied to what's in front of " +
-      "them: " + goal.label + " — " + goal.description + ". Warm, specific, ending in one light " +
-      "question. " + (signed ? "They are a signed-in patron; a small nod to that is welcome." :
-      "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
-      "{{tokens}}, no greeting boilerplate. Just the line.";
+    const postSale = body.post_sale === true;
+
+    let sys: string;
+    if (postSale) {
+      // They JUST commissioned — never "still eyeing it". Congratulate lightly if
+      // natural, then invite a SECOND entry (companion cloth for another room, or
+      // one as a gift with the register card in another name).
+      sys =
+        "You are the Mill Concierge for Feierabend. This shopper JUST commissioned a blanket and is " +
+        "browsing again on the '" + (section || "page") + "' section. Write ONE short line (max 30 " +
+        "words) that does NOT treat them as undecided — a light nod to their new entry is fine, then " +
+        "warmly invite a SECOND blanket: a companion cloth for another room, or one as a gift with the " +
+        "register card in another name. End in one light question. " +
+        (signed ? "They are a signed-in patron." : "They are an anonymous visitor.") +
+        " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line.";
+    } else {
+      const open = goalStatus
+        ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
+        : data.goals;
+      if (open.length === 0) return fallback();               // all met — don't push
+      const goal = open.find((g) => section && typeof g.section === "string" &&
+        g.section.toLowerCase() === section) || open[0];
+      sys =
+        "You are the Mill Concierge for Feierabend, a numbered German wool blanket. Write ONE short " +
+        "outreach line (max 30 words) to a shopper who is reading the '" + (section || "page") +
+        "' section and has paused with the chat closed. Advance THIS goal, tied to what's in front of " +
+        "them: " + goal.label + " — " + goal.description + ". Warm, specific, ending in one light " +
+        "question. " + (signed ? "They are a signed-in patron; a small nod to that is welcome." :
+        "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
+        "{{tokens}}, no greeting boilerplate. Just the line.";
+    }
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
