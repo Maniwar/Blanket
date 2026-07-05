@@ -48,6 +48,37 @@ noted where they exist.
 - Covered in [`DESIGN.md`](DESIGN.md) §2.8: the move-selector (Ask/Recommend/Show/
   Advance/Reassure/Space), the assertiveness dial, hooks/objections, journey-aware
   goals, closed-panel re-engagement, and post-sale behavior. All admin-tunable.
+- **Show the commission button on a buying signal — don't interrogate.** The moment
+  the shopper signals intent ("I want to commission," "let's do it," "open the
+  register," "I'll take it"), the bot emits `{{action:commission}}` **in that same
+  reply**. It does NOT ask which cloth or where it ships first — the register sheet
+  collects the cloth and address itself, so asking beforehand is friction that
+  loses the sale. It never proposes opening the register ("shall I…?") without the
+  button in the message, and never repeats a qualifying question.
+- **`[HOLD]` is a silence signal, never a reply.** The bot may answer a *proactive*
+  check-in prompt with exactly `[HOLD]` when staying quiet is kinder — the server
+  turns that into a hold and shows nothing. It must never write `[HOLD]` in reply
+  to a message the visitor actually sent; the token can never reach the reader (the
+  pipeline strips it on every path).
+- **Post-purchase.** A commission is congratulated **in the transcript** the moment
+  checkout closes (with the standing note — Wiederkehr/Hausfreund/Stifter — when it
+  applies), whether the chat panel is open or closed. After the sale the bot leads
+  with reassurance (grace window), then may re-engage for a companion cloth/gift —
+  never "still eyeing it." Timings are admin-tunable (`outreach.reengageGraceMs`,
+  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
+
+## Chat panel & composer (client UX)
+- **A brief tab-switch does not end the conversation.** Glancing at another tab
+  (e.g. the admin) no longer marks the live chat "closed" — the wind-down fires
+  only on a real leave (tab hidden ~60s, or an actual page unload). An explicit
+  "That's all"/snooze still starts a fresh conversation deliberately.
+- **The composer keeps focus** on pointer devices (including a narrow, side-by-side
+  desktop window): the cursor lands in the box on open and returns to it after each
+  reply, so you can send back-to-back with Enter. On touch it's left alone so the
+  keyboard doesn't spring up.
+- **Session identity is per-tab** (`sessionStorage` key), so a refresh resumes the
+  same conversation; a second tab, or the magic-link sign-in opening a new tab, is
+  a separate conversation by design.
 
 ## Journey-aware goals
 - Each goal can carry one or more **sections** (page/journey stages), set as

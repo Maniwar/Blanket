@@ -55,7 +55,11 @@ a whole class of calls falls away. No deploy.
 so the prompt is assembled from memory, not a DB round-trip, on most calls. (This
 also keeps the cached prefix identical for the TTL.)
 
-## Backlog (not yet done)
+## Backlog (deliberately deferred)
+
+These are held back on purpose: each trades some **quality** for cost, and with
+prompt caching already doing the heavy lifting, the tradeoff isn't worth it yet.
+Revisit if spend becomes a concern at scale.
 
 - **Template the re-engagement line** — the client already has a solid fallback;
   skip the `?reengage` model call entirely, or only use the model at higher
