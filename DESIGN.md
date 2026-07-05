@@ -420,7 +420,9 @@ via SOPs / tuning notes). The full set is documented in the admin studio
   injected into the system prompt so the concierge knows to use them.
 - `{{action:commission}}` / `{{action:signin}}` — the commission / sign-in
   buttons. `{{reply:<text>}}` — a tappable pill. `{{form:<slug>:<serial>}}` — an
-  in-chat form (defined under Procedures → Forms).
+  in-chat form (defined under Procedures → Forms). Forms — the field schema,
+  submit-tool binding, how to add one, and how to steer when the bot offers it —
+  are documented in [`FORMS.md`](FORMS.md).
 
 Data model rationale is documented field-by-field in
 [`supabase/SCHEMA.md`](supabase/SCHEMA.md).

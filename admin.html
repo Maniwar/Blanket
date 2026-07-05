@@ -347,6 +347,7 @@
   .row-tools{ display:flex; gap:12px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
   .filters{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
   .filters input[type="date"]{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
+  .filters select{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
 
   /* toasts */
   #toasts{ position:fixed; right:22px; bottom:22px; z-index:50; display:flex; flex-direction:column; gap:10px; }
@@ -667,9 +668,10 @@
           <h3>Forms</h3>
           <span class="micro">structured input the concierge can hand out</span>
         </div>
-        <p class="note" style="margin-bottom:16px;">Each form renders inside the chat when the concierge emits its token. Fields are JSON: name, label, type (text · state · zip), required, maxlength, autocomplete. Submissions run through the same verified, audited write path as the concierge's own tools.</p>
+        <p class="note" style="margin-bottom:16px;">Each form renders inside the chat when the concierge emits its <code>{{form:slug:serial}}</code> token — so forms are <strong>order-scoped</strong> (they carry a serial). A form binds to one <strong>submit tool</strong> (a register write path); pick it when adding. Fields are JSON: name, label, type (text · state · zip), required, maxlength, autocomplete — at least one field is required. Submissions run through the same verified, audited path as the concierge's own tools. See <code>FORMS.md</code> for the full guide.</p>
         <div id="forms-list"></div>
         <div class="card-foot">
+          <button id="forms-add" class="btn primary">Add form</button>
           <button id="forms-refresh" class="btn">Refresh</button>
         </div>
       </section>
@@ -729,9 +731,31 @@
       </div>
 
       <div class="row-tools filters">
+        <input type="text" id="cust-serial" inputmode="numeric" placeholder="Find Nº…" title="Jump to an order number" style="max-width:110px;">
         <input type="date" id="cust-from" title="Ordered from">
         <input type="date" id="cust-to" title="Ordered to">
-        <input type="text" id="cust-search" placeholder="Search name or email…" style="max-width:260px;">
+        <input type="text" id="cust-search" placeholder="Search name or email…" style="max-width:220px;">
+        <select id="cust-status" title="Order status">
+          <option value="">Any status</option>
+          <option value="placed">placed</option>
+          <option value="weaving">weaving</option>
+          <option value="finishing">finishing</option>
+          <option value="shipped">shipped</option>
+          <option value="delivered">delivered</option>
+          <option value="returned">returned</option>
+          <option value="cancelled">cancelled</option>
+        </select>
+        <select id="cust-colorway" title="Colorway">
+          <option value="">Any cloth</option>
+          <option value="ungefaerbt">ungefaerbt</option>
+          <option value="loden">loden</option>
+          <option value="graphit">graphit</option>
+        </select>
+        <select id="cust-gift" title="Gift or self">
+          <option value="">Gift &amp; self</option>
+          <option value="gift">gifts only</option>
+          <option value="self">self only</option>
+        </select>
         <button id="cust-apply" class="btn">Search</button>
         <button id="cust-clear" class="btn ghost">Clear</button>
         <button id="cust-refresh" class="btn">Refresh</button>
@@ -781,6 +805,14 @@
         <input type="date" id="convo-from" title="From date">
         <input type="date" id="convo-to" title="To date">
         <input type="text" id="convo-q" placeholder="patron email, or a word in the chat…" style="max-width:280px;">
+        <select id="convo-goal" title="Goal outcome (filters loaded conversations)">
+          <option value="">Any outcome</option>
+          <option value="met">Any goal met</option>
+          <option value="partial">Any goal partial</option>
+          <option value="unmet">All unmet / none</option>
+          <option value="graded">Graded only</option>
+          <option value="ungraded">Not yet graded</option>
+        </select>
         <button id="convo-apply" class="btn">Search</button>
         <button id="convo-clear" class="btn ghost">Clear</button>
         <button id="convo-more" class="btn ghost" style="display:none;">Load more</button>
@@ -1125,6 +1157,7 @@ function wireStatic() {
   $('forms-refresh').addEventListener('click', function () {
     withBusy($('forms-refresh'), loadForms);
   });
+  $('forms-add').addEventListener('click', addForm);
   $('goals-def-refresh').addEventListener('click', function () {
     withBusy($('goals-def-refresh'), loadGoalDefs);
   });
@@ -1144,9 +1177,15 @@ function wireStatic() {
 
   // ---- Audit filters: Search / Clear / Load more + Enter-to-search ----
   wireFilter('act', loadActions, ['act-q'], $('act-apply'), $('act-clear'), $('actions-more'));
-  wireFilter('cust', loadCustomers, ['cust-search'], $('cust-apply'), $('cust-clear'), null);
-  wireFilter('convo', loadConversations, ['convo-q'], $('convo-apply'), $('convo-clear'), $('convo-more'));
+  wireFilter('cust', loadCustomers, ['cust-search', 'cust-serial', 'cust-status', 'cust-colorway', 'cust-gift'], $('cust-apply'), $('cust-clear'), null);
+  wireFilter('convo', loadConversations, ['convo-q', 'convo-goal'], $('convo-apply'), $('convo-clear'), $('convo-more'));
   wireFilter('wl', loadWaitlist, ['wl-q'], $('wl-apply'), $('wl-clear'), $('wl-more'));
+  // Selects apply on change: the order attributes hit the server; the goal
+  // outcome re-filters the conversations already loaded (no server round-trip).
+  ['cust-status', 'cust-colorway', 'cust-gift'].forEach(function (id) {
+    $(id).addEventListener('change', function () { withBusy($('cust-apply'), loadCustomers); });
+  });
+  $('convo-goal').addEventListener('change', renderConversations);
   $('wl-refresh').addEventListener('click', function () { withBusy($('wl-refresh'), loadWaitlist); });
   $('wl-export').addEventListener('click', exportWaitlistCsv);
 }
@@ -1572,19 +1611,60 @@ async function loadForms() {
   renderForms();
 }
 
+/* Forms are order-scoped ({{form:slug:serial}}) so their submit tool must be a
+   register write path that takes a serial. These are the ones that qualify; the
+   server safely rejects anything else at submit time. Each carries a starter
+   fields template so a new form is usable immediately. */
+const SUBMIT_TOOLS = [
+  {
+    tool: 'update_shipping_address',
+    label: 'update_shipping_address — change the delivery address',
+    fields: [
+      { name: 'address',  label: 'Street address',         type: 'text',  required: true,  maxlength: 120, autocomplete: 'address-line1' },
+      { name: 'address2', label: 'Apt, suite — if needed', type: 'text',  required: false, maxlength: 120, autocomplete: 'address-line2' },
+      { name: 'city',     label: 'City',                    type: 'text',  required: true,  maxlength: 80,  autocomplete: 'address-level2' },
+      { name: 'state',    label: 'State',                   type: 'state', required: true },
+      { name: 'zip',      label: 'ZIP',                     type: 'zip',   required: true,  autocomplete: 'postal-code' }
+    ]
+  },
+  {
+    tool: 'update_colorway',
+    label: 'update_colorway — change the cloth (before weaving)',
+    fields: [
+      { name: 'colorway', label: 'Colorway — ungefaerbt, loden, or graphit', type: 'text', required: true, maxlength: 12 }
+    ]
+  }
+];
+function submitToolMeta(tool) {
+  for (let i = 0; i < SUBMIT_TOOLS.length; i++) if (SUBMIT_TOOLS[i].tool === tool) return SUBMIT_TOOLS[i];
+  return null;
+}
+
 function renderForms() {
   const list = $('forms-list');
   list.textContent = '';
   if (!state.forms.length) {
-    list.appendChild(el('div', 'empty micro', 'No forms yet — run the forms migration, or add rows to concierge_forms.'));
-    return;
+    list.appendChild(el('div', 'empty micro', 'No forms yet — add one, or run the forms migration.'));
+  } else {
+    state.forms.forEach(function (row) { list.appendChild(formEditor(row)); });
   }
-  state.forms.forEach(function (row) { list.appendChild(formEditor(row)); });
   if ($('panel-procedures').classList.contains('on')) autoGrowAll('#forms-list');
 }
 
+function addForm() {
+  const def = SUBMIT_TOOLS[0];
+  const fresh = { id: null, slug: '', title: '', submit_tool: def.tool, fields: def.fields, enabled: true };
+  state.forms.push(fresh);
+  const list = $('forms-list');
+  const em = list.querySelector('.empty'); if (em) em.remove();
+  const node = formEditor(fresh);
+  list.appendChild(node);
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function formEditor(row) {
-  const wrap = el('div', 'kb-row');
+  const isNew = !row.id;
+  const wrap = el('div', 'kb-row' + (isNew ? ' is-new' : ''));
 
   const top = el('div', 'kb-top');
   const chk = el('label', 'checkline');
@@ -1594,9 +1674,40 @@ function formEditor(row) {
   chk.appendChild(cb);
   chk.appendChild(el('span', 'micro', 'Enabled'));
   top.appendChild(chk);
-  top.appendChild(el('span', 'slug', '{{form:' + row.slug + ':<serial>}}'));
-  top.appendChild(el('span', 'micro ord', '→ ' + (row.submit_tool || '')));
+  const slugEl = el('span', 'slug', isNew ? '{{form:(slug):<serial>}}' : '{{form:' + row.slug + ':<serial>}}');
+  top.appendChild(slugEl);
+  const toolEl = el('span', 'micro ord', '→ ' + (row.submit_tool || ''));
+  top.appendChild(toolEl);
   wrap.appendChild(top);
+
+  // New forms let the admin set the slug + pick the submit tool; existing ones
+  // keep both read-only (the slug is referenced by SOPs, the tool by the token).
+  let slugInput = null, toolSelect = null;
+  if (isNew) {
+    const fSlug = el('div', 'field');
+    fSlug.appendChild(el('span', 'micro', 'Slug (letters, numbers, dashes — used in the token)'));
+    slugInput = el('input');
+    slugInput.type = 'text';
+    slugInput.placeholder = 'e.g. address-change';
+    slugInput.addEventListener('input', function () {
+      slugInput.value = kebab(slugInput.value);
+      slugEl.textContent = '{{form:' + (slugInput.value || '(slug)') + ':<serial>}}';
+    });
+    fSlug.appendChild(slugInput);
+    wrap.appendChild(fSlug);
+
+    const fTool = el('div', 'field');
+    fTool.appendChild(el('span', 'micro', 'Submit tool (the register write path this form runs)'));
+    toolSelect = document.createElement('select');
+    SUBMIT_TOOLS.forEach(function (t) {
+      const opt = document.createElement('option');
+      opt.value = t.tool; opt.textContent = t.label;
+      toolSelect.appendChild(opt);
+    });
+    toolSelect.value = row.submit_tool;
+    fTool.appendChild(toolSelect);
+    wrap.appendChild(fTool);
+  }
 
   const fTitle = el('div', 'field');
   fTitle.appendChild(el('span', 'micro', 'Title (shown on the form)'));
@@ -1607,7 +1718,7 @@ function formEditor(row) {
   wrap.appendChild(fTitle);
 
   const fBody = el('div', 'field');
-  fBody.appendChild(el('span', 'micro', 'Fields (JSON array)'));
+  fBody.appendChild(el('span', 'micro', 'Fields (JSON array — at least one)'));
   const body = el('textarea');
   body.rows = 6;
   body.value = JSON.stringify(row.fields || [], null, 2);
@@ -1615,7 +1726,27 @@ function formEditor(row) {
   fBody.appendChild(body);
   wrap.appendChild(fBody);
 
+  // Picking a tool for a new form swaps in that tool's starter fields, unless
+  // the admin has already edited them.
+  if (isNew && toolSelect) {
+    let pristine = true;
+    body.addEventListener('input', function () { pristine = false; });
+    toolSelect.addEventListener('change', function () {
+      toolEl.textContent = '→ ' + toolSelect.value;
+      const meta = submitToolMeta(toolSelect.value);
+      if (meta && pristine) { body.value = JSON.stringify(meta.fields, null, 2); autoGrow(body); }
+    });
+  }
+
   const actions = el('div', 'kb-actions');
+  if (isNew) {
+    const btnDel = el('button', 'btn danger', 'Discard');
+    btnDel.addEventListener('click', function () {
+      state.forms = state.forms.filter(function (r) { return r !== row; });
+      wrap.remove();
+    });
+    actions.appendChild(btnDel);
+  }
   const btnSave = el('button', 'btn primary', 'Save');
   actions.appendChild(btnSave);
   wrap.appendChild(actions);
@@ -1630,6 +1761,29 @@ function formEditor(row) {
         toast('Fields JSON does not parse: ' + e.message, true);
         return;
       }
+      if (!fields.length) { toast('A form needs at least one field to render.', true); return; }
+
+      if (isNew) {
+        const slug = kebab(slugInput.value);
+        if (!slug) { toast('Enter a slug (letters, numbers, dashes).', true); return; }
+        if (!submitToolMeta(toolSelect.value)) { toast('Pick a submit tool.', true); return; }
+        const res = await sb.from('concierge_forms').insert({
+          slug: slug, title: title.value.trim() || slug, submit_tool: toolSelect.value,
+          fields: fields, enabled: cb.checked, updated_at: nowIso()
+        }).select().single();
+        if (res.error) {
+          fail(res.error.code === '23505' ? 'Slug already in use' : 'Add form', res.error);
+          return;
+        }
+        row.id = res.data.id; row.slug = res.data.slug; row.submit_tool = res.data.submit_tool;
+        wrap.classList.remove('is-new');
+        // freeze slug + tool now that it exists — rebuild as a normal editor
+        const fresh = formEditor(row);
+        wrap.replaceWith(fresh);
+        toast('Form added — ' + row.slug);
+        return;
+      }
+
       const res = await sb.from('concierge_forms').update({
         title: title.value.trim() || row.slug,
         fields: fields,
@@ -1795,7 +1949,11 @@ async function loadActions(more) {
   const df = fFrom('act-from'), dt = fTo('act-to'), kw = fkw('act-q');
   if (df) q = q.gte('created_at', df);
   if (dt) q = q.lte('created_at', dt);
-  if (kw) q = q.or(orIlike(['email', 'action', 'result'], kw));
+  if (kw) {
+    let ors = orIlike(['email', 'action', 'result'], kw);
+    if (/^\d+$/.test(kw)) ors += ',serial.eq.' + kw;   // a bare number matches an order Nº
+    q = q.or(ors);
+  }
   const res = await q;
   if (res.error) { fail('Load actions', res.error); return; }
   const rows = res.data || [];
@@ -2054,9 +2212,21 @@ async function loadCustomers() {
     .order('placed_at', { ascending: false })
     .limit(1000);
   const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
-  if (df) q = q.gte('placed_at', df);
-  if (dt) q = q.lte('placed_at', dt);
-  if (kw) q = q.or(orIlike(['email', 'name', 'recipient_name'], kw)); // server search, not just the fetched page
+  const serialQ = fkw('cust-serial'), statusQ = fval('cust-status'),
+        cwQ = fval('cust-colorway'), giftQ = fval('cust-gift');
+  // A bare order number jumps straight to that entry (live or struck), ignoring
+  // the other narrowing so the admin always finds the number they typed.
+  if (/^\d+$/.test(serialQ)) {
+    q = q.or('serial.eq.' + serialQ + ',cancelled_serial.eq.' + serialQ);
+  } else {
+    if (df) q = q.gte('placed_at', df);
+    if (dt) q = q.lte('placed_at', dt);
+    if (kw) q = q.or(orIlike(['email', 'name', 'recipient_name'], kw)); // server search, not just the fetched page
+    if (statusQ) q = q.eq('status', statusQ);
+    if (cwQ) q = q.eq('colorway', cwQ);
+    if (giftQ === 'gift') q = q.eq('is_gift', true);
+    else if (giftQ === 'self') q = q.or('is_gift.is.false,is_gift.is.null');
+  }
   const res = await q;
   if (res.error) { fail('Load customers', res.error); return; }
   let notesByKey = new Map();
@@ -2115,7 +2285,10 @@ function renderCustomers() {
   const list = $('cust-list');
   list.textContent = '';
 
-  const q = ($('cust-search').value || '').trim().toLowerCase();
+  const serialActive = /^\d+$/.test(($('cust-serial').value || '').trim());
+  // When jumping to an order Nº the server already narrowed to it — don't also
+  // apply the free-text box (it's ignored on that path) and open the row.
+  const q = serialActive ? '' : ($('cust-search').value || '').trim().toLowerCase();
   const rows = state.customers.filter(function (c) {
     return !q || c.email.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
   });
@@ -2264,6 +2437,7 @@ function renderCustomers() {
     row.appendChild(book);
 
     head.addEventListener('click', function () { row.classList.toggle('open'); });
+    if (serialActive) row.classList.add('open');   // land on the order, expanded
     list.appendChild(row);
   });
 }
@@ -2445,17 +2619,48 @@ function fmtWhen(ts) {
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/* Does a conversation's goal_status match the outcome filter? Client-side —
+   goal_status is jsonb (slug -> {status}) and can't be cleanly queried in
+   PostgREST, so we filter the loaded page here. */
+function convoGoalMatch(goalStatus, mode) {
+  if (!mode) return true;
+  const gs = (goalStatus && typeof goalStatus === 'object') ? goalStatus : null;
+  const graded = !!gs && Object.keys(gs).length > 0;
+  if (mode === 'graded') return graded;
+  if (mode === 'ungraded') return !graded;
+  let anyMet = false, anyPartial = false;
+  if (graded) {
+    Object.keys(gs).forEach(function (k) {
+      const st = gs[k] && gs[k].status;
+      if (st === 'met') anyMet = true;
+      else if (st === 'partial') anyPartial = true;
+    });
+  }
+  if (mode === 'met') return anyMet;
+  if (mode === 'partial') return anyPartial;
+  if (mode === 'unmet') return !anyMet && !anyPartial;   // all unmet, or not graded
+  return true;
+}
+
+/* Re-render the loaded conversations (e.g. after the goal-outcome select
+   changes) without a server round-trip, reusing the stored message counts. */
+function renderConversations() { renderConvoList(state.convoCounts || {}); }
+
 function renderConvoList(counts) {
+  if (counts) state.convoCounts = counts; else counts = state.convoCounts || {};
+  const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
+  const shown = state.convos.filter(function (c) { return convoGoalMatch(c.goal_status, goalMode); });
   const list = $('convo-list');
   list.textContent = '';
   $('convo-count').textContent = state.convos.length
-    ? ('Latest ' + state.convos.length)
+    ? ('Latest ' + state.convos.length + (goalMode ? ' · ' + shown.length + ' shown' : ''))
     : '';
-  if (!state.convos.length) {
-    list.appendChild(el('div', 'empty micro', 'No conversations yet.'));
+  if (!shown.length) {
+    list.appendChild(el('div', 'empty micro',
+      state.convos.length ? 'No conversation in this page matches that outcome.' : 'No conversations yet.'));
     return;
   }
-  state.convos.forEach(function (c) {
+  shown.forEach(function (c) {
     const btn = el('button', 'convo-item');
     if (c.id === state.activeConvoId) btn.classList.add('on');
 

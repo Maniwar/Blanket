@@ -31,6 +31,11 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
   `data:` URI** (Tuning → Bot images). A file-upload path (Supabase Storage
   bucket + signed URLs) would let them drop in real image files instead of
   pasting a source. *Effort:* moderate (storage bucket + RLS + upload widget).
+- **`select` field type for in-chat forms.** Form fields are `text` · `state` ·
+  `zip` today, so a constrained choice (e.g. colorway) is a free-text field
+  validated server-side. A `select` type (label + options) would give a proper
+  dropdown and remove the typo path. *Effort:* small (widget renderer + a type in
+  the field schema). See [FORMS.md](FORMS.md) §8.
 - **Configurable colorways per run.** Currently hardcoded (`ungefaerbt/loden/
   graphit`) across ~13 places incl. a DB `CHECK`. Make them admin-editable
   (name/description/swatch), replacing the constraint, wired through checkout,
