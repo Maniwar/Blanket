@@ -465,7 +465,7 @@
 
       /* outreach — the concierge speaks first, chat closed or not */
       '.cx-outreach{position:fixed;left:50%;transform:translateX(-50%) translateY(12px);',
-      'bottom:calc(4.6rem + env(safe-area-inset-bottom,0px));z-index:79;',
+      'bottom:calc(4.6rem + env(safe-area-inset-bottom,0px));z-index:81;',
       'max-width:min(340px,calc(100vw - 32px));display:flex;gap:10px;align-items:flex-start;',
       'background:rgba(23,31,26,.96);border:1px solid rgba(196,155,91,.55);',
       'padding:.85rem 2rem .85rem .85rem;cursor:pointer;opacity:0;',
@@ -1309,17 +1309,20 @@
       outreachEl = null;
     });
     b.appendChild(x);
-    b.addEventListener('click', function () {
-      b.remove();
-      outreachEl = null;
-      clearLauncherUnread();
-      pendingSay = '';
-      /* the concierge said it — the conversation resumes from its line */
-      entryMode = 'outreach:' + kind;
-      history.push({ role: 'assistant', content: text, ts: Date.now() });
-      saveHistory();
+    function openFromOutreach() {
+      /* do the bookkeeping defensively, but ALWAYS open the panel */
+      try {
+        b.remove();
+        outreachEl = null;
+        clearLauncherUnread();
+        pendingSay = '';
+        entryMode = 'outreach:' + kind;
+        history.push({ role: 'assistant', content: text, ts: Date.now() });
+        saveHistory();
+      } catch (eOR) { /* never let bookkeeping block the open */ }
       openPanel();
-    });
+    }
+    b.addEventListener('click', openFromOutreach);
     document.body.appendChild(b);
     outreachEl = b;
     requestAnimationFrame(function () {
@@ -2468,15 +2471,27 @@
     authResolved = true;
 
     if (em !== authEmail) {
-      var wasSignedIn = !!authEmail;
+      var prevOwner = authEmail;   /* who the current thread belonged to before this change */
       var wasResolved = !firstResolve;
       authEmail = em;
       if (em) { closeAuthRow(); }
       updateAuthUI();
       if (wasResolved) {
-        /* an actual sign-in / sign-out / switch during the visit */
-        if (!em && wasSignedIn) { clearDevicePurchaseTraces(); }
-        resetConversation();
+        if (prevOwner && prevOwner !== em) {
+          /* sign-out, or a switch to a DIFFERENT person — wipe so no thread bleeds */
+          if (!em) { clearDevicePurchaseTraces(); }
+          resetConversation();
+        } else {
+          /* anonymous → signed in: adopt this thread as the patron's, keeping
+             continuity. The next turn backfills identity server-side, and we let
+             the concierge acknowledge them now that it knows who they are. */
+          ssSet(OWNER_KEY, em);
+          if (panelOpen && msgsEl && !streaming) {
+            reengagedThisOpen = false;
+            if (!history.length) { renderHistory(); }
+            maybeOpenerOnOpen();
+          }
+        }
         return;
       }
       /* first resolve WITH a restored identity — fall through to reconcile */
@@ -2486,11 +2501,12 @@
 
     if (firstResolve) {
       /* Reconcile the stored conversation with who is actually signed in now.
-         If the saved thread belongs to a different identity (e.g. leftover
-         signed-in chat while now signed out), wipe it rather than show it. */
+         Wipe only when the saved thread belongs to a DIFFERENT real identity
+         (e.g. leftover signed-in chat while now signed out); an anonymous thread
+         (owner '') is adopted, so continuity is kept across a sign-in. */
       var owner = '';
       try { owner = ssGet(OWNER_KEY) || ''; } catch (eO) { owner = ''; }
-      if (storedHistoryLen() > 0 && owner !== em) {
+      if (storedHistoryLen() > 0 && owner && owner !== em) {
         if (!em) { clearDevicePurchaseTraces(); }
         resetConversation();
       } else {
