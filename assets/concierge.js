@@ -3310,12 +3310,23 @@
        once-only wrappedUp guard means a quick tab-switch fires it at most once —
        returning and writing again resumes the same conversation. */
     window.addEventListener('pagehide', function () {
-      if (panelOpen) { doWrapup('auto'); }
+      if (panelOpen) { doWrapup('auto'); }   /* a real unload: close / navigate away */
     });
+    /* A brief tab-switch (glancing at another tab, e.g. the admin) must NOT end a
+       live conversation. Only wind down if the tab stays hidden a while — a real
+       leave. Returning before then cancels it; pagehide still handles an outright
+       close/navigation immediately. */
+    var hiddenWrapTimer = null;
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') {
-        if (panelOpen) { doWrapup('auto'); } /* record the wind-down on leave */
+        if (panelOpen && !hiddenWrapTimer) {
+          hiddenWrapTimer = setTimeout(function () {
+            hiddenWrapTimer = null;
+            if (document.visibilityState === 'hidden' && panelOpen) { doWrapup('auto'); }
+          }, 60000);
+        }
       } else if (document.visibilityState === 'visible') {
+        if (hiddenWrapTimer) { clearTimeout(hiddenWrapTimer); hiddenWrapTimer = null; }
         noteActivity();                        /* they came back — a sign of life */
       }
     });
