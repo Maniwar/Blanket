@@ -8,17 +8,13 @@ name: Publish site (Pages)
 # → Source → "GitHub Actions". Until that is switched, this workflow's deploy
 # step fails harmlessly and the existing branch-based Pages keeps serving.
 
+# Manual-only for now. This deploys Pages via a workflow (with the SEO head
+# bake), which requires Settings → Pages → Source → "GitHub Actions". Until that
+# switch is made, running it just fails at deploy-pages — so it does NOT run on
+# push (that only produced a harmless red ✗). When you're ready for the social
+# SEO bake: flip the Pages source to "GitHub Actions", then re-add the `push:`
+# trigger below (or run this workflow manually) so it becomes the deployer.
 on:
-  push:
-    branches: [claude/github-pages-deploy-14tf3y]
-    paths:
-      - 'index.html'
-      - 'admin.html'
-      - 'privacy.html'
-      - 'assets/**'
-      - 'img/**'
-      - 'scripts/bake_seo.py'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
