@@ -209,7 +209,16 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
   working — so that I can trust it. *(`?selftest=1`, `?cachecheck=1`.)*
 - **As the operator**, I want a complete audit trail of every order change and
   tool action, so that nothing mutates the register invisibly.
-  *(`order_events` trigger + `concierge_actions`.)*
+  *(`order_events` trigger records field-level `{old,new}` diffs on every update
+  and the full row on create — append-only, admin-readable, and **not** touched
+  by retention; plus `concierge_actions`. Orders mutate in place, so `orders`
+  holds current state and `order_events` holds the history.)*
+- **As the operator**, I want order-field edits to be correct, not free-typed by
+  the model. *(Address changes go through the labeled `address-change` **form**,
+  never a free-text tool — a city can't land in the street line. The commission
+  function's admin-gated `?editaddr=1` + the per-order **address editor** in the
+  register are the reliable correction path; writes are service-role, verified,
+  and ownership-scoped.)*
 - **As the operator**, I want the database itself to be the security boundary, so
   that a front-end bug can't leak or corrupt data. *(RLS + `security definer`
   functions; browser holds only the publishable key.)*
@@ -283,10 +292,22 @@ rather than merely reacting:
   as a chip in the Conversations tab, so the admin can see where chats stall. The
   live bot also reads the stage each turn to choose a stage-appropriate move.
 
+- **Proactive re-engagement (closed panel).** When a visitor is active
+  (scrolls) then goes idle with the widget closed, the concierge reaches out with
+  a contextual line — section-aware for anons, warmer for signed-in patrons. It
+  re-arms only on *fresh* activity, so a visitor who truly left isn't nagged.
+  Cadence derives from the assertiveness dial (Attentive baseline), with
+  per-audience admin overrides (idle interval + max, anon vs signed-in) and an
+  on/off. The post-purchase "welcome back" bubble now marks itself done only once
+  it actually renders, so it reliably reappears on a later refresh if it couldn't
+  show — and opens the chat when tapped.
+
 Admin-editable selling inputs (all config keys): `assertiveness`, `hooks`
 (selling angles woven in to build desire), `objections` (`{trigger, response}`
 playbook for the Reassure move), plus engagement pacing (`outreach.nudgeCap`,
-`outreach.maxAmbient`, `outreach.dwell2Ms`, and the existing nudge/dwell/draft
+`outreach.maxAmbient`, `outreach.dwell2Ms`, re-engagement
+(`outreach.reengageEnabled`, `reengageIdleAnonMs`/`reengageMaxAnon`,
+`reengageIdleSignedMs`/`reengageMaxSigned`), and the existing nudge/dwell/draft
 timings and `goal_sample_rate`).
 
 ---

@@ -1360,14 +1360,19 @@
     clearLauncherUnread();
   }
 
-  function showOutreach(kind, text, exempt) {
-    if (!text || orSeen(kind) || panelOpen || outreachEl || quietMode) { return; }
+  /* Returns true only if a bubble actually rendered (so callers like the
+     welcome-back can avoid marking themselves 'done' when they silently bailed).
+     `repeatable` skips the once-per-session seen-guard for beats that manage
+     their own budget (re-engagement). */
+  function showOutreach(kind, text, exempt, repeatable) {
+    if (!text || panelOpen || outreachEl || quietMode) { return false; }
+    if (!repeatable && orSeen(kind)) { return false; }
     /* ambient reach-out budget: admin maxAmbient wins, else scales with
        assertiveness (driving settings earn one more knock). */
     var oc = orCfg();
     var ambientCap = (typeof oc.maxAmbient === 'number') ? oc.maxAmbient : (assertLevel() >= 4 ? 3 : 2);
-    if (!exempt && orCount() >= ambientCap) { return; }
-    orMark(kind);
+    if (!exempt && orCount() >= ambientCap) { return false; }
+    if (!repeatable) { orMark(kind); }
     if (!exempt) { orBump(); }
     /* the launcher carries an unread mark until the visitor engages */
     markLauncherUnread(text);
@@ -1411,6 +1416,7 @@
         setTimeout(function () { b.remove(); if (outreachEl === b) { outreachEl = null; } }, 700);
       }
     }, 22000);
+    return true;
   }
 
   /* congrats after a commission — waits for the register card to be put down */
@@ -1461,12 +1467,16 @@
     try { if (window.localStorage.getItem(doneKey) === '1') { return; } } catch (e2) { /* ignore */ }
     setTimeout(function () {
       if (panelOpen || quietMode) { return; }
-      try { window.localStorage.setItem(doneKey, '1'); } catch (e3) { /* ignore */ }
       var no = mark.serial ? 'Nº ' + Number(mark.serial).toLocaleString('en-US') : 'your number';
       var line = 'Welcome back — ' + no + ' is safely in the Webbuch. Before anything else: is ' +
         'there anything you still need from me? A shipping detail, a companion cloth for another ' +
         'room, or anything about the weave.';
-      showOutreach('checkin-' + (mark.serial || 'x'), line, true);
+      /* Only mark it done once the bubble actually rendered — otherwise (panel
+         open, another bubble showing) leave it un-marked so a later refresh
+         gets another chance. This is the reliability fix. */
+      if (showOutreach('checkin-' + (mark.serial || 'x'), line, true)) {
+        try { window.localStorage.setItem(doneKey, '1'); } catch (e3) { /* ignore */ }
+      }
     }, 7000);
   })();
 
@@ -1925,16 +1935,74 @@
   var pendingOpener = null;     /* 'reengage' | 'greet' — carried into the next request */
   var reengagedThisOpen = false;/* the bot has already opened contextually this panel session */
   var unacked = 0;              /* proactive reach-outs since the visitor last showed a sign of life */
+  var lastActivityTs = 0;       /* when the visitor last did something real */
+  var hadActivity = false;      /* any real activity this visit (gates re-engagement) */
+  var activeSinceReengage = false; /* fresh activity since the last re-engage reach-out */
+  var reengageCount = 0;        /* closed-panel re-engagements fired this visit */
 
   /* Any sign the visitor is actually present — a scroll, tap, key, or the tab
      coming back into view. This is our stand-in for a read receipt: it clears
      the "unacknowledged" count so the concierge resumes a light presence, and
-     if it had gone quiet (paused), it picks the thread back up. */
+     if it had gone quiet (paused), it picks the thread back up. It also stamps
+     the activity clock the closed-panel re-engagement watches. */
   function noteActivity() {
-    if (unacked === 0) { return; }
-    unacked = 0;
-    if (panelOpen && !streaming && !quietMode && !nudgeTimer) { scheduleNudge(); }
+    lastActivityTs = Date.now();
+    hadActivity = true;
+    activeSinceReengage = true;
+    if (unacked !== 0) {
+      unacked = 0;
+      if (panelOpen && !streaming && !quietMode && !nudgeTimer) { scheduleNudge(); }
+    }
   }
+
+  /* Closed-panel re-engagement: when the visitor was active and then went idle
+     (panel closed), reach out with a contextual line — the "they paused, notice
+     it" beat. Cadence derives from the assertiveness dial (Attentive baseline),
+     with per-audience admin overrides. Re-arms only on FRESH activity, so a
+     visitor who truly left isn't nagged; one who's actively browsing gets a
+     timely nudge. Signed-in patrons get a warmer, faster default than anons. */
+  function reengageCfg() {
+    var o = orCfg();
+    var signed = !!authEmail;
+    var mult = assertDelayMult();                 /* [1.5,1.25,1,0.8,0.65] by assertiveness */
+    var idleMs = Math.round((signed ? 30000 : 40000) * mult);   /* Attentive baseline */
+    var maxN = Math.max(0, (signed ? 3 : 2) + (assertLevel() - 3));
+    var ci = signed ? o.reengageIdleSignedMs : o.reengageIdleAnonMs;   /* custom overrides win */
+    var cm = signed ? o.reengageMaxSigned : o.reengageMaxAnon;
+    if (typeof ci === 'number' && ci > 0) { idleMs = ci; }
+    if (typeof cm === 'number' && cm >= 0) { maxN = cm; }
+    return { idleMs: idleMs, max: maxN, enabled: o.reengageEnabled !== false };
+  }
+  function reengageLine() {
+    var sec = currentSection();
+    if (authEmail) {
+      var s = {
+        wool: 'Still weighing the cloth? Tell me the room and I’ll point you to the one that suits it.',
+        reserve: 'Your number is held while you decide — say the word and I’ll open the register.',
+        ritual: 'Thinking it over? A companion cloth for another room is an easy addition whenever you like.'
+      };
+      return s[sec] || 'Still here whenever you’d like to pick this back up — anything I can pull up for you?';
+    }
+    var a = {
+      wool: 'Guten Abend — the cloth you’re reading about comes in three. Tell me the room and I’ll suggest one.',
+      label: 'Questions about care or the weave? Ask me anything — wool asks less than people think.',
+      ritual: 'If this one is a gift, the register card can carry another name — I can arrange it.',
+      reserve: 'Your number is held while you decide. Tell me the room and I’ll suggest the cloth.'
+    };
+    return a[sec] || 'Guten Abend — I’m the mill’s concierge. Tell me the room it’s for and I’ll tell you the cloth.';
+  }
+  function reengageTick() {
+    if (isDemo() || panelOpen || quietMode || streaming || outreachEl) { return; }
+    if (!hadActivity || !activeSinceReengage) { return; }        /* need fresh activity */
+    var c = reengageCfg();
+    if (!c.enabled || reengageCount >= c.max) { return; }
+    if (Date.now() - lastActivityTs < c.idleMs) { return; }      /* not idle long enough yet */
+    if (showOutreach('reengage-' + reengageCount, reengageLine(), true, true)) {
+      reengageCount++;
+      activeSinceReengage = false;                               /* require fresh activity before the next */
+    }
+  }
+  setInterval(reengageTick, 4000);
 
   /* ----------------------------------------------------------
      Conversation lifecycle — closing / snoozing (a mix of both:
