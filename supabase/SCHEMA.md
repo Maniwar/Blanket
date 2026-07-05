@@ -77,9 +77,16 @@ compiled into `functions/concierge/kb.ts`. **Written by:** admin (KB tab).
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `email` | text PK | An admin's verified email. |
+| `is_super` | boolean | The protected owner. Exactly one is seeded; can never be removed or demoted. |
 
-**Read by:** `is_concierge_admin()` (used in every admin RLS policy).
-**Seeded by:** `setup.sql` (change this to your email before running).
+**Read by:** `is_concierge_admin()` and `is_super_admin()` (used in the admin RLS
+policies). **Managed by:** the admin panel's **Tuning → Administrators** card.
+**RLS (command-split):** any admin may **select** the roster and **insert** a
+non-super admin; only the **super** admin may **delete**, and the super row
+itself cannot be deleted or updated — so one owner always remains. A non-admin
+sees zero rows (how the panel gates entry). **Seeded by:** `setup.sql` (change
+the email to yours before running); the first/super admin must be seeded in
+SQL, after which the roster is self-serve.
 
 ### `concierge_conversations` — one row per chat thread
 | Column | Type | Purpose |
@@ -305,6 +312,7 @@ scores each into `concierge_conversations.goal_status`). **Seeded by:**
 | Function | Signature | What it does | Called by |
 | --- | --- | --- | --- |
 | `is_concierge_admin()` | → bool | True if the JWT email is in `concierge_admins`. | Every admin RLS policy. |
+| `is_super_admin()` | → bool | True if the JWT email is the super admin. | `concierge_admins` delete/update policies. |
 | `hold_serial(p_session)` | → (serial, expires_at) | Reserves the **lowest free** number for a visit — refresh own hold, else claim a lapsed hold, else draw from `allocation_counter`. `FOR UPDATE SKIP LOCKED`. | commission `?hold=1`. |
 | `commission_order(…13 args)` | → int | Places an order: consume this visit's hold (or a lapsed one, or a fresh number), insert the order, return the serial. `-1` when the edition is full. | commission POST. |
 | `cancel_order_return(p_serial,p_user_id,p_email)` | → text | Cancels a `placed` order the caller owns: sets `status='cancelled'`, moves `serial`→`cancelled_serial`, and re-inserts the number as a lapsed hold so it's reclaimable. | concierge `cancel_order` tool. |

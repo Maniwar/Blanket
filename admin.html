@@ -233,6 +233,21 @@
   .goal-row{ display:flex; align-items:flex-start; gap:10px; }
   .goal-row .goal-chip{ flex:0 0 auto; }
   .goal-why{ flex:1 1 auto; line-height:1.45; padding-top:2px; }
+  .admin-row{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:9px 0; border-bottom:1px solid var(--hairline-dim); }
+  .admin-row:last-of-type{ border-bottom:none; }
+  .admin-email{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool); word-break:break-all; }
+  .admin-tags{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+  .admin-you, .admin-super{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.08em;
+    text-transform:uppercase; }
+  .admin-you{ color:var(--wool-faint); }
+  .admin-super{ color:var(--brass-soft); border:1px solid rgba(196,155,91,.4);
+    border-radius:20px; padding:2px 8px; }
+  .admin-remove{ background:none; border:1px solid var(--hairline-dim); color:var(--wool-faint);
+    border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer; }
+  .admin-remove:hover{ color:#e88; border-color:rgba(238,136,136,.5); }
+  .admin-add{ display:flex; gap:8px; margin-top:14px; }
+  .admin-add input{ flex:1 1 auto; }
 
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
@@ -475,6 +490,22 @@
           <button id="save-starters" class="btn primary">Save starters</button>
         </div>
       </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Administrators</h3>
+          <span class="micro">Who can sign in here and manage the concierge</span>
+        </div>
+        <p class="micro" style="margin:0 0 12px;">Anyone listed can read every conversation and edit
+          all settings. Add by the exact email they sign in with. Only the <b>super</b> admin can
+          remove admins, and the super admin can never be removed.</p>
+        <div id="admins-list"></div>
+        <form id="admin-add-form" class="admin-add">
+          <input id="admin-add-email" type="email" placeholder="new.admin@example.com" autocomplete="off" />
+          <button id="admin-add-btn" class="btn primary" type="submit">Add admin</button>
+        </form>
+        <div id="admin-add-note" class="micro"></div>
+      </section>
     </div>
 
     <!-- ============ TAB 2 : KNOWLEDGE ============ -->
@@ -668,6 +699,8 @@ const state = {
   forms: [],
   goalDefs: [],
   convos: [],
+  admins: [],
+  isSuper: false,
   activeConvoId: null,
   loaded: false
 };
@@ -786,6 +819,7 @@ async function route() {
   if (!state.loaded) {
     state.loaded = true;
     loadConfig();
+    loadAdmins();
     loadSections(KB_SPEC);
     loadSections(SOP_SPEC);
     loadActions();
@@ -809,6 +843,77 @@ async function checkAdmin() {
   } catch (e) {
     return false;
   }
+}
+
+/* ---------------- Administrators ----------------
+   Any admin may list the roster and add a (non-super) admin. Only the SUPER
+   admin may remove admins, and the super row can never be removed or demoted.
+   The database RLS enforces all of this; the UI just mirrors it. */
+function myEmail() {
+  return ((state.session && state.session.user && state.session.user.email) || '').toLowerCase();
+}
+
+async function loadAdmins() {
+  const res = await sb.from('concierge_admins').select('email,is_super').order('email');
+  if (res.error) { fail('Load admins', res.error); return; }
+  state.admins = res.data || [];
+  state.isSuper = state.admins.some(function (a) {
+    return String(a.email).toLowerCase() === myEmail() && a.is_super;
+  });
+  renderAdmins();
+}
+
+function renderAdmins() {
+  const list = $('admins-list');
+  if (!list) return;
+  list.textContent = '';
+  const me = myEmail();
+  if (!state.admins.length) {
+    list.appendChild(el('div', 'empty micro', 'No administrators on file.'));
+    return;
+  }
+  state.admins.forEach(function (a) {
+    const email = a.email;
+    const isSelf = String(email).toLowerCase() === me;
+    const row = el('div', 'admin-row');
+    row.appendChild(el('span', 'admin-email', email));
+    const tags = el('div', 'admin-tags');
+    if (a.is_super) { tags.appendChild(el('span', 'admin-super', 'super')); }
+    if (isSelf) { tags.appendChild(el('span', 'admin-you', 'you')); }
+    /* Only the super admin sees Remove, and never on the (protected) super row. */
+    if (state.isSuper && !a.is_super) {
+      const rm = el('button', 'admin-remove', 'Remove');
+      rm.type = 'button';
+      rm.addEventListener('click', function () { removeAdmin(email); });
+      tags.appendChild(rm);
+    }
+    row.appendChild(tags);
+    list.appendChild(row);
+  });
+}
+
+async function addAdmin() {
+  const input = $('admin-add-email');
+  const note = $('admin-add-note');
+  const email = (input.value || '').trim().toLowerCase();
+  note.textContent = '';
+  if (!email || email.indexOf('@') < 1) { note.textContent = 'Enter a valid email address.'; return; }
+  if (state.admins.some(function (a) { return String(a.email).toLowerCase() === email; })) {
+    note.textContent = 'Already an administrator.'; return;
+  }
+  const res = await sb.from('concierge_admins').insert({ email: email, is_super: false });
+  if (res.error) { fail('Add admin', res.error); return; }
+  input.value = '';
+  note.textContent = 'Added ' + email + '. They can sign in immediately.';
+  loadAdmins();
+}
+
+async function removeAdmin(email) {
+  if (!state.isSuper) return;                        /* only the super admin removes */
+  if (!window.confirm('Remove ' + email + ' as an administrator?')) return;
+  const res = await sb.from('concierge_admins').delete().eq('email', email);
+  if (res.error) { fail('Remove admin', res.error); return; }
+  loadAdmins();
 }
 
 function wireStatic() {
@@ -841,6 +946,10 @@ function wireStatic() {
   });
   $('save-starters').addEventListener('click', function () {
     withBusy($('save-starters'), saveStarters);
+  });
+  $('admin-add-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    withBusy($('admin-add-btn'), addAdmin);
   });
   $('cfg-enabled').addEventListener('change', function () {
     $('cfg-enabled-label').textContent = $('cfg-enabled').checked ? 'Live' : 'Paused';

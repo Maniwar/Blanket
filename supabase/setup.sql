@@ -27,6 +27,8 @@ create table if not exists public.concierge_kb (
   updated_at timestamptz not null default now());
 
 create table if not exists public.concierge_admins (email text primary key);
+-- a protected super admin (the owner) can never be removed or demoted
+alter table public.concierge_admins add column if not exists is_super boolean not null default false;
 
 create table if not exists public.concierge_conversations (
   id uuid primary key default gen_random_uuid(),
@@ -170,6 +172,13 @@ create or replace function public.is_concierge_admin() returns boolean
 $$ select exists(select 1 from public.concierge_admins a
      where a.email = coalesce(auth.jwt()->>'email','')) $$;
 
+-- The super admin (the owner) — the only one who may remove admins, and the
+-- one row no admin can remove or demote.
+create or replace function public.is_super_admin() returns boolean
+  language sql security definer stable set search_path = '' as
+$$ select exists(select 1 from public.concierge_admins a
+     where a.email = coalesce(auth.jwt()->>'email','') and a.is_super) $$;
+
 do $$
 declare t text;
 begin
@@ -204,10 +213,27 @@ create policy "admin read" on public.concierge_actions for select to authenticat
 drop policy if exists "admin read" on public.order_events;
 create policy "admin read" on public.order_events for select to authenticated using (public.is_concierge_admin());
 
--- concierge_admins: read your own row
+-- concierge_admins roster, from the admin panel:
+--   • any admin may LIST the roster and ADD a (non-super) admin;
+--   • only the SUPER admin may REMOVE an admin, and the super row itself can
+--     never be removed or demoted (guaranteeing one owner always remains).
+-- is_concierge_admin()/is_super_admin() are security-definer reads of this
+-- table, so there is no RLS recursion; a non-admin still sees zero rows.
 drop policy if exists "admin all" on public.concierge_admins;
-create policy "admin all" on public.concierge_admins for all to authenticated
-  using (email = coalesce(auth.jwt()->>'email','')) with check (email = coalesce(auth.jwt()->>'email',''));
+drop policy if exists "admin manage" on public.concierge_admins;
+drop policy if exists "admin select" on public.concierge_admins;
+drop policy if exists "admin insert" on public.concierge_admins;
+drop policy if exists "admin update" on public.concierge_admins;
+drop policy if exists "admin delete" on public.concierge_admins;
+create policy "admin select" on public.concierge_admins for select to authenticated
+  using (public.is_concierge_admin());
+create policy "admin insert" on public.concierge_admins for insert to authenticated
+  with check (public.is_concierge_admin() and coalesce(is_super, false) = false);
+create policy "admin update" on public.concierge_admins for update to authenticated
+  using (public.is_super_admin() and coalesce(is_super, false) = false)
+  with check (public.is_super_admin() and coalesce(is_super, false) = false);
+create policy "admin delete" on public.concierge_admins for delete to authenticated
+  using (public.is_super_admin() and coalesce(is_super, false) = false);
 
 -- feedback: admins manage; anyone may insert a rating
 drop policy if exists "admin all" on public.concierge_feedback;
@@ -365,7 +391,8 @@ create trigger orders_audit after insert or update on public.orders
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- IMPORTANT: change this to YOUR admin email.
-insert into public.concierge_admins (email) values ('mberenji@gmail.com') on conflict (email) do nothing;
+insert into public.concierge_admins (email, is_super) values ('mberenji@gmail.com', true)
+  on conflict (email) do update set is_super = true;
 
 insert into public.concierge_config (key, value) values
   ('enabled','true'::jsonb),
