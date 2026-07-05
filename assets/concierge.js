@@ -2207,6 +2207,17 @@
     });
   }
 
+  /* A device with a real pointer (mouse/trackpad) — desktop, INCLUDING a narrow
+     window. On touch-primary devices we avoid auto-focusing the composer so the
+     on-screen keyboard doesn't spring up unbidden. Keyed off pointer type, not
+     window width, so a half-screen desktop window still keeps the box focused. */
+  function pointerFine() {
+    try {
+      if (window.matchMedia) { return window.matchMedia('(pointer: fine)').matches; }
+    } catch (e) { /* fall through */ }
+    return !('ontouchstart' in window);
+  }
+
   function setStreaming(on, proactive) {
     streaming = on;
     proactiveStream = on ? !!proactive : false;
@@ -2219,7 +2230,7 @@
       inputEl.disabled = lock;
       /* only pull focus back when a visitor-initiated turn finishes, and never
          if they're already mid-word somewhere (their focus wins) */
-      if (!on && panelOpen && window.innerWidth >= 900 &&
+      if (!on && panelOpen && pointerFine() &&
           document.activeElement !== inputEl && !composing()) {
         try { inputEl.focus(); } catch (e) { /* ignore */ }
       }
@@ -3138,7 +3149,9 @@
     runShimmer();
     try { scrollToBottom(true); } catch (eSc) { /* ignore */ }
     setTimeout(function () {
-      try { panel.focus(); } catch (e) { /* ignore */ }
+      /* On a pointer device, land the cursor in the composer so they can type
+         at once; on touch, focus the panel so the keyboard doesn't spring up. */
+      try { ((pointerFine() && inputEl && !inputEl.disabled) ? inputEl : panel).focus(); } catch (e) { /* ignore */ }
     }, REDUCED ? 0 : 80);
     if (typeof prefillQuestion === 'string' && prefillQuestion && !streaming) {
       sendMessage(prefillQuestion);
