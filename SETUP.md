@@ -10,6 +10,41 @@ This is a **demo** — no real product ships and no payment is ever taken.
 
 ---
 
+## Go-live checklist
+
+The short path from a fresh clone to a working demo. Each step links to its
+detail below.
+
+- [ ] **1. Database** — paste all of [`supabase/setup.sql`](supabase/setup.sql)
+  into the Supabase **SQL Editor** and Run. This one file provisions everything
+  (schema + all seed content + the edition run); nothing else to apply. *Change
+  the super-admin email near the bottom to yours first.*
+- [ ] **2. GitHub secrets** — add `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`,
+  `ANTHROPIC_API_KEY`. *(Optional now, needed for order email: `RESEND_API_KEY`,
+  `EMAIL_FROM`.)*
+- [ ] **3. Deploy functions** — Actions → **Deploy Concierge** → Run workflow
+  (deploys concierge + commission).
+- [ ] **4. Front end config** — confirm `FEIER_CONCIERGE_CONFIG` in `index.html`
+  has your `endpoint` / `supabaseUrl` / `supabaseAnonKey`, then push (Pages
+  auto-deploys).
+- [ ] **5. Auth URLs** — Supabase → Authentication → **URL Configuration**: Site
+  URL `https://maniwar.github.io/Blanket/`, redirect `.../Blanket/**`.
+- [ ] **6. Sign-in email (required)** — configure **custom SMTP** (the built-in
+  sender is rate-limited and causes "The key could not be sent"), then paste the
+  branded **Magic Link** + **Confirm Signup** templates from
+  [`supabase/EMAIL_TEMPLATES.md`](supabase/EMAIL_TEMPLATES.md) into
+  Authentication → Email Templates.
+- [ ] **7. Order email (optional)** — add `RESEND_API_KEY` and re-run **Deploy
+  Concierge** to turn on confirmation / shipment / cancellation emails. Until a
+  domain is verified, the default sender only reaches your own Resend inbox.
+- [ ] **8. Verify** — sign in, type `selftest` in the chat, and walk the
+  [smoke test](#quick-behavior-smoke-test).
+
+*Steps 1, 6, and 8 are the ones that must be done by hand in the Supabase
+dashboard; the rest are GitHub/Actions.*
+
+---
+
 ## Architecture at a glance
 
 | Piece | Where | Deploys via |
