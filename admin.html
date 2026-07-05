@@ -501,6 +501,31 @@
 
       <section class="card">
         <div class="card-head">
+          <h3>Engagement pace</h3>
+          <span class="micro">How quickly the concierge reaches out</span>
+        </div>
+        <p class="note">All values in <strong>seconds</strong>. These control the proactive follow-ups inside an open chat and the reach-out bubble when the widget is closed. Leave a field blank to use the built-in default.</p>
+        <div class="ed-grid">
+          <div><label class="micro" for="cfg-nudge1">First follow-up (in chat)</label>
+            <input type="number" id="cfg-nudge1" class="mono-field" min="3" step="1" placeholder="20"></div>
+          <div><label class="micro" for="cfg-nudge2">Second follow-up (in chat)</label>
+            <input type="number" id="cfg-nudge2" class="mono-field" min="3" step="1" placeholder="45"></div>
+          <div><label class="micro" for="cfg-dwell">Reach out when idle (widget closed)</label>
+            <input type="number" id="cfg-dwell" class="mono-field" min="5" step="1" placeholder="45"></div>
+          <div><label class="micro" for="cfg-draft">Nudge a half-written order</label>
+            <input type="number" id="cfg-draft" class="mono-field" min="5" step="1" placeholder="25"></div>
+        </div>
+        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <input type="checkbox" id="cfg-idlereach">
+          <span class="micro">Reach out to an idle visitor even before they scroll</span>
+        </label>
+        <div class="card-foot">
+          <button id="save-engagement" class="btn primary">Save engagement</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Edition run</h3>
           <span class="micro">The size of the run and the next number to issue</span>
         </div>
@@ -996,6 +1021,9 @@ function wireStatic() {
   $('save-starters').addEventListener('click', function () {
     withBusy($('save-starters'), saveStarters);
   });
+  $('save-engagement').addEventListener('click', function () {
+    withBusy($('save-engagement'), saveEngagement);
+  });
   $('save-edition').addEventListener('click', function () {
     withBusy($('save-edition'), saveEdition);
   });
@@ -1108,7 +1136,33 @@ async function loadConfig() {
   $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
   $('cfg-voice').value = (typeof cfg.voice_notes === 'string') ? cfg.voice_notes : '';
   renderStarters((cfg.starters && typeof cfg.starters === 'object') ? cfg.starters : {});
+
+  const o = (cfg.outreach && typeof cfg.outreach === 'object') ? cfg.outreach : {};
+  const ms2s = function (v) { return (typeof v === 'number' && v > 0) ? Math.round(v / 1000) : ''; };
+  $('cfg-nudge1').value = ms2s(o.nudge1Ms);
+  $('cfg-nudge2').value = ms2s(o.nudge2Ms);
+  $('cfg-dwell').value = ms2s(o.dwellMs);
+  $('cfg-draft').value = ms2s(o.draftMs);
+  $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
+
   setPill(cfg.enabled === true);
+}
+
+async function saveEngagement() {
+  const s2ms = function (id) {
+    const v = Number($(id).value);
+    return (Number.isFinite(v) && v > 0) ? Math.round(v * 1000) : null;
+  };
+  const o = {};
+  const n1 = s2ms('cfg-nudge1'); if (n1) o.nudge1Ms = n1;
+  const n2 = s2ms('cfg-nudge2'); if (n2) o.nudge2Ms = n2;
+  const dw = s2ms('cfg-dwell'); if (dw) o.dwellMs = dw;
+  const dr = s2ms('cfg-draft'); if (dr) o.draftMs = dr;
+  o.idleReach = $('cfg-idlereach').checked;
+  const res = await sb.from('concierge_config')
+    .upsert([{ key: 'outreach', value: o, updated_at: nowIso() }], { onConflict: 'key' });
+  if (res.error) { fail('Save engagement', res.error); return; }
+  toast('Engagement saved');
 }
 
 function renderStarters(starters) {

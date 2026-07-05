@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-no-gift-cards";
+const BUILD_TAG = "2026-07-05-admin-engagement";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1184,10 +1184,12 @@ async function handleConfigGet(req: Request): Promise<Response> {
   const { config } = await loadConciergeData();
   const starters = config?.starters;
   const { forms } = await loadConciergeData();
+  const outreach = config?.outreach;
   return jsonResponse(req, 200, {
     enabled: config?.enabled === false ? false : true,
     greeting: typeof config?.greeting === "string" ? config.greeting : null,
     starters: starters && typeof starters === "object" && !Array.isArray(starters) ? starters : null,
+    outreach: outreach && typeof outreach === "object" && !Array.isArray(outreach) ? outreach : null,
     auth: true,
     forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
   });

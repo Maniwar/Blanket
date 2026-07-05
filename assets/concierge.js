@@ -157,6 +157,7 @@
   var remoteStarters = null;    /* replaces FEIER_KB.suggested when present */
   var remoteAuth = null;
   var remoteForms = {};        /* slug -> {title, fields[], submit_tool} */
+  var remoteOutreach = null;   /* admin-set engagement timings (from ?config=1) */
 
   function sanitizeForms(raw) {
     var out = {}, i, f, def, fields, j, fd;
@@ -233,6 +234,7 @@
           var st = sanitizeStarters(j.starters);
           if (st) { remoteStarters = st; }
           if (j.auth != null) { remoteAuth = j.auth; }
+          if (j.outreach && typeof j.outreach === 'object') { remoteOutreach = j.outreach; }
           remoteForms = sanitizeForms(j.forms);
         }
         clearTimeout(timer);
@@ -1292,6 +1294,9 @@
   var pendingKind = '';
 
   function orCfg() {
+    /* admin-set timings (from ?config=1) win; fall back to the static window
+       config, then to the built-in defaults each caller supplies */
+    if (remoteOutreach && typeof remoteOutreach === 'object') { return remoteOutreach; }
     var c = cfg().outreach;
     return (c && typeof c === 'object') ? c : {};
   }
@@ -1311,6 +1316,8 @@
   function markLauncherUnread(text) {
     if (!launcher) { return; }
     launcher.classList.add('cx-unread');
+    /* an unread reach-out must be visible even if they haven't scrolled */
+    if (!panelOpen) { launcher.classList.add('cx-on'); }
     try { launcher.setAttribute('data-cx-say', String(text).slice(0, 140)); } catch (e) { /* ignore */ }
   }
   function clearLauncherUnread() {
@@ -1439,8 +1446,11 @@
     var dwellMs = typeof orCfg().dwellMs === 'number' ? orCfg().dwellMs : 45000;
     setTimeout(function () {
       if (panelOpen || history.length) { return; }
+      /* Reach out to an idle visitor even if they haven't scrolled — the dwell
+         time is itself the "they're here and lingering" signal. Admins can turn
+         this off (idleReach:false) to require a scroll first, as before. */
       var y = window.scrollY || window.pageYOffset || 0;
-      if (y < window.innerHeight * 0.5) { return; }
+      if (orCfg().idleReach === false && y < window.innerHeight * 0.5) { return; }
       var sec = currentSection();
       var lines = {
         wool: 'Guten Abend. The cloth you\u2019re reading about \u2014 I can tell you which of the three would suit the room you have in mind.',
@@ -1480,7 +1490,8 @@
       return;
     }
     var eligible = (window.scrollY || window.pageYOffset || 0) > window.innerHeight * 0.6;
-    if (eligible) { launcher.classList.add('cx-on'); }
+    /* keep it up while a reach-out is waiting, wherever they've scrolled to */
+    if (eligible || launcher.classList.contains('cx-unread')) { launcher.classList.add('cx-on'); }
     else { launcher.classList.remove('cx-on'); }
     if (currentSection() === 'reserve') { launcher.classList.add('cx-dock'); }
     else { launcher.classList.remove('cx-dock'); }

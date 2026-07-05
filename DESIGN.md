@@ -111,6 +111,11 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
 - **As the merchant**, I want to tune the concierge's voice, the greeting, and the
   starter prompts without a deploy, so that I can iterate on tone live. *(Tuning
   tab: config + voice notes + starters — DB-backed, 60s cache.)*
+- **As the merchant**, I want to control how quickly and eagerly the concierge
+  reaches out — the in-chat follow-up delays, the idle reach-out when the widget
+  is closed, and whether it engages a visitor who hasn't scrolled — so that I can
+  dial engagement from attentive to restrained without a deploy. *(Tuning tab:
+  Engagement pace → `outreach` config, delivered to the widget via `?config=1`.)*
 - **As the merchant**, I want to edit the knowledge base and the selling
   procedures (SOPs) that the concierge follows, so that policy and pitch are mine
   to control. *(Knowledge tab + Procedures tab; injected into the system prompt.)*
