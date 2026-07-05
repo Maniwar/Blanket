@@ -18,8 +18,14 @@ create table if not exists public.waitlist (
   notified_at timestamptz    -- admin stamps this once they've reached out
 );
 
+create extension if not exists pg_trgm with schema extensions;
+
 create index if not exists waitlist_created_idx on public.waitlist (created_at desc);
 create index if not exists waitlist_email_idx on public.waitlist (email);
+-- keyword search (email/name/note ILIKE) — trigram GIN so the admin filter scales
+create index if not exists waitlist_email_trgm_idx on public.waitlist using gin (email extensions.gin_trgm_ops);
+create index if not exists waitlist_name_trgm_idx  on public.waitlist using gin (name  extensions.gin_trgm_ops);
+create index if not exists waitlist_note_trgm_idx  on public.waitlist using gin (note  extensions.gin_trgm_ops);
 
 alter table public.waitlist enable row level security;
 -- Admins read + manage; the edge functions insert with the service role (which

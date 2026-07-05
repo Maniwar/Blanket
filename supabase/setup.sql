@@ -437,14 +437,22 @@ create index if not exists orders_email_trgm_idx
   on public.orders using gin (email extensions.gin_trgm_ops);
 create index if not exists orders_name_trgm_idx
   on public.orders using gin (name extensions.gin_trgm_ops);
+create index if not exists orders_recipient_trgm_idx
+  on public.orders using gin (recipient_name extensions.gin_trgm_ops);
 
 create index if not exists concierge_actions_email_idx
   on public.concierge_actions (email, created_at desc);
+create index if not exists concierge_actions_email_trgm_idx
+  on public.concierge_actions using gin (email extensions.gin_trgm_ops);
+create index if not exists concierge_actions_action_trgm_idx
+  on public.concierge_actions using gin (action extensions.gin_trgm_ops);
 create index if not exists concierge_actions_result_trgm_idx
   on public.concierge_actions using gin (result extensions.gin_trgm_ops);
 
 create index if not exists concierge_conversations_email_idx
   on public.concierge_conversations (user_email, created_at desc);
+create index if not exists concierge_conversations_email_trgm_idx
+  on public.concierge_conversations using gin (user_email extensions.gin_trgm_ops);
 
 create index if not exists concierge_messages_content_trgm_idx
   on public.concierge_messages using gin (content extensions.gin_trgm_ops);
@@ -496,6 +504,10 @@ create table if not exists public.waitlist (
 );
 create index if not exists waitlist_created_idx on public.waitlist (created_at desc);
 create index if not exists waitlist_email_idx on public.waitlist (email);
+-- keyword search (email/name/note ILIKE) — trigram GIN so the admin filter scales
+create index if not exists waitlist_email_trgm_idx on public.waitlist using gin (email extensions.gin_trgm_ops);
+create index if not exists waitlist_name_trgm_idx  on public.waitlist using gin (name  extensions.gin_trgm_ops);
+create index if not exists waitlist_note_trgm_idx  on public.waitlist using gin (note  extensions.gin_trgm_ops);
 alter table public.waitlist enable row level security;
 drop policy if exists "admin all waitlist" on public.waitlist;
 create policy "admin all waitlist" on public.waitlist

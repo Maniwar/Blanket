@@ -115,11 +115,15 @@ tabs):
   name/result, and conversation *message content* via the messages table).
 - **Pagination** ("load more" by keyset/range) so results aren't capped at the
   first page.
-- **Supporting indexes** (see `supabase/setup.sql` / migration `0024`):
-  `orders(placed_at)`, `orders(status)`, `concierge_actions(email, created_at)`,
-  `concierge_conversations(user_email)`, and **pg_trgm GIN** indexes for
-  keyword/`ILIKE` search on `orders`, `concierge_actions`, and
-  `concierge_messages.content` — without which keyword search is a full scan.
+- **Supporting indexes** (`supabase/setup.sql` / migrations `0024`, `0027`,
+  `0028`): btree on `orders(placed_at, status)`, `concierge_actions(email,
+  created_at)`, `concierge_conversations(user_email, created_at)`,
+  `waitlist(created_at, email)`; and **pg_trgm GIN** on *every* column a keyword
+  filter runs `ILIKE '%…%'` over — `orders(email,name,recipient_name)`,
+  `concierge_actions(email,action,result)`, `concierge_conversations(user_email)`,
+  `concierge_messages(content)`, `waitlist(email,name,note)` — without which
+  substring search is a full scan. All filter surfaces (actions, customers,
+  conversations, waitlist) are covered.
 
 This makes the admin panel usable at scale and is the prerequisite for auditing
 a large system. The blockers above (rate limiting, partitioning, counts) remain
