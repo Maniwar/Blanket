@@ -64,16 +64,18 @@ function jsonError(req: Request, status: number, message: string): Response {
   return jsonResponse(req, status, { error: message });
 }
 
-// ── Rate limiting — in-memory sliding window per client IP ───────────────────
+// ── Rate limiting — DB-backed fixed window (shared across all edge instances),
+//    with a per-instance in-memory fallback if the DB/RPC is unreachable ───────
 
-const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const hits = new Map<string, number[]>(); // key -> request timestamps
+const RATE_WINDOW_SEC = 10 * 60; // 10 minutes
+const RATE_WINDOW_MS = RATE_WINDOW_SEC * 1000;
+const hits = new Map<string, number[]>(); // key -> timestamps (fallback only)
 
-/** Sliding-window limiter; holds get their own, roomier budget per IP. */
-function rateLimited(key: string, limit: number): boolean {
+/** Per-instance sliding window — used only when the shared DB limiter is
+ *  unreachable, so an outage still leaves some protection. */
+function rateLimitedLocal(key: string, limit: number): boolean {
   const now = Date.now();
   const cutoff = now - RATE_WINDOW_MS;
-  // Prune stale entries across the whole map so it can't grow unbounded.
   for (const [k, times] of hits) {
     const fresh = times.filter((t) => t > cutoff);
     if (fresh.length === 0) hits.delete(k);
@@ -84,6 +86,23 @@ function rateLimited(key: string, limit: number): boolean {
   recent.push(now);
   hits.set(key, recent);
   return false;
+}
+
+/** Shared, DB-backed limiter (one window across every instance); holds get a
+ *  roomier budget per IP. Fails over to the per-instance counter on DB error. */
+async function rateLimited(key: string, limit: number): Promise<boolean> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return rateLimitedLocal(key, limit);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rate_hit`, {
+      method: "POST",
+      headers: RPC_HEADERS,
+      body: JSON.stringify({ p_key: key, p_limit: limit, p_window_seconds: RATE_WINDOW_SEC }),
+    });
+    if (!res.ok) return rateLimitedLocal(key, limit);
+    return (await res.json()) === true;
+  } catch {
+    return rateLimitedLocal(key, limit);
+  }
 }
 
 // ── Validation ───────────────────────────────────────────────────────────────
@@ -518,7 +537,7 @@ Deno.serve(async (req: Request) => {
 
   // ── POST ?hold=1 — reserve (or re-confirm) the visit's number ─────────────
   if (new URL(req.url).searchParams.get("hold")) {
-    if (rateLimited("h:" + ip, 30)) {
+    if (await rateLimited("h:" + ip, 30)) {
       return jsonError(req, 429, "Too many hold requests — a short pause, please.");
     }
     let holdBody: unknown;
@@ -571,7 +590,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Rate limit: 10 commissions / 10 minutes per x-forwarded-for IP.
-  if (rateLimited(ip, 10)) {
+  if (await rateLimited(ip, 10)) {
     return jsonError(req, 429,
       "Too many requests. The register takes a short pause — try again in a few minutes.");
   }

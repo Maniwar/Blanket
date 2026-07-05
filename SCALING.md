@@ -27,15 +27,17 @@ would bite at scale. They're ranked below, worst first.
 
 ## Blockers — fix before real scale
 
-### 1. Rate limiting is in-memory per instance — no real limit at scale
-`const hits = new Map()` in both functions counts requests **per warm instance**.
-Supabase runs many isolated instances, and they cold-start; so the "20 / 10 min"
-limit is really "20 × however many instances, reset on every cold start." At
-scale it provides almost no protection against abuse or cost blowout.
-**Fix:** move the counter to shared state — a Postgres table with a windowed
-count (a `security definer` RPC doing an upsert + count), or an external store
-(Upstash/Redis). DB-backed is simplest here since Postgres is already the trust
-boundary.
+### 1. Rate limiting is in-memory per instance — ✅ FIXED (now DB-backed)
+*Was:* `const hits = new Map()` in both functions counted requests **per warm
+instance**, so the "20 / 10 min" limit was really "20 × however many instances,
+reset on every cold start" — almost no protection at scale.
+*Now:* a Postgres `rate_limits` table + `rate_hit(key, limit, window_seconds)`
+`security definer` RPC (atomic upsert into a fixed window) gives one shared
+window across every edge instance. Both functions call it; each **fails over to
+the per-instance in-memory counter** if the DB is momentarily unreachable, so an
+outage never blocks legitimate traffic. The table self-prunes to ~one row per
+active key. *(Migration `0025` / `setup.sql`.)* A whole-table sweep of stale
+windows (pg_cron) is the optional belt-and-suspenders for very high key churn.
 
 ### 2. Unbounded high-write tables — `concierge_messages`, `concierge_actions`, `order_events`
 Every chat turn writes a message row; every tool call writes an action row.

@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-openers-buffered";
+const BUILD_TAG = "2026-07-05-shared-ratelimit";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -211,26 +211,40 @@ async function loadConciergeData(): Promise<ConciergeData> {
   return dataCache;
 }
 
-// ── Rate limiting — in-memory sliding window per client IP (POST only) ───────
+// ── Rate limiting — DB-backed fixed window (shared across all edge instances),
+//    with a per-instance in-memory fallback if the DB/RPC is unreachable ───────
 
-const RATE_LIMIT = 20; // requests
-const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const hits = new Map<string, number[]>(); // ip -> request timestamps
+const RATE_LIMIT = 20; // requests per window
+const RATE_WINDOW_SEC = 10 * 60; // 10 minutes
+const RATE_WINDOW_MS = RATE_WINDOW_SEC * 1000;
+const hits = new Map<string, number[]>(); // ip -> request timestamps (fallback only)
 
-function rateLimited(ip: string): boolean {
+/** Per-instance sliding window — only used when the shared DB limiter can't be
+ *  reached, so a database hiccup still leaves *some* protection in place. */
+function rateLimitedLocal(key: string, limit: number): boolean {
   const now = Date.now();
   const cutoff = now - RATE_WINDOW_MS;
-  // Prune stale entries across the whole map so it can't grow unbounded.
-  for (const [key, times] of hits) {
+  for (const [k, times] of hits) {
     const fresh = times.filter((t) => t > cutoff);
-    if (fresh.length === 0) hits.delete(key);
-    else hits.set(key, fresh);
+    if (fresh.length === 0) hits.delete(k);
+    else hits.set(k, fresh);
   }
-  const recent = hits.get(ip) ?? [];
-  if (recent.length >= RATE_LIMIT) return true;
+  const recent = hits.get(key) ?? [];
+  if (recent.length >= limit) return true;
   recent.push(now);
-  hits.set(ip, recent);
+  hits.set(key, recent);
   return false;
+}
+
+/** Shared, DB-backed limiter (one window across every instance). Returns true
+ *  when the caller is over the limit. Fails over to the per-instance counter on
+ *  any DB error, so it never blocks legitimate traffic on an outage. */
+async function rateLimited(key: string, limit = RATE_LIMIT): Promise<boolean> {
+  const over = await pgRpc<boolean>("rate_hit", {
+    p_key: key, p_limit: limit, p_window_seconds: RATE_WINDOW_SEC,
+  });
+  if (over === null) return rateLimitedLocal(key, limit); // DB unreachable
+  return over === true;
 }
 
 // ── Validation — v1 rules plus optional session_key (<= 64 chars) ────────────
@@ -1245,7 +1259,7 @@ async function handleSelfTest(req: Request): Promise<Response> {
 async function handleChatPost(req: Request): Promise<Response> {
   // Rate limit (v1 behavior: 20 req / 10 min per x-forwarded-for IP).
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  if (rateLimited(ip)) {
+  if (await rateLimited(ip)) {
     return jsonError(req, 429,
       "Too many requests. The concierge takes a short pause — try again in a few minutes.");
   }
@@ -1758,7 +1772,7 @@ async function writeClientBookNote(
 
 async function handleFormPost(req: Request): Promise<Response> {
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  if (rateLimited("f:" + ip)) {
+  if (await rateLimited("f:" + ip)) {
     return jsonError(req, 429, "A short pause, please — the register is writing.");
   }
   const customer = await verifyUser(req);

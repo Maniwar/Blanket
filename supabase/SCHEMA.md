@@ -202,6 +202,18 @@ RLS on, **no policies** — service-role only. **Read/written by:**
 (re-inserts the struck number as an already-lapsed hold so it's reclaimable).
 Concurrency-safe via `FOR UPDATE SKIP LOCKED`.
 
+### `rate_limits` — shared request counter
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `bucket` | text | Rate-limit key (an IP, or `f:<ip>` / `h:<ip>`). |
+| `window_start` | timestamptz | Start of the fixed window. |
+| `count` | int | Requests seen for this bucket in this window. |
+
+PK `(bucket, window_start)`. RLS on, **no policies** — service-role only.
+**Written/read by:** `rate_hit` (atomic upsert + count; self-prunes a key's
+spent windows). Replaces the old in-memory per-instance limiter so the limit
+holds across every edge instance.
+
 ### `concierge_sops` — the house's standard operating procedures
 Same shape as `concierge_kb` (`slug`,`title`,`content_md`,`sort_order`,
 `enabled`). Enabled rows are injected into the system prompt's STANDARD
@@ -328,6 +340,7 @@ scores each into `concierge_conversations.goal_status`). **Seeded by:**
 | `cancel_order_return(p_serial,p_user_id,p_email)` | → text | Cancels a `placed` order the caller owns: sets `status='cancelled'`, moves `serial`→`cancelled_serial`, and re-inserts the number as a lapsed hold so it's reclaimable. | concierge `cancel_order` tool. |
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
+| `rate_hit(p_key, p_limit, p_window_seconds)` | → bool | Counts one request for `p_key` in the current fixed window (atomic upsert into `rate_limits`) and returns true when over `p_limit`. Shared across all edge instances. | both functions' rate limiters. |
 | `get_edition()` | → (next, run, claimed, remaining) | Reads the edition counter. Raises unless `is_concierge_admin()`. | admin Edition card. |
 | `set_edition(p_next_serial, p_run_size)` | → void | Sets `next_serial`/`run_size` (validates `next ≤ run+1`). Raises unless `is_concierge_admin()`. | admin Edition card. |
 

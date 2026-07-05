@@ -440,6 +440,35 @@ create index if not exists concierge_messages_created_at_idx
   on public.concierge_messages (created_at desc);
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3c. SHARED RATE LIMITING — DB-backed fixed-window counter so the limit holds
+--     across all edge instances (the in-memory Map was per-instance only).
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.rate_limits (
+  bucket        text not null,
+  window_start  timestamptz not null,
+  count         int not null default 0,
+  primary key (bucket, window_start)
+);
+alter table public.rate_limits enable row level security;  -- service-role only
+
+create or replace function public.rate_hit(p_key text, p_limit int, p_window_seconds int)
+returns boolean language plpgsql security definer set search_path = '' as $$
+declare
+  v_secs  int := greatest(coalesce(p_window_seconds, 600), 1);
+  v_start timestamptz := to_timestamp(floor(extract(epoch from now()) / v_secs) * v_secs);
+  v_count int;
+begin
+  insert into public.rate_limits (bucket, window_start, count)
+    values (p_key, v_start, 1)
+    on conflict (bucket, window_start)
+      do update set count = public.rate_limits.count + 1
+    returning count into v_count;
+  delete from public.rate_limits where bucket = p_key and window_start < v_start;
+  return v_count > coalesce(p_limit, 20);
+end; $$;
+revoke execute on function public.rate_hit(text, int, int) from public, anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 4. SEED DATA (admins, config, KB, SOPs, forms, goals) — safe to re-run
 -- ─────────────────────────────────────────────────────────────────────────────
 
