@@ -2228,11 +2228,20 @@
     if (sendBtn) { sendBtn.disabled = lock; }
     if (inputEl) {
       inputEl.disabled = lock;
-      /* only pull focus back when a visitor-initiated turn finishes, and never
-         if they're already mid-word somewhere (their focus wins) */
-      if (!on && panelOpen && pointerFine() &&
-          document.activeElement !== inputEl && !composing()) {
-        try { inputEl.focus(); } catch (e) { /* ignore */ }
+      /* Pull focus back to the composer when a visitor turn finishes (disabling
+         it mid-stream blurred it), so they can type the next message without
+         clicking. Skip ONLY if they've genuinely moved on — typing in another
+         field, or a draft is sitting in the box. (The old check used a "typed in
+         the last 4s" heuristic, which is always true right after hitting Enter,
+         so focus never came back on a quick reply.) */
+      if (!on && panelOpen && pointerFine()) {
+        var af = document.activeElement;
+        var typingElsewhere = af && af !== inputEl && af !== document.body &&
+          (af.tagName === 'INPUT' || af.tagName === 'TEXTAREA' || af.isContentEditable);
+        var draft = (inputEl.value || '').replace(/^\s+|\s+$/g, '');
+        if (!typingElsewhere && !draft) {
+          try { inputEl.focus(); } catch (e) { /* ignore */ }
+        }
       }
     }
   }
