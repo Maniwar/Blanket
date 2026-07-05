@@ -151,7 +151,7 @@ The core table. No payment or street-shipping data beyond what the demo needs.
 | `user_id` | uuid → auth.users | Owner, if placed signed-in. | placement |
 | `email` | text | Buyer email. | placement |
 | `serial` | int **unique, nullable** | The edition number (1–15000). **Null while cancelled** so a struck number frees up (unique ignores nulls). | placement; cleared on cancel |
-| `status` | text | `placed`→`weaving`→`finishing`→`shipped`→`delivered`, or `returned`/`cancelled`. | placement; admin/tool updates |
+| `status` | text | `placed`→`weaving`→`finishing`→`shipped`→`delivered`, or `returned`/`cancelled`. **Note:** nothing *advances* status or sets `tracking` yet (fulfillment is unbuilt — see DESIGN.md §8); today orders stay `placed`. | placement; cancel; (future) admin/fulfillment |
 | `tracking` | text | Carrier tracking, once shipped. | admin when shipped |
 | `city`,`state`,`zip` | text | Shipping locale (state = 2 letters). | placement / address change |
 | `address`,`address2` | text | Street lines (demo only). | placement / address change |
@@ -175,10 +175,16 @@ commission `?me=1` (prefill), admin (Customers/Orders). **Audited by:** the
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `id` | int PK (=1) | Single-row guard. |
-| `next_serial` | int | Next never-issued number; seeded at 14215 (14214 is the demo order). Cap is 15000. |
+| `next_serial` | int | Next never-issued number. Cap is 15000. |
 
 RLS on, **no policies** — service-role only. **Read/written by:**
 `hold_serial` and `commission_order` (both `... FOR UPDATE`).
+
+> **Edition framing (to finalize).** Seeded at **14215** so the run reads as
+> "~786 of 15,000 remain" — an established, nearly-sold-out edition. The site's
+> "remaining" is driven by the **live** counter (`commission ?next=1`), not a
+> hardcoded figure. Whether to keep this scarcity story or start a fresh edition
+> at Nº 1 is a product decision still open (see DESIGN.md §8).
 
 ### `serial_holds` — live reservations
 | Column | Type | Purpose |

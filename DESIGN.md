@@ -336,22 +336,53 @@ tool call, order change, feedback, and knowledge gap is logged for the admin.
 
 ---
 
-## 8. Limitations & what's next
+## 8. Roadmap — designed for, not yet built
 
-Honest gaps, roughly in priority:
+Called out so the docs never overclaim. These are intended and have a place in
+the model, but are **not implemented yet**:
 
-- **Leave-detection is best-effort.** The `pagehide`/`visibilitychange` beacon
-  can be skipped on a hard crash or aggressive mobile eviction. A small scheduled
-  job that marks conversations idle for N hours as ended would close the gap.
-- **Goal scoring and summaries are single-judge.** An adversarial or multi-judge
-  pass would raise confidence; today it's one LLM call, best-effort and async.
-- **Cache invalidation is manual.** If the knowledge changes, stale cached answers
-  aren't auto-evicted; an admin clears them. A content-hash or TTL would automate
-  it.
-- **No true read receipts.** Presence is inferred from activity — good enough to
-  stop talking into the void, but not a delivery guarantee.
-- **Single-region.** Fine for a demo; a global audience would want the functions
-  and DB closer to users.
+- **Order fulfillment progression.** The status vocabulary
+  (`placed → weaving → finishing → shipped → delivered`) exists, and the concierge
+  can *read* status and tracking — but nothing *advances* an order or sets a
+  tracking number yet, and the admin's orders view is read-only. **So today every
+  order stays `placed`.** *Planned:* admin controls to advance status and attach
+  tracking (RLS-gated writes to `orders`, audited by the existing trigger), and
+  optionally a demo auto-progression so the edition visibly moves.
+- **Transactional email notifications.** Only auth emails (magic link) are wired.
+  *Planned:* order-confirmation, shipment-with-tracking, and cancellation emails,
+  sent through the same custom SMTP and triggered on order events (via a DB
+  webhook/edge function or from the commission + admin write paths).
+- **Edition framing (to finalize).** The run seeds at **Nº 14,215 of 15,000** — a
+  "nearly sold out, ~786 remain" scarcity story — and the site's "remaining"
+  reads the **live** counter (`?next=1`), so it isn't faked. The starting point
+  is a product choice still to be finalized and documented (fresh edition from
+  Nº 1 vs. the established-run scarcity story).
+
+## 9. Known limitations (inherent)
+
+- **Leave-detection is best-effort.** The `pagehide`/`visibilitychange` beacon can
+  be skipped on a hard crash or aggressive mobile eviction. A scheduled job that
+  ends conversations idle for N hours would close the gap.
+- **Goal scoring and summaries are single-judge** — one async LLM call. An
+  adversarial/multi-judge pass would raise confidence.
+- **Cache invalidation is manual** — stale answers aren't auto-evicted when the
+  knowledge changes; an admin clears them.
+- **No true read receipts** — presence is inferred from activity.
+- **Single-region** — fine for a demo; a global audience wants closer infra.
+
+## 10. Keeping the docs in sync
+
+Documentation is part of the feature, not an afterthought. When a feature lands,
+the same change updates whichever of these it touches:
+
+- **[DESIGN.md](DESIGN.md)** — user stories (§2), the relevant decision/roadmap
+  section, and moves items out of §8 as they ship.
+- **[supabase/SCHEMA.md](supabase/SCHEMA.md)** — any new table/column/RPC.
+- **[supabase/README.md](supabase/README.md)** — any new endpoint/wire contract.
+- **[SETUP.md](SETUP.md)** / **[DEMO.md](DEMO.md)** — if setup, verification, or
+  the walkthrough changes.
+
+A feature isn't "done" until its docs are.
 
 ---
 
