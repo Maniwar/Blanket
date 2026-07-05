@@ -1415,8 +1415,11 @@
         clearLauncherUnread();
         pendingSay = '';
         entryMode = 'outreach:' + kind;
-        history.push({ role: 'assistant', content: text, ts: Date.now() });
-        saveHistory();
+        var lastH = history.length ? history[history.length - 1] : null;
+        if (!lastH || lastH.content !== text) {   /* may already be in the transcript */
+          history.push({ role: 'assistant', content: text, ts: Date.now() });
+          saveHistory();
+        }
       } catch (eOR) { /* never let bookkeeping block the open */ }
       openPanel();
     }
@@ -1464,7 +1467,26 @@
       if (!sheetOpen || tries > 120) {
         clearInterval(waitClose);
         try { window.sessionStorage.removeItem('cx-or-congrats'); } catch (e) { /* re-arm per sale */ }
-        setTimeout(function () { showOutreach('congrats', line, true); }, 1200);
+        setTimeout(function () {
+          /* Guarantee the congratulations lands. Put it in the transcript (so it's
+             there the moment they look at the chat), render it now if the panel is
+             open — the common case, since the commission button lives in the open
+             chat — and raise the bubble as a heads-up only when the panel is closed.
+             The old behaviour was bubble-only, which showOutreach suppresses while
+             the panel is open, so a purchase made from the chat got no congrats. */
+          try {
+            var last = history.length ? history[history.length - 1] : null;
+            if (!last || last.content !== line) {
+              history.push({ role: 'assistant', content: line, ts: Date.now() });
+              saveHistory();
+            }
+          } catch (eH) { /* ignore */ }
+          if (panelOpen && msgsEl && !streaming) {
+            try { renderHistory(); scrollToBottom(false); } catch (eR) { /* ignore */ }
+          } else if (!panelOpen) {
+            showOutreach('congrats', line, true);
+          }
+        }, 1200);
       }
     }, 1000);
   });
