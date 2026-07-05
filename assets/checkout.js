@@ -1790,6 +1790,18 @@
     })['catch'](function () { /* the form is still a form */ });
   }
 
+  /* Opening to place a NEW order: if the last commission is already finished,
+     clear it so we start a fresh entry instead of replaying its celebration
+     card. (An in-progress entry — commissioned still null — is left to resume.) */
+  function freshIfDone() {
+    if (commissioned) {
+      commissioned = null;
+      act = 1;
+      order.colorway = '';
+      clearDraft();
+    }
+  }
+
   function openPanel() {
     if (!panel || panelOpen) { return; }
     panelOpen = true;
@@ -1935,6 +1947,7 @@
       (function (anchor) {
         anchor.addEventListener('click', function (e) {
           e.preventDefault();
+          freshIfDone();
           openPanel();
         });
       })(a);
@@ -1996,6 +2009,7 @@
         if (panelOpen) { showAct(1, 0); } else { openPanel(); }
         return;
       }
+      freshIfDone();
       openPanel();
     },
     close: function () { closePanel(); }
