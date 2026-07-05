@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-personal-starters";
+const BUILD_TAG = "2026-07-05-hold-leak-fix";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1482,6 +1482,13 @@ function buildSystemPrompt(
   system += "\nASSERTIVENESS (how to sell right now): " +
     (ASSERTIVENESS_GUIDANCE[assertivenessLevel(data)] ?? ASSERTIVENESS_GUIDANCE[3]) + "\n";
 
+  // [HOLD] is ONLY a silence signal for a proactive check-in — never a reply.
+  system += "\n[HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY when a " +
+    "proactive follow-up prompt asks you to check in and you decide silence is kinder. " +
+    "NEVER write [HOLD] (or the word 'hold' alone) in reply to a message the visitor " +
+    "actually sent — to anything they type, including a bare 'hey', always give a real, " +
+    "warm answer. Never let the token [HOLD] appear in what the customer reads.\n";
+
   // SELLING ANGLES — admin-curated true lines the bot may weave in to build desire.
   const hooks = data.config?.hooks;
   if (Array.isArray(hooks)) {
@@ -2102,14 +2109,29 @@ async function handleChatPost(req: Request): Promise<Response> {
           }
 
           finalText = stripPlumbing(finalText);
-          for (const piece of chunked(finalText)) send({ t: piece });
-          const lastUserMsg = [...validated.messages].reverse().find((m) => m.role === "user");
-          await maybeFlagGap(cid, lastUserMsg?.content, finalText);
-          if (!isNudge) {
-            scheduleGoalEval(cid, data, [...validated.messages, { role: "assistant", content: finalText }], apiKey, model);
+          // [HOLD] is the "stay silent" signal for a PROACTIVE beat — it must
+          // never render as text. On a nudge/opener that chose silence, emit a
+          // hold and say nothing. If the model emits it in reply to something the
+          // visitor actually typed (where holding makes no sense), never show the
+          // token — answer with a light presence instead.
+          const holdish = finalText.trim().length === 0 ||
+            /^\[?hold\]?\.?$/i.test(finalText.trim());
+          if (holdish && (isNudge || isOpener)) {
+            send({ hold: 1 });
+            finalText = "";
+          } else {
+            if (holdish) { finalText = "I'm here — what can I help you with?"; }
+            for (const piece of chunked(finalText)) send({ t: piece });
           }
-          const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
-          if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
+          if (finalText) {
+            const lastUserMsg = [...validated.messages].reverse().find((m) => m.role === "user");
+            await maybeFlagGap(cid, lastUserMsg?.content, finalText);
+            if (!isNudge) {
+              scheduleGoalEval(cid, data, [...validated.messages, { role: "assistant", content: finalText }], apiKey, model);
+            }
+            const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
+            if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
+          }
         } catch { /* fall through to [DONE] */ }
         try {
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
