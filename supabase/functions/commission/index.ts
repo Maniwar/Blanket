@@ -594,6 +594,44 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, hold);
   }
 
+  // ── POST ?waitlist=1 — join the waitlist (sold-out form, or the concierge) ──
+  if (new URL(req.url).searchParams.get("waitlist")) {
+    if (await rateLimited("w:" + ip, 10)) {
+      return jsonError(req, 429, "A short pause, please — try again in a moment.");
+    }
+    let wb: Record<string, unknown>;
+    try { wb = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const email = s(wb.email).toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 120) {
+      return jsonError(req, 400, "A valid email is required.");
+    }
+    const cw = s(wb.colorway).toLowerCase();
+    const source = ["sold_out", "concierge", "form"].includes(s(wb.source)) ? s(wb.source) : "form";
+    const user = await verifyUser(req);
+    const row = {
+      email,
+      name: s(wb.name).slice(0, 80) || null,
+      colorway: COLORWAYS.has(cw) ? cw : null,
+      note: s(wb.note).slice(0, 400) || null,
+      source,
+      user_id: user?.id ?? null,
+    };
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/waitlist`, {
+        method: "POST",
+        headers: { ...RPC_HEADERS, "Prefer": "return=minimal" },
+        body: JSON.stringify(row),
+      });
+      if (!res.ok) return jsonError(req, 502, "Could not record that just now — try again.");
+    } catch {
+      return jsonError(req, 502, "Could not record that just now — try again.");
+    }
+    return jsonResponse(req, 200, { ok: true });
+  }
+
   // ── POST ?fulfill=1 — admin advances an order and (on ship) notifies ──────
   if (new URL(req.url).searchParams.get("fulfill")) {
     const admin = await verifyUser(req);

@@ -481,6 +481,29 @@ end; $$;
 revoke execute on function public.rate_hit(text, int, int) from public, anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3d. WAITLIST — captured when sold out (form) or by the concierge; admin-managed
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.waitlist (
+  id          uuid primary key default gen_random_uuid(),
+  email       text not null,
+  name        text,
+  colorway    text,
+  note        text,
+  source      text,
+  user_id     uuid,
+  created_at  timestamptz not null default now(),
+  notified_at timestamptz
+);
+create index if not exists waitlist_created_idx on public.waitlist (created_at desc);
+create index if not exists waitlist_email_idx on public.waitlist (email);
+alter table public.waitlist enable row level security;
+drop policy if exists "admin all waitlist" on public.waitlist;
+create policy "admin all waitlist" on public.waitlist
+  for all to authenticated
+  using (public.is_concierge_admin())
+  with check (public.is_concierge_admin());
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 4. SEED DATA (admins, config, KB, SOPs, forms, goals) — safe to re-run
 -- ─────────────────────────────────────────────────────────────────────────────
 

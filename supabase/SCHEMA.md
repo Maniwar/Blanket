@@ -214,6 +214,22 @@ PK `(bucket, window_start)`. RLS on, **no policies** — service-role only.
 spent windows). Replaces the old in-memory per-instance limiter so the limit
 holds across every edge instance.
 
+### `waitlist` — future-edition sign-ups
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | uuid PK | Row id. |
+| `email` | text | Who to write to. |
+| `name`,`colorway`,`note` | text | Optional details captured. |
+| `source` | text | `sold_out` (front-end form), `concierge`, or `form`. |
+| `user_id` | uuid | Set when captured from a signed-in patron. |
+| `created_at` | timestamptz | When they joined. |
+| `notified_at` | timestamptz | Admin stamps this once they've reached out. |
+
+RLS on; **admin** select/manage policy (`is_concierge_admin()`). **Written by:**
+commission `POST ?waitlist=1` (sold-out form) and the concierge `join_waitlist`
+tool (both via service role). **Read/managed by:** admin (Customers tab →
+Waitlist card: filter, mark notified, export CSV).
+
 ### `concierge_sops` — the house's standard operating procedures
 Same shape as `concierge_kb` (`slug`,`title`,`content_md`,`sort_order`,
 `enabled`). Enabled rows are injected into the system prompt's STANDARD
@@ -374,6 +390,7 @@ meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
 | `POST ?hold=1` | Reserve the visit's serial (`hold_serial`). |
 | `POST` | Place the order (`commission_order`); emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
 | `POST ?fulfill=1` | **Admin only** (`verifyUser` + `is_concierge_admin`). Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
+| `POST ?waitlist=1` | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (rate-limited; no auth required, links `user_id` if signed in). |
 
 Transactional email uses Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`,
 default `Feierabend <onboarding@resend.dev>`). With the default Resend sender,

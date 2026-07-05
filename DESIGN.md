@@ -146,6 +146,11 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
   and what the concierge learned about them, so that I can serve them well.
   *(Customers tab: LTV ledger + client book + order history.)*
+- **As the merchant**, I want a real waitlist — captured when the edition sells
+  out (a form on the sold-out state) and by the concierge in chat — that I can
+  filter, mark people notified on, and export to email, so that demand past a
+  full run isn't lost. *(Customers tab: Waitlist card; `waitlist` table;
+  commission `POST ?waitlist=1`; concierge `join_waitlist` tool.)*
 - **As the merchant**, I want to know the concierge is actually selling, so that I
   can justify it — so I need its assisted revenue attributed. *(Order ↔ chat
   attribution via `chat_session`.)*

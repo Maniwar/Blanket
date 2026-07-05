@@ -690,6 +690,28 @@
       </div>
 
       <div id="cust-list"></div>
+
+      <section class="card" style="margin-top:24px;">
+        <div class="card-head">
+          <h3>Waitlist</h3>
+          <span class="micro">waitlist · sold-out & concierge sign-ups</span>
+        </div>
+        <p class="note">People asking to be told about a future edition — captured by the sold-out form or by the concierge in chat. Mark someone <strong>notified</strong> once you've reached out; export the list to email them.</p>
+        <div class="row-tools filters">
+          <input type="date" id="wl-from" title="From date">
+          <input type="date" id="wl-to" title="To date">
+          <input type="text" id="wl-q" placeholder="email or keyword…" style="max-width:240px;">
+          <button id="wl-apply" class="btn">Search</button>
+          <button id="wl-clear" class="btn ghost">Clear</button>
+          <button id="wl-export" class="btn ghost">Export CSV</button>
+          <button id="wl-refresh" class="btn">Refresh</button>
+          <span class="micro" id="wl-count" style="color:var(--wool-faint);"></span>
+        </div>
+        <div id="wl-list"></div>
+        <div class="card-foot">
+          <button id="wl-more" class="btn ghost" style="display:none;">Load more</button>
+        </div>
+      </section>
     </div>
 
     <!-- ============ TAB 6 : CONVERSATIONS ============ -->
@@ -769,6 +791,7 @@ const state = {
   actions: [],
   gaps: [],
   customers: [],
+  waitlist: [],
   forms: [],
   goalDefs: [],
   convos: [],
@@ -900,6 +923,7 @@ async function route() {
     loadCache();
     loadGaps();
     loadCustomers();
+    loadWaitlist();
     loadForms();
     loadGoalDefs();
     loadConversations();
@@ -1068,6 +1092,9 @@ function wireStatic() {
   wireFilter('act', loadActions, ['act-q'], $('act-apply'), $('act-clear'), $('actions-more'));
   wireFilter('cust', loadCustomers, ['cust-search'], $('cust-apply'), $('cust-clear'), null);
   wireFilter('convo', loadConversations, ['convo-q'], $('convo-apply'), $('convo-clear'), $('convo-more'));
+  wireFilter('wl', loadWaitlist, ['wl-q'], $('wl-apply'), $('wl-clear'), $('wl-more'));
+  $('wl-refresh').addEventListener('click', function () { withBusy($('wl-refresh'), loadWaitlist); });
+  $('wl-export').addEventListener('click', exportWaitlistCsv);
 }
 
 /* Wire one audit surface's filter controls to its loader. */
@@ -1619,7 +1646,7 @@ function goalChips(goalStatus) {
    wildcard is * (not %), and commas/parens/wildcards are stripped so a search
    term can't break the filter grammar. */
 const PAGE = 40;
-const pageState = { act: 0, convo: 0 };
+const pageState = { act: 0, convo: 0, wl: 0 };
 
 function fval(id) { const e = $(id); return e ? (e.value || '').replace(/^\s+|\s+$/g, '') : ''; }
 function fkw(id) { return fval(id).replace(/[,()%*]/g, ''); }           // safe for or()
@@ -2043,6 +2070,76 @@ function renderCustomers() {
     head.addEventListener('click', function () { row.classList.toggle('open'); });
     list.appendChild(row);
   });
+}
+
+/* ---- Waitlist (in the Customers tab) ---- */
+async function loadWaitlist(more) {
+  if (!more) pageState.wl = 0;
+  const from = pageState.wl * PAGE;
+  let q = sb.from('waitlist')
+    .select('id,email,name,colorway,note,source,created_at,notified_at')
+    .order('created_at', { ascending: false })
+    .range(from, from + PAGE - 1);
+  const df = fFrom('wl-from'), dt = fTo('wl-to'), kw = fkw('wl-q');
+  if (df) q = q.gte('created_at', df);
+  if (dt) q = q.lte('created_at', dt);
+  if (kw) q = q.or(orIlike(['email', 'name', 'note'], kw));
+  const res = await q;
+  if (res.error) { fail('Load waitlist', res.error); return; }
+  const rows = res.data || [];
+  state.waitlist = more ? state.waitlist.concat(rows) : rows;
+  pageState.wl++;
+  renderWaitlist();
+  showMore('wl-more', rows.length === PAGE);
+}
+
+function renderWaitlist() {
+  const list = $('wl-list');
+  list.textContent = '';
+  $('wl-count').textContent = state.waitlist.length ? state.waitlist.length + ' shown' : '';
+  if (!state.waitlist.length) {
+    list.appendChild(el('div', 'empty micro', 'No one on the waitlist yet.'));
+    return;
+  }
+  state.waitlist.forEach(function (w) {
+    const row = el('div', 'action-row');
+    row.appendChild(el('span', 'micro', fmtWhen(w.created_at)));
+    row.appendChild(el('span', 'who', w.email || ''));
+    if (w.name) row.appendChild(el('span', 'act', w.name));
+    if (w.colorway) row.appendChild(el('span', 'serial', w.colorway));
+    if (w.source) row.appendChild(el('span', 'micro', w.source));
+    if (w.note) row.appendChild(el('span', 'payload', w.note));
+    if (w.notified_at) {
+      row.appendChild(el('span', 'micro', '✓ notified'));
+    } else {
+      const b = el('button', 'btn ghost', 'Mark notified');
+      b.addEventListener('click', function () { withBusy(b, function () { return markNotified(w); }); });
+      row.appendChild(b);
+    }
+    list.appendChild(row);
+  });
+}
+
+async function markNotified(w) {
+  const res = await sb.from('waitlist').update({ notified_at: nowIso() }).eq('id', w.id);
+  if (res.error) { fail('Mark notified', res.error); return; }
+  w.notified_at = nowIso();
+  renderWaitlist();
+}
+
+function exportWaitlistCsv() {
+  const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  const head = ['created_at', 'email', 'name', 'colorway', 'source', 'note', 'notified_at'];
+  const lines = [head.join(',')];
+  state.waitlist.forEach(function (w) {
+    lines.push(head.map(function (k) { return esc(w[k]); }).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'waitlist.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
 }
 
 /* ============================================================

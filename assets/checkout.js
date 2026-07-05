@@ -62,6 +62,32 @@
     } catch (eH) { /* ignore */ }
   }
 
+  /* Sold out: record the visitor on the waitlist (their entry is already filled). */
+  function joinWaitlist(btn, sysline) {
+    if (!btn || btn.disabled) { return; }
+    var e = commissionEndpoint();
+    if (!e) { return; }
+    btn.disabled = true;
+    try {
+      fetch(e + '?waitlist=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: order.email, name: order.name,
+          colorway: order.colorway, source: 'sold_out'
+        })
+      }).then(function (res) {
+        if (res.ok) {
+          if (sysline) { sysline.textContent = 'You’re on the waitlist — I’ll write to ' + (order.email || 'you') + ' when the next edition opens.'; }
+          if (btn.parentNode) { btn.parentNode.removeChild(btn); }
+        } else {
+          btn.disabled = false;
+          if (sysline) { sysline.textContent = 'Could not add you just now — try once more.'; }
+        }
+      })['catch'](function () { btn.disabled = false; });
+    } catch (eW) { btn.disabled = false; }
+  }
+
   function feierState() {
     var s = window.__feierState;
     return (s && typeof s === 'object') ? s : {};
@@ -1234,10 +1260,18 @@
         return;
       }
       if (code === 409) {
-        sysline.textContent = 'The year\u2019s run is fully spoken for at this moment. A held number may free within minutes \u2014 or the 2027 waitlist stands open.';
+        sysline.textContent = 'The year\u2019s run is fully spoken for at this moment. A held number may free within minutes \u2014 or leave your name and I\u2019ll write when the next edition opens.';
         sysline.style.display = '';
         while (confirmBtn.firstChild) { confirmBtn.removeChild(confirmBtn.firstChild); }
         confirmBtn.appendChild(el('span', null, 'Try once more'));
+        if (!document.getElementById('ck-wl-btn') && confirmBtn.parentNode) {
+          var wlBtn = el('button', 'ck-btn ck-ghost');
+          wlBtn.id = 'ck-wl-btn';
+          wlBtn.type = 'button';
+          wlBtn.appendChild(el('span', null, 'Join the waitlist'));
+          wlBtn.addEventListener('click', function () { joinWaitlist(wlBtn, sysline); });
+          confirmBtn.parentNode.appendChild(wlBtn);
+        }
         return;
       }
       sysline.textContent = ERR_LINE;

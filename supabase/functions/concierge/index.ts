@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-admin-engagement";
+const BUILD_TAG = "2026-07-05-waitlist";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -595,6 +595,23 @@ const REGISTER_TOOLS: any[] = [
       required: ["serial"],
     },
   },
+  {
+    name: "join_waitlist",
+    description:
+      "Add this patron to the waitlist for a future edition. Use when the year's run is sold out, " +
+      "when they ask to be told about the next edition, or when a cloth they want isn't available. " +
+      "Use their signed-in email; you may also record a preferred cloth and a short note. " +
+      "Confirm warmly once done.",
+    input_schema: {
+      type: "object",
+      properties: {
+        email: { type: "string", description: "The patron's email (use the signed-in one)." },
+        colorway: { type: "string", description: "Optional preferred cloth: ungefaerbt, loden, or graphit." },
+        note: { type: "string", description: "Optional short note about what they're after." },
+      },
+      required: ["email"],
+    },
+  },
 ];
 
 /** Writes one row to the concierge_actions audit log. Never throws. */
@@ -659,6 +676,25 @@ async function runRegisterTool(
       client_book: (notes ?? []).map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`),
       prior_conversations: prior,
     });
+  }
+
+  if (name === "join_waitlist") {
+    const email = (typeof input.email === "string" ? input.email.trim().toLowerCase() : "") ||
+      (customer.email ?? "").toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return "ERROR: a valid email is needed for the waitlist — ask them for one first.";
+    }
+    const cw = typeof input.colorway === "string" ? input.colorway.trim().toLowerCase() : "";
+    const row = await pgInsert("waitlist", {
+      email,
+      colorway: ["ungefaerbt", "loden", "graphit"].includes(cw) ? cw : null,
+      note: typeof input.note === "string" ? input.note.trim().slice(0, 400) || null : null,
+      source: "concierge",
+      user_id: customer.id ?? null,
+    });
+    if (!row) return "ERROR: the waitlist is unreachable right now.";
+    await logAction(cid, customer, "join_waitlist", null, { email }, "added to waitlist");
+    return `Done — ${email} is on the waitlist for the next edition; I'll see they're told when it opens.`;
   }
 
   if (name === "remember_customer") {
