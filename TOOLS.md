@@ -50,7 +50,7 @@ a city into the street line, so address changes go through an in-chat **form**
 
 | Tool | Reads / writes | What it does | Guard beyond ownership |
 | --- | --- | --- | --- |
-| `get_my_orders` | read | The caller's orders — Nº, status, tracking, cloth, address, date. Called before answering any order question. | — |
+| `get_my_orders` | read | The caller's orders — Nº, status, tracking, cloth, address, date. Takes an optional `colorway` filter and returns an authoritative `{ count, orders }`, so counts and "show my Loden" are answered from the register, not tallied by hand. Called before answering any order question. | — |
 | `recall_context` | read | The caller's full client-book notes + the tail of earlier conversations, to re-engage a returning patron faithfully. | — |
 | `remember_customer` | write | Adds one short factual line to the client book. De-duplicates against existing notes; refuses sensitive content. | — |
 | `update_colorway` | write | Changes the cloth on an order. | Only while `placed` (loom not started). |

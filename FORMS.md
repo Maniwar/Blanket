@@ -5,9 +5,10 @@ a proper set of labelled fields with a submit button — instead of collecting a
 address or a change field by field in prose. This is how the bot makes a
 low-friction, low-error edit to an existing order.
 
-Forms are defined in the **admin studio → Procedures → Forms**, stored in the
+Forms are defined in the **admin studio → Tools → Form tools**, stored in the
 `concierge_forms` table, and delivered to the widget with the rest of the
-concierge config. Everything below is editable without a deploy.
+concierge config. Everything below is editable without a deploy. (Forms are one
+of the two kinds of tool the concierge can use — see [`TOOLS.md`](TOOLS.md).)
 
 ---
 
@@ -108,7 +109,7 @@ a new form is usable immediately.
 
 ## 4. Adding and configuring a form (admin)
 
-**Procedures → Forms → Add form:**
+**Tools → Form tools → Create form tool:**
 
 1. Click **Add form**. A new draft appears.
 2. Enter a **slug** (letters, numbers, dashes — this is the token handle).

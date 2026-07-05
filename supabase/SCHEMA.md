@@ -367,6 +367,8 @@ line recording the wind-down: quiet mode / closed / wound down). **Read by:**
 | `label` | text | Short name (admin scorecard). |
 | `description` | text | What "met" means; injected so the bot pursues it. |
 | `enabled` | boolean | Only enabled goals are pursued/scored. |
+| `sections` | text[] | Journey stages (page sections) this goal fits; the bot leads with it when the visitor is in ANY of them. Empty/null = anywhere. **Source of truth** — the admin edits it as checkboxes. |
+| `section` | text | Legacy single-section column, kept as a back-compat mirror of `sections[0]`; `goalSections()` prefers `sections`. |
 | `sort_order` | int | Display order. |
 | `updated_at` | timestamptz | Last edit. |
 

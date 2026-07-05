@@ -334,8 +334,8 @@ rather than merely reacting:
   grace, the post-sale window length, and whether to re-engage at all after a
   sale are admin-tunable (`outreach.reengageGraceMs`,
   `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
-- **Journey-aware goals.** Each goal can carry a `section` (page/journey stage);
-  `buildSystemPrompt` flags the open goals that match where the visitor is and
+- **Journey-aware goals.** Each goal can carry one or more `sections` (page/journey
+  stages), edited as checkboxes in the admin; `buildSystemPrompt` flags the open goals that match where the visitor is and
   tells the concierge to lead with them, so the agenda tracks the shopper's path
   down the page (discover→why, match-cloth→wool, handle-doubt→specs,
   advance→reserve by default; all admin-editable).
