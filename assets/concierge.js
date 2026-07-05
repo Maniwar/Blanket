@@ -1428,8 +1428,8 @@
       try { window.localStorage.setItem(doneKey, '1'); } catch (e3) { /* ignore */ }
       var no = mark.serial ? 'Nº ' + Number(mark.serial).toLocaleString('en-US') : 'your number';
       var line = 'Welcome back — ' + no + ' is safely in the Webbuch. Before anything else: is ' +
-        'there anything you still need from me? A shipping detail, a gift card, or a companion ' +
-        'cloth for another room.';
+        'there anything you still need from me? A shipping detail, a companion cloth for another ' +
+        'room, or anything about the weave.';
       showOutreach('checkin-' + (mark.serial || 'x'), line, true);
     }, 7000);
   })();
