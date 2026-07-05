@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-pills-narrowing";
+const BUILD_TAG = "2026-07-05-orders-count-filter";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -437,12 +437,14 @@ function ownershipFilter(customer: Customer): string {
 }
 
 async function myOrders(
-  customer: Customer, includeCancelled = false,
+  customer: Customer, includeCancelled = false, colorway?: string,
 ): Promise<OrderRow[] | null> {
+  const cw = colorway && ["ungefaerbt", "loden", "graphit"].includes(colorway)
+    ? `&colorway=eq.${colorway}` : "";
   return await pgSelect<OrderRow>(
     "orders?select=serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,cancelled_serial,name" +
-      (includeCancelled ? "" : "&status=neq.cancelled") +
-      `&${ownershipFilter(customer)}&order=placed_at.desc&limit=25`,
+      (includeCancelled ? "" : "&status=neq.cancelled") + cw +
+      `&${ownershipFilter(customer)}&order=placed_at.desc&limit=500`,
   );
 }
 
@@ -549,7 +551,12 @@ const REGISTER_TOOLS: any[] = [
     description:
       "Read the orders on the register for the signed-in owner: serial number, " +
       "status, tracking (when shipped), colorway, shipping address, and the date placed. " +
-      "Always call this before answering questions about the owner's orders. " +
+      "Returns an authoritative { count, colorway, orders } — ALWAYS call this before " +
+      "answering ANY question about the owner's orders, including every count and every " +
+      "'how many' — use its count and rows verbatim; never count or filter from memory. " +
+      "When the owner is narrowing to one cloth (e.g. 'show my Ungefärbt', or after they " +
+      "tap a cloth pill), pass 'colorway' so the register returns exactly that cloth's " +
+      "orders and you don't have to filter in your head. " +
       "Struck (cancelled) entries are omitted unless include_cancelled is true — " +
       "pass it only when the owner asks about cancelled or past entries.",
     input_schema: {
@@ -558,6 +565,11 @@ const REGISTER_TOOLS: any[] = [
         include_cancelled: {
           type: "boolean",
           description: "Also return struck (cancelled) entries. Default false.",
+        },
+        colorway: {
+          type: "string", enum: ["ungefaerbt", "loden", "graphit"],
+          description: "Return only orders in this cloth. Pass it whenever the owner is " +
+            "looking at or picking among a single colorway.",
         },
       },
       required: [],
@@ -799,11 +811,19 @@ async function runRegisterTool(
   customer: Customer, cid: string | null,
 ): Promise<string> {
   if (name === "get_my_orders") {
-    const orders = await myOrders(customer, input.include_cancelled === true);
+    const cw = typeof input.colorway === "string" ? input.colorway.toLowerCase() : undefined;
+    const orders = await myOrders(customer, input.include_cancelled === true, cw);
     if (orders === null) return "ERROR: the register is unreachable right now.";
-    await logAction(cid, customer, "get_my_orders", null, null, `${orders.length} orders read`);
-    if (orders.length === 0) return "No orders on the register for this owner.";
-    return JSON.stringify(orders.map((o) => ({ ...o, serial: o.serial ?? o.cancelled_serial })));
+    const cwLabel = cw && ["ungefaerbt", "loden", "graphit"].includes(cw) ? cw : "all";
+    await logAction(cid, customer, "get_my_orders", null, cw ? { colorway: cw } : null,
+      `${orders.length} orders read${cw ? ` (${cwLabel})` : ""}`);
+    // Return an authoritative shape so the model reports the count and rows
+    // verbatim instead of tallying a long list by hand (which it does badly).
+    return JSON.stringify({
+      count: orders.length,
+      colorway: cwLabel,
+      orders: orders.map((o) => ({ ...o, serial: o.serial ?? o.cancelled_serial })),
+    });
   }
 
   if (name === "recall_context") {
@@ -1388,7 +1408,13 @@ function buildSystemPrompt(
       "labeled fields themselves. NEVER compose or dictate street/city/state/ZIP yourself, and never " +
       "claim an address changed unless the form's confirmation came back — mistyping a field (a city " +
       "into the street line) is exactly what the form prevents.\n" +
-      "- Call get_my_orders before answering any question about their orders — never rely on memory. " +
+      "- Call get_my_orders before answering ANY question about their orders — never rely on memory " +
+      "or on the CUSTOMER summary above. This includes every count ('how many…') and every filtered " +
+      "list: call the tool and build your answer, count, and pills ONLY from its result, listing " +
+      "every row it returns and no others. When the owner is narrowing to one cloth, call it with the " +
+      "colorway filter and read back its exact count — do NOT tally or filter a long list in your head " +
+      "(that is how numbers get dropped or a cloth mislabeled). If you already listed orders earlier " +
+      "in the chat and are asked again, call get_my_orders again rather than trusting the earlier list. " +
       "Struck (cancelled) entries are archive: leave them out of lists and counts unless the owner " +
       "asks about cancellations or history (then call get_my_orders with include_cancelled).\n" +
       "- For a cancellation: state exactly what you are about to do and get the owner's explicit " +
