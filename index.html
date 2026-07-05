@@ -1382,10 +1382,11 @@ footer{
     if(!cfg.endpoint) return;
     var base = cfg.endpoint.replace(/concierge$/, 'commission');
     fetch(base + '?next=1').then(function(r){ return r.json(); }).then(function(j){
+      if(j && typeof j.run_size === 'number' && j.run_size > 0){ RUN = j.run_size; }
       if(j && typeof j.next_serial === 'number' && j.next_serial > 1){
         claimed = j.next_serial - 1;
         syncAlloc();
-      }
+      } else if(j && typeof j.run_size === 'number'){ syncAlloc(); }
     })['catch'](function(){});
     requestHold();
     fetch(base + '?recent=1').then(function(r){ return r.json(); }).then(function(j){
@@ -1530,7 +1531,7 @@ footer{
             return 'Nº <b>' + fmtN(o.serial) + '</b> · ' + (place || 'the register') + ' · ' + relTime(o.placed_at);
           }
           return 'Woven to order · <b>3–5 weeks</b> to your door';
-        case 1: return '<b>' + fmtN(RUN - claimed) + '</b> of 15,000 remain';
+        case 1: return '<b>' + fmtN(RUN - claimed) + '</b> of ' + fmtN(RUN) + ' remain';
         case 2: return 'Looms start in <b>' + (loomClock ? loomClock.textContent : '') + '</b>';
         default: return 'Weberei Brandt · Allgäu · Est. <b>1897</b>';
       }

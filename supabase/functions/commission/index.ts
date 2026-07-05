@@ -28,6 +28,10 @@
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+// Transactional email (order confirmation / shipping / cancellation) via Resend.
+// Optional: if RESEND_API_KEY is unset, emails are simply skipped (never an error).
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -331,6 +335,118 @@ async function commissionOrder(
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
+// ── Transactional email ──────────────────────────────────────────────────────
+
+const COLORWAY_NAME: Record<string, string> = {
+  ungefaerbt: "Ungefärbt", loden: "Loden", graphit: "Graphit",
+};
+
+/** Best-effort email via Resend's API. Never throws; skips if unconfigured. */
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+  if (!RESEND_API_KEY || !to) return;
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+    });
+  } catch { /* email never breaks the order path */ }
+}
+
+function emailShell(heading: string, lines: string[]): string {
+  const body = lines.filter(Boolean).map((l) =>
+    `<tr><td style="padding:0 34px 14px;font-family:Helvetica,Arial,sans-serif;color:#c9c3b6;font-size:14px;line-height:1.6;">${l}</td></tr>`
+  ).join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c211d;margin:0;padding:32px 0;"><tr><td align="center">` +
+    `<table role="presentation" width="440" cellpadding="0" cellspacing="0" style="width:440px;max-width:92%;background:#232a25;border:1px solid #3a4139;border-radius:14px;overflow:hidden;">` +
+    `<tr><td style="padding:30px 34px 4px;font-family:Georgia,serif;color:#f1ece2;font-size:26px;letter-spacing:.5px;">Feierabend</td></tr>` +
+    `<tr><td style="padding:0 34px 20px;font-family:'Courier New',monospace;color:#c49b5b;font-size:10px;letter-spacing:3px;text-transform:uppercase;">Weberei Brandt · Est. 1897</td></tr>` +
+    `<tr><td style="padding:0 34px;border-top:1px solid #3a4139;"></td></tr>` +
+    `<tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">${heading}</td></tr>` +
+    body +
+    `<tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">An automated note from the mill's register. This is a demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>` +
+    `</table></td></tr></table>`;
+}
+
+interface OrderRow {
+  serial: number | null; email: string; name?: string | null; colorway?: string | null;
+  tracking?: string | null; recipient_name?: string | null; is_gift?: boolean; status?: string | null;
+}
+
+function orderEmail(
+  kind: "placed" | "shipped" | "cancelled", o: OrderRow,
+): { subject: string; html: string } {
+  const no = "Nº " + Number(o.serial).toLocaleString("en-US");
+  const first = (o.name ?? "").trim().split(/\s+/)[0] || "";
+  const greet = first ? `${first},` : "Guten Tag,";
+  const cloth = o.colorway && COLORWAY_NAME[o.colorway] ? ` in ${COLORWAY_NAME[o.colorway]}` : "";
+  if (kind === "placed") {
+    return {
+      subject: `${no} is entered in the Webbuch`,
+      html: emailShell("Your number is entered", [
+        `${greet} thank you — <strong>${no}</strong>${cloth} is entered in the Webbuch under your name.`,
+        o.is_gift && o.recipient_name ? `It will carry ${o.recipient_name}'s name on the card.` : "",
+        "It is woven to order — 3–5 weeks. When it ships, the tracking will appear in your register and in a note from us.",
+      ]),
+    };
+  }
+  if (kind === "shipped") {
+    return {
+      subject: `${no} is on its way`,
+      html: emailShell("On its way", [
+        `${greet} <strong>${no}</strong> has left the mill.`,
+        o.tracking ? `Tracking: <strong>${o.tracking}</strong>` : "Your tracking number is now in your register.",
+        "Woven to order, sealed by hand. We hope it lands well.",
+      ]),
+    };
+  }
+  return {
+    subject: `${no} — cancelled`,
+    html: emailShell("Struck from the register", [
+      `${greet} <strong>${no}</strong> has been cancelled, and the number returns to the edition.`,
+      "Nothing was charged — this is a demo. If it was in error, write to us and we'll set it right.",
+    ]),
+  };
+}
+
+// ── Admin helpers (for fulfillment) ──────────────────────────────────────────
+
+async function isAdmin(email: string | null): Promise<boolean> {
+  if (!email) return false;
+  try {
+    const safe = email.replace(/["\\,()]/g, "");
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/concierge_admins?select=email&email=eq.${encodeURIComponent(email)}`,
+      { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
+    );
+    if (!res.ok) return false;
+    const rows = await res.json() as unknown[];
+    void safe;
+    return Array.isArray(rows) && rows.length > 0;
+  } catch { return false; }
+}
+
+async function fetchOrder(serial: number): Promise<OrderRow | null> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status&serial=eq.${serial}&limit=1`,
+      { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
+    );
+    if (!res.ok) return null;
+    const rows = await res.json() as OrderRow[];
+    return rows.length > 0 ? rows[0] : null;
+  } catch { return null; }
+}
+
+async function patchOrder(serial: number, patch: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?serial=eq.${serial}`, {
+      method: "PATCH", headers: RPC_HEADERS, body: JSON.stringify(patch),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(req) });
@@ -352,13 +468,18 @@ Deno.serve(async (req: Request) => {
     // Public: the next serial to be assigned — keeps the page's number honest.
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/allocation_counter?select=next_serial&id=eq.1`,
+        `${SUPABASE_URL}/rest/v1/allocation_counter?select=next_serial,run_size&id=eq.1`,
         { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
       );
-      const rows = res.ok ? await res.json() as Array<{ next_serial: number }> : [];
+      const rows = res.ok ? await res.json() as Array<{ next_serial: number; run_size: number }> : [];
       const next = rows.length > 0 ? rows[0].next_serial : null;
+      const run = rows.length > 0 ? rows[0].run_size : null;
       if (typeof next === "number") {
-        return jsonResponse(req, 200, { next_serial: next });
+        return jsonResponse(req, 200, {
+          next_serial: next,
+          run_size: typeof run === "number" ? run : null,
+          remaining: typeof run === "number" ? Math.max(run - (next - 1), 0) : null,
+        });
       }
     } catch { /* fall through */ }
     return jsonError(req, 502, "Counter unavailable.");
@@ -414,6 +535,41 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, hold);
   }
 
+  // ── POST ?fulfill=1 — admin advances an order and (on ship) notifies ──────
+  if (new URL(req.url).searchParams.get("fulfill")) {
+    const admin = await verifyUser(req);
+    if (!admin || !(await isAdmin(admin.email))) {
+      return jsonError(req, 403, "Administrators only.");
+    }
+    let fb: Record<string, unknown>;
+    try { fb = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const serial = typeof fb.serial === "number" ? Math.floor(fb.serial) : NaN;
+    const status = typeof fb.status === "string" ? fb.status : "";
+    const trackingRaw = typeof fb.tracking === "string" ? fb.tracking.trim().slice(0, 120) : null;
+    const ALLOWED = ["placed", "weaving", "finishing", "shipped", "delivered", "returned"];
+    if (!Number.isFinite(serial) || !ALLOWED.includes(status)) {
+      return jsonError(req, 400, "serial (number) and a valid status are required.");
+    }
+    const before = await fetchOrder(serial);
+    if (!before) return jsonError(req, 404, `No order Nº ${serial} on the register.`);
+    const patch: Record<string, unknown> = { status };
+    if (trackingRaw !== null) patch.tracking = trackingRaw || null;
+    if (!(await patchOrder(serial, patch))) {
+      return jsonError(req, 502, "The register could not be updated. Nothing was changed.");
+    }
+    // Notify the buyer when it ships or is struck (best-effort).
+    if (status === "shipped" || status === "returned") {
+      const kind = status === "shipped" ? "shipped" : "cancelled";
+      const mail = orderEmail(kind, { ...before, tracking: trackingRaw ?? before.tracking });
+      const p = sendEmail(before.email, mail.subject, mail.html);
+      const er = (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime;
+      if (typeof er?.waitUntil === "function") er.waitUntil(p); else p.catch(() => {});
+    }
+    return jsonResponse(req, 200, { ok: true, serial, status, tracking: patch.tracking ?? before.tracking });
+  }
+
   // Rate limit: 10 commissions / 10 minutes per x-forwarded-for IP.
   if (rateLimited(ip, 10)) {
     return jsonError(req, 429,
@@ -459,6 +615,20 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({ chat_session: chatSession }),
       });
     } catch { /* the order stands either way */ }
+  }
+
+  // Order-confirmation email (best-effort; never blocks the response).
+  {
+    const mail = orderEmail("placed", {
+      serial, email: validated.email, name: validated.name, colorway: validated.colorway,
+      recipient_name: validated.recipient || null, is_gift: !!validated.isGift,
+    });
+    const p = sendEmail(validated.email, mail.subject, mail.html);
+    if (typeof (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime
+      ?.waitUntil === "function") {
+      (globalThis as { EdgeRuntime: { waitUntil: (x: Promise<unknown>) => void } }).EdgeRuntime
+        .waitUntil(p);
+    } else { p.catch(() => {}); }
   }
 
   const count = await orderCount(customer.id, customer.email);

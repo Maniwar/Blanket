@@ -298,13 +298,17 @@ Because the pitch is "it's a virtual sales associate," it has to be measurable:
   `?selftest=1` (what does it know about me / is the schema applied),
   `?cachecheck=1` (cache round-trip health).
 - **Checkout / commission** (`functions/commission/`) — hold a number
-  (`?hold=1`), place an order (POST), read your orders for prefill (`?me=1`),
-  recent orders for the ticker (`?recent=1`). Guest checkout verifies email via
-  the same magic-link OTP path.
+  (`?hold=1`), place an order (POST) and email a confirmation, read your orders
+  for prefill (`?me=1`), the live edition counter for the ticker (`?next=1`),
+  recent orders for the ticker (`?recent=1`), and an admin-gated fulfillment
+  endpoint (`POST ?fulfill=1`) that advances status / attaches tracking and emails
+  the customer on shipment or return. Guest checkout verifies email via the same
+  magic-link OTP path.
 - **Admin studio** (`admin.html`) — tabs for Tuning (config, voice, starters,
-  admins), Knowledge, Procedures (SOPs, forms, goals), Cache, Customers (LTV +
-  client book), and Conversations (transcripts + goal scorecards). All writes are
-  governed by RLS.
+  admins, **edition run**), Knowledge, Procedures (SOPs, forms, goals), Cache,
+  Customers (LTV + client book + **per-order fulfillment controls**), and
+  Conversations (transcripts + goal scorecards). All writes are governed by RLS
+  or an admin-gated endpoint.
 
 Data model rationale is documented field-by-field in
 [`supabase/SCHEMA.md`](supabase/SCHEMA.md).
@@ -336,27 +340,46 @@ tool call, order change, feedback, and knowledge gap is logged for the admin.
 
 ---
 
-## 8. Roadmap — designed for, not yet built
+## 8. Roadmap
 
-Called out so the docs never overclaim. These are intended and have a place in
-the model, but are **not implemented yet**:
+### Recently shipped
 
-- **Order fulfillment progression.** The status vocabulary
-  (`placed → weaving → finishing → shipped → delivered`) exists, and the concierge
-  can *read* status and tracking — but nothing *advances* an order or sets a
-  tracking number yet, and the admin's orders view is read-only. **So today every
-  order stays `placed`.** *Planned:* admin controls to advance status and attach
-  tracking (RLS-gated writes to `orders`, audited by the existing trigger), and
-  optionally a demo auto-progression so the edition visibly moves.
-- **Transactional email notifications.** Only auth emails (magic link) are wired.
-  *Planned:* order-confirmation, shipment-with-tracking, and cancellation emails,
-  sent through the same custom SMTP and triggered on order events (via a DB
-  webhook/edge function or from the commission + admin write paths).
-- **Edition framing (to finalize).** The run seeds at **Nº 14,215 of 15,000** — a
-  "nearly sold out, ~786 remain" scarcity story — and the site's "remaining"
-  reads the **live** counter (`?next=1`), so it isn't faked. The starting point
-  is a product choice still to be finalized and documented (fresh edition from
-  Nº 1 vs. the established-run scarcity story).
+- **Order fulfillment progression.** The admin's Customers view now carries a
+  per-order control to advance status (`placed → weaving → finishing → shipped →
+  delivered`, plus `returned`) and attach a tracking number. Writes go through an
+  admin-gated endpoint on the commission function (`POST ?fulfill=1`, guarded by
+  `verifyUser` + an `is_concierge_admin` membership check) rather than direct
+  table writes, and land on `orders` where the existing audit trigger records
+  them. The concierge already *reads* that status/tracking, so an advanced order
+  is reflected in chat.
+- **Transactional email notifications.** Order events now send branded email via
+  Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`): a confirmation when an order
+  is placed, and a shipment note (with tracking) or a return note when an admin
+  advances the order. Auth email (magic link) continues to go through Supabase
+  SMTP. Sending is best-effort and fired via `EdgeRuntime.waitUntil` so it never
+  blocks the response.
+- **Admin-settable edition run.** The total run size lives on
+  `allocation_counter.run_size` (no longer the hardcoded 15,000) and is read/set
+  by admins through the `get_edition`/`set_edition` RPCs, surfaced as an Edition
+  card in the admin studio. The allocation functions cap against `run_size`, and
+  the storefront ticker reads the live figure from `?next=1`. The demo seeds at
+  **Nº 14,215 of 15,000** for the "nearly sold out" scarcity story; an admin can
+  reset it to a fresh edition (start at Nº 1, any run size) at will.
+
+### Designed for, not yet built
+
+Called out so the docs never overclaim:
+
+- **Customer-initiated cancellation email.** A customer can cancel in chat (the
+  concierge `cancel_order` tool), and an admin-driven `returned` transition emails
+  the customer — but a *customer-initiated* cancel does not yet send its own
+  confirmation email. *Planned:* wire the same `orderEmail('cancelled', …)` path
+  into the concierge cancel tool.
+- **Demo auto-progression.** Fulfillment advances only when an admin acts; there's
+  no timed auto-progression that would make the edition visibly move on its own.
+- **Scheduled idle-close job.** See §9 — leave-detection is best-effort; a
+  server-side sweep would close conversations idle for N hours regardless of the
+  beacon firing.
 
 ## 9. Known limitations (inherent)
 

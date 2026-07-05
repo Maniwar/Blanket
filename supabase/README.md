@@ -207,7 +207,40 @@ was recorded — try again.") when the RPC fails.
 
 Optionally send `Authorization: Bearer <Supabase user JWT>` to link the order
 to the signed-in account (the bare anon key does not count; invalid tokens
-simply mean an anonymous order — never an error).
+simply mean an anonymous order — never an error). On a successful placement the
+function emails the buyer a confirmation (best-effort; see **Transactional
+email** below).
+
+### Other endpoints
+
+| Method / query | Purpose |
+| --- | --- |
+| `POST ?hold=1` | Reserve this visit's serial (`hold_serial`), returns `{serial, expires_at}`. |
+| `GET ?next=1` | Live edition figures: `{next_serial, run_size, remaining}` (drives the storefront ticker). |
+| `GET ?recent=1` | A few recent real orders for the ticker. |
+| `GET ?me=1` | Signed-in buyer's orders + shipping, for checkout prefill (JWT required). |
+| `POST ?fulfill=1` | **Admin only.** Advance an order's `status` and set `tracking`. |
+
+**`POST ?fulfill=1`** requires a signed-in admin JWT — the function calls
+`verifyUser` and checks the email against `concierge_admins` (mirrors
+`is_concierge_admin()`); non-admins get `403`. Body:
+
+```json
+{ "serial": 14215, "status": "shipped", "tracking": "1Z999AA10123456784" }
+```
+
+`status` must be one of `placed`, `weaving`, `finishing`, `shipped`,
+`delivered`, `returned`. On `shipped` (with tracking) or `returned` the buyer
+is emailed. This is what the admin studio's per-order fulfillment control calls.
+
+### Transactional email
+
+Order confirmation and shipment/return notices are sent via the **Resend HTTP
+API** (not SMTP — that's only for auth magic links). Set `RESEND_API_KEY` and
+optionally `EMAIL_FROM` (default `Feierabend <onboarding@resend.dev>`) as
+function secrets. With the default sender, Resend only delivers to your own
+Resend-account address until a domain is verified. Sending is best-effort and
+fired via `EdgeRuntime.waitUntil`, so it never blocks or fails the response.
 
 ### Data minimization by design
 
@@ -238,9 +271,10 @@ hello@feierabend.example.
 
 ### Deployment
 
-The **Deploy Concierge** GitHub Action deploys **only the concierge
-function** — it does not deploy this one. Apply the migration first
-(Supabase MCP server or `supabase db push`), then deploy the function with:
+The **Deploy Concierge** GitHub Action deploys **both** functions (concierge
+and commission) and, when `SUPABASE_DB_PASSWORD` is set, runs `supabase db push`
+first. To deploy this one by hand instead, apply migrations first (Supabase MCP
+server or `supabase db push`), then:
 
 ```bash
 supabase functions deploy commission --no-verify-jwt

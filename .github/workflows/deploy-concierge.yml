@@ -12,6 +12,8 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +41,12 @@ jobs:
         if: env.ANTHROPIC_API_KEY == ''
         run: |
           echo "::warning::ANTHROPIC_API_KEY repo secret is not set. Leaving the function's existing secret untouched — manage it in the Supabase dashboard (Edge Functions → Secrets) or add the GitHub secret."
+
+      - name: Set transactional email secrets (only when present)
+        if: env.RESEND_API_KEY != ''
+        run: |
+          supabase secrets set RESEND_API_KEY="$RESEND_API_KEY"
+          if [ -n "$EMAIL_FROM" ]; then supabase secrets set EMAIL_FROM="$EMAIL_FROM"; fi
 
       - name: Deploy concierge function
         run: supabase functions deploy concierge --no-verify-jwt

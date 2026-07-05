@@ -33,7 +33,10 @@ uses the public **publishable** key. Auth is passwordless email (magic link).
    the bottom to yours first). For the large editable content (KB, SOPs, forms),
    run the ordered files in `supabase/migrations/` once, or `supabase db push`.
 3. **Add GitHub repo secrets** (repo → Settings → Secrets and variables → Actions):
-   `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `ANTHROPIC_API_KEY`.
+   `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `ANTHROPIC_API_KEY`. Optional:
+   `RESEND_API_KEY` (+ optional `EMAIL_FROM`) to turn on transactional order email
+   — the deploy sets them on the commission function. Without `RESEND_API_KEY`,
+   orders still place; the emails are just skipped.
 4. **Deploy the functions** — Actions → **Deploy Concierge** → Run workflow.
 5. **Wire the front end** — in `index.html`, `FEIER_CONCIERGE_CONFIG` should hold
    your `endpoint`, `supabaseUrl`, and `supabaseAnonKey` (publishable). Push.
@@ -50,6 +53,19 @@ uses the public **publishable** key. Auth is passwordless email (magic link).
    Host `smtp.resend.com`, Port `465`, Username `resend`, Password = API key,
    Sender = your address. Save.
 4. Authentication → **Rate Limits** → raise emails/hour (now that it's your SMTP).
+
+### Transactional order email (Resend API, optional)
+
+Separate from auth email: order confirmations and shipment/return notices are
+sent by the **commission function** through the Resend HTTP API, not SMTP.
+
+1. Reuse the same Resend **API key** (or make a second one) as the
+   `RESEND_API_KEY` GitHub secret.
+2. `EMAIL_FROM` is optional; it defaults to `Feierabend <onboarding@resend.dev>`.
+   With that default sender, Resend only delivers to **your own Resend-account
+   email** — verify a domain and set `EMAIL_FROM` to an address on it to email
+   real customers.
+3. Re-run **Deploy Concierge** so the secrets land on the function.
 
 ---
 
@@ -76,6 +92,10 @@ It prints a report. Confirm:
 - [ ] Sign in from an anonymous chat → the conversation **carries over**
 - [ ] Sign out → the thread resets (no bleed into an anonymous view)
 - [ ] Admin panel → Conversations shows your chat (not "anonymous")
+- [ ] Admin → Tuning → **Edition** card loads current/next/remaining; saving a new
+  run size moves the storefront ticker
+- [ ] Admin → Customers → a placed order shows a **fulfillment** control; advancing
+  to `shipped` with a tracking number emails the buyer (if `RESEND_API_KEY` is set)
 
 ---
 

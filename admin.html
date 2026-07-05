@@ -248,6 +248,12 @@
   .admin-remove:hover{ color:#e88; border-color:rgba(238,136,136,.5); }
   .admin-add{ display:flex; gap:8px; margin-top:14px; }
   .admin-add input{ flex:1 1 auto; }
+  .fulfill{ display:flex; align-items:center; gap:8px; padding:2px 0 10px 0; flex-wrap:wrap; }
+  .fulfill .ffsel, .fulfill .fftrk{ font-family:'IBM Plex Mono', monospace; font-size:12px;
+    background:rgba(38,51,43,.4); border:1px solid var(--hairline-dim); color:var(--wool);
+    border-radius:7px; padding:5px 8px; }
+  .fulfill .fftrk{ flex:1 1 140px; min-width:0; }
+  .fulfill .btn{ padding:5px 12px; font-size:12px; }
 
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
@@ -489,6 +495,28 @@
         <div class="card-foot">
           <button id="save-starters" class="btn primary">Save starters</button>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Edition run</h3>
+          <span class="micro">The size of the run and the next number to issue</span>
+        </div>
+        <p class="micro" id="ed-stat" style="margin:0 0 12px;">—</p>
+        <div class="grid-2">
+          <div class="field">
+            <label class="micro" for="ed-run">Run size (total pieces)</label>
+            <input type="number" id="ed-run" class="mono-field" min="1" step="1" placeholder="15000">
+          </div>
+          <div class="field">
+            <label class="micro" for="ed-next">Next number to issue</label>
+            <input type="number" id="ed-next" class="mono-field" min="1" step="1" placeholder="1">
+          </div>
+        </div>
+        <p class="micro" style="margin:8px 0 0;">Set <b>Next = 1</b> for a fresh edition, or a higher
+          number to reflect an established run. Allocation stops once the run size is reached.</p>
+        <div class="card-foot"><button id="save-edition" class="btn primary" type="button">Save edition</button></div>
+        <div id="ed-note" class="micro"></div>
       </section>
 
       <section class="card">
@@ -819,6 +847,7 @@ async function route() {
   if (!state.loaded) {
     state.loaded = true;
     loadConfig();
+    loadEdition();
     loadAdmins();
     loadSections(KB_SPEC);
     loadSections(SOP_SPEC);
@@ -946,6 +975,9 @@ function wireStatic() {
   });
   $('save-starters').addEventListener('click', function () {
     withBusy($('save-starters'), saveStarters);
+  });
+  $('save-edition').addEventListener('click', function () {
+    withBusy($('save-edition'), saveEdition);
   });
   $('admin-add-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -1665,9 +1697,57 @@ function tierFor(n) {
   return 'Eintrag';
 }
 
+/* ---------------- Fulfillment (advance orders via the commission fn) ------- */
+async function fulfillOrder(serial, status, tracking) {
+  try {
+    const token = state.session && state.session.access_token;
+    if (!token) return { ok: false, message: 'not signed in' };
+    const res = await fetch(SUPABASE_URL + '/functions/v1/commission?fulfill=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ serial: serial, status: status, tracking: tracking || null })
+    });
+    let j = {};
+    try { j = await res.json(); } catch (e) { /* ignore */ }
+    if (!res.ok) return { ok: false, message: j.error || ('HTTP ' + res.status) };
+    return { ok: true, data: j };
+  } catch (e) { return { ok: false, message: String(e) }; }
+}
+
+/* ---------------- Edition run (admin-settable) ---------------------------- */
+async function loadEdition() {
+  const res = await sb.rpc('get_edition');
+  if (res.error) { fail('Load edition', res.error); return; }
+  const e = (res.data && res.data[0]) || null;
+  if (!e) return;
+  if ($('ed-next')) $('ed-next').value = e.o_next;
+  if ($('ed-run')) $('ed-run').value = e.o_run;
+  if ($('ed-stat')) {
+    $('ed-stat').textContent = Number(e.o_claimed).toLocaleString('en-US') + ' claimed · ' +
+      Number(e.o_remaining).toLocaleString('en-US') + ' remaining of ' +
+      Number(e.o_run).toLocaleString('en-US');
+  }
+}
+async function saveEdition() {
+  const next = parseInt($('ed-next').value, 10);
+  const run = parseInt($('ed-run').value, 10);
+  const note = $('ed-note');
+  if (note) note.textContent = '';
+  if (!(next >= 1) || !(run >= 1)) { if (note) note.textContent = 'Enter positive numbers.'; return; }
+  if (next > run + 1) { if (note) note.textContent = 'Next number can’t exceed run size + 1.'; return; }
+  const res = await sb.rpc('set_edition', { p_next_serial: next, p_run_size: run });
+  if (res.error) { fail('Save edition', res.error); return; }
+  toast('Edition updated');
+  loadEdition();
+}
+
 async function loadCustomers() {
   const res = await sb.from('orders')
-    .select('email,name,serial,status,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
+    .select('email,name,serial,status,tracking,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
     .order('placed_at', { ascending: false })
     .limit(1000);
   if (res.error) { fail('Load customers', res.error); return; }
@@ -1764,6 +1844,38 @@ function renderCustomers() {
       line.appendChild(el('span', 'place',
         (place ? place + ' · ' : '') + fmtWhen(o.placed_at)));
       orders.appendChild(line);
+
+      /* Fulfillment: advance status + set tracking (shipped/cancelled emails
+         the buyer). Only for live entries with a serial. */
+      const stSpan = line.querySelector('.st');
+      if (o.serial != null && o.status !== 'cancelled') {
+        const ctl = el('div', 'fulfill');
+        const sel = document.createElement('select');
+        sel.className = 'ffsel';
+        ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 'returned'].forEach(function (s) {
+          const opt = document.createElement('option');
+          opt.value = s; opt.textContent = s;
+          if (s === o.status) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        const trk = document.createElement('input');
+        trk.type = 'text'; trk.className = 'fftrk'; trk.placeholder = 'tracking #';
+        trk.value = o.tracking || '';
+        const btn = el('button', 'btn ghost', 'Update');
+        btn.type = 'button';
+        btn.addEventListener('click', function () {
+          withBusy(btn, async function () {
+            const r = await fulfillOrder(o.serial, sel.value, trk.value.trim());
+            if (!r.ok) { fail('Update order', { message: r.message || 'failed' }); return; }
+            o.status = sel.value; o.tracking = trk.value.trim();
+            if (stSpan) stSpan.textContent = sel.value;
+            toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' → ' + sel.value +
+              (sel.value === 'shipped' || sel.value === 'returned' ? ' (buyer emailed)' : ''));
+          });
+        });
+        ctl.appendChild(sel); ctl.appendChild(trk); ctl.appendChild(btn);
+        orders.appendChild(ctl);
+      }
     });
     row.appendChild(orders);
 

@@ -151,8 +151,8 @@ The core table. No payment or street-shipping data beyond what the demo needs.
 | `user_id` | uuid → auth.users | Owner, if placed signed-in. | placement |
 | `email` | text | Buyer email. | placement |
 | `serial` | int **unique, nullable** | The edition number (1–15000). **Null while cancelled** so a struck number frees up (unique ignores nulls). | placement; cleared on cancel |
-| `status` | text | `placed`→`weaving`→`finishing`→`shipped`→`delivered`, or `returned`/`cancelled`. **Note:** nothing *advances* status or sets `tracking` yet (fulfillment is unbuilt — see DESIGN.md §8); today orders stay `placed`. | placement; cancel; (future) admin/fulfillment |
-| `tracking` | text | Carrier tracking, once shipped. | admin when shipped |
+| `status` | text | `placed`→`weaving`→`finishing`→`shipped`→`delivered`, or `returned`/`cancelled`. Advanced by an admin via commission `POST ?fulfill=1`; on `shipped`/`returned` the customer is emailed. | placement; cancel; admin fulfillment |
+| `tracking` | text | Carrier tracking; set alongside `status` on the fulfillment endpoint, included in the shipment email. | admin when shipped |
 | `city`,`state`,`zip` | text | Shipping locale (state = 2 letters). | placement / address change |
 | `address`,`address2` | text | Street lines (demo only). | placement / address change |
 | `colorway` | text | `ungefaerbt`/`loden`/`graphit`. | placement / colorway change |
@@ -166,7 +166,8 @@ The core table. No payment or street-shipping data beyond what the demo needs.
 
 **Written by:** `commission_order` (placement), `cancel_order_return`
 (cancel), the register tools `update_shipping_address` / `update_colorway`
-(concierge, signed-in), admin (Orders). **Read by:** `myOrders` /
+(concierge, signed-in), admin fulfillment (`patchOrder` via commission
+`POST ?fulfill=1`). **Read by:** `myOrders` /
 `customerBlock` (concierge context + LTV/standing), the `get_my_orders` tool,
 commission `?me=1` (prefill), admin (Customers/Orders). **Audited by:** the
 `log_order_event` trigger → `order_events`.
@@ -175,16 +176,19 @@ commission `?me=1` (prefill), admin (Customers/Orders). **Audited by:** the
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `id` | int PK (=1) | Single-row guard. |
-| `next_serial` | int | Next never-issued number. Cap is 15000. |
+| `next_serial` | int | Next never-issued number. |
+| `run_size` | int (default 15000) | The edition's total size; the allocation cap. Admin-settable via `set_edition`. |
 
 RLS on, **no policies** — service-role only. **Read/written by:**
-`hold_serial` and `commission_order` (both `... FOR UPDATE`).
+`hold_serial` and `commission_order` (both `... FOR UPDATE`, capping against
+`run_size`); read/written by the admin RPCs `get_edition` / `set_edition`.
 
-> **Edition framing (to finalize).** Seeded at **14215** so the run reads as
-> "~786 of 15,000 remain" — an established, nearly-sold-out edition. The site's
-> "remaining" is driven by the **live** counter (`commission ?next=1`), not a
-> hardcoded figure. Whether to keep this scarcity story or start a fresh edition
-> at Nº 1 is a product decision still open (see DESIGN.md §8).
+> **Edition framing.** Seeded at **next_serial 14215 / run_size 15000** so the
+> run reads as "~786 of 15,000 remain" — an established, nearly-sold-out edition.
+> The site's "remaining" is driven by the **live** counter (`commission ?next=1`,
+> which now returns `run_size` too), not a hardcoded figure. An admin can reset to
+> a fresh edition (start at Nº 1, any run size) from the studio's Edition card via
+> `set_edition`.
 
 ### `serial_holds` — live reservations
 | Column | Type | Purpose |
@@ -324,9 +328,13 @@ scores each into `concierge_conversations.goal_status`). **Seeded by:**
 | `cancel_order_return(p_serial,p_user_id,p_email)` | → text | Cancels a `placed` order the caller owns: sets `status='cancelled'`, moves `serial`→`cancelled_serial`, and re-inserts the number as a lapsed hold so it's reclaimable. | concierge `cancel_order` tool. |
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
+| `get_edition()` | → (next, run, claimed, remaining) | Reads the edition counter. Raises unless `is_concierge_admin()`. | admin Edition card. |
+| `set_edition(p_next_serial, p_run_size)` | → void | Sets `next_serial`/`run_size` (validates `next ≤ run+1`). Raises unless `is_concierge_admin()`. | admin Edition card. |
 
-`EXECUTE` on every RPC is revoked from `public`/`anon`/`authenticated`; only
-the service role calls them.
+`EXECUTE` on the register/cache RPCs is revoked from
+`public`/`anon`/`authenticated`; only the service role calls them. The two
+edition RPCs are the exception — granted to `authenticated` (they self-gate on
+`is_concierge_admin()`) so the admin studio can call them with the user's JWT.
 
 ---
 
@@ -348,10 +356,16 @@ meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
 | Method / query | Purpose |
 | --- | --- |
 | `GET ?recent=1` | Recent real orders (for the site ticker). |
-| `GET ?next=1` | The next available number (display). |
+| `GET ?next=1` | The live edition figures: `{next_serial, run_size, remaining}` (drives the ticker). |
 | `GET ?me=1` | Signed-in patron's orders + shipping details, for checkout prefill. |
 | `POST ?hold=1` | Reserve the visit's serial (`hold_serial`). |
-| `POST` | Place the order (`commission_order`). |
+| `POST` | Place the order (`commission_order`); emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
+| `POST ?fulfill=1` | **Admin only** (`verifyUser` + `is_concierge_admin`). Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
+
+Transactional email uses Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`,
+default `Feierabend <onboarding@resend.dev>`). With the default Resend sender,
+delivery is limited to the Resend account's own address until a domain is
+verified — see SETUP.md.
 
 ---
 

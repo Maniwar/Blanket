@@ -19,9 +19,13 @@ when it's software?*
   (a "client book"), pursues admin-defined conversation goals, and drives toward
   a sale with patience. It reads your register, changes an address/colorway, or
   cancels an order — in chat, itself.
-- **Scarcity done honestly.** 15,000 unique numbers, allocated collision-free
-  under concurrency (`FOR UPDATE SKIP LOCKED`); the number you're shown is the
-  number you get; a cancelled number returns to the edition, lowest-first.
+- **Scarcity done honestly.** A numbered edition (15,000 by default, admin-settable),
+  allocated collision-free under concurrency (`FOR UPDATE SKIP LOCKED`); the number
+  you're shown is the number you get; a cancelled number returns to the edition,
+  lowest-first.
+- **A merchant back office.** The admin studio sets the edition run, advances an
+  order through fulfillment (`placed → … → shipped`, with tracking), and sends the
+  buyer a branded confirmation and shipment email along the way.
 - **Attentive, not annoying.** The concierge speaks first on open, circles back
   when you go quiet, and — with no true read receipts available — uses
   *acknowledgement/presence* as a proxy: it pauses when it's talking to no one and
