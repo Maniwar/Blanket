@@ -2955,9 +2955,17 @@
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', updateLauncher);
     document.addEventListener('keydown', onKeydown);
-    /* leaving the tab mid-exchange still records the wind-down (keepalive) */
+    /* Record the wind-down when the visitor leaves. pagehide covers close /
+       navigation on desktop; visibilitychange→hidden is the reliable signal on
+       mobile (where pagehide is often skipped) and when the tab is backgrounded.
+       The keepalive beacon survives the page being frozen/unloaded, and the
+       once-only wrappedUp guard means a quick tab-switch fires it at most once —
+       returning and writing again resumes the same conversation. */
     window.addEventListener('pagehide', function () {
       if (panelOpen) { doWrapup('auto'); }
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden' && panelOpen) { doWrapup('auto'); }
     });
     updateLauncher();
     /* Resolve any signed-in session early (and collect a magic-link redirect if
