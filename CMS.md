@@ -132,3 +132,25 @@ The tab title still updates instantly via the runtime layer in the meantime.
   and migrate the ~1.58 MB of inline base64 art to Storage-served files for a
   real performance win.
 - **Live preview** iframe and **change history / rollback** per slot.
+
+---
+
+## Status (shipped)
+
+Phase 1 is live: `site_content` table, `data-cms` slot tags (59 copy slots),
+`?site=1` delivery, the runtime hydrator (localStorage-cached, HTML fallback),
+and the **Website** admin tab (all copy + SEO, grouped by section). Copy + SEO
+hydrate at runtime (browser tab + Google).
+
+The **deploy-time head bake** (`scripts/bake_seo.py` + `.github/workflows/
+pages.yml`) is built. It reads the public `?site=1` endpoint (no DB creds) and
+writes the current title/description/OG into `index.html <head>` before publish,
+for social crawlers.
+
+**One manual switch to activate the head bake:** Settings → Pages → Build and
+deployment → **Source → "GitHub Actions"**. Until then the `pages.yml` run fails
+harmlessly and the existing branch-based Pages keeps serving the site.
+
+Deferred (noted): the stylized **wordmark** and **section images** (graphics
+phase — image uploads via Supabase Storage, per BACKLOG.md), and server-side
+caching of `?site=1` if traffic warrants.

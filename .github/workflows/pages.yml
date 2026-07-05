@@ -1,0 +1,52 @@
+name: Publish site (Pages)
+
+# Publishes the storefront to GitHub Pages via a workflow (instead of plain
+# branch serving) so the SEO/OG tags from the CMS can be baked into <head>
+# before publish — for social crawlers that don't run JavaScript.
+#
+# REQUIRES a one-time settings change: Settings → Pages → Build and deployment
+# → Source → "GitHub Actions". Until that is switched, this workflow's deploy
+# step fails harmlessly and the existing branch-based Pages keeps serving.
+
+on:
+  push:
+    branches: [claude/github-pages-deploy-14tf3y]
+    paths:
+      - 'index.html'
+      - 'admin.html'
+      - 'privacy.html'
+      - 'assets/**'
+      - 'img/**'
+      - 'scripts/bake_seo.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bake seo.* from the CMS into index.html <head>. Reads the public ?site=1
+      # endpoint (no DB creds); best-effort, never fails the publish.
+      - name: Bake SEO into <head>
+        run: python3 scripts/bake_seo.py
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deploy
+        uses: actions/deploy-pages@v4
