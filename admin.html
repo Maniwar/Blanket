@@ -254,6 +254,9 @@
     border-radius:7px; padding:5px 8px; }
   .fulfill .fftrk{ flex:1 1 140px; min-width:0; }
   .fulfill .btn{ padding:5px 12px; font-size:12px; }
+  .emails{ display:flex; align-items:center; gap:8px; padding:0 0 12px 0; flex-wrap:wrap; }
+  .emails .micro{ color:var(--wool-faint); }
+  .emails .btn{ padding:4px 10px; font-size:11px; }
 
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
@@ -792,6 +795,7 @@ const state = {
   gaps: [],
   customers: [],
   waitlist: [],
+  emailsBySerial: {},
   forms: [],
   goalDefs: [],
   convos: [],
@@ -1871,6 +1875,26 @@ async function fulfillOrder(serial, status, tracking) {
   } catch (e) { return { ok: false, message: String(e) }; }
 }
 
+async function resendEmail(serial, kind) {
+  try {
+    const token = state.session && state.session.access_token;
+    if (!token) return { ok: false, message: 'not signed in' };
+    const res = await fetch(SUPABASE_URL + '/functions/v1/commission?resend=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ serial: serial, kind: kind })
+    });
+    let j = {};
+    try { j = await res.json(); } catch (e) { /* ignore */ }
+    if (!res.ok) return { ok: false, message: j.error || ('HTTP ' + res.status) };
+    return { ok: true, data: j };
+  } catch (e) { return { ok: false, message: String(e) }; }
+}
+
 /* ---------------- Edition run (admin-settable) ---------------------------- */
 async function loadEdition() {
   const res = await sb.rpc('get_edition');
@@ -1919,6 +1943,21 @@ async function loadCustomers() {
       const key = (n.email || n.user_id || 'unknown').toLowerCase();
       if (!notesByKey.has(key)) notesByKey.set(key, []);
       notesByKey.get(key).push(n);
+    });
+  }
+
+  // Email log — which transactional emails went out, grouped by order Nº.
+  state.emailsBySerial = {};
+  const eres = await sb.from('email_log')
+    .select('kind,serial,ok,error,created_at')
+    .not('serial', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(2000);
+  if (!eres.error) {
+    (eres.data || []).forEach(function (e) {
+      const k = String(e.serial);
+      if (!state.emailsBySerial[k]) state.emailsBySerial[k] = [];
+      state.emailsBySerial[k].push(e);
     });
   }
 
@@ -2033,6 +2072,37 @@ function renderCustomers() {
         });
         ctl.appendChild(sel); ctl.appendChild(trk); ctl.appendChild(btn);
         orders.appendChild(ctl);
+      }
+
+      /* Email history for this order + re-send. Uses the live number, or the
+         archived one for a cancelled entry. */
+      const sNo = (o.serial != null) ? o.serial : o.cancelled_serial;
+      if (sNo != null) {
+        const elog = (state.emailsBySerial && state.emailsBySerial[String(sNo)]) || [];
+        const em = el('div', 'emails');
+        const hist = elog.length
+          ? elog.map(function (e) {
+              return e.kind + ' ' + (e.ok ? '✓' : '✗ ' + (e.error || 'failed')) + ' · ' + fmtWhen(e.created_at);
+            }).join('   ·   ')
+          : 'no emails sent yet';
+        em.appendChild(el('span', 'micro', '✉ ' + hist));
+        const kinds = [['placed', 'confirmation']];
+        if (o.status === 'shipped' || o.status === 'delivered') kinds.push(['shipped', 'shipment']);
+        if (o.status === 'returned' || o.status === 'cancelled') kinds.push(['cancelled', 'cancellation']);
+        kinds.forEach(function (k) {
+          const rb = el('button', 'btn ghost', 'Resend ' + k[1]);
+          rb.type = 'button';
+          rb.addEventListener('click', function () {
+            withBusy(rb, async function () {
+              const r = await resendEmail(sNo, k[0]);
+              if (!r.ok) { fail('Resend email', { message: r.message || 'failed' }); return; }
+              toast('Re-sent ' + k[1] + ' for Nº ' + Number(sNo).toLocaleString('en-US'));
+              loadCustomers();
+            });
+          });
+          em.appendChild(rb);
+        });
+        orders.appendChild(em);
       }
     });
     row.appendChild(orders);

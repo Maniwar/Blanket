@@ -230,6 +230,23 @@ commission `POST ?waitlist=1` (sold-out form) and the concierge `join_waitlist`
 tool (both via service role). **Read/managed by:** admin (Customers tab →
 Waitlist card: filter, mark notified, export CSV).
 
+### `email_log` — record of transactional emails
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | uuid PK | Row id. |
+| `to_email` | text | Recipient. |
+| `kind` | text | `placed` / `shipped` / `returned` / `cancelled`. |
+| `serial` | int | The order's Nº. |
+| `subject` | text | The email subject line. |
+| `ok` | boolean | Whether Resend accepted it. |
+| `provider_id` | text | Resend message id (on success). |
+| `error` | text | Short reason (on failure). |
+| `created_at` | timestamptz | When it was attempted. |
+
+RLS on; **admin** read policy. **Written by:** `sendEmail` in both functions
+(every attempt, success or fail). **Read by:** admin (Customers tab → per-order
+email history). **Re-sent via:** commission `POST ?resend=1` (admin-gated).
+
 ### `concierge_sops` — the house's standard operating procedures
 Same shape as `concierge_kb` (`slug`,`title`,`content_md`,`sort_order`,
 `enabled`). Enabled rows are injected into the system prompt's STANDARD
@@ -391,6 +408,7 @@ meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
 | `POST` | Place the order (`commission_order`); emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
 | `POST ?fulfill=1` | **Admin only** (`verifyUser` + `is_concierge_admin`). Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
 | `POST ?waitlist=1` | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (rate-limited; no auth required, links `user_id` if signed in). |
+| `POST ?resend=1` | **Admin only.** Re-send an order email: `{serial, kind}` (`placed`/`shipped`/`cancelled`) → rebuilds from the order and sends, logging to `email_log`. |
 
 Transactional email uses Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`,
 default `Feierabend <onboarding@resend.dev>`). With the default Resend sender,

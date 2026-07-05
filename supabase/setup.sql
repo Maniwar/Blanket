@@ -516,6 +516,29 @@ create policy "admin all waitlist" on public.waitlist
   with check (public.is_concierge_admin());
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3e. EMAIL LOG — a record of every transactional email sent, for the admin to
+--     review and re-send. Written by the edge functions; admin-read.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.email_log (
+  id          uuid primary key default gen_random_uuid(),
+  to_email    text not null,
+  kind        text not null,
+  serial      int,
+  subject     text,
+  ok          boolean not null default false,
+  provider_id text,
+  error       text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists email_log_serial_idx on public.email_log (serial, created_at desc);
+create index if not exists email_log_created_idx on public.email_log (created_at desc);
+alter table public.email_log enable row level security;
+drop policy if exists "admin read email_log" on public.email_log;
+create policy "admin read email_log" on public.email_log
+  for select to authenticated
+  using (public.is_concierge_admin());
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 4. SEED DATA (admins, config, KB, SOPs, forms, goals) — safe to re-run
 -- ─────────────────────────────────────────────────────────────────────────────
 

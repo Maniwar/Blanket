@@ -138,6 +138,11 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
   a tracking number, so that a real order can actually move — and the customer is
   emailed when it ships or is returned. *(Customers tab: per-order fulfillment
   control → commission `POST ?fulfill=1`, admin-gated, audited, sends email.)*
+- **As the merchant**, I want to see which transactional emails were sent for an
+  order (confirmation, shipment, return, cancellation) — including failures — and
+  re-send any of them, so that a customer who lost or never got a note isn't left
+  in the dark. *(Customers tab: per-order email history from `email_log`; resend
+  via commission `POST ?resend=1`, admin-gated.)*
 - **As the merchant**, I want to see every **register action** the concierge took
   on a customer's behalf — status reads, address and colorway changes,
   cancellations, context recalls, notes written — so that nothing the bot did to

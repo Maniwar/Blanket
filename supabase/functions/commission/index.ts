@@ -360,16 +360,46 @@ const COLORWAY_NAME: Record<string, string> = {
   ungefaerbt: "Ungefärbt", loden: "Loden", graphit: "Graphit",
 };
 
-/** Best-effort email via Resend's API. Never throws; skips if unconfigured. */
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
-  if (!RESEND_API_KEY || !to) return;
-  try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
-    });
-  } catch { /* email never breaks the order path */ }
+/** Best-effort email via Resend's API. Never throws. When `meta` is given, the
+ *  attempt (success or failure) is recorded in email_log so the admin can see
+ *  what was sent and re-send it. */
+async function sendEmail(
+  to: string, subject: string, html: string,
+  meta?: { kind: string; serial?: number | null },
+): Promise<void> {
+  if (!to) return;
+  let ok = false;
+  let providerId: string | null = null;
+  let error: string | null = null;
+  if (!RESEND_API_KEY) {
+    error = "email not configured (no RESEND_API_KEY)";
+  } else {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+      });
+      ok = res.ok;
+      const body = await res.json().catch(() => null) as { id?: string; message?: string } | null;
+      if (ok) providerId = body?.id ?? null;
+      else error = (body?.message ?? `HTTP ${res.status}`).slice(0, 300);
+    } catch (e) {
+      error = String(e).slice(0, 300);
+    }
+  }
+  if (meta) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/email_log`, {
+        method: "POST",
+        headers: { ...RPC_HEADERS, "Prefer": "return=minimal" },
+        body: JSON.stringify({
+          to_email: to, kind: meta.kind, serial: meta.serial ?? null,
+          subject, ok, provider_id: providerId, error,
+        }),
+      });
+    } catch { /* logging never breaks the send */ }
+  }
 }
 
 function emailShell(heading: string, lines: string[]): string {
@@ -488,7 +518,7 @@ async function isAdmin(email: string | null): Promise<boolean> {
 async function fetchOrder(serial: number): Promise<OrderRow | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status&serial=eq.${serial}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status,address,address2,city,state,zip&serial=eq.${serial}&limit=1`,
       { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
     );
     if (!res.ok) return null;
@@ -658,13 +688,37 @@ Deno.serve(async (req: Request) => {
     }
     // Notify the buyer when it ships or is struck (best-effort).
     if (status === "shipped" || status === "returned") {
-      const kind = status === "shipped" ? "shipped" : "cancelled";
-      const mail = orderEmail(kind, { ...before, tracking: trackingRaw ?? before.tracking });
-      const p = sendEmail(before.email, mail.subject, mail.html);
+      const kind = status === "shipped" ? "shipped" : "returned";
+      const mail = orderEmail(status === "shipped" ? "shipped" : "cancelled", { ...before, tracking: trackingRaw ?? before.tracking });
+      const p = sendEmail(before.email, mail.subject, mail.html, { kind, serial });
       const er = (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime;
       if (typeof er?.waitUntil === "function") er.waitUntil(p); else p.catch(() => {});
     }
     return jsonResponse(req, 200, { ok: true, serial, status, tracking: patch.tracking ?? before.tracking });
+  }
+
+  // ── POST ?resend=1 — admin re-sends a transactional email for an order ──────
+  if (new URL(req.url).searchParams.get("resend")) {
+    const admin = await verifyUser(req);
+    if (!admin || !(await isAdmin(admin.email))) {
+      return jsonError(req, 403, "Administrators only.");
+    }
+    let rb: Record<string, unknown>;
+    try { rb = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const serial = typeof rb.serial === "number" ? Math.floor(rb.serial) : NaN;
+    const kind = typeof rb.kind === "string" ? rb.kind : "";
+    if (!Number.isFinite(serial) || !["placed", "shipped", "cancelled"].includes(kind)) {
+      return jsonError(req, 400, "serial (number) and kind (placed|shipped|cancelled) are required.");
+    }
+    const order = await fetchOrder(serial);
+    if (!order) return jsonError(req, 404, `No order Nº ${serial}.`);
+    const mail = orderEmail(kind as "placed" | "shipped" | "cancelled", order);
+    // record it under the true state name (a returned order's note is 'returned')
+    const logKind = (kind === "cancelled" && order.status === "returned") ? "returned" : kind;
+    await sendEmail(order.email, mail.subject, mail.html, { kind: logKind, serial });
+    return jsonResponse(req, 200, { ok: true });
   }
 
   // Rate limit: 10 commissions / 10 minutes per x-forwarded-for IP.
@@ -722,7 +776,7 @@ Deno.serve(async (req: Request) => {
       address: validated.address, address2: validated.address2, city: validated.city,
       state: validated.state, zip: validated.zip,
     });
-    const p = sendEmail(validated.email, mail.subject, mail.html);
+    const p = sendEmail(validated.email, mail.subject, mail.html, { kind: "placed", serial });
     if (typeof (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime
       ?.waitUntil === "function") {
       (globalThis as { EdgeRuntime: { waitUntil: (x: Promise<unknown>) => void } }).EdgeRuntime

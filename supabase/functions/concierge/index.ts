@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-waitlist";
+const BUILD_TAG = "2026-07-05-email-log";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -321,16 +321,39 @@ function bg(p: Promise<unknown>): void {
   } catch { (p as Promise<unknown>).catch(() => {}); }
 }
 
-/** Best-effort email via Resend's API. Never throws; skips if unconfigured. */
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
-  if (!RESEND_API_KEY || !to) return;
-  try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+/** Best-effort email via Resend's API. Never throws. When `meta` is given the
+ *  attempt is recorded in email_log (so the admin sees it and can re-send). */
+async function sendEmail(
+  to: string, subject: string, html: string,
+  meta?: { kind: string; serial?: number | null },
+): Promise<void> {
+  if (!to) return;
+  let ok = false;
+  let providerId: string | null = null;
+  let error: string | null = null;
+  if (!RESEND_API_KEY) {
+    error = "email not configured (no RESEND_API_KEY)";
+  } else {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+      });
+      ok = res.ok;
+      const body = await res.json().catch(() => null) as { id?: string; message?: string } | null;
+      if (ok) providerId = body?.id ?? null;
+      else error = (body?.message ?? `HTTP ${res.status}`).slice(0, 300);
+    } catch (e) {
+      error = String(e).slice(0, 300);
+    }
+  }
+  if (meta) {
+    await pgInsert("email_log", {
+      to_email: to, kind: meta.kind, serial: meta.serial ?? null,
+      subject, ok, provider_id: providerId, error,
     });
-  } catch { /* email never breaks the cancel path */ }
+  }
 }
 
 function emailShell(heading: string, lines: string[]): string {
@@ -781,7 +804,7 @@ async function runRegisterTool(
     if (result === "ok") {
       await logAction(cid, customer, "cancel_order", serial, null, "order cancelled; serial released");
       const mail = cancelEmail(serial, order.name, order.colorway);
-      bg(sendEmail(customer.email ?? "", mail.subject, mail.html));
+      bg(sendEmail(customer.email ?? "", mail.subject, mail.html, { kind: "cancelled", serial }));
       return `Done. Nº ${serial} is struck from the register and the number returns to the year's edition.`;
     }
     if (result === null) {
@@ -793,7 +816,7 @@ async function runRegisterTool(
       if (!updated || updated.length === 0) return "ERROR: the register did not accept the cancellation.";
       await logAction(cid, customer, "cancel_order", serial, null, "order cancelled");
       const mail = cancelEmail(serial, order.name, order.colorway);
-      bg(sendEmail(customer.email ?? "", mail.subject, mail.html));
+      bg(sendEmail(customer.email ?? "", mail.subject, mail.html, { kind: "cancelled", serial }));
       return `Done. Nº ${serial} is cancelled.`;
     }
     return `ERROR: the register declined — ${result}.`;
