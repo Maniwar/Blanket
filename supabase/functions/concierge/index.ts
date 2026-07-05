@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-email-log";
+const BUILD_TAG = "2026-07-05-goal-sampling";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -940,6 +940,16 @@ function scheduleGoalEval(
   apiKey: string, model: string,
 ): void {
   if (!cid || data.goals.length === 0) return;
+  // Substance gate: nothing meaningful to grade on a one-message exchange.
+  const userTurns = transcript.filter((m) => m.role === "user").length;
+  if (userTurns < 2) return;
+  // Sampling: goal scoring is pure analytics and fires every turn, so grade only
+  // a fraction to bound background LLM cost. Admin-settable via the
+  // goal_sample_rate config key (0–1); default 1 = grade every eligible turn.
+  const rate = typeof data.config?.goal_sample_rate === "number"
+    ? data.config.goal_sample_rate
+    : 1;
+  if (rate < 1 && Math.random() >= Math.max(0, rate)) return;
   const p = evaluateGoals(cid, data, transcript, apiKey, model);
   try {
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {

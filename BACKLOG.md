@@ -7,12 +7,7 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Scalability — do when volume demands it
 
-- **[P1] Sample the async LLM work (SCALING #7).** Goal-scoring and client-book
-  summarization each fire an Anthropic call per conversation. Add a sampling gate
-  (grade 1 in N) + optional queue. *Payoff:* the biggest lever on running cost
-  and Anthropic rate-limit pressure. *Effort:* low. *Trigger:* Anthropic cost /
-  rate limits become the constraint (they hit before the DB does).
-- **[P2] Collapse per-request query fan-out (SCALING #5).** Fold `customerBlock`'s
+- **[P1] Collapse per-request query fan-out (SCALING #5).** Fold `customerBlock`'s
   ~3 sequential reads into one `security definer` RPC bundle; keep PostgREST on
   the pooler. *Payoff:* lower per-message latency, fewer held DB connections under
   concurrency. *Effort:* moderate. *Trigger:* hundreds+ of concurrent signed-in

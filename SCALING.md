@@ -95,11 +95,16 @@ non-issue (scarcity *is* the point; volume is low). It would only matter if the
 model were reused for a high-volume, non-scarce product — then switch to a
 sequence or sharded counter.
 
-### 7. Async LLM work per conversation
-Goal scoring and client-book summarization each fire an LLM call per
-conversation. At scale that's real Anthropic spend and concurrency pressure
-(their rate limits, not ours). **Fix:** sample (score a fraction), batch, or
-queue this work rather than doing it inline on every conversation.
+### 7. Async LLM work per conversation — ✅ goal scoring now sampled
+Goal scoring and client-book summarization each fire a background LLM call, and
+goal scoring runs *every* signed-in turn. *Now:* goal scoring has a **substance
+gate** (skips one-message exchanges — nothing to grade) and an admin-settable
+**sample rate** (`goal_sample_rate` config, 0–1, in Tuning → Engagement pace) so
+you grade, say, 1 in 5 turns instead of all — cutting that background spend
+directly while keeping the analytics representative. The client-book note is
+left always-on (it's per-customer product value, not analytics — dropping it
+randomly would degrade the clienteling). *Further:* batch/queue if even the
+sampled load matters.
 
 ### 8. Cost & third-party quotas, not architecture
 At millions of chats the binding constraint becomes Anthropic token cost and
