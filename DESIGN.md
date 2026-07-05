@@ -396,6 +396,9 @@ the same change updates whichever of these it touches:
 
 - **[DESIGN.md](DESIGN.md)** — user stories (§2), the relevant decision/roadmap
   section, and moves items out of §8 as they ship.
+- **[supabase/setup.sql](supabase/setup.sql)** — the single source of truth for
+  the database: schema, RLS, functions, and all seed content. Schema changes land
+  here (a `supabase/migrations/` file is optional, only for `supabase db push`).
 - **[supabase/SCHEMA.md](supabase/SCHEMA.md)** — any new table/column/RPC.
 - **[supabase/README.md](supabase/README.md)** — any new endpoint/wire contract.
 - **[SETUP.md](SETUP.md)** / **[DEMO.md](DEMO.md)** — if setup, verification, or

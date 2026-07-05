@@ -28,10 +28,14 @@ uses the public **publishable** key. Auth is passwordless email (magic link).
 
 1. **Create a Supabase project** — note the project ref (in the dashboard URL).
 2. **Apply the schema** — Supabase → **SQL Editor** → paste all of
-   [`supabase/setup.sql`](supabase/setup.sql) → **Run**. It's idempotent (safe to
-   re-run) and seeds config, goals, and the **super admin** (change the email near
-   the bottom to yours first). For the large editable content (KB, SOPs, forms),
-   run the ordered files in `supabase/migrations/` once, or `supabase db push`.
+   [`supabase/setup.sql`](supabase/setup.sql) → **Run**. This **one file** is the
+   complete, self-contained setup: schema, RLS, functions, **and** all seed
+   content (config, the full knowledge base, every SOP, forms, goals, and the
+   **super admin** — change that email near the bottom to yours first). It's
+   idempotent (safe to re-run) and each content block seeds only if its table is
+   empty, so your Studio edits are never overwritten. The numbered files in
+   `supabase/migrations/` are just the historical record of how the schema grew —
+   you don't need to run them.
 3. **Add GitHub repo secrets** (repo → Settings → Secrets and variables → Actions):
    `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `ANTHROPIC_API_KEY`. Optional:
    `RESEND_API_KEY` (+ optional `EMAIL_FROM`) to turn on transactional order email
@@ -54,24 +58,12 @@ uses the public **publishable** key. Auth is passwordless email (magic link).
    Sender = your address. Save.
 4. Authentication → **Rate Limits** → raise emails/hour (now that it's your SMTP).
 
-### Magic-link email template (optional, branded)
+### Email templates (branded)
 
-Supabase → Authentication → **Email Templates → Magic Link**. Subject:
-`Your Feierabend sign-in`. Paste this body (it matches the order emails' look;
-`{{ .ConfirmationURL }}` is Supabase's link token):
-
-```html
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c211d;margin:0;padding:32px 0;"><tr><td align="center">
-<table role="presentation" width="440" cellpadding="0" cellspacing="0" style="width:440px;max-width:92%;background:#232a25;border:1px solid #3a4139;border-radius:14px;overflow:hidden;">
-  <tr><td style="padding:30px 34px 4px;font-family:Georgia,serif;color:#f1ece2;font-size:26px;letter-spacing:.5px;">Feierabend</td></tr>
-  <tr><td style="padding:0 34px 20px;font-family:'Courier New',monospace;color:#c49b5b;font-size:10px;letter-spacing:3px;text-transform:uppercase;">Weberei Brandt · Est. 1897</td></tr>
-  <tr><td style="padding:0 34px;border-top:1px solid #3a4139;"></td></tr>
-  <tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">Your sign-in link</td></tr>
-  <tr><td style="padding:0 34px 14px;font-family:Helvetica,Arial,sans-serif;color:#c9c3b6;font-size:14px;line-height:1.6;">Guten Tag — tap below to open the register. The link is single-use and expires shortly.</td></tr>
-  <tr><td style="padding:4px 34px 22px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#c49b5b;color:#1c211d;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px;">Sign in</a></td></tr>
-  <tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">If you didn't request this, you can ignore it. A demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>
-</table></td></tr></table>
-```
+Paste-ready branded templates for the auth emails (Magic Link, Confirm signup)
+live in **[`supabase/EMAIL_TEMPLATES.md`](supabase/EMAIL_TEMPLATES.md)** — that
+file is the single catalog of every email the demo sends, auth and order alike.
+Set them under Supabase → Authentication → **Email Templates**.
 
 ### Transactional order email (Resend API, optional)
 
@@ -124,8 +116,11 @@ It prints a report. Confirm:
   auto-deploys. Bump the `?v=N` on the changed asset in `index.html` to bust cache.
 - **Functions** (`supabase/functions/*`): push, then run **Deploy Concierge**.
   Bump `BUILD_TAG` in `concierge/index.ts` so `selftest` confirms the live build.
-- **Schema**: add a migration under `supabase/migrations/` AND mirror it in
-  `setup.sql`; apply via SQL Editor or `supabase db push`.
+- **Schema**: `setup.sql` is the **single source of truth** — make the change
+  there and re-run it in the SQL Editor. A matching file under
+  `supabase/migrations/` is optional and only needed if you deploy schema with
+  `supabase db push` (the deploy workflow does this when `SUPABASE_DB_PASSWORD`
+  is set).
 
 ---
 

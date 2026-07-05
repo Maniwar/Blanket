@@ -14,12 +14,15 @@ every statement creates only what is missing, so it always brings the schema
 to the state the edge functions expect. Change the admin email near the
 bottom (`insert into public.concierge_admins …`) to your own before running.
 
+`setup.sql` now includes **all** the seed content too — config, the full
+knowledge base, every SOP, forms, and goals — so this one file provisions a
+complete, working system on its own. Each content block seeds only if its table
+is empty, so re-running never overwrites edits made in the admin Studio.
+
 The `supabase/migrations/` folder holds the same schema as an ordered history
-for `supabase db push` and CI, and also seeds the large editable content (KB,
-SOPs, forms). On a brand-new project, run the ordered migration files once (or
-`supabase db push`) to seed that content, then manage everything from the
-admin Studio thereafter. (The older `APPLY_NOW_*.sql` snippets have been
-folded into `setup.sql` and removed.)
+for `supabase db push` and CI. You don't need to run those files on a fresh
+project — `setup.sql` covers everything. (The older `APPLY_NOW_*.sql` snippets
+were folded into `setup.sql` and removed.)
 
 **`supabase/SCHEMA.md`** is the field-by-field reference for the whole
 database — every table and column, what writes it, what reads it, and when,
