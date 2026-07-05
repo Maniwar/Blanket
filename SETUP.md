@@ -4,6 +4,7 @@ A runnable checklist to stand this project up and confirm it's wired correctly.
 This is a **demo** — no real product ships and no payment is ever taken.
 
 - **Live site:** https://maniwar.github.io/Blanket/
+- **Design doc (the *why*):** [`DESIGN.md`](DESIGN.md)
 - **Deep-dive docs:** [`supabase/README.md`](supabase/README.md) (backend) ·
   [`supabase/SCHEMA.md`](supabase/SCHEMA.md) (every table/field/RPC)
 
