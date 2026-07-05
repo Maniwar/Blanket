@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-notes-dedup";
+const BUILD_TAG = "2026-07-05-selling-engine";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -995,8 +995,12 @@ async function evaluateGoals(
       "The 'note' MUST justify the status with a specific fact from THIS transcript: quote or " +
       "paraphrase what the shopper or concierge actually said that proves it (e.g. \"shopper named " +
       "the east-facing bedroom and chose Loden\"). Never write a generic note; if you cannot cite " +
-      "evidence, the status is 'unmet' and the note says what is still missing. Respond ONLY with a " +
-      "JSON object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\"}. No prose.";
+      "evidence, the status is 'unmet' and the note says what is still missing. ALSO judge the " +
+      "shopper's current SALES STAGE, one of: browsing (just landed, low signal), engaged (asking real " +
+      "questions), evaluating (weighing it, comparing, picturing it), objection (a specific hesitation), " +
+      "ready (clear buying signals), won (they commissioned), lost (they declined and left). Respond " +
+      "ONLY with a JSON object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\"}, " +
+      "plus a key \"_stage\" set to the stage word. No prose.";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -1022,17 +1026,21 @@ async function evaluateGoals(
     const a = text.indexOf("{"), z = text.lastIndexOf("}");
     if (a < 0 || z < 0) return;
     text = text.slice(a, z + 1);
-    const parsed = JSON.parse(text) as Record<string, { status?: string; note?: string }>;
+    const parsed = JSON.parse(text) as Record<string, unknown>;
     const clean: Record<string, { status: string; note: string }> = {};
     for (const g of data.goals) {
-      const v = parsed[g.slug];
+      const v = parsed[g.slug] as { status?: string; note?: string } | undefined;
       const st = v && ["met", "partial", "unmet"].includes(String(v.status)) ? String(v.status) : "unmet";
       clean[g.slug] = { status: st, note: (v && typeof v.note === "string") ? v.note.slice(0, 160) : "" };
     }
-    await pgPatch(
-      `concierge_conversations?id=eq.${cid}`,
-      { goal_status: clean, goal_status_at: new Date().toISOString() },
-    );
+    const STAGES = ["browsing", "engaged", "evaluating", "objection", "ready", "won", "lost"];
+    const stageRaw = String(parsed._stage ?? "").toLowerCase().trim();
+    const stage = STAGES.includes(stageRaw) ? stageRaw : null;
+    const patch: Record<string, unknown> = {
+      goal_status: clean, goal_status_at: new Date().toISOString(),
+    };
+    if (stage) patch.sales_stage = stage;
+    await pgPatch(`concierge_conversations?id=eq.${cid}`, patch);
   } catch { /* evaluation is best-effort */ }
 }
 
@@ -1057,6 +1065,32 @@ function renderLiveState(ctx: Record<string, unknown>, customerLine: string | nu
 
 function formCatalog(data: ConciergeData): string {
   return data.forms.map((f) => `${f.slug} — ${f.title}`).join("; ");
+}
+
+// How hard to sell, 1 (most restrained) .. 5 (closer). Default 3 = warm
+// consultant. Injected into the prompt so the NEXT MOVE selector knows how far
+// to lean toward RECOMMEND / SHOW / ADVANCE versus ASK / SPACE.
+const ASSERTIVENESS_GUIDANCE: Record<number, string> = {
+  1: "Most restrained. Lean heavily on ASK and plain answers; volunteer little. Offer " +
+    "{{action:commission}} only on an explicit, unmistakable buying signal. Rarely build desire " +
+    "unprompted. When in doubt, give SPACE.",
+  2: "Restrained. Mostly answer and ASK; RECOMMEND when it clearly helps. Offer the order when " +
+    "interest is clear, not before. Build desire sparingly.",
+  3: "Warm consultant (balanced). Mix ASK with RECOMMEND and SHOW, and ladder small yeses. When the " +
+    "shopper is evaluating, build desire with one vivid, true detail. Propose the order (ADVANCE) once " +
+    "genuine interest shows — gently, assumptively, never as pressure.",
+  4: "Driving. Favor RECOMMEND, SHOW, and ADVANCE over ASK. Build desire early, propose the next step " +
+    "sooner, and re-open a different door if the conversation warms. Still honest, still graceful with a no.",
+  5: "Closer. Lead with RECOMMEND / SHOW / ADVANCE. Build desire from the first substantive turn, propose " +
+    "the order early (and more than once across a conversation, though never twice in one breath), and " +
+    "always drive toward an entry in the Webbuch. Honest and warm, but unmistakably selling.",
+};
+
+function assertivenessLevel(data: ConciergeData): number {
+  const av = data.config?.assertiveness;
+  const n = typeof av === "number" ? av : (typeof av === "string" ? parseFloat(av) : NaN);
+  if (!isFinite(n)) return 3;
+  return Math.min(5, Math.max(1, Math.round(n)));
 }
 
 function buildSystemPrompt(
@@ -1125,6 +1159,42 @@ function buildSystemPrompt(
         }).join("\n") + "\n";
     }
   }
+  // ASSERTIVENESS — how far to lean toward driving the sale this conversation.
+  system += "\nASSERTIVENESS (how to sell right now): " +
+    (ASSERTIVENESS_GUIDANCE[assertivenessLevel(data)] ?? ASSERTIVENESS_GUIDANCE[3]) + "\n";
+
+  // SELLING ANGLES — admin-curated true lines the bot may weave in to build desire.
+  const hooks = data.config?.hooks;
+  if (Array.isArray(hooks)) {
+    const lines = hooks
+      .filter((h) => typeof h === "string" && (h as string).trim().length > 0)
+      .map((h) => "- " + (h as string).trim().slice(0, 240));
+    if (lines.length > 0) {
+      system += "\nSELLING ANGLES (true, house-approved lines to weave in when building desire — " +
+        "never as a script, never all at once, at most one per turn):\n" + lines.join("\n") + "\n";
+    }
+  }
+
+  // OBJECTION PLAYBOOK — admin-curated responses to common hesitations. Each item
+  // is {trigger, response} (or a plain string). Used for the REASSURE move.
+  const objections = data.config?.objections;
+  if (Array.isArray(objections)) {
+    const lines = objections.map((o) => {
+      if (o && typeof o === "object" && !Array.isArray(o)) {
+        const t = ((o as Record<string, unknown>).trigger ?? "").toString().trim().slice(0, 80);
+        const r = ((o as Record<string, unknown>).response ?? "").toString().trim().slice(0, 300);
+        if (!r) return "";
+        return t ? `- When they raise ${t}: ${r}` : `- ${r}`;
+      }
+      const s = typeof o === "string" ? o.trim().slice(0, 300) : "";
+      return s ? `- ${s}` : "";
+    }).filter((l) => l.length > 0);
+    if (lines.length > 0) {
+      system += "\nOBJECTION PLAYBOOK (when the shopper raises one of these, REASSURE with the house's " +
+        "answer, then re-open the door):\n" + lines.join("\n") + "\n";
+    }
+  }
+
   if (data.sopText) {
     system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
   }
@@ -1291,6 +1361,7 @@ async function handleConfigGet(req: Request): Promise<Response> {
     starters: starters && typeof starters === "object" && !Array.isArray(starters) ? starters : null,
     outreach: outreach && typeof outreach === "object" && !Array.isArray(outreach) ? outreach : null,
     images: images && typeof images === "object" && !Array.isArray(images) ? images : null,
+    assertiveness: assertivenessLevel({ config } as ConciergeData),
     auth: true,
     forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
   });

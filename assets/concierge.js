@@ -170,6 +170,17 @@
   var remoteForms = {};        /* slug -> {title, fields[], submit_tool} */
   var remoteOutreach = null;   /* admin-set engagement timings (from ?config=1) */
   var remoteImages = null;     /* admin-added {{img:token}} sources (from ?config=1) */
+  var remoteAssert = null;     /* admin assertiveness 1..5 (from ?config=1) */
+
+  /* Assertiveness 1 (restrained) .. 5 (closer); default 3. Scales how often and
+     how soon the concierge reaches out. */
+  function assertLevel() {
+    var v = (typeof remoteAssert === 'number') ? remoteAssert : 3;
+    v = Math.round(v);
+    return v < 1 ? 1 : (v > 5 ? 5 : v);
+  }
+  /* delay multiplier: higher assertiveness → shorter waits before a follow-up */
+  function assertDelayMult() { return [1.5, 1.25, 1, 0.8, 0.65][assertLevel() - 1]; }
 
   function sanitizeForms(raw) {
     var out = {}, i, f, def, fields, j, fd;
@@ -248,6 +259,7 @@
           if (j.auth != null) { remoteAuth = j.auth; }
           if (j.outreach && typeof j.outreach === 'object') { remoteOutreach = j.outreach; }
           if (j.images && typeof j.images === 'object') { remoteImages = j.images; }
+          if (typeof j.assertiveness === 'number') { remoteAssert = j.assertiveness; }
           remoteForms = sanitizeForms(j.forms);
         }
         clearTimeout(timer);
@@ -1350,7 +1362,11 @@
 
   function showOutreach(kind, text, exempt) {
     if (!text || orSeen(kind) || panelOpen || outreachEl || quietMode) { return; }
-    if (!exempt && orCount() >= 2) { return; }
+    /* ambient reach-out budget: admin maxAmbient wins, else scales with
+       assertiveness (driving settings earn one more knock). */
+    var oc = orCfg();
+    var ambientCap = (typeof oc.maxAmbient === 'number') ? oc.maxAmbient : (assertLevel() >= 4 ? 3 : 2);
+    if (!exempt && orCount() >= ambientCap) { return; }
     orMark(kind);
     if (!exempt) { orBump(); }
     /* the launcher carries an unread mark until the visitor engages */
@@ -1474,6 +1490,29 @@
       showOutreach('dwell', lines[sec] ||
         'Guten Abend. I\u2019m the mill\u2019s concierge \u2014 tell me the room it\u2019s for, and I\u2019ll tell you the cloth.');
     }, dwellMs);
+  })();
+
+  /* a second, later beat for a reader who lingers but hasn't opened the panel —
+     desire-building, not a repeat. Only at a warm-or-driving assertiveness (>=3),
+     and only if the ambient budget still allows it. */
+  (function () {
+    var dwellMs = typeof orCfg().dwellMs === 'number' ? orCfg().dwellMs : 45000;
+    var dwell2Ms = typeof orCfg().dwell2Ms === 'number' ? orCfg().dwell2Ms : Math.round(dwellMs * 2.4);
+    setTimeout(function () {
+      if (panelOpen || history.length || orSeen('dwell2') || assertLevel() < 3) { return; }
+      if (orCfg().idleReach === false) {
+        var y = window.scrollY || window.pageYOffset || 0;
+        if (y < window.innerHeight * 0.5) { return; }
+      }
+      var sec = currentSection();
+      var lines = {
+        wool: 'Still with the cloth? Woven to order at four yards an hour — 15,000 a year, never more. I can hold the right one for your room whenever you like.',
+        ritual: 'Picture the Feierabend hour with it across your knees. If a name should go on the register card, I can arrange that too.',
+        reserve: 'Your number is still held. When you’re ready I can open the register in a moment — no payment, this is a demonstration.'
+      };
+      showOutreach('dwell2', lines[sec] ||
+        'One more thought — about twelve dollars a year across the fifty it takes to be inherited, and mended for life. I’m here when you’d like to talk it through.');
+    }, dwell2Ms);
   })();
 
   /* a half-written entry — offer to finish it together */
@@ -2191,11 +2230,16 @@
   function scheduleNudge(spacious) {
     clearNudge();
     if (isDemo() || !panelOpen || quietMode) { return; }
-    if (nudgeCount >= NUDGE_CAP) { return; }
+    var o = orCfg();
+    /* Effective caps scale with assertiveness: a more driving concierge circles
+       back a couple more times; admin nudgeCap overrides entirely. */
+    var cap = (typeof o.nudgeCap === 'number') ? o.nudgeCap : (NUDGE_CAP + (assertLevel() - 3));
+    if (nudgeCount >= cap) { return; }
     /* Don't talk into the void: if the last couple of reach-outs went completely
        unacknowledged (no scroll, tap, type, or return to the tab), the visitor
        isn't watching — pause. Any sign of life resets this and resumes us. */
-    if (unacked >= UNACKED_CAP) { return; }
+    var ucap = assertLevel() >= 4 ? 3 : UNACKED_CAP;
+    if (unacked >= ucap) { return; }
     /* only when a real exchange is underway and the last word was the bot's */
     if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
     /* Normally we only circle back once the visitor has spoken — but a signed-in
@@ -2203,11 +2247,11 @@
     var spoke = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
     if (!spoke && !authEmail) { return; }
-    var o = orCfg();
     var idx = Math.min(nudgeCount, NUDGE_DELAYS.length - 1);
     var wait = NUDGE_DELAYS[idx];
     if (idx === 0 && typeof o.nudge1Ms === 'number') { wait = o.nudge1Ms; }
     if (idx === 1 && typeof o.nudge2Ms === 'number') { wait = o.nudge2Ms; }
+    wait = Math.round(wait * assertDelayMult());          /* assertiveness scales the pace */
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
     nudgeTimer = setTimeout(function () {
       if (streaming || !panelOpen || quietMode) { return; }

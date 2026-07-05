@@ -348,6 +348,11 @@
   .filters{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
   .filters input[type="date"]{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
   .filters select{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
+  .stage-chip{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:1px 6px; border-radius:2px; border:1px solid var(--wool-faint); color:var(--wool-dim); }
+  .stage-ready, .stage-won{ color:#7fb069; border-color:#7fb069; }
+  .stage-objection{ color:#c98a4b; border-color:#c98a4b; }
+  .stage-evaluating, .stage-engaged{ color:var(--brass-soft); border-color:var(--brass-soft); }
+  .stage-lost{ color:#b06b6b; border-color:#b06b6b; }
 
   /* toasts */
   #toasts{ position:fixed; right:22px; bottom:22px; z-index:50; display:flex; flex-direction:column; gap:10px; }
@@ -559,6 +564,13 @@
           <div><label class="micro" for="cfg-draft">Nudge a half-written order</label>
             <input type="number" id="cfg-draft" class="mono-field" min="5" step="1" placeholder="25"></div>
         </div>
+        <p class="note" style="margin:14px 0 6px;">These two are <strong>counts</strong>, not seconds — how many times the concierge may reach out before it rests.</p>
+        <div class="ed-grid">
+          <div><label class="micro" for="cfg-nudgecap">Max in-chat follow-ups</label>
+            <input type="number" id="cfg-nudgecap" class="mono-field" min="0" step="1" placeholder="6"></div>
+          <div><label class="micro" for="cfg-maxambient">Max reach-outs (widget closed)</label>
+            <input type="number" id="cfg-maxambient" class="mono-field" min="0" step="1" placeholder="2"></div>
+        </div>
         <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="cfg-idlereach">
           <span class="micro">Reach out to an idle visitor even before they scroll</span>
@@ -570,6 +582,32 @@
         </div>
         <div class="card-foot">
           <button id="save-engagement" class="btn primary">Save engagement</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Selling style</h3>
+          <span class="micro">How hard, and with what, the concierge sells</span>
+        </div>
+        <p class="note">Assertiveness sets how far the concierge leans toward recommending, building desire, and proposing the order — versus answering and waiting. It never becomes pushy; higher just means it drives sooner.</p>
+        <div style="margin:6px 0 16px;">
+          <label class="micro" for="cfg-assert">Assertiveness</label>
+          <input type="range" id="cfg-assert" min="1" max="5" step="1" value="3" style="width:100%;max-width:420px;display:block;margin:10px 0 6px;">
+          <div class="micro" id="cfg-assert-label" style="color:var(--brass-soft);"></div>
+        </div>
+        <div class="field" style="margin-bottom:16px;">
+          <label class="micro" for="cfg-hooks">Selling angles — one per line. True, house-approved lines the bot can weave in to build desire.</label>
+          <textarea id="cfg-hooks" rows="4" placeholder="Woven to order at four yards an hour — 15,000 a year, never more.
+About twelve dollars a year across the fifty it takes to be inherited."></textarea>
+        </div>
+        <div class="field">
+          <label class="micro" for="cfg-objections">Objection playbook — one per line, as <code>trigger | response</code>. The bot meets the hesitation, then re-opens the door.</label>
+          <textarea id="cfg-objections" rows="4" placeholder="price | About twelve dollars a year, and mended for life — the cost is the last time you buy one.
+care | Wool self-cleans; airing handles most days. Wash it less than you think."></textarea>
+        </div>
+        <div class="card-foot">
+          <button id="save-selling" class="btn primary">Save selling style</button>
         </div>
       </section>
 
@@ -1130,6 +1168,10 @@ function wireStatic() {
   $('save-engagement').addEventListener('click', function () {
     withBusy($('save-engagement'), saveEngagement);
   });
+  $('save-selling').addEventListener('click', function () {
+    withBusy($('save-selling'), saveSelling);
+  });
+  $('cfg-assert').addEventListener('input', renderAssertLabel);
   $('img-add').addEventListener('click', addImageRow);
   $('save-images').addEventListener('click', function () {
     withBusy($('save-images'), saveImages);
@@ -1265,11 +1307,54 @@ async function loadConfig() {
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
   $('cfg-goalrate').value = (typeof cfg.goal_sample_rate === 'number') ? cfg.goal_sample_rate : '';
+  $('cfg-nudgecap').value = (typeof o.nudgeCap === 'number') ? o.nudgeCap : '';
+  $('cfg-maxambient').value = (typeof o.maxAmbient === 'number') ? o.maxAmbient : '';
+
+  // Selling style
+  const av = (typeof cfg.assertiveness === 'number') ? Math.min(5, Math.max(1, Math.round(cfg.assertiveness))) : 3;
+  $('cfg-assert').value = av;
+  renderAssertLabel();
+  $('cfg-hooks').value = Array.isArray(cfg.hooks)
+    ? cfg.hooks.filter(function (h) { return typeof h === 'string'; }).join('\n') : '';
+  $('cfg-objections').value = objectionsToText(cfg.objections);
 
   state.images = imgObjToRows(cfg.images);
   renderImageRows();
 
   setPill(cfg.enabled === true);
+}
+
+const ASSERT_LABELS = {
+  1: '1 · Most restrained — answers and waits; offers the order only on a clear buying signal.',
+  2: '2 · Restrained — recommends when it helps; offers the order when interest is clear.',
+  3: '3 · Warm consultant (recommended) — mixes questions with recommendations, ladders small steps, proposes the order when genuine interest shows.',
+  4: '4 · Driving — favours recommending and showing, builds desire early, proposes the next step sooner.',
+  5: '5 · Closer — leads with recommendations, builds desire from the first turn, drives toward the order (still honest).'
+};
+function renderAssertLabel() {
+  const v = Number($('cfg-assert').value) || 3;
+  $('cfg-assert-label').textContent = ASSERT_LABELS[v] || ASSERT_LABELS[3];
+}
+
+/* objections config <-> textarea. Stored as [{trigger,response}]; shown one per
+   line as "trigger | response" (a line with no pipe is a bare response). */
+function objectionsToText(arr) {
+  if (!Array.isArray(arr)) return '';
+  return arr.map(function (o) {
+    if (o && typeof o === 'object') {
+      return (o.trigger ? o.trigger + ' | ' : '') + (o.response || '');
+    }
+    return String(o || '');
+  }).filter(function (l) { return l.trim(); }).join('\n');
+}
+function textToObjections(txt) {
+  return String(txt || '').split('\n').map(function (line) {
+    line = line.trim();
+    if (!line) return null;
+    const i = line.indexOf('|');
+    if (i < 0) return { trigger: '', response: line };
+    return { trigger: line.slice(0, i).trim(), response: line.slice(i + 1).trim() };
+  }).filter(function (o) { return o && o.response; });
 }
 
 async function saveEngagement() {
@@ -1283,6 +1368,10 @@ async function saveEngagement() {
   const dw = s2ms('cfg-dwell'); if (dw) o.dwellMs = dw;
   const dr = s2ms('cfg-draft'); if (dr) o.draftMs = dr;
   o.idleReach = $('cfg-idlereach').checked;
+  const cap = Number($('cfg-nudgecap').value);
+  if ($('cfg-nudgecap').value !== '' && Number.isFinite(cap) && cap >= 0) o.nudgeCap = Math.round(cap);
+  const amb = Number($('cfg-maxambient').value);
+  if ($('cfg-maxambient').value !== '' && Number.isFinite(amb) && amb >= 0) o.maxAmbient = Math.round(amb);
   const rows = [{ key: 'outreach', value: o, updated_at: nowIso() }];
   const gr = Number($('cfg-goalrate').value);
   if ($('cfg-goalrate').value !== '' && Number.isFinite(gr) && gr >= 0 && gr <= 1) {
@@ -1291,6 +1380,21 @@ async function saveEngagement() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save engagement', res.error); return; }
   toast('Engagement saved');
+}
+
+async function saveSelling() {
+  const av = Math.min(5, Math.max(1, Math.round(Number($('cfg-assert').value) || 3)));
+  const hooks = String($('cfg-hooks').value || '').split('\n')
+    .map(function (l) { return l.trim(); }).filter(function (l) { return l; }).slice(0, 30);
+  const objections = textToObjections($('cfg-objections').value).slice(0, 30);
+  const rows = [
+    { key: 'assertiveness', value: av, updated_at: nowIso() },
+    { key: 'hooks', value: hooks, updated_at: nowIso() },
+    { key: 'objections', value: objections, updated_at: nowIso() }
+  ];
+  const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
+  if (res.error) { fail('Save selling style', res.error); return; }
+  toast('Selling style saved');
 }
 
 /* ---- Bot images (config key 'images') ---- */
@@ -2667,6 +2771,7 @@ function renderConvoList(counts) {
     const line1 = el('div', 'line1');
     line1.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
     line1.appendChild(el('span', 'micro', c.section || '—'));
+    if (c.sales_stage) line1.appendChild(el('span', 'stage-chip stage-' + c.sales_stage, c.sales_stage));
     btn.appendChild(line1);
 
     const n = counts[c.id] || 0;

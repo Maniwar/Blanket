@@ -43,7 +43,8 @@ alter table public.concierge_conversations
   add column if not exists status text not null default 'active',
   add column if not exists ended_at timestamptz,
   add column if not exists goal_status jsonb,
-  add column if not exists goal_status_at timestamptz;
+  add column if not exists goal_status_at timestamptz,
+  add column if not exists sales_stage text;   -- funnel stage from the async grader (browsing…won/lost)
 create index if not exists concierge_conversations_ended_idx
   on public.concierge_conversations (user_id, ended_at desc) where ended_at is not null;
 
@@ -582,7 +583,21 @@ insert into public.concierge_config (key, value) values
 {{reply:It's for me}}
 {{reply:It's a gift}}
 {{reply:Just looking}}$g$::text)),
-  ('voice_notes','""'::jsonb)
+  ('voice_notes','""'::jsonb),
+  ('assertiveness','3'::jsonb),   -- warm consultant (1 restrained .. 5 closer)
+  ('hooks', $h$[
+    "Woven to order at four yards an hour — 15,000 a year, never more.",
+    "About twelve dollars a year across the fifty it takes to be inherited.",
+    "Numbered on the selvedge and entered by hand in the Webbuch, kept since 1897.",
+    "Mended by the mill for life — a blanket like this isn't replaced, it's inherited.",
+    "The Feierabend hour: the end of the workday, with it across your knees."
+  ]$h$::jsonb),
+  ('objections', $o$[
+    {"trigger":"price","response":"About twelve dollars a year across the fifty it takes to be inherited — and mended for life. The cost is the last time you buy one."},
+    {"trigger":"care","response":"Wool self-cleans; airing handles most days. A cold wool cycle now and then, line dry — wash it less than you think."},
+    {"trigger":"commitment","response":"The 30-night trial carries the risk: sleep under it, and if it isn't right, send it back clean for a full refund."},
+    {"trigger":"gift timing","response":"Woven to order, three to five weeks to the door — and the register card can carry the recipient's name."}
+  ]$o$::jsonb)
 on conflict (key) do nothing;
 
 -- KB, SOPs, forms, and goals seed only if the table is empty, so your edits in

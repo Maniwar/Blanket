@@ -247,6 +247,36 @@ signed-in patrons are in §2.2; the merchant's control over all of this is §2.4
   hanging, so that I leave feeling served. *(Wrap-up SOP; needs-met goal; a
   client-book note recorded silently.)*
 
+### 2.8 The selling engine — moves, assertiveness, and stages
+
+The concierge is a *seller*, not a Q&A bot. Three mechanisms keep it driving
+rather than merely reacting:
+
+- **Next-move selector (in the prompt).** Instead of ending every turn with a
+  question, each turn the bot picks the ONE move that fits — **Ask · Recommend ·
+  Show · Advance (soft/assumptive close) · Reassure · Space** — and never repeats
+  the same move twice in a row. This is what makes it feel human: it recommends,
+  paints a picture, or proposes the next step rather than always interrogating.
+  It also ladders small yeses (room → cloth → open the register) instead of one
+  big ask, and builds desire with true "selling angles."
+- **Assertiveness dial (admin, `assertiveness` 1–5, default 3 = warm consultant).**
+  One knob sets how far the bot leans toward Recommend/Show/Advance versus
+  Ask/Space: it scales the prompt guidance, the in-chat follow-up caps and pace,
+  and the closed-panel reach-out budget. Higher drives sooner; it never becomes
+  pushy. Surfaced in Tuning → Selling style, delivered to the widget via
+  `?config`.
+- **Sales stage (per conversation).** The async grader classifies each
+  conversation's funnel stage — *browsing · engaged · evaluating · objection ·
+  ready · won · lost* — stored on `concierge_conversations.sales_stage` and shown
+  as a chip in the Conversations tab, so the admin can see where chats stall. The
+  live bot also reads the stage each turn to choose a stage-appropriate move.
+
+Admin-editable selling inputs (all config keys): `assertiveness`, `hooks`
+(selling angles woven in to build desire), `objections` (`{trigger, response}`
+playbook for the Reassure move), plus engagement pacing (`outreach.nudgeCap`,
+`outreach.maxAmbient`, `outreach.dwell2Ms`, and the existing nudge/dwell/draft
+timings and `goal_sample_rate`).
+
 ---
 
 ## 3. Architecture
