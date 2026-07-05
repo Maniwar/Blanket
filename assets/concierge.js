@@ -1172,8 +1172,9 @@
     inputEl.rows = 1;
     inputEl.placeholder = 'Ask about the wool, the mill, the number…';
     inputEl.setAttribute('aria-label', 'Your question');
-    inputEl.addEventListener('input', autogrow);
+    inputEl.addEventListener('input', function () { lastTypeTs = Date.now(); autogrow(); });
     inputEl.addEventListener('keydown', function (e) {
+      lastTypeTs = Date.now();
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         submitInput();
@@ -1823,6 +1824,7 @@
      10. Transport
   ---------------------------------------------------------- */
   var streaming = false;
+  var proactiveStream = false;  /* the current stream is the bot speaking on its own */
   var currentAbort = null;
   var demoTimers = [];
   var nudgeTimer = null;        /* silence timer while the panel is open */
@@ -1964,15 +1966,33 @@
     });
   }
 
-  function setStreaming(on) {
+  function setStreaming(on, proactive) {
     streaming = on;
-    if (sendBtn) { sendBtn.disabled = on; }
+    proactiveStream = on ? !!proactive : false;
+    /* A turn the VISITOR started locks the composer until the reply lands. But a
+       PROACTIVE line (a nudge/opener the bot speaks on its own) must never seize
+       the field — the customer has to be able to keep typing right through it. */
+    var lock = on && !proactive;
+    if (sendBtn) { sendBtn.disabled = lock; }
     if (inputEl) {
-      inputEl.disabled = on;
-      if (!on && panelOpen && window.innerWidth >= 900) {
+      inputEl.disabled = lock;
+      /* only pull focus back when a visitor-initiated turn finishes, and never
+         if they're already mid-word somewhere (their focus wins) */
+      if (!on && panelOpen && window.innerWidth >= 900 &&
+          document.activeElement !== inputEl && !composing()) {
         try { inputEl.focus(); } catch (e) { /* ignore */ }
       }
     }
+  }
+
+  /* Is the visitor actively composing? Text sitting in the box, or a keystroke
+     within the last few seconds. (Focus alone doesn't count — the composer
+     auto-focuses on open, and the opener still needs to be able to speak.) */
+  var lastTypeTs = 0;
+  function composing() {
+    if (!inputEl) { return false; }
+    if ((inputEl.value || '').replace(/^\s+|\s+$/g, '')) { return true; }
+    return (Date.now() - lastTypeTs) < 4000;
   }
 
   function clearDemoTimers() {
@@ -1990,9 +2010,16 @@
   }
 
   function submitInput() {
-    if (streaming) { return; }
     var text = (inputEl.value || '').replace(/^\s+|\s+$/g, '');
     if (!text) { return; }
+    if (streaming) {
+      /* their own turn is still landing — wait for it. But if the bot was just
+         speaking on its own (a nudge/opener), the visitor takes over: step aside
+         and send theirs. */
+      if (!proactiveStream) { return; }
+      abortStream();
+      setStreaming(false);
+    }
     inputEl.value = '';
     autogrow();
     sendMessage(text);
@@ -2054,8 +2081,8 @@
   }
 
   function performRequest(opts) {
-    setStreaming(true);
     var proactive = !!(opts && opts.quiet);
+    setStreaming(true, proactive);
     var shell = proactive ? lazyShell() : addAssistantShell();
     shell.proactive = proactive;   /* a proactive follow-up may hold; a reply may not */
     if (isDemo()) { demoRespond(shell); }
@@ -2131,6 +2158,8 @@
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
     nudgeTimer = setTimeout(function () {
       if (streaming || !panelOpen || quietMode) { return; }
+      /* never speak over someone mid-sentence — wait and try again shortly */
+      if (composing()) { scheduleNudge(spacious); return; }
       if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
       nudgeCount++;
       unacked++;                 /* this reach-out is unacknowledged until they show a sign of life */
@@ -2168,14 +2197,17 @@
     if (!kind) { return; }
     reengagedThisOpen = true;
     nudgeCount = 0; holdAttempts = 0; clearNudge();
-    nudgeTimer = setTimeout(function () {
+    function fireOpener() {
       if (!panelOpen || streaming || quietMode) { return; }
       /* if they engaged during the wait (tapped a pill, typed), let them lead */
       if (kind === 'greet' && history.length) { return; }
+      /* don't open over someone already typing — hold the thought a beat */
+      if (composing()) { nudgeTimer = setTimeout(fireOpener, 2000); return; }
       pendingOpener = kind;
       entryMode = 'opener:' + kind;
       performRequest({ quiet: true }); /* lazy shell — no phantom typing if it holds */
-    }, delay);
+    }
+    nudgeTimer = setTimeout(fireOpener, delay);
   }
 
   function failTurn(shell) {
@@ -2296,6 +2328,10 @@
       return pump();
     })['catch'](function (err) {
       if (aborted || (err && err.name === 'AbortError')) {
+        /* If a newer turn already superseded this one (the visitor typed over a
+           proactive line), just drop this shell — don't touch the live stream
+           state or we'd unlock the composer mid-reply. */
+        if (currentAbort !== ac) { shell.done(); return; }
         /* panel closed mid-stream: keep what we have quietly */
         shell.done();
         var partial = shell.getText();

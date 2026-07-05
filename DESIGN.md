@@ -53,6 +53,11 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 - **As someone just browsing**, I want the concierge to notice I'm here and open a
   relevant thread — but to ease off if I'm clearly not engaging — so that it feels
   attentive, not spammy. *(Proactive openers + presence-aware nudging.)*
+- **As anyone mid-message**, I want the concierge to never talk over me while I'm
+  typing — my composer must stay live and my keystrokes must never be swallowed —
+  so that its proactive lines feel like a considerate person, not a UI that fights
+  me. *(Proactive turns defer while composing and never disable the input; if one
+  is already speaking, hitting send lets me take over.)*
 - **As an undecided guest**, I want to start a commission and see my number held
   while I decide, without an account, so that scarcity feels real but low-friction.
   *(`?hold=1` reserves a number for the visit.)*
@@ -98,23 +103,56 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 
 ### 2.4 Merchant — content & operations admin
 
-- **As the merchant**, I want to tune the concierge's voice, knowledge, and
-  selling procedures without a deploy, so that I can iterate on tone and policy
-  live. *(Config, KB, SOPs — DB-backed, 60s cache.)*
+*Everything below is a tab or control in the admin studio (`admin.html`): Tuning,
+Knowledge, Procedures, Cache, Customers, Conversations.*
+
+**Tuning the concierge**
+
+- **As the merchant**, I want to tune the concierge's voice, the greeting, and the
+  starter prompts without a deploy, so that I can iterate on tone live. *(Tuning
+  tab: config + voice notes + starters — DB-backed, 60s cache.)*
+- **As the merchant**, I want to edit the knowledge base and the selling
+  procedures (SOPs) that the concierge follows, so that policy and pitch are mine
+  to control. *(Knowledge tab + Procedures tab; injected into the system prompt.)*
 - **As the merchant**, I want to define the goals of every conversation and see,
   per chat, which were met — with the evidence — so that I can measure quality.
-  *(Admin-editable goals; LLM-judge scoring with cited justifications.)*
+  *(Procedures tab: admin-editable goals; LLM-judge scoring with cited
+  justifications.)*
 - **As the merchant**, I want in-chat forms for structured order changes, so that
-  the concierge can collect exactly what a change needs. *(Admin-defined forms.)*
+  the concierge can collect exactly what a change needs. *(Procedures tab:
+  admin-defined forms.)*
+
+**Running the register (orders, fulfillment, edition)**
+
+- **As the merchant**, I want to set the edition's run size and the next number to
+  issue, so that I can open a fresh edition or frame the scarcity story without
+  touching the database. *(Tuning tab: Edition card → `get_edition`/`set_edition`;
+  the storefront ticker reads it live.)*
+- **As the merchant**, I want to advance an order through fulfillment
+  (`placed → weaving → finishing → shipped → delivered`, or `returned`) and attach
+  a tracking number, so that a real order can actually move — and the customer is
+  emailed when it ships or is returned. *(Customers tab: per-order fulfillment
+  control → commission `POST ?fulfill=1`, admin-gated, audited, sends email.)*
+- **As the merchant**, I want to see every **register action** the concierge took
+  on a customer's behalf — status reads, address and colorway changes,
+  cancellations, context recalls, notes written — so that nothing the bot did to
+  the register is invisible to me. *(Register-action log: `concierge_actions`,
+  surfaced in the studio; every order change also captured in `order_events`.)*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
   and what the concierge learned about them, so that I can serve them well.
-  *(Customers ledger + client book.)*
+  *(Customers tab: LTV ledger + client book + order history.)*
 - **As the merchant**, I want to know the concierge is actually selling, so that I
   can justify it — so I need its assisted revenue attributed. *(Order ↔ chat
-  attribution.)*
+  attribution via `chat_session`.)*
+
+**Quality & knowledge upkeep**
+
 - **As the merchant**, I want to browse conversations and feedback and see where
   the concierge lacked an answer, so that I can improve the knowledge base.
-  *(Conversations + feedback + knowledge-gap flags.)*
+  *(Conversations tab + feedback + knowledge-gap flags.)*
+- **As the merchant**, I want to inspect the semantic answer cache and clear stale
+  entries, so that a changed policy isn't served from an old answer. *(Cache tab:
+  view entries + hit counts, evict on demand.)*
 
 ### 2.5 Super admin — owner / access control
 
@@ -128,11 +166,15 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 
 ### 2.6 Platform / database administrator — ops
 
-- **As the operator**, I want to stand the whole database up from one idempotent
-  file, safe to re-run, so that setup isn't a fragile sequence. *(`setup.sql`.)*
-- **As the operator**, I want schema changes as ordered migrations mirrored in the
-  setup file, so that fresh installs and `db push` stay in lockstep.
-  *(`migrations/` + `setup.sql`.)*
+- **As the operator**, I want to stand the *whole* database up — schema, RLS,
+  functions, and all seed content (KB, SOPs, forms, goals) — from one idempotent
+  file, safe to re-run, so that setup is a single paste and never a fragile
+  sequence. *(`setup.sql` as the single source of truth; each content block seeds
+  only if empty, so re-runs never clobber Studio edits.)*
+- **As the operator**, I want the ordered `migrations/` folder kept as history for
+  `supabase db push`/CI, while `setup.sql` stays the file I actually maintain, so
+  that there's one place to change and no drift. *(`setup.sql` canonical;
+  `migrations/` optional.)*
 - **As the operator**, I want to deploy the functions and know exactly which build
   is live, so that I'm never debugging stale code. *(`BUILD_TAG` + `selftest`.)*
 - **As the operator**, I want to verify the live system end-to-end without
