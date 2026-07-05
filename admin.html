@@ -1285,6 +1285,11 @@ function wireStatic() {
 function wireFilter(prefix, loader, textIds, applyBtn, clearBtn, moreBtn) {
   const run = function () { withBusy(applyBtn || document.createElement('button'), loader); };
   if (applyBtn) applyBtn.addEventListener('click', run);
+  // Date range auto-applies on change — picking a date shouldn't need a second
+  // action (a click on Search or another field) to take effect.
+  [prefix + '-from', prefix + '-to'].forEach(function (id) {
+    const e = $(id); if (e) e.addEventListener('change', run);
+  });
   if (clearBtn) clearBtn.addEventListener('click', function () {
     [prefix + '-from', prefix + '-to'].concat(textIds).forEach(function (id) {
       const e = $(id); if (e) e.value = '';
