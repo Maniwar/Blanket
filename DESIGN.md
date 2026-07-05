@@ -372,6 +372,9 @@ fallback. Full design: [`CMS.md`](CMS.md).
 - **Two edge functions** (Deno, deployed to Supabase):
   - `concierge` — proxies streaming chat to Anthropic, runs the tool-use loop,
     the semantic cache, conversation logging, goal scoring, and the lifecycle.
+    The system prompt is split into a **prompt-cached static prefix** and a
+    dynamic tail to keep input cost down — full accounting of every model call
+    and the cost levers in [`COST.md`](COST.md).
   - `commission` — the demo checkout: serial holds and order placement.
   - Both talk to Postgres with the **service-role** key over raw PostgREST (no
     `supabase-js`), so they bypass RLS by design; the SQL functions enforce the

@@ -10,7 +10,7 @@ Two Supabase Edge Functions use this database:
 
 | Function | Folder | Role |
 | --- | --- | --- |
-| **concierge** | `functions/concierge/` | The AI sales concierge — streaming chat, register tools, semantic cache, conversation logging, goals, lifecycle. |
+| **concierge** | `functions/concierge/` | The AI sales concierge — streaming chat, register tools, semantic cache, conversation logging, goals, lifecycle. System prompt is a prompt-cached static prefix + dynamic tail (see [`COST.md`](../COST.md)). |
 | **commission** | `functions/commission/` | The demo checkout — serial holds and order placement. No payment; nothing ships. |
 
 Both read the database with the **service-role key** over raw PostgREST (no
