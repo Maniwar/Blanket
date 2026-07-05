@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-orders-count-filter";
+const BUILD_TAG = "2026-07-05-personal-starters";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1697,6 +1697,34 @@ async function handleToolsGet(req: Request): Promise<Response> {
   return jsonResponse(req, 200, { tools: toolsManifest(data) });
 }
 
+// ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
+// Deterministic, built from their REAL orders (status, cloth, gift), so every chip
+// points at something they actually have — no model call, no guessing. Anonymous
+// callers (or a patron with no orders) get [], and the client falls back to the
+// section defaults. The client tops these up with the generic starters.
+async function handleStartersGet(req: Request): Promise<Response> {
+  const customer = await verifyUser(req);
+  if (!customer) return jsonResponse(req, 200, { starters: [] });
+  const orders = await myOrders(customer, false);
+  if (!orders || orders.length === 0) return jsonResponse(req, 200, { starters: [] });
+  const clothOf = (cw: string | null) => cw && EMAIL_COLORWAY[cw] ? EMAIL_COLORWAY[cw] : "my cloth";
+  const noOf = (o: OrderRow) =>
+    `Nº ${Number(o.serial ?? o.cancelled_serial ?? 0).toLocaleString("en-US")}`;
+  const out: string[] = [];
+  const add = (s: string) => { if (s && !out.includes(s) && out.length < 4) out.push(s); };
+  // orders arrive placed_at desc (most recent first)
+  const shipped = orders.find((o) => o.status === "shipped");
+  if (shipped) add(`Where is my ${noOf(shipped)}?`);
+  const placed = orders.find((o) => o.status === "placed");
+  if (placed) add(`Change the cloth on my ${clothOf(placed.colorway)} (${noOf(placed)})`);
+  const gift = orders.find((o) => o.is_gift && MUTABLE_STATUSES.includes(o.status ?? ""));
+  if (gift) add(`Update the gift card on ${noOf(gift)}`);
+  const delivered = orders.find((o) => o.status === "delivered");
+  if (delivered) add(`How should I care for my ${clothOf(delivered.colorway)}?`);
+  add("Show me all my orders");
+  return jsonResponse(req, 200, { starters: out.slice(0, 4) });
+}
+
 // ── GET ?selftest=1 — "what does the concierge actually know about me?" ───────
 // Call it with the same Authorization the widget sends. It reports whether the
 // caller is recognized as signed in, whether the newer tables/columns exist in
@@ -2519,6 +2547,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("tools")) {
     return await handleToolsGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("starters")) {
+    return await handleStartersGet(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("selftest")) {
     return await handleSelfTest(req);

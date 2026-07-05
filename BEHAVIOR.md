@@ -55,6 +55,15 @@ noted where they exist.
   when the visitor is reading **any** of its sections. No sections = pursued
   anywhere. Source of truth is `concierge_goals.sections[]`.
 
+## Conversation starters
+- The suggestion chips (and the on-page inline starters) are the admin's
+  configured starters **topped up** with the baked KB defaults, per section — so a
+  section left blank or only partly filled still offers a few, never one or none.
+- For a **signed-in** patron the widget leads with **personalized** starters from
+  `?starters=1` — built deterministically from their real orders (where's my Nº,
+  change the cloth, update the gift card, care guide, show all orders) — then tops
+  up with the section defaults.
+
 ## Admin console — date filters
 - The date filters on the Actions / Customers / Conversations / Waitlist tabs read
   a **local** calendar day and convert it to the matching UTC window, so a

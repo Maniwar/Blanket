@@ -59,12 +59,28 @@
     var s = kb().suggested;
     return (s && typeof s === 'object') ? s : null;
   }
+  function pickSection(map, sectionId) {
+    if (!map || typeof map !== 'object') { return []; }
+    var l = (sectionId && map[sectionId]) ? map[sectionId] : map['default'];
+    return (Object.prototype.toString.call(l) === '[object Array]') ? l : [];
+  }
+  /* Effective starters for a section: the admin's overrides (from ?config) come
+     first, then the baked KB defaults TOP UP any remaining slots (up to 3). This
+     way a section the admin left blank — or only partly filled (e.g. one of three)
+     — still offers a few starters instead of one or none. */
   function kbSuggested(sectionId) {
-    var s = suggestedMap();
-    if (!s) { return []; }
-    var list = (sectionId && s[sectionId]) ? s[sectionId] : s['default'];
-    if (Object.prototype.toString.call(list) !== '[object Array]') { return []; }
-    return list.slice(0, 3);
+    var out = [], i, v;
+    var over = remoteStarters ? pickSection(remoteStarters, sectionId) : [];
+    for (i = 0; i < over.length && out.length < 3; i++) {
+      v = over[i];
+      if (typeof v === 'string' && v && out.indexOf(v) === -1) { out.push(v); }
+    }
+    var baked = pickSection(kb().suggested, sectionId);
+    for (i = 0; i < baked.length && out.length < 3; i++) {
+      v = baked[i];
+      if (typeof v === 'string' && v && out.indexOf(v) === -1) { out.push(v); }
+    }
+    return out;
   }
   function kbDemoEntries() {
     var d = kb().demo;
@@ -166,6 +182,7 @@
   var remoteEnabled = null;     /* true/false once fetched */
   var remoteGreeting = '';
   var remoteStarters = null;    /* replaces FEIER_KB.suggested when present */
+  var personalStarters = [];    /* signed-in: context-aware starters from ?starters=1 */
   var remoteAuth = null;
   var remoteForms = {};        /* slug -> {title, fields[], submit_tool} */
   var remoteOutreach = null;   /* admin-set engagement timings (from ?config=1) */
@@ -1850,12 +1867,19 @@
   }
 
   function addSuggestChips(questions) {
-    var list = [], j;
-    if (authEmail) { list.push(TRACK_QUESTION); }
-    if (questions && questions.length) {
-      for (j = 0; j < questions.length; j++) {
-        if (String(questions[j]) !== TRACK_QUESTION) { list.push(questions[j]); }
+    var list = [], j, seen = {};
+    function push(q) { q = String(q); if (q && !seen[q]) { seen[q] = true; list.push(q); } }
+    /* Signed in: lead with context-aware starters built from their own orders
+       (from ?starters=1); fall back to the generic "track" chip if none loaded. */
+    if (authEmail) {
+      if (personalStarters && personalStarters.length) {
+        for (j = 0; j < personalStarters.length; j++) { push(personalStarters[j]); }
+      } else {
+        push(TRACK_QUESTION);
       }
+    }
+    if (questions && questions.length) {
+      for (j = 0; j < questions.length; j++) { push(questions[j]); }
     }
     if (!list.length) { return; }
     var cap = authEmail ? 4 : 3;
@@ -2709,6 +2733,44 @@
     });
   }
 
+  /* Re-render just the greeting's suggestion chips (used when personalized
+     starters arrive after the greeting was already drawn). */
+  function refreshGreetingChips() {
+    if (!msgsEl || history.length) { return; }
+    var old = msgsEl.querySelector('.cx-suggest');
+    if (old && old.parentNode) { old.parentNode.removeChild(old); }
+    addSuggestChips(kbSuggested(currentSection()));
+  }
+
+  /* Signed-in: pull context-aware starters built from the patron's own orders.
+     Best-effort — on any failure the generic starters stand. */
+  function fetchPersonalStarters() {
+    if (!authEmail || !endpoint()) { return; }
+    getAccessToken().then(function (token) {
+      if (!token || !authEmail) { return; }
+      var url = endpoint() + (endpoint().indexOf('?') === -1 ? '?starters=1' : '&starters=1');
+      var ac = null;
+      try { ac = new AbortController(); } catch (eA) { ac = null; }
+      var timer = setTimeout(function () { if (ac) { try { ac.abort(); } catch (eT) { /* ignore */ } } }, 4000);
+      fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + token },
+        signal: ac ? ac.signal : undefined
+      }).then(function (res) {
+        return res.ok ? res.json() : null;
+      }).then(function (j) {
+        clearTimeout(timer);
+        if (!j || Object.prototype.toString.call(j.starters) !== '[object Array]') { return; }
+        var clean = [], i;
+        for (i = 0; i < j.starters.length; i++) {
+          if (typeof j.starters[i] === 'string' && j.starters[i]) { clean.push(j.starters[i]); }
+        }
+        personalStarters = clean;
+        if (panelOpen && !streaming) { refreshGreetingChips(); }
+      }, function () { clearTimeout(timer); });
+    });
+  }
+
   /* Start a completely fresh conversation — used when the identity changes so
      one person's chat never bleeds into another's (or into an anonymous view). */
   function resetConversation() {
@@ -2763,6 +2825,7 @@
       authEmail = em;
       if (em) { closeAuthRow(); }
       updateAuthUI();
+      if (em) { personalStarters = []; fetchPersonalStarters(); } else { personalStarters = []; }
       if (wasResolved) {
         if (prevOwner && prevOwner !== em) {
           /* sign-out, or a switch to a DIFFERENT person — wipe so no thread bleeds */
@@ -2977,15 +3040,13 @@
   var LIGHT_SECTIONS = { wool: 1, ritual: 1 }; /* wool-coloured backgrounds → ink text */
 
   function initInlineStarters() {
-    var map = suggestedMap();
-    if (!map) { return; }
     var i;
     for (i = 0; i < INLINE_SECTIONS.length; i++) {
       (function (id) {
         var section = document.getElementById(id);
         if (!section) { return; }
-        var list = map[id];
-        if (Object.prototype.toString.call(list) !== '[object Array]' || list.length < 2) { return; }
+        var list = kbSuggested(id);   /* override + baked top-up, so never sparse */
+        if (list.length < 2) { return; }
         var question = String(list[1]);
         if (!question) { return; }
         /* match the section's own gutters by living inside its inner wrapper */

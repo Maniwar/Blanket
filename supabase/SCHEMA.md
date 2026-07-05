@@ -426,6 +426,7 @@ edition RPCs are the exception — granted to `authenticated` (they self-gate on
 | `GET ?config=1` | `handleConfigGet` | Public bootstrap: enabled, greeting, starters, forms, images, outreach timings, assertiveness. |
 | `GET ?site=1` | `handleSiteGet` | Storefront CMS slot values (`site_content`) for the runtime hydrator + head bake. |
 | `GET ?tools=1` | `handleToolsGet` | The built-in tools manifest (name, enabled, core, effective + default instruction, overridden) for the admin Tools tab. |
+| `GET ?starters=1` | `handleStartersGet` | **Signed-in only.** Personalized conversation starters built deterministically from the caller's real orders (status/cloth/gift); `[]` when anonymous or no orders. The widget leads with these, topped up with the section defaults. |
 | `GET ?cachecheck=1` | inline | Self-diagnosis of the semantic cache round-trip. |
 | `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, **proactive openers** (`context.opener` = `reengage`/`greet` — the bot speaks first on panel open), tools (incl. `recall_context` to pull prior notes/conversation), cache, logging, goal scheduling. |
 | `POST ?wrapup=1` | `handleWrapup` | **Records a conversation as closed/snoozed.** Body `{session_key, reason}` where reason is `quiet` (→ snoozed), `close` or `auto` (→ closed). Stamps `status`+`ended_at` **once** (already-ended threads are left alone), and for a signed-in patron adds one `customer_notes` line. |
