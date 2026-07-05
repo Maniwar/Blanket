@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-selling-engine";
+const BUILD_TAG = "2026-07-05-selling-engine-2";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1036,11 +1036,19 @@ async function evaluateGoals(
     const STAGES = ["browsing", "engaged", "evaluating", "objection", "ready", "won", "lost"];
     const stageRaw = String(parsed._stage ?? "").toLowerCase().trim();
     const stage = STAGES.includes(stageRaw) ? stageRaw : null;
-    const patch: Record<string, unknown> = {
-      goal_status: clean, goal_status_at: new Date().toISOString(),
-    };
-    if (stage) patch.sales_stage = stage;
-    await pgPatch(`concierge_conversations?id=eq.${cid}`, patch);
+    // Goal grading is the primary write and must always land.
+    await pgPatch(
+      `concierge_conversations?id=eq.${cid}`,
+      { goal_status: clean, goal_status_at: new Date().toISOString() },
+    );
+    // The sales stage is a SEPARATE, isolated best-effort write: if the
+    // sales_stage column isn't in this database yet (migration not applied),
+    // its failure must never take goal grading down with it.
+    if (stage) {
+      try {
+        await pgPatch(`concierge_conversations?id=eq.${cid}`, { sales_stage: stage });
+      } catch { /* column may not exist yet — ignore */ }
+    }
   } catch { /* evaluation is best-effort */ }
 }
 
