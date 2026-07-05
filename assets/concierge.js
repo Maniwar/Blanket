@@ -1799,6 +1799,8 @@
   var nudgeTimer = null;        /* silence timer while the panel is open */
   var nudgeCount = 0;           /* proactive follow-ups since the visitor last spoke */
   var pendingNudge = null;      /* {seconds,count} carried into the next request */
+  var pendingOpener = null;     /* 'reengage' | 'greet' — carried into the next request */
+  var reengagedThisOpen = false;/* the bot has already opened contextually this panel session */
 
   /* ----------------------------------------------------------
      Conversation lifecycle — closing / snoozing (a mix of both:
@@ -2055,9 +2057,11 @@
     if (nudgeCount >= 2) { return; }
     /* only when a real exchange is underway and the last word was the bot's */
     if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
+    /* Normally we only circle back once the visitor has spoken — but a signed-in
+       patron we already know earns a proactive follow-up even before they type. */
     var spoke = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
-    if (!spoke) { return; }
+    if (!spoke && !authEmail) { return; }
     var o = orCfg();
     var first = typeof o.nudge1Ms === 'number' ? o.nudge1Ms : 20000;
     var second = typeof o.nudge2Ms === 'number' ? o.nudge2Ms : 45000;
@@ -2071,6 +2075,35 @@
       pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount };
       performRequest({ quiet: true }); /* no phantom typing if it holds */
     }, wait);
+  }
+
+  /* On opening the panel, the concierge speaks first — contextually. A returning
+     visitor with a thread in progress is re-engaged; a signed-in patron we know
+     is greeted by name toward the goals. Nothing fires in quiet mode, for a
+     purely anonymous first-timer (the static greeting serves them), or right on
+     the heels of an outreach line they just tapped. */
+  function maybeOpenerOnOpen() {
+    if (isDemo() || quietMode || streaming || reengagedThisOpen) { return; }
+    var last = history.length ? history[history.length - 1] : null;
+    /* an outreach line they just tapped is itself the opener — don't double up */
+    if (last && last.role === 'assistant' && (Date.now() - (last.ts || 0) < 5000)) {
+      reengagedThisOpen = true;
+      return;
+    }
+    var hadUser = false, i;
+    for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { hadUser = true; break; } }
+    var kind = '';
+    if (last && last.role === 'assistant' && hadUser) { kind = 'reengage'; }
+    else if (authEmail && !history.length) { kind = 'greet'; }
+    if (!kind) { return; }
+    reengagedThisOpen = true;
+    nudgeCount = 0; holdAttempts = 0; clearNudge();
+    setTimeout(function () {
+      if (!panelOpen || streaming || quietMode) { return; }
+      pendingOpener = kind;
+      entryMode = 'opener:' + kind;
+      performRequest({ quiet: true }); /* lazy shell — no phantom typing if it holds */
+    }, 1100);
   }
 
   function failTurn(shell) {
@@ -2094,6 +2127,7 @@
     }
     var ctx = freshState();
     if (pendingNudge) { ctx.nudge = pendingNudge; pendingNudge = null; }
+    if (pendingOpener) { ctx.opener = pendingOpener; pendingOpener = null; }
     var body = JSON.stringify({
       messages: messages,
       context: ctx,
@@ -2613,6 +2647,8 @@
     }, REDUCED ? 0 : 80);
     if (typeof prefillQuestion === 'string' && prefillQuestion && !streaming) {
       sendMessage(prefillQuestion);
+    } else {
+      maybeOpenerOnOpen();
     }
   }
 
@@ -2623,6 +2659,7 @@
        reads as a re-engagement rather than one endless thread. */
     doWrapup('auto');
     panelOpen = false;
+    reengagedThisOpen = false;   /* next open may re-engage afresh */
     abortStream();
     clearNudge();
     panel.classList.remove('cx-open');

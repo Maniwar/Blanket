@@ -42,7 +42,7 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-04-summaries+silent+goaljustify+probefix";
+const BUILD_TAG = "2026-07-04-opener+recall+proactive";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -244,8 +244,16 @@ function validateBody(body: unknown): ValidatedBody | string {
     return "Request body must be a JSON object.";
   }
   const { messages, context, session_key } = body as Record<string, unknown>;
-  if (!Array.isArray(messages) || messages.length < 1 || messages.length > 20) {
-    return "messages must be an array of 1 to 20 items.";
+  if (context !== undefined &&
+    (typeof context !== "object" || context === null || Array.isArray(context))) {
+    return "context, if provided, must be an object.";
+  }
+  const ctxObj = (context ?? {}) as Record<string, unknown>;
+  // A proactive opener (the bot greeting a returning visitor) may carry no prior
+  // messages — the handler injects its own instruction.
+  const isOpener = ctxObj.opener === "reengage" || ctxObj.opener === "greet";
+  if (!Array.isArray(messages) || messages.length > 20 || (messages.length < 1 && !isOpener)) {
+    return "messages must be an array of up to 20 items.";
   }
   for (const m of messages) {
     if (typeof m !== "object" || m === null) return "Each message must be an object.";
@@ -436,6 +444,16 @@ const REGISTER_TOOLS: any[] = [
     },
   },
   {
+    name: "recall_context",
+    description:
+      "Pull the signed-in patron's prior context on demand: their full client-book notes and the " +
+      "tail of their most recent EARLIER conversation(s). The CUSTOMER block already summarizes " +
+      "their orders, standing, recency, and the latest notes — call this only when you need more: " +
+      "older notes, or what was actually said last time, to re-engage a returning patron faithfully. " +
+      "Read-only.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "update_shipping_address",
     description:
       "Change the shipping address on one of the owner's orders. Allowed only while " +
@@ -527,6 +545,44 @@ async function runRegisterTool(
     await logAction(cid, customer, "get_my_orders", null, null, `${orders.length} orders read`);
     if (orders.length === 0) return "No orders on the register for this owner.";
     return JSON.stringify(orders.map((o) => ({ ...o, serial: o.serial ?? o.cancelled_serial })));
+  }
+
+  if (name === "recall_context") {
+    const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+    const nf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    const notes = await pgSelect<{ note: string; created_at: string }>(
+      `customer_notes?select=note,created_at&${nf}&order=created_at.desc&limit=20`,
+    );
+    const cf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},user_email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    const convos = await pgSelect<{ id: string; created_at: string; ended_at: string | null }>(
+      `concierge_conversations?select=id,created_at,ended_at&${cf}${
+        cid ? `&id=neq.${cid}` : ""}&order=created_at.desc&limit=2`,
+    );
+    const prior: Array<{ when: string; turns: string[] }> = [];
+    if (convos) {
+      for (const c of convos) {
+        const msgs = await pgSelect<{ role: string; content: string }>(
+          `concierge_messages?select=role,content,created_at&conversation_id=eq.${c.id}` +
+            `&order=created_at.desc&limit=8`,
+        );
+        if (msgs && msgs.length > 0) {
+          prior.push({
+            when: String(c.created_at).slice(0, 10),
+            turns: msgs.reverse().map((m) => `${m.role === "user" ? "Patron" : "You"}: ${m.content}`),
+          });
+        }
+      }
+    }
+    await logAction(cid, customer, "recall_context", null, null,
+      `${notes?.length ?? 0} notes, ${prior.length} prior conversations`);
+    return JSON.stringify({
+      client_book: (notes ?? []).map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`),
+      prior_conversations: prior,
+    });
   }
 
   if (name === "remember_customer") {
@@ -1131,6 +1187,32 @@ async function handleChatPost(req: Request): Promise<Response> {
     });
   }
 
+  // Proactive opener: the visitor just opened (or reopened) the concierge. Speak
+  // first, contextually, toward the goals — never wait for them to type. The
+  // instruction is injected (never logged as their words); the model may call
+  // recall_context to pull prior notes/conversation it doesn't already see.
+  const opener = (validated.context as Record<string, unknown>)?.opener;
+  const isOpener = opener === "reengage" || opener === "greet";
+  if (isOpener && !isNudge) {
+    validated.messages.push({
+      role: "user",
+      content: opener === "greet"
+        ? "[Context note, not the shopper's words: they just opened the concierge and have not " +
+          "spoken yet. They already see a brief house greeting, so do NOT repeat a generic hello. " +
+          "Add ONE personal, specific line that shows you already know this patron — greet them by " +
+          "first name and nod to their standing or a real order/note (a returning patron is never a " +
+          "stranger). If a RE-ENGAGEMENT line is present, welcome them back to where you left off. " +
+          "End with a single light question that moves toward a conversation goal. If you need prior " +
+          "notes or an earlier conversation you don't see here, call recall_context first. Do not " +
+          "mention this note. One or two sentences.]"
+        : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
+          "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
+          "from the conversation so far and what you know of them — never a generic greeting, never " +
+          "repeating yourself. If you need older context or notes you don't see, call recall_context " +
+          "first. Do not mention this note. One or two sentences ending in a light question.]",
+    });
+  }
+
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
 
@@ -1155,7 +1237,7 @@ async function handleChatPost(req: Request): Promise<Response> {
 
   // Logging: resolve conversation + store the user turn, concurrently with
   // the model work; awaited again before the stream finishes.
-  const conversationPromise = logUserTurn(validated, customer, isNudge);
+  const conversationPromise = logUserTurn(validated, customer, isNudge || isOpener);
   const startedAt = Date.now();
 
   // ── Semantic cache — anonymous, single-turn questions only ────────────────
@@ -1164,7 +1246,7 @@ async function handleChatPost(req: Request): Promise<Response> {
   let queryEmbedding: number[] | null = null;
   const lastUser = [...validated.messages].reverse().find((m) => m.role === "user");
   const userTurns = validated.messages.filter((m) => m.role === "user").length;
-  const cacheEligible = !customer && !isNudge &&
+  const cacheEligible = !customer && !isNudge && !isOpener &&
     userTurns === 1 &&
     !!lastUser && lastUser.content.length <= 300 &&
     !CACHE_SKIP.test(lastUser.content);

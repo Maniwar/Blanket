@@ -205,7 +205,7 @@ post-purchase behavior. **Written by:** admin (Procedures tab). **Read by:**
 | `id` | bigint identity PK | Row id. |
 | `conversation_id` | uuid → conversations | Where it happened. |
 | `user_id`,`email` | — | Who. |
-| `action` | text | Tool name (`get_my_orders`, `update_colorway`, `cancel_order`, `remember_customer`, …). |
+| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, …). |
 | `serial` | int | Affected order, if any. |
 | `payload` | jsonb | The tool input. |
 | `result` | text | Outcome summary. |
@@ -331,7 +331,7 @@ the service role calls them.
 | --- | --- | --- |
 | `GET ?config=1` | `handleConfigGet` | Public bootstrap: enabled, greeting, starters, forms. |
 | `GET ?cachecheck=1` | inline | Self-diagnosis of the semantic cache round-trip. |
-| `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, tools, cache, logging, goal scheduling. |
+| `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, **proactive openers** (`context.opener` = `reengage`/`greet` — the bot speaks first on panel open), tools (incl. `recall_context` to pull prior notes/conversation), cache, logging, goal scheduling. |
 | `POST ?wrapup=1` | `handleWrapup` | **Records a conversation as closed/snoozed.** Body `{session_key, reason}` where reason is `quiet` (→ snoozed), `close` or `auto` (→ closed). Stamps `status`+`ended_at` **once** (already-ended threads are left alone), and for a signed-in patron adds one `customer_notes` line. |
 | `POST ?form=1` | `handleFormPost` | Structured form submission (verified JWT, routed through `submit_tool`). |
 
