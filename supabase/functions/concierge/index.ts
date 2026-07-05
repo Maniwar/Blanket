@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-admin-images";
+const BUILD_TAG = "2026-07-05-notes-dedup";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -577,7 +577,9 @@ const REGISTER_TOOLS: any[] = [
       "Write one short, durable, factual line to this patron's client book — a room they " +
       "mentioned, a favored cloth, a gift occasion, a hesitation, a thread to pick up later. " +
       "Only what a good clerk would note; never health, beliefs, finances, or anything " +
-      "sensitive. The book is shown to the patron's own conversations and to the admin.",
+      "sensitive. The book is shown to the patron's own conversations and to the admin. " +
+      "Do NOT record something the CLIENT BOOK above already holds — one line per durable " +
+      "fact; if it is already noted, say nothing rather than repeating it.",
     input_schema: {
       type: "object",
       properties: {
@@ -723,6 +725,18 @@ async function runRegisterTool(
   if (name === "remember_customer") {
     const note = typeof input.note === "string" ? input.note.trim().slice(0, 240) : "";
     if (note.length < 3) return "ERROR: a note needs a few words.";
+    // Don't let the book fill with repeats — if this line substantially
+    // duplicates one already on file, accept the intent without a second row.
+    const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+    const nf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    const prior = await pgSelect<{ note: string }>(
+      `customer_notes?select=note&${nf}&order=created_at.desc&limit=12`,
+    );
+    if (isRedundantNote(note, prior ?? [])) {
+      return "Already in the client book — nothing new to add.";
+    }
     const row = await pgInsert("customer_notes", {
       user_id: customer.id, email: customer.email, note,
     });
@@ -1813,6 +1827,36 @@ async function handleWrapup(req: Request): Promise<Response> {
 
 /** Fire-and-forget: summarize the wrapped conversation into one client-book
  *  line, if it had real substance. Skips thin/off-topic chats entirely. */
+/** Normalize a note to a bag of meaningful words for cheap similarity checks. */
+function noteTokens(s: string): Set<string> {
+  const stop = new Set([
+    "the", "and", "for", "with", "was", "her", "his", "their", "they", "she", "he",
+    "a", "an", "to", "of", "in", "on", "is", "it", "that", "this", "patron", "about",
+    "has", "have", "had", "but", "not", "one", "over", "into", "from", "who", "will",
+  ]);
+  return new Set(
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+      .filter((w) => w.length > 2 && !stop.has(w)),
+  );
+}
+
+/** True if `note` substantially overlaps a note already in the book. Guards
+ *  against near-verbatim repeats slipping past the model's own dedup. */
+function isRedundantNote(note: string, prior: { note: string }[]): boolean {
+  const a = noteTokens(note);
+  if (a.size === 0) return false;
+  for (const p of prior) {
+    const b = noteTokens(p.note);
+    if (b.size === 0) continue;
+    let shared = 0;
+    for (const w of a) if (b.has(w)) shared++;
+    // Jaccard over the smaller set: ≥0.7 of the new note's content words are
+    // already present in an existing line → treat it as a repeat.
+    if (shared / a.size >= 0.7) return true;
+  }
+  return false;
+}
+
 function scheduleClientBookNote(
   cid: string, customer: Customer, apiKey: string, model: string,
 ): void {
@@ -1836,19 +1880,35 @@ async function writeClientBookNote(
     const convo = msgs
       .map((m) => `${m.role === "user" ? "Patron" : "Concierge"}: ${m.content}`)
       .join("\n").slice(0, 6000);
+    // The book already knows some things about this patron. Feed the recent
+    // lines in so the writer records only what is NEW — otherwise every return
+    // visit re-notes the same durable facts and the book fills with repeats.
+    const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+    const nf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    const prior = await pgSelect<{ note: string }>(
+      `customer_notes?select=note&${nf}&order=created_at.desc&limit=12`,
+    );
+    const known = (prior ?? []).map((n) => `- ${n.note}`).join("\n");
     const sys =
       "You keep a luxury shop's private client book. From this conversation, write ONE line " +
-      "(max 200 chars) capturing only what is worth remembering about THIS patron for next time: " +
+      "(max 200 chars) capturing what is NEWLY worth remembering about THIS patron for next time: " +
       "rooms, recipients, colorways they favored or rejected, hesitations, decisions, commissions " +
       "placed or changed. Use concrete facts from the transcript. It is an internal note the patron " +
-      "never sees — third person, no greeting, no fluff. If the conversation held nothing durable " +
-      "(small talk, a test, an unresolved hello), respond with exactly SKIP and nothing else.";
+      "never sees — third person, no greeting, no fluff.\n" +
+      "CRITICAL — do not repeat the book. Below is what is already recorded about this patron. " +
+      "Only write a line if this conversation adds durable information NOT already captured there. " +
+      "Do not restate, rephrase, or lightly update a fact the book already holds. If the " +
+      "conversation held nothing new and durable (small talk, a test, an unresolved hello, or only " +
+      "facts already on file), respond with exactly SKIP and nothing else.\n" +
+      "ALREADY IN THE BOOK:\n" + (known || "(nothing yet)");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model, max_tokens: 120, system: sys,
-        messages: [{ role: "user", content: `CONVERSATION:\n${convo}\n\nWrite the client-book line, or SKIP.` }],
+        messages: [{ role: "user", content: `CONVERSATION:\n${convo}\n\nWrite the NEW client-book line, or SKIP.` }],
       }),
     });
     if (!res.ok) return;
@@ -1856,10 +1916,14 @@ async function writeClientBookNote(
     const msg = await res.json() as any;
     const blocks = Array.isArray(msg.content) ? msg.content : [];
     // deno-lint-ignore no-explicit-any
-    const note = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    let note = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
     if (!note || note.toUpperCase() === "SKIP" || note.length < 8) return;
+    note = note.slice(0, 220);
+    // Belt-and-braces: if the model still echoed an existing line near-verbatim,
+    // drop it. Cheap normalized comparison against what the book already holds.
+    if (isRedundantNote(note, prior ?? [])) return;
     await pgInsert("customer_notes", {
-      user_id: customer.id, email: customer.email, note: note.slice(0, 220),
+      user_id: customer.id, email: customer.email, note,
     });
   } catch { /* best-effort — a missing note never breaks a wrap-up */ }
 }
