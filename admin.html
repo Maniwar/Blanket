@@ -357,6 +357,10 @@
   .addr-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .addr-form{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
   .addr-in{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; flex:1 1 160px; min-width:120px; }
+  .site-badge{ font-family:'IBM Plex Mono', monospace; font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; padding:1px 5px; border-radius:2px; border:1px solid var(--wool-faint); color:var(--wool-dim); }
+  .site-badge.custom{ color:var(--brass-soft); border-color:var(--brass-soft); }
+  .site-reset{ font-size:10px; padding:1px 6px; margin-left:8px; }
+  .site-img-prev{ max-width:180px; max-height:110px; border:1px solid var(--wool-faint); border-radius:3px; display:block; margin:6px 0; object-fit:cover; }
 
   /* toasts */
   #toasts{ position:fixed; right:22px; bottom:22px; z-index:50; display:flex; flex-direction:column; gap:10px; }
@@ -1480,7 +1484,8 @@ const SITE_SLOTS = [
   { group: 'Hero', items: [
     { key: 'hero.eyebrow', label: 'Eyebrow', type: 'text' },
     { key: 'hero.subcopy', label: 'Sub-copy (the definition)', type: 'area' },
-    { key: 'hero.cue', label: 'Scroll cue', type: 'text' }
+    { key: 'hero.cue', label: 'Scroll cue', type: 'text' },
+    { key: 'hero.image', label: 'Hero image', type: 'image' }
   ] },
   { group: 'Why it exists', items: [
     { key: 'why.eyebrow', label: 'Eyebrow', type: 'text' },
@@ -1489,7 +1494,13 @@ const SITE_SLOTS = [
   { group: 'Wool — the five decisions', items: [
     { key: 'wool.eyebrow', label: 'Eyebrow', type: 'text' },
     { key: 'wool.headline', label: 'Headline', type: 'area' }
-  ].concat(siteItems('wool', 5, true)) },
+  ].concat(siteItems('wool', 5, true)).concat([
+    { key: 'wool.item1.image', label: '1 · Image', type: 'image' },
+    { key: 'wool.item2.image', label: '2 · Image', type: 'image' },
+    { key: 'wool.item3.image', label: '3 · Image', type: 'image' },
+    { key: 'wool.item4.image', label: '4 · Image', type: 'image' },
+    { key: 'wool.item5.image', label: '5 · Image', type: 'image' }
+  ]) },
   { group: 'Read the label', items: [
     { key: 'label.eyebrow', label: 'Eyebrow', type: 'text' },
     { key: 'label.headline', label: 'Headline', type: 'area' },
@@ -1510,13 +1521,16 @@ const SITE_SLOTS = [
     { key: 'ritual.line1', label: 'Line 1', type: 'text' },
     { key: 'ritual.line2', label: 'Line 2', type: 'text' },
     { key: 'ritual.line3', label: 'Line 3', type: 'text' },
-    { key: 'ritual.line4', label: 'Line 4', type: 'text' }
+    { key: 'ritual.line4', label: 'Line 4', type: 'text' },
+    { key: 'ritual.image', label: 'Ritual image', type: 'image' }
   ] },
   { group: 'Arrival', items: [
     { key: 'arrival.eyebrow', label: 'Eyebrow', type: 'text' },
     { key: 'arrival.headline', label: 'Headline', type: 'area' }
   ].concat(siteItems('arrival', 4, true)).concat([
-    { key: 'arrival.close', label: 'Closing line', type: 'text' }
+    { key: 'arrival.close', label: 'Closing line', type: 'text' },
+    { key: 'arrival.image_wide', label: 'Open-box image', type: 'image' },
+    { key: 'arrival.image_seal', label: 'Beeswax-seal image', type: 'image' }
   ]) },
   { group: 'Reserve & footer', items: [
     { key: 'reserve.cw1.name', label: 'Colorway 1 · name', type: 'text' },
@@ -1535,12 +1549,42 @@ const SITE_SLOTS = [
   ] }
 ];
 
+/* Pull the CURRENT copy the storefront shows, straight from the deployed
+   index.html (served next to admin.html), so each field is pre-filled with the
+   real text instead of a blank "use default". */
+async function loadSiteDefaults() {
+  try {
+    const res = await fetch(new URL('index.html', location.href).href, { cache: 'no-store' });
+    if (!res.ok) return {};
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    const map = {};
+    doc.querySelectorAll('[data-cms]').forEach(function (el2) {
+      const k = el2.getAttribute('data-cms');
+      map[k] = (el2.tagName === 'IMG')
+        ? (el2.getAttribute('src') || '')
+        : (el2.textContent || '').replace(/\s+/g, ' ').trim();
+    });
+    const meta = function (sel, attr) { const m = doc.querySelector(sel); return m ? (attr ? (m.getAttribute(attr) || '') : (m.textContent || '').trim()) : ''; };
+    map['seo.title'] = meta('title');
+    map['seo.description'] = meta('meta[name="description"]', 'content');
+    map['seo.og_title'] = meta('meta[property="og:title"]', 'content');
+    map['seo.og_description'] = meta('meta[property="og:description"]', 'content');
+    map['seo.og_image'] = meta('meta[property="og:image"]', 'content');
+    return map;
+  } catch (e) { return {}; }
+}
+
 async function loadSite() {
-  const res = await sb.from('site_content').select('slug,kind,value,alt');
+  const results = await Promise.all([
+    sb.from('site_content').select('slug,kind,value,alt'),
+    loadSiteDefaults()
+  ]);
+  const res = results[0];
   if (res.error) { fail('Load website content', res.error); return; }
   const map = {};
   (res.data || []).forEach(function (r) { map[r.slug] = r; });
   state.site = map;
+  state.siteDefaults = results[1] || {};
   renderSite();
 }
 
@@ -1555,15 +1599,61 @@ function renderSite() {
     card.appendChild(head);
     grp.items.forEach(function (it) {
       const field = el('div', 'field');
-      field.appendChild(el('span', 'micro', it.label + '  ·  ' + it.key));
-      const cur = state.site && state.site[it.key] ? (state.site[it.key].value || '') : '';
+      const over = state.site && state.site[it.key];
+      const def = (state.siteDefaults && typeof state.siteDefaults[it.key] === 'string') ? state.siteDefaults[it.key] : '';
+      const isCustom = !!(over && typeof over.value === 'string' && over.value);
+
+      const lab = el('span', 'micro');
+      lab.appendChild(document.createTextNode(it.label + '  ·  ' + it.key + '  '));
+      lab.appendChild(el('span', 'site-badge ' + (isCustom ? 'custom' : 'def'), isCustom ? 'custom' : 'default'));
+      const reset = el('button', 'btn ghost site-reset', '↺ default');
+      reset.type = 'button';
+      lab.appendChild(reset);
+      field.appendChild(lab);
+
+      if (it.type === 'image') {
+        /* Image slot: preview the current image + a field to paste a new URL or
+           data: URI. The default may be huge inline base64 — never dumped into a
+           text box, only compared/previewed. */
+        const effSrc = isCustom ? over.value : def;
+        const prev = document.createElement('img');
+        prev.className = 'site-img-prev';
+        if (effSrc) prev.setAttribute('src', effSrc);
+        field.appendChild(prev);
+        const src = document.createElement('input');
+        src.type = 'text';
+        /* prefill only when the override is a short-ish source (a URL) — not base64 */
+        src.value = (isCustom && over.value.length < 300) ? over.value : '';
+        src.setAttribute('placeholder', 'Paste an image URL or data:image URI to replace');
+        src.setAttribute('data-slot', it.key);
+        src.setAttribute('data-kind', 'image');
+        src.setAttribute('data-default', def.length < 300 ? def : '__PAGE_DEFAULT__');
+        src.addEventListener('input', function () { if (src.value) prev.setAttribute('src', src.value); });
+        field.appendChild(src);
+        const alt = document.createElement('input');
+        alt.type = 'text';
+        alt.value = (isCustom && typeof over.alt === 'string') ? over.alt : '';
+        alt.setAttribute('placeholder', 'Alt text (accessibility)');
+        alt.setAttribute('data-alt-for', it.key);
+        field.appendChild(alt);
+        reset.addEventListener('click', function () {
+          src.value = ''; alt.value = ''; src.setAttribute('data-reset', '1');
+          if (def) prev.setAttribute('src', def); else prev.removeAttribute('src');
+        });
+        src.addEventListener('input', function () { src.removeAttribute('data-reset'); });
+        card.appendChild(field);
+        return;
+      }
+
       let input;
       if (it.type === 'area') { input = el('textarea'); input.rows = 2; input.addEventListener('input', function () { autoGrow(input); }); }
       else { input = document.createElement('input'); input.type = 'text'; }
-      input.value = cur;
-      input.setAttribute('placeholder', 'Using page default — type to override');
+      input.value = isCustom ? over.value : def;          /* show the real copy */
+      input.setAttribute('placeholder', def || '(no default on the page)');
       input.setAttribute('data-slot', it.key);
       input.setAttribute('data-kind', it.kind || 'text');
+      input.setAttribute('data-default', def);
+      reset.addEventListener('click', function () { input.value = def; if (it.type === 'area') autoGrow(input); });
       field.appendChild(input);
       card.appendChild(field);
     });
@@ -1578,10 +1668,28 @@ async function saveSite() {
   inputs.forEach(function (inp) {
     const slug = inp.getAttribute('data-slot');
     const kind = inp.getAttribute('data-kind') || 'text';
+    const def = (inp.getAttribute('data-default') || '').trim();
     const val = (inp.value || '').trim();
     const had = state.site && state.site[slug];
-    if (val) { upserts.push({ slug: slug, kind: kind, value: val, updated_at: nowIso() }); }
-    else if (had) { deletes.push(slug); }          /* cleared → revert to page default */
+
+    if (kind === 'image') {
+      const altEl = document.querySelector('[data-alt-for="' + slug + '"]');
+      const altVal = altEl ? (altEl.value || '').trim() : '';
+      if (inp.getAttribute('data-reset') === '1') {
+        if (had) deletes.push(slug);                 /* revert to the page image */
+      } else if (val && val !== def) {
+        upserts.push({ slug: slug, kind: 'image', value: val, alt: altVal || null, updated_at: nowIso() });
+      } else if (had && altVal !== (had.alt || '')) {
+        upserts.push({ slug: slug, kind: 'image', value: had.value, alt: altVal || null, updated_at: nowIso() });
+      }
+      return;
+    }
+
+    if (val && val !== def) {
+      upserts.push({ slug: slug, kind: kind, value: val, updated_at: nowIso() });   /* real change → override */
+    } else if (had) {
+      deletes.push(slug);   /* empty or back to the page default → drop the override */
+    }
   });
   if (upserts.length) {
     const r = await sb.from('site_content').upsert(upserts, { onConflict: 'slug' });
@@ -1591,7 +1699,7 @@ async function saveSite() {
     const r2 = await sb.from('site_content').delete().in('slug', deletes);
     if (r2.error) { fail('Reset website content', r2.error); return; }
   }
-  $('site-status').textContent = 'Saved ' + upserts.length + ' · reset ' + deletes.length + ' · live within a minute';
+  $('site-status').textContent = 'Saved ' + upserts.length + ' override(s) · reset ' + deletes.length + ' · live within a minute';
   toast('Website content saved');
   loadSite();
 }
