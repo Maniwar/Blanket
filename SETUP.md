@@ -54,6 +54,25 @@ uses the public **publishable** key. Auth is passwordless email (magic link).
    Sender = your address. Save.
 4. Authentication → **Rate Limits** → raise emails/hour (now that it's your SMTP).
 
+### Magic-link email template (optional, branded)
+
+Supabase → Authentication → **Email Templates → Magic Link**. Subject:
+`Your Feierabend sign-in`. Paste this body (it matches the order emails' look;
+`{{ .ConfirmationURL }}` is Supabase's link token):
+
+```html
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c211d;margin:0;padding:32px 0;"><tr><td align="center">
+<table role="presentation" width="440" cellpadding="0" cellspacing="0" style="width:440px;max-width:92%;background:#232a25;border:1px solid #3a4139;border-radius:14px;overflow:hidden;">
+  <tr><td style="padding:30px 34px 4px;font-family:Georgia,serif;color:#f1ece2;font-size:26px;letter-spacing:.5px;">Feierabend</td></tr>
+  <tr><td style="padding:0 34px 20px;font-family:'Courier New',monospace;color:#c49b5b;font-size:10px;letter-spacing:3px;text-transform:uppercase;">Weberei Brandt · Est. 1897</td></tr>
+  <tr><td style="padding:0 34px;border-top:1px solid #3a4139;"></td></tr>
+  <tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">Your sign-in link</td></tr>
+  <tr><td style="padding:0 34px 14px;font-family:Helvetica,Arial,sans-serif;color:#c9c3b6;font-size:14px;line-height:1.6;">Guten Tag — tap below to open the register. The link is single-use and expires shortly.</td></tr>
+  <tr><td style="padding:4px 34px 22px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#c49b5b;color:#1c211d;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px;">Sign in</a></td></tr>
+  <tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">If you didn't request this, you can ignore it. A demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>
+</table></td></tr></table>
+```
+
 ### Transactional order email (Resend API, optional)
 
 Separate from auth email: order confirmations and shipment/return notices are

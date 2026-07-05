@@ -354,10 +354,11 @@ tool call, order change, feedback, and knowledge gap is logged for the admin.
   is reflected in chat.
 - **Transactional email notifications.** Order events now send branded email via
   Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`): a confirmation when an order
-  is placed, and a shipment note (with tracking) or a return note when an admin
-  advances the order. Auth email (magic link) continues to go through Supabase
-  SMTP. Sending is best-effort and fired via `EdgeRuntime.waitUntil` so it never
-  blocks the response.
+  is placed, a shipment note (with tracking) or a return note when an admin
+  advances the order, and a cancellation note when a customer cancels in chat
+  (sent from the concierge's `cancel_order` tool). Auth email (magic link)
+  continues to go through Supabase SMTP. Sending is best-effort and fired via
+  `EdgeRuntime.waitUntil` so it never blocks the response.
 - **Admin-settable edition run.** The total run size lives on
   `allocation_counter.run_size` (no longer the hardcoded 15,000) and is read/set
   by admins through the `get_edition`/`set_edition` RPCs, surfaced as an Edition
@@ -370,11 +371,6 @@ tool call, order change, feedback, and knowledge gap is logged for the admin.
 
 Called out so the docs never overclaim:
 
-- **Customer-initiated cancellation email.** A customer can cancel in chat (the
-  concierge `cancel_order` tool), and an admin-driven `returned` transition emails
-  the customer — but a *customer-initiated* cancel does not yet send its own
-  confirmation email. *Planned:* wire the same `orderEmail('cancelled', …)` path
-  into the concierge cancel tool.
 - **Demo auto-progression.** Fulfillment advances only when an admin acts; there's
   no timed auto-progression that would make the edition visibly move on its own.
 - **Scheduled idle-close job.** See §9 — leave-detection is best-effort; a

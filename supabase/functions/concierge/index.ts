@@ -40,9 +40,11 @@ declare const Supabase: any;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-persistent-engage+emailinvite";
+const BUILD_TAG = "2026-07-05-cancel-email";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -287,6 +289,66 @@ interface OrderRow {
   city: string | null; state: string | null; zip: string | null;
   placed_at: string | null; recipient_name?: string | null; is_gift?: boolean;
   cancelled_serial?: number | null; name?: string | null;
+}
+
+// ── Transactional email (cancellation) ───────────────────────────────────────
+// The concierge places nothing, but it *can* cancel — so it owns the
+// cancellation note. Placement/shipment emails live in the commission function.
+
+const EMAIL_COLORWAY: Record<string, string> = {
+  ungefaerbt: "Ungefärbt", loden: "Loden", graphit: "Graphit",
+};
+
+/** Fire-and-forget async work that must not block or fail the response. */
+function bg(p: Promise<unknown>): void {
+  try {
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+    else (p as Promise<unknown>).catch(() => {});
+  } catch { (p as Promise<unknown>).catch(() => {}); }
+}
+
+/** Best-effort email via Resend's API. Never throws; skips if unconfigured. */
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+  if (!RESEND_API_KEY || !to) return;
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
+    });
+  } catch { /* email never breaks the cancel path */ }
+}
+
+function emailShell(heading: string, lines: string[]): string {
+  const body = lines.filter(Boolean).map((l) =>
+    `<tr><td style="padding:0 34px 14px;font-family:Helvetica,Arial,sans-serif;color:#c9c3b6;font-size:14px;line-height:1.6;">${l}</td></tr>`
+  ).join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c211d;margin:0;padding:32px 0;"><tr><td align="center">` +
+    `<table role="presentation" width="440" cellpadding="0" cellspacing="0" style="width:440px;max-width:92%;background:#232a25;border:1px solid #3a4139;border-radius:14px;overflow:hidden;">` +
+    `<tr><td style="padding:30px 34px 4px;font-family:Georgia,serif;color:#f1ece2;font-size:26px;letter-spacing:.5px;">Feierabend</td></tr>` +
+    `<tr><td style="padding:0 34px 20px;font-family:'Courier New',monospace;color:#c49b5b;font-size:10px;letter-spacing:3px;text-transform:uppercase;">Weberei Brandt · Est. 1897</td></tr>` +
+    `<tr><td style="padding:0 34px;border-top:1px solid #3a4139;"></td></tr>` +
+    `<tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">${heading}</td></tr>` +
+    body +
+    `<tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">An automated note from the mill's register. This is a demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>` +
+    `</table></td></tr></table>`;
+}
+
+/** The cancellation note, mirroring the commission function's 'cancelled' email. */
+function cancelEmail(serial: number, name?: string | null, colorway?: string | null): {
+  subject: string; html: string;
+} {
+  const no = "Nº " + Number(serial).toLocaleString("en-US");
+  const first = (name ?? "").trim().split(/\s+/)[0] || "";
+  const greet = first ? `${first},` : "Guten Tag,";
+  const cloth = colorway && EMAIL_COLORWAY[colorway] ? ` in ${EMAIL_COLORWAY[colorway]}` : "";
+  return {
+    subject: `${no} — cancelled`,
+    html: emailShell("Struck from the register", [
+      `${greet} as you asked, <strong>${no}</strong>${cloth} has been cancelled, and the number returns to the edition.`,
+      "Nothing was charged — this is a demo. If it was in error, just say the word and we'll set it right.",
+    ]),
+  };
 }
 
 /** Verified user, or null (absent / anon key / invalid token — never errors). */
@@ -668,6 +730,8 @@ async function runRegisterTool(
     });
     if (result === "ok") {
       await logAction(cid, customer, "cancel_order", serial, null, "order cancelled; serial released");
+      const mail = cancelEmail(serial, order.name, order.colorway);
+      bg(sendEmail(customer.email ?? "", mail.subject, mail.html));
       return `Done. Nº ${serial} is struck from the register and the number returns to the year's edition.`;
     }
     if (result === null) {
@@ -678,6 +742,8 @@ async function runRegisterTool(
       );
       if (!updated || updated.length === 0) return "ERROR: the register did not accept the cancellation.";
       await logAction(cid, customer, "cancel_order", serial, null, "order cancelled");
+      const mail = cancelEmail(serial, order.name, order.colorway);
+      bg(sendEmail(customer.email ?? "", mail.subject, mail.html));
       return `Done. Nº ${serial} is cancelled.`;
     }
     return `ERROR: the register declined — ${result}.`;
