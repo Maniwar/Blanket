@@ -26,9 +26,15 @@ jobs:
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
+      # Best-effort only. This project manages schema through the idempotent
+      # supabase/setup.sql (run in the SQL editor), not incremental db push, so a
+      # push mismatch must NEVER block the function deploy below.
       - name: Apply database migrations
         if: env.SUPABASE_DB_PASSWORD != ''
-        run: supabase db push -p "$SUPABASE_DB_PASSWORD"
+        continue-on-error: true
+        run: |
+          supabase db push -p "$SUPABASE_DB_PASSWORD" \
+            || echo "::warning::db push skipped — schema is managed via supabase/setup.sql; run it in the SQL editor for schema changes."
 
       - name: Set allowed origins
         run: supabase secrets set ALLOWED_ORIGINS="https://maniwar.github.io"
