@@ -43,77 +43,119 @@ The design goals, in priority order:
 
 ## 2. User stories
 
-### The shopper
+Grouped by role. Each notes, in *italics*, the feature that serves it.
 
-- **As a first-time visitor**, I want to understand the object and get a
-  question answered without signing up, so that I can decide if it's for me.
-  *(Anonymous chat; semantic cache serves common questions instantly.)*
-- **As someone just browsing**, I want the concierge to notice I'm here and open
-  a relevant thread — but to ease off if I'm clearly not engaging — so that it
-  feels attentive, not spammy. *(Proactive openers + presence-aware nudging.)*
-- **As a gift-giver**, I want to buy for someone else, with the recipient's name
-  on the card but the order in my name, so that the gift is theirs and the record
-  is mine. *(Purchaser vs. recipient split; separate billing/shipping.)*
-- **As a returning patron**, I want to be recognized the moment I arrive —
-  greeted by name, my orders and standing known — so that I don't have to repeat
-  myself. *(Signed-in customer block: name, standing, orders, client book,
-  re-engagement recency.)*
-- **As a patron mid-conversation**, I want to sign in and keep the same thread,
-  so that signing in feels like continuity, not a reset. *(Anonymous → signed-in
-  conversation adoption.)*
+### 2.1 Guest — anonymous visitor (no account)
+
+- **As a first-time visitor**, I want to understand the object and get a question
+  answered without signing up, so that I can decide if it's for me. *(Anonymous
+  chat; semantic cache serves common questions instantly.)*
+- **As someone just browsing**, I want the concierge to notice I'm here and open a
+  relevant thread — but to ease off if I'm clearly not engaging — so that it feels
+  attentive, not spammy. *(Proactive openers + presence-aware nudging.)*
+- **As an undecided guest**, I want to start a commission and see my number held
+  while I decide, without an account, so that scarcity feels real but low-friction.
+  *(`?hold=1` reserves a number for the visit.)*
+- **As a guest who's warming up**, I want to be invited — gently, occasionally —
+  to leave my email so I'm remembered next time, so that signing in feels like a
+  courtesy, not a gate. *(Periodic email invite in later check-ins.)*
+- **As a guest ready to buy**, I want to commission with just an email
+  verification, so that I don't have to create a password. *(Magic-link OTP guest
+  checkout.)*
+
+### 2.2 Customer — signed-in / returning patron
+
+- **As a returning patron**, I want to be recognized the moment I arrive — greeted
+  by name, my orders and standing known — so that I don't have to repeat myself.
+  *(Customer block: name, standing, orders, client book, re-engagement recency.)*
+- **As a patron mid-conversation**, I want to sign in and keep the same thread, so
+  that signing in is continuity, not a reset. *(Anonymous → signed-in adoption.)*
 - **As a customer with an order**, I want to check status, change the shipping
   address or colorway, or cancel — in chat, myself — so that I'm not emailing
-  support. *(Register tools, gated to still-mutable orders.)*
+  support. *(Register tools, gated to still-mutable orders, fully audited.)*
+- **As a valued patron**, I want to be treated according to my standing — more
+  deference the more I've bought — so that loyalty is felt, not just logged.
+  *(LTV tiers: Eintrag → Wiederkehr → Hausfreund → Stifter.)*
+- **As a patron the house knows**, I want it to remember what I told it last time
+  (the room, the person, the cloth I favored), so that each visit builds on the
+  last. *(Client book + `recall_context`.)*
 - **As someone who's done for now**, I want to say "that's all" or "don't message
   me until I write back" and have it respected, so that I'm in control.
-  *(Customer-signalled close/quiet + auto wind-down.)*
+  *(Customer-signalled close / quiet mode + auto wind-down.)*
+- **As a customer who just purchased**, I want a warm acknowledgement now and a
+  welcome-back next time, so that the relationship continues past the sale.
+  *(Post-purchase check-in + re-engagement.)*
 
-### The merchant / admin
+### 2.3 Gift-giver (a customer buying for someone else)
+
+- **As a gift-giver**, I want the recipient's name on the register card but the
+  order in my name, so that the gift is theirs and the record is mine.
+  *(Purchaser vs. recipient split.)*
+- **As a gift-giver**, I want different billing and shipping addresses, so that it
+  ships to them and bills to me. *(Separate billing/shipping.)*
+- **As a gift-giver**, I want the concierge to handle the gift framing naturally,
+  so that it feels considered. *(Gift-aware prompt + card copy.)*
+
+### 2.4 Merchant — content & operations admin
 
 - **As the merchant**, I want to tune the concierge's voice, knowledge, and
   selling procedures without a deploy, so that I can iterate on tone and policy
-  live. *(Config, KB, SOPs — all DB-backed, 60s cache.)*
+  live. *(Config, KB, SOPs — DB-backed, 60s cache.)*
 - **As the merchant**, I want to define the goals of every conversation and see,
   per chat, which were met — with the evidence — so that I can measure quality.
-  *(Admin-editable goals; LLM-judge scoring with justifications.)*
+  *(Admin-editable goals; LLM-judge scoring with cited justifications.)*
+- **As the merchant**, I want in-chat forms for structured order changes, so that
+  the concierge can collect exactly what a change needs. *(Admin-defined forms.)*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
-  and what the concierge has learned about them, so that I can serve them well.
+  and what the concierge learned about them, so that I can serve them well.
   *(Customers ledger + client book.)*
 - **As the merchant**, I want to know the concierge is actually selling, so that I
-  can justify it, so I need its assisted revenue attributed. *(Order ↔ chat
+  can justify it — so I need its assisted revenue attributed. *(Order ↔ chat
   attribution.)*
-- **As the owner**, I want to add and remove other admins from the panel, but I
-  want to be the one admin who can never be removed. *(Roster management with a
-  protected super admin.)*
+- **As the merchant**, I want to browse conversations and feedback and see where
+  the concierge lacked an answer, so that I can improve the knowledge base.
+  *(Conversations + feedback + knowledge-gap flags.)*
+
+### 2.5 Super admin — owner / access control
+
+- **As the owner**, I want to add and remove other admins from the panel, so that
+  I can delegate without touching the database. *(Roster management UI.)*
+- **As the owner**, I want to be the one admin who can never be removed or
+  demoted, so that I never lose control. *(Protected super admin.)*
+- **As the owner**, I want these rules enforced even against direct API calls, not
+  just hidden in the UI, so that access control is real. *(Command-split RLS on
+  `concierge_admins` via `is_super_admin()`.)*
+
+### 2.6 Platform / database administrator — ops
+
+- **As the operator**, I want to stand the whole database up from one idempotent
+  file, safe to re-run, so that setup isn't a fragile sequence. *(`setup.sql`.)*
+- **As the operator**, I want schema changes as ordered migrations mirrored in the
+  setup file, so that fresh installs and `db push` stay in lockstep.
+  *(`migrations/` + `setup.sql`.)*
+- **As the operator**, I want to deploy the functions and know exactly which build
+  is live, so that I'm never debugging stale code. *(`BUILD_TAG` + `selftest`.)*
+- **As the operator**, I want to verify the live system end-to-end without
+  guessing — is sign-in recognized, is the schema applied, is attribution
+  working — so that I can trust it. *(`?selftest=1`, `?cachecheck=1`.)*
+- **As the operator**, I want a complete audit trail of every order change and
+  tool action, so that nothing mutates the register invisibly.
+  *(`order_events` trigger + `concierge_actions`.)*
+- **As the operator**, I want the database itself to be the security boundary, so
+  that a front-end bug can't leak or corrupt data. *(RLS + `security definer`
+  functions; browser holds only the publishable key.)*
+- **As the operator**, I want abuse bounded and personal data minimized, so that
+  the system is safe and there's little to safeguard. *(Per-IP rate limits, CORS,
+  data-minimized orders — no payment data ever.)*
+- **As the operator**, I want to diagnose auth/email failures from the logs and
+  swap the email provider without code changes, so that infra is decoupled from
+  the app. *(Supabase Auth logs + custom SMTP config.)*
 
 ---
 
 ## 3. Architecture
 
-```
-        Browser (GitHub Pages, static)
-   ┌───────────────────────────────────────────┐
-   │  index.html  ·  assets/concierge.js        │  publishable anon key only
-   │  admin.html  ·  assets/checkout.js         │
-   └───────┬───────────────────────┬────────────┘
-           │ SSE / fetch           │ Supabase Auth (magic link)
-           ▼                       ▼
-   ┌─────────────────┐     ┌──────────────────┐
-   │ concierge fn    │     │ commission fn    │   Deno edge functions
-   │ (Deno)          │     │ (Deno)           │   service-role key
-   └───────┬─────────┘     └────────┬─────────┘
-           │  PostgREST + RPC (service role, bypasses RLS)
-           ▼                        ▼
-   ┌───────────────────────────────────────────┐
-   │  Supabase Postgres  ·  RLS  ·  pgvector    │
-   │  orders · conversations · cache · goals …  │
-   └───────────────────────────────────────────┘
-           ▲
-           │ Anthropic Messages API (streaming, tool use) — key server-side only
-   ┌───────────────┐
-   │  Anthropic     │
-   └───────────────┘
-```
+![Architecture diagram](docs/architecture.svg)
 
 **Three tiers, no server to operate:**
 

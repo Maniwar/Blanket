@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 700" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="10" markerHeight="10" refX="7.5" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9a927f"/>
+    </marker>
+    <style>
+      .card { fill:#ffffff; stroke:#d8d2c6; stroke-width:1.5; }
+      .fn   { fill:#f4f7f4; stroke:#b9c7bb; stroke-width:1.5; }
+      .db   { fill:#f6f1e7; stroke:#d9c9a6; stroke-width:1.5; }
+      .ext  { fill:#f3eef7; stroke:#cabbd8; stroke-width:1.5; }
+      .h    { fill:#2a2622; font-weight:700; }
+      .t    { fill:#4a4438; }
+      .m    { fill:#6b6459; }
+      .mono { font-family:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace; }
+      .flow { stroke:#9a927f; stroke-width:1.6; fill:none; }
+      .fl   { fill:#6b6459; }
+      .br   { fill:#b98a3e; }
+    </style>
+  </defs>
+
+  <rect width="960" height="700" fill="#faf8f4"/>
+  <text x="40" y="44" font-size="23" class="h">Feierabend — Architecture</text>
+  <text x="40" y="66" font-size="12.5" class="m">Static site · two Deno edge functions · managed Postgres — no server to operate.</text>
+
+  <!-- BROWSER -->
+  <rect x="60" y="96" width="840" height="98" rx="12" class="card"/>
+  <text x="82" y="126" font-size="13.5" class="h">BROWSER · GitHub Pages (static)</text>
+  <text x="82" y="150" font-size="12" class="mono t">index.html · admin.html · assets/concierge.js · assets/checkout.js</text>
+  <text x="82" y="172" font-size="11" class="m">ES5 · textContent-only rendering · scroll-scrubbed motion</text>
+  <rect x="686" y="132" width="192" height="28" rx="14" fill="#f2ede3" stroke="#e4dccb"/>
+  <text x="782" y="150" font-size="10.5" text-anchor="middle" class="br mono">publishable key only</text>
+
+  <!-- EDGE FUNCTIONS -->
+  <rect x="110" y="286" width="290" height="104" rx="12" class="fn"/>
+  <text x="130" y="314" font-size="13.5" class="h">concierge function</text>
+  <text x="130" y="334" font-size="11" class="m mono">Deno · streaming chat + tool loop</text>
+  <text x="130" y="352" font-size="11" class="m">semantic cache · logging · goals</text>
+  <text x="130" y="370" font-size="11" class="m">lifecycle · selftest / cachecheck</text>
+
+  <rect x="440" y="286" width="250" height="104" rx="12" class="fn"/>
+  <text x="460" y="314" font-size="13.5" class="h">commission function</text>
+  <text x="460" y="334" font-size="11" class="m mono">Deno · demo checkout</text>
+  <text x="460" y="352" font-size="11" class="m">serial holds · order placement</text>
+  <text x="460" y="370" font-size="11" class="m">no payment · nothing ships</text>
+
+  <!-- ANTHROPIC -->
+  <rect x="732" y="286" width="168" height="104" rx="12" class="ext"/>
+  <text x="752" y="314" font-size="13.5" class="h">Anthropic</text>
+  <text x="752" y="334" font-size="11" class="m">Claude</text>
+  <text x="752" y="356" font-size="11" class="m">streaming +</text>
+  <text x="752" y="372" font-size="11" class="m">tool use</text>
+
+  <!-- POSTGRES -->
+  <rect x="110" y="486" width="580" height="122" rx="12" class="db"/>
+  <text x="132" y="514" font-size="13.5" class="h">Supabase Postgres · Row-Level Security · pgvector</text>
+  <text x="132" y="538" font-size="11.5" class="mono t">orders · serial_holds · allocation_counter · customers</text>
+  <text x="132" y="558" font-size="11.5" class="mono t">conversations · messages · customer_notes · goals</text>
+  <text x="132" y="578" font-size="11.5" class="mono t">config · kb · sops · forms · cache · actions · order_events</text>
+  <text x="132" y="598" font-size="10.5" class="m">RLS gates the browser &amp; admin; the functions (service role) are the trusted writers.</text>
+
+  <!-- FLOWS -->
+  <!-- browser -> concierge -->
+  <path class="flow" d="M255,194 L255,286" marker-end="url(#arw)"/>
+  <path class="flow" d="M275,286 L275,194" marker-end="url(#arw)"/>
+  <text x="300" y="232" font-size="10.5" class="fl">SSE stream</text>
+  <text x="300" y="248" font-size="10.5" class="fl">/ fetch</text>
+
+  <!-- browser -> commission -->
+  <path class="flow" d="M565,194 L565,286" marker-end="url(#arw)"/>
+  <text x="580" y="232" font-size="10.5" class="fl">checkout API +</text>
+  <text x="580" y="248" font-size="10.5" class="fl">magic-link auth</text>
+
+  <!-- concierge <-> anthropic (routed up and over the commission box) -->
+  <path class="flow" d="M370,286 L370,250 L820,250 L820,286" marker-start="url(#arw)" marker-end="url(#arw)"/>
+  <text x="450" y="244" font-size="10.5" text-anchor="middle" class="fl">prompt + tools · streaming</text>
+
+  <!-- concierge -> postgres -->
+  <path class="flow" d="M250,390 L280,486" marker-end="url(#arw)"/>
+  <!-- commission -> postgres -->
+  <path class="flow" d="M560,390 L520,486" marker-end="url(#arw)"/>
+  <text x="330" y="452" font-size="10.5" class="fl">PostgREST + RPC (service role, bypasses RLS)</text>
+
+  <text x="40" y="666" font-size="10.5" class="m">Secrets (Anthropic, service-role, SMTP) live only in Supabase/GitHub. The browser never sees them.</text>
+</svg>
