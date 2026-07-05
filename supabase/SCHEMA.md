@@ -51,11 +51,25 @@ chat returns 503 and `?config=1` reports resting), `model` (Anthropic model id,
 overrides the `MODEL` env var), `max_tokens` (per-reply cap, default 1024),
 `greeting` (opening line; may embed `{{reply:…}}` pills), `voice_notes`
 (appended to the system prompt as tuning notes), `starters` (per-section
-suggested questions), `outreach`/`nudge*` (timings the client reads via
-`?config=1`).
-**Written by:** admin portal (Config tab). **Read by:** `handleConfigGet`
-(`GET ?config=1`), `handleChatPost` (every reply). **Seeded by:** `setup.sql`
-(`enabled`, `model`, `max_tokens`, `greeting`, `voice_notes`).
+suggested questions), `images` (admin-added `{{img:token}}` sources, merged
+client-side and injected into the prompt), `goal_sample_rate` (0–1 — fraction of
+turns the async goal grader runs).
+
+*Selling engine keys:* `assertiveness` (1–5, default 3 = warm consultant — how
+hard to sell; scales the prompt guidance and the client nudge/outreach budget),
+`hooks` (array of true "selling angles" the bot weaves in to build desire),
+`objections` (array of `{trigger, response}` for the Reassure move).
+
+*Engagement pacing* lives under the `outreach` key (object): `nudge1Ms`/
+`nudge2Ms` (in-chat follow-up delays), `dwellMs`/`dwell2Ms` (closed-panel
+reach-out delays), `draftMs` (half-written-order nudge), `idleReach` (bool),
+`nudgeCap` (max in-chat follow-ups), `maxAmbient` (max closed-panel reach-outs).
+The client reads these via `?config=1`.
+
+**Written by:** admin portal (Tuning tab — Config, Engagement pace, Selling
+style, Bot images). **Read by:** `handleConfigGet` (`GET ?config=1`),
+`handleChatPost` (every reply). **Seeded by:** `setup.sql` (`enabled`, `model`,
+`max_tokens`, `greeting`, `voice_notes`, `assertiveness`, `hooks`, `objections`).
 
 ### `concierge_kb` — editable product knowledge
 | Column | Type | Purpose |
@@ -101,9 +115,10 @@ SQL, after which the roster is self-serve.
 | `ended_at` | timestamptz | When the thread was wrapped (snoozed or closed). Presence of this = the thread is done; the next visit is a **re-engagement**. |
 | `goal_status` | jsonb | Per-goal scoring: `{ "<slug>": {"status":"met|partial|unmet","note":"…"} }`. |
 | `goal_status_at` | timestamptz | When goals were last judged. |
+| `sales_stage` | text | Funnel stage from the async grader: `browsing`/`engaged`/`evaluating`/`objection`/`ready`/`won`/`lost`. Written in a **separate best-effort PATCH** from `goal_status`, so a missing column can't break grading. Shown as a chip in the admin Conversations tab. |
 
 **Written by:** `logUserTurn` (create + identity back-fill), `handleWrapup`
-(status/ended_at), `evaluateGoals` (goal_status). **Read by:** `logUserTurn`
+(status/ended_at), `evaluateGoals` (goal_status + sales_stage). **Read by:** `logUserTurn`
 (thread reuse), `customerBlock` (re-engagement recency — most recent
 `ended_at` for the user), admin (Conversations tab, goal scorecard).
 
@@ -389,7 +404,7 @@ edition RPCs are the exception — granted to `authenticated` (they self-gate on
 ### concierge (`functions/concierge/index.ts`)
 | Method / query | Handler | Purpose |
 | --- | --- | --- |
-| `GET ?config=1` | `handleConfigGet` | Public bootstrap: enabled, greeting, starters, forms. |
+| `GET ?config=1` | `handleConfigGet` | Public bootstrap: enabled, greeting, starters, forms, images, outreach timings, assertiveness. |
 | `GET ?cachecheck=1` | inline | Self-diagnosis of the semantic cache round-trip. |
 | `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, **proactive openers** (`context.opener` = `reengage`/`greet` — the bot speaks first on panel open), tools (incl. `recall_context` to pull prior notes/conversation), cache, logging, goal scheduling. |
 | `POST ?wrapup=1` | `handleWrapup` | **Records a conversation as closed/snoozed.** Body `{session_key, reason}` where reason is `quiet` (→ snoozed), `close` or `auto` (→ closed). Stamps `status`+`ended_at` **once** (already-ended threads are left alone), and for a signed-in patron adds one `customer_notes` line. |

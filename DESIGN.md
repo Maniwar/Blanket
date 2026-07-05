@@ -186,10 +186,22 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
   file, safe to re-run, so that setup is a single paste and never a fragile
   sequence. *(`setup.sql` as the single source of truth; each content block seeds
   only if empty, so re-runs never clobber Studio edits.)*
-- **As the operator**, I want the ordered `migrations/` folder kept as history for
-  `supabase db push`/CI, while `setup.sql` stays the file I actually maintain, so
-  that there's one place to change and no drift. *(`setup.sql` canonical;
-  `migrations/` optional.)*
+- **As the operator**, I want `setup.sql` to be the file I actually maintain, with
+  the ordered `migrations/` folder kept only as history, so that there's one place
+  to change and no drift. *(`setup.sql` canonical, applied in the SQL editor;
+  `migrations/` is a changelog. The deploy workflow's `db push` step is
+  **best-effort / non-blocking** — this repo's schema is not managed incrementally,
+  so a push mismatch never halts the function deploy.)*
+- **As the operator**, I want to audit at scale — filter logs, conversations,
+  customers, and the waitlist by date range and keyword, jump straight to an order
+  by its **Nº**, and see each conversation's **sales stage** — so that nothing is
+  buried once volume grows. *(Server-side trigram filters; order-number lookup;
+  stage chips; goal-outcome filter.)*
+- **As the operator**, I want to change what the concierge says and shows without a
+  deploy — copy, tuning notes, starters, **selling angles**, **objection playbook**,
+  **assertiveness**, engagement pacing, in-chat **forms**, and the **images** the
+  bot shares — all from the Studio. *(All `concierge_config`/table-backed, live
+  within a minute.)*
 - **As the operator**, I want to deploy the functions and know exactly which build
   is live, so that I'm never debugging stale code. *(`BUILD_TAG` + `selftest`.)*
 - **As the operator**, I want to verify the live system end-to-end without
