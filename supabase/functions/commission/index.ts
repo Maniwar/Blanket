@@ -344,10 +344,21 @@ async function commissionOrder(
         headers: RPC_HEADERS,
         body: JSON.stringify(args),
       });
-      if (!res.ok) continue; // signature mismatch pre-migration → try legacy
-      const serial = await res.json() as unknown;
-      return typeof serial === "number" && Number.isInteger(serial) ? serial : null;
-    } catch { /* fall through to the next signature */ }
+      if (res.ok) {
+        const serial = await res.json() as unknown;
+        return typeof serial === "number" && Number.isInteger(serial) ? serial : null;
+      }
+      // 404 = no function matches THESE args (a pre-migration signature) → try the
+      // next signature. Anything else is a REAL error from the RPC itself (a
+      // constraint, a raised exception); don't mask it behind legacy attempts —
+      // log it so the edge logs show the true cause, and stop.
+      if (res.status === 404) continue;
+      const body = await res.text().catch(() => "");
+      console.error("commission_order failed:", res.status, body.slice(0, 500));
+      return null;
+    } catch (e) {
+      console.error("commission_order fetch error:", e instanceof Error ? e.message : String(e));
+    }
   }
   return null;
 }
