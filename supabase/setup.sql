@@ -147,6 +147,16 @@ create table if not exists public.concierge_forms (
   fields jsonb not null, enabled boolean not null default true,
   updated_at timestamptz not null default now());
 
+-- Storefront CMS: one row per editable slot on index.html (copy / image / meta).
+-- HTML holds the defaults; a slug here overrides it. Read via ?site=1 (service
+-- role) and the deploy-time <head> bake; written by admins.
+create table if not exists public.site_content (
+  slug text primary key,
+  kind text not null default 'text',   -- 'text' | 'image' | 'meta'
+  value text,
+  alt text,
+  updated_at timestamptz not null default now());
+
 create table if not exists public.customer_notes (
   id bigint generated always as identity primary key,
   user_id uuid, email text, note text not null,
@@ -189,7 +199,7 @@ begin
     'concierge_config','concierge_kb','concierge_admins','concierge_conversations',
     'concierge_messages','concierge_feedback','customers','orders','allocation_counter',
     'serial_holds','concierge_sops','concierge_actions','concierge_cache','concierge_flags',
-    'concierge_forms','customer_notes','order_events','concierge_goals'
+    'concierge_forms','customer_notes','order_events','concierge_goals','site_content'
   ] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
@@ -202,7 +212,7 @@ begin
   foreach t in array array[
     'concierge_config','concierge_kb','concierge_conversations','concierge_messages',
     'concierge_sops','concierge_cache','concierge_forms','customer_notes',
-    'concierge_goals','concierge_flags'
+    'concierge_goals','concierge_flags','site_content'
   ] loop
     execute format('drop policy if exists "admin all" on public.%I', t);
     execute format($f$create policy "admin all" on public.%I for all to authenticated
@@ -692,11 +702,11 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 4. If an order has no tracking yet, say tracking begins the day it ships and will appear right here.
 5. If the shopper is not signed in, explain that the register takes signed entries and offer {{action:signin}}.$sop$, 1),
 
-('address-change', 'Shipping address changes', $sop$An owner may change the shipping address on an order that has not shipped (status placed, weaving, or finishing):
+('address-change', 'Shipping address changes', $sop$An owner may change the shipping address on an order that has not shipped (status placed, weaving, or finishing). You do NOT type the address yourself — you hand them a form so they enter each field:
 1. Call get_my_orders to confirm the order exists and is still on the loom.
-2. Confirm the full new address back to the owner — street, unit if any, city, state, ZIP — and ask them to confirm before acting.
-3. Only after the owner confirms, call update_shipping_address with the serial and the complete new address.
-4. Read the recorded address back from the tool result so the owner sees exactly what the register now holds.
+2. If more than one order could be meant, list them (Nº, cloth, destination) and offer one {{reply:…}} pill per order so they pick the exact one.
+3. Emit the address-change form for that order on its own line: {{form:address-change:<serial>}} (use the real serial). The owner types the street, unit, city, state, and ZIP into labeled fields themselves.
+4. NEVER compose, dictate, or "correct" the street/city/state/ZIP in chat, and never call a tool to set an address — mistyping one field (a city into the street line) is exactly what the form prevents. The register records the submission and the chat shows the confirmation; read that back so the owner sees what was saved.
 5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer hello@feierabend.example for a carrier redirect.$sop$, 2),
 
 ('cancellation', 'Cancellations', $sop$An owner may cancel an order only while it is still 'placed' (the loom has not started):
@@ -720,11 +730,11 @@ update public.concierge_sops set content_md = $sop$An owner may cancel an order 
   updated_at = now()
   where slug = 'cancellation';
 
-update public.concierge_sops set content_md = $sop$An owner may change the shipping address on an order that has not shipped (status placed, weaving, or finishing):
+update public.concierge_sops set content_md = $sop$An owner may change the shipping address on an order that has not shipped (status placed, weaving, or finishing). You do NOT type the address yourself — you hand them a form so they enter each field:
 1. Call get_my_orders to confirm the order exists and is still on the loom.
-2. If several orders are eligible, list them (Nº, cloth, status) and offer one pill per order: {{reply:Change the address on Nº 14,228}}.
-3. Confirm the full new address back to the owner — street, unit if any, city, state, ZIP — and offer {{reply:Yes, record that address}} and {{reply:Hold on}} before acting.
-4. Only after the owner confirms, call update_shipping_address with the serial and the complete new address, and read the recorded address back from the tool result.
+2. If several orders are eligible, list them (Nº, cloth, destination) and offer one pill per order: {{reply:Change the address on Nº 14,228}}.
+3. Once the exact order is chosen, emit the address-change form on its own line: {{form:address-change:<serial>}} (use the real serial). The owner types the street, unit, city, state, and ZIP into labeled fields themselves.
+4. NEVER compose, dictate, or "correct" the street/city/state/ZIP in chat, and never call a tool to set an address — mistyping one field (a city into the street line) is exactly what the form prevents. The register records the submission and the chat shows the confirmation; read that back so the owner sees what was saved.
 5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer hello@feierabend.example for a carrier redirect.$sop$,
   updated_at = now()
   where slug = 'address-change';

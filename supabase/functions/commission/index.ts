@@ -697,6 +697,42 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, { ok: true, serial, status, tracking: patch.tracking ?? before.tracking });
   }
 
+  // ── POST ?editaddr=1 — admin corrects an order's shipping address ──────────
+  // The reliable, labeled correction path: each field is entered separately in
+  // the admin, validated here, and written only for unshipped orders.
+  if (new URL(req.url).searchParams.get("editaddr")) {
+    const admin = await verifyUser(req);
+    if (!admin || !(await isAdmin(admin.email))) {
+      return jsonError(req, 403, "Administrators only.");
+    }
+    let fb: Record<string, unknown>;
+    try { fb = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const serial = typeof fb.serial === "number" ? Math.floor(fb.serial) : NaN;
+    if (!Number.isFinite(serial)) return jsonError(req, 400, "serial (number) is required.");
+    const address = String(fb.address ?? "").trim();
+    const address2 = String(fb.address2 ?? "").trim();
+    const city = String(fb.city ?? "").trim();
+    const state = String(fb.state ?? "").trim().toUpperCase();
+    const zip = String(fb.zip ?? "").trim();
+    if (address.length < 4 || address.length > 120) return jsonError(req, 400, "Street address must be 4–120 characters.");
+    if (address2.length > 120) return jsonError(req, 400, "Address line 2 is too long.");
+    if (city.length < 1 || city.length > 80) return jsonError(req, 400, "City must be 1–80 characters.");
+    if (!/^[A-Z]{2}$/.test(state)) return jsonError(req, 400, "State must be a two-letter US code.");
+    if (!/^\d{5}(-\d{4})?$/.test(zip)) return jsonError(req, 400, "ZIP must be 12345 or 12345-6789.");
+    const before = await fetchOrder(serial);
+    if (!before) return jsonError(req, 404, `No order Nº ${serial} on the register.`);
+    if (!["placed", "weaving", "finishing"].includes(before.status ?? "")) {
+      return jsonError(req, 409, `Nº ${serial} is '${before.status}' — the register is closed on it (address changes are only possible before shipment).`);
+    }
+    const patch = { address, address2: address2 || null, city, state, zip };
+    if (!(await patchOrder(serial, patch))) {
+      return jsonError(req, 502, "The register could not be updated. Nothing was changed.");
+    }
+    return jsonResponse(req, 200, { ok: true, serial, ...patch });
+  }
+
   // ── POST ?resend=1 — admin re-sends a transactional email for an order ──────
   if (new URL(req.url).searchParams.get("resend")) {
     const admin = await verifyUser(req);

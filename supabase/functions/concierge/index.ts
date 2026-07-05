@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-selling-engine-2";
+const BUILD_TAG = "2026-07-05-address-via-form";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -552,25 +552,12 @@ const REGISTER_TOOLS: any[] = [
       "Read-only.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
-  {
-    name: "update_shipping_address",
-    description:
-      "Change the shipping address on one of the owner's orders. Allowed only while " +
-      "the order has not shipped (status placed, weaving, or finishing). Confirm the " +
-      "complete new address with the owner before calling.",
-    input_schema: {
-      type: "object",
-      properties: {
-        serial: { type: "integer", description: "The order's serial number (Nº)." },
-        address: { type: "string", description: "Street address." },
-        address2: { type: "string", description: "Apartment, suite, unit (optional)." },
-        city: { type: "string" },
-        state: { type: "string", description: "Two-letter US state code." },
-        zip: { type: "string", description: "ZIP code, 12345 or 12345-6789." },
-      },
-      required: ["serial", "address", "city", "state", "zip"],
-    },
-  },
+  // NOTE: address changes are intentionally NOT a free-text model tool. A model
+  // composing five address fields can (and did) mis-map them — e.g. a city into
+  // the street field. Address edits go through the {{form:address-change:serial}}
+  // form instead, so a human types each labeled field. The form's submit path
+  // (handleFormPost → runRegisterTool → update_shipping_address) still validates
+  // and writes; only the free-typed model tool is removed.
   {
     name: "remember_customer",
     description:
@@ -1113,15 +1100,20 @@ function buildSystemPrompt(
   if (signedIn) {
     system += "\nREGISTER TOOLS\n" +
       "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
-      "get_my_orders (read their orders), update_shipping_address (before shipment), " +
-      "update_colorway (only while 'placed'), cancel_order (only while 'placed'), " +
-      "remember_customer (one durable line to the client book).\n" +
+      "get_my_orders (read their orders), update_colorway (only while 'placed'), " +
+      "cancel_order (only while 'placed'), remember_customer (one durable line to the client book).\n" +
+      "- ADDRESS CHANGES: you do NOT have a tool to type an address. To change where an unshipped " +
+      "order goes, confirm WHICH order, then emit the address-change form " +
+      "({{form:address-change:<serial>}}) on its own line so the owner types the new address into " +
+      "labeled fields themselves. NEVER compose or dictate street/city/state/ZIP yourself, and never " +
+      "claim an address changed unless the form's confirmation came back — mistyping a field (a city " +
+      "into the street line) is exactly what the form prevents.\n" +
       "- Call get_my_orders before answering any question about their orders — never rely on memory. " +
       "Struck (cancelled) entries are archive: leave them out of lists and counts unless the owner " +
       "asks about cancellations or history (then call get_my_orders with include_cancelled).\n" +
-      "- For any change (address, cancellation): state exactly what you are about to do and get the " +
-      "owner's explicit confirmation in this conversation before calling the tool. Report the tool's " +
-      "result verbatim in substance — never claim a change happened unless the tool confirmed it.\n" +
+      "- For a cancellation: state exactly what you are about to do and get the owner's explicit " +
+      "confirmation in this conversation before calling the tool. Report the tool's result verbatim " +
+      "in substance — never claim a change happened unless the tool confirmed it.\n" +
       "- This pattern governs EVERY register action (status detail, cancellation, address change, " +
       "anything that modifies an order): when more than one order could be meant, FIRST list the " +
       "eligible orders, then offer one {{reply:...}} pill per order, each on its own line, at most 6. " +

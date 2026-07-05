@@ -353,6 +353,10 @@
   .stage-objection{ color:#c98a4b; border-color:#c98a4b; }
   .stage-evaluating, .stage-engaged{ color:var(--brass-soft); border-color:var(--brass-soft); }
   .stage-lost{ color:#b06b6b; border-color:#b06b6b; }
+  .addr-edit{ margin:6px 0 2px; }
+  .addr-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .addr-form{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .addr-in{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; flex:1 1 160px; min-width:120px; }
 
   /* toasts */
   #toasts{ position:fixed; right:22px; bottom:22px; z-index:50; display:flex; flex-direction:column; gap:10px; }
@@ -2263,6 +2267,27 @@ async function fulfillOrder(serial, status, tracking) {
   } catch (e) { return { ok: false, message: String(e) }; }
 }
 
+async function saveAddress(serial, addr) {
+  try {
+    const token = state.session && state.session.access_token;
+    if (!token) return { ok: false, message: 'not signed in' };
+    const res = await fetch(SUPABASE_URL + '/functions/v1/commission?editaddr=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ serial: serial, address: addr.address, address2: addr.address2,
+        city: addr.city, state: addr.state, zip: addr.zip })
+    });
+    let j = {};
+    try { j = await res.json(); } catch (e) { /* ignore */ }
+    if (!res.ok) return { ok: false, message: j.error || ('HTTP ' + res.status) };
+    return { ok: true, data: j };
+  } catch (e) { return { ok: false, message: String(e) }; }
+}
+
 async function resendEmail(serial, kind) {
   try {
     const token = state.session && state.session.access_token;
@@ -2312,7 +2337,7 @@ async function saveEdition() {
 
 async function loadCustomers() {
   let q = sb.from('orders')
-    .select('email,name,serial,status,tracking,colorway,city,state,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
+    .select('email,name,serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
     .order('placed_at', { ascending: false })
     .limit(1000);
   const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
@@ -2475,6 +2500,54 @@ function renderCustomers() {
         });
         ctl.appendChild(sel); ctl.appendChild(trk); ctl.appendChild(btn);
         orders.appendChild(ctl);
+
+        /* Address correction — labeled fields, validated server-side, only
+           before shipment. The reliable way to fix a mangled address. */
+        if (['placed', 'weaving', 'finishing'].indexOf(o.status) >= 0) {
+          const aw = el('div', 'addr-edit');
+          const head2 = el('div', 'addr-head');
+          function addrLine(o2) {
+            const loc = [(o2.city || ''), (o2.state || '')].filter(Boolean).join(', ') + (o2.zip ? ' ' + o2.zip : '');
+            return '✎ ' + ([o2.address, o2.address2, loc.trim()].filter(Boolean).join(' · ') || 'no address on file');
+          }
+          const cur = el('span', 'micro', addrLine(o));
+          const toggle = el('button', 'btn ghost', 'Edit address'); toggle.type = 'button';
+          head2.appendChild(cur); head2.appendChild(toggle);
+          aw.appendChild(head2);
+          const form = el('div', 'addr-form'); form.style.display = 'none';
+          function mk(ph, val, w) {
+            const i = document.createElement('input');
+            i.type = 'text'; i.placeholder = ph; i.value = val || ''; i.className = 'addr-in';
+            if (w) i.style.maxWidth = w;
+            return i;
+          }
+          const iAddr = mk('Street address', o.address);
+          const iAddr2 = mk('Apt, suite (optional)', o.address2);
+          const iCity = mk('City', o.city);
+          const iState = mk('State', o.state, '64px');
+          const iZip = mk('ZIP', o.zip, '104px');
+          const save = el('button', 'btn primary', 'Save address'); save.type = 'button';
+          save.addEventListener('click', function () {
+            withBusy(save, async function () {
+              const r = await saveAddress(o.serial, {
+                address: iAddr.value.trim(), address2: iAddr2.value.trim(),
+                city: iCity.value.trim(), state: iState.value.trim(), zip: iZip.value.trim()
+              });
+              if (!r.ok) { fail('Save address', { message: r.message || 'failed' }); return; }
+              o.address = r.data.address; o.address2 = r.data.address2;
+              o.city = r.data.city; o.state = r.data.state; o.zip = r.data.zip;
+              cur.textContent = addrLine(o);
+              form.style.display = 'none';
+              toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' address corrected');
+            });
+          });
+          [iAddr, iAddr2, iCity, iState, iZip, save].forEach(function (e) { form.appendChild(e); });
+          toggle.addEventListener('click', function () {
+            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+          });
+          aw.appendChild(form);
+          orders.appendChild(aw);
+        }
       }
 
       /* Email history for this order + re-send. Uses the live number, or the
