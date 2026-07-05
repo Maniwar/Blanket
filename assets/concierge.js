@@ -40,7 +40,18 @@
   }
   function kbImages() {
     var i = kb().images;
-    return (i && typeof i === 'object') ? i : {};
+    var base = (i && typeof i === 'object') ? i : {};
+    if (!remoteImages || typeof remoteImages !== 'object') { return base; }
+    /* admin-added images extend (and can override) the built-in map */
+    var merged = {}, k;
+    for (k in base) { if (Object.prototype.hasOwnProperty.call(base, k)) { merged[k] = base[k]; } }
+    for (k in remoteImages) {
+      if (Object.prototype.hasOwnProperty.call(remoteImages, k)) {
+        var v = remoteImages[k];
+        if (v && typeof v === 'object' && typeof v.src === 'string') { merged[k] = v; }
+      }
+    }
+    return merged;
   }
   /* remote starters (from ?config=1) REPLACE the KB map when present */
   function suggestedMap() {
@@ -158,6 +169,7 @@
   var remoteAuth = null;
   var remoteForms = {};        /* slug -> {title, fields[], submit_tool} */
   var remoteOutreach = null;   /* admin-set engagement timings (from ?config=1) */
+  var remoteImages = null;     /* admin-added {{img:token}} sources (from ?config=1) */
 
   function sanitizeForms(raw) {
     var out = {}, i, f, def, fields, j, fd;
@@ -235,6 +247,7 @@
           if (st) { remoteStarters = st; }
           if (j.auth != null) { remoteAuth = j.auth; }
           if (j.outreach && typeof j.outreach === 'object') { remoteOutreach = j.outreach; }
+          if (j.images && typeof j.images === 'object') { remoteImages = j.images; }
           remoteForms = sanitizeForms(j.forms);
         }
         clearTimeout(timer);

@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-goal-sampling";
+const BUILD_TAG = "2026-07-05-admin-images";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1114,6 +1114,22 @@ function buildSystemPrompt(
   if (data.sopText) {
     system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
   }
+  // Admin-added images (beyond the built-in three) — tell the model they exist
+  // and when to use each, so it can share them like the standard ones.
+  const cfgImages = data.config?.images;
+  if (cfgImages && typeof cfgImages === "object" && !Array.isArray(cfgImages)) {
+    const lines = Object.entries(cfgImages as Record<string, unknown>)
+      .filter(([tok, v]) => /^[a-z0-9_-]+$/i.test(tok) && v && typeof v === "object")
+      .map(([tok, v]) => {
+        const o = v as { description?: string; alt?: string };
+        const desc = (o.description ?? o.alt ?? "").toString().slice(0, 200);
+        return `- {{img:${tok}}}${desc ? " — " + desc : ""}`;
+      });
+    if (lines.length > 0) {
+      system += "\nADDITIONAL IMAGES (admin-added; each on its own line, at most one per answer):\n" +
+        lines.join("\n") + "\n";
+    }
+  }
   const notes = data.config?.voice_notes;
   if (typeof notes === "string" && notes.trim().length > 0) {
     system += "\nADMIN TUNING NOTES (follow these):\n" + notes;
@@ -1254,11 +1270,13 @@ async function handleConfigGet(req: Request): Promise<Response> {
   const starters = config?.starters;
   const { forms } = await loadConciergeData();
   const outreach = config?.outreach;
+  const images = config?.images;
   return jsonResponse(req, 200, {
     enabled: config?.enabled === false ? false : true,
     greeting: typeof config?.greeting === "string" ? config.greeting : null,
     starters: starters && typeof starters === "object" && !Array.isArray(starters) ? starters : null,
     outreach: outreach && typeof outreach === "object" && !Array.isArray(outreach) ? outreach : null,
+    images: images && typeof images === "object" && !Array.isArray(images) ? images : null,
     auth: true,
     forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
   });

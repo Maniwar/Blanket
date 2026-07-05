@@ -208,6 +208,45 @@ Knowledge, Procedures, Cache, Customers, Conversations.*
   swap the email provider without code changes, so that infra is decoupled from
   the app. *(Supabase Auth logs + custom SMTP config.)*
 
+### 2.7 The AI sales concierge — how it sells
+
+Stories for the assistant itself: the selling behaviors, framed from the
+shopper's side. (The register-tool and memory stories the concierge fulfils for
+signed-in patrons are in §2.2; the merchant's control over all of this is §2.4.)
+
+- **As a shopper**, I want the concierge to understand who the blanket is for and
+  where it will live *before* it presents, so that it feels like advice, not a
+  pitch. *(Discovery-first selling method / SOP; the `discover` goal.)*
+- **As a shopper**, I want it to translate specs into what they mean for my home
+  ("dense enough that it settles over you") rather than reciting numbers, so that
+  the value is concrete. *(Fact → benefit → your-life laddering in the sales SOP.)*
+- **As a shopper**, I want a single, gentle nudge toward commissioning when I'm
+  genuinely interested — never repeated pressure — so that I'm guided, not
+  chased. *(Soft close, `{{action:commission}}` at most once per answer.)*
+- **As a shopper**, I want it to answer honestly and never invent a price, a stock
+  number, a delivery date, or a product we don't sell, so that I can trust it.
+  *(Anti-hallucination rules; one product only — no gift cards or accessories.)*
+- **As a shopper**, I want it to *show* me the object — the packaging, the seal,
+  the cloth — when a picture helps, so that I can see what I'm considering.
+  *(Image tokens; admin-managed beyond the built-ins.)*
+- **As a shopper**, I want to tap quick replies and fill short in-chat forms
+  instead of typing everything, so that deciding and changing an order is fast.
+  *(`{{reply:…}}` pills, `{{form:…}}` forms.)*
+- **As a returning shopper**, I want it to greet me like someone who remembers me
+  and pick up the thread, so that each visit builds on the last. *(Client book +
+  re-engagement recency + openers.)*
+- **As a shopper**, I want it to know when to give me space and circle back later
+  like a real person — not spam me — so that the presence feels human.
+  *(Presence/acknowledgement model; paced nudges; quiet mode.)*
+- **As a shopper when the run is sold out**, I want to leave my name for the next
+  edition, so that I'm not turned away empty-handed. *(Waitlist — sold-out form +
+  the concierge's `join_waitlist` tool.)*
+- **As a shopper**, I want a common question answered instantly, so that I'm not
+  waiting on the model for things the house already knows. *(Semantic cache.)*
+- **As a shopper**, I want the conversation to close warmly with nothing left
+  hanging, so that I leave feeling served. *(Wrap-up SOP; needs-met goal; a
+  client-book note recorded silently.)*
+
 ---
 
 ## 3. Architecture
@@ -374,10 +413,11 @@ via SOPs / tuning notes). The full set is documented in the admin studio
 (Tuning → *Concierge tokens*):
 
 - `{{img:pack-wide}}`, `{{img:pack-seal}}`, `{{img:hero}}` — a photo on its own
-  line. **These three are the only images**; they're defined in
-  `assets/concierge-kb.js` (token → `{src, alt}`), not in the database, so adding
-  a new one is a code change today (add the asset + a map entry + redeploy).
-  Making images admin-managed is on the backlog.
+  line. These three are built in (`assets/concierge-kb.js`); admins add more in
+  the studio (Tuning → *Bot images*: token, source URL / `data:` URI,
+  description). Custom images are stored in config, delivered to the widget via
+  `?config=1` and merged into its image map, and their tokens + descriptions are
+  injected into the system prompt so the concierge knows to use them.
 - `{{action:commission}}` / `{{action:signin}}` — the commission / sign-in
   buttons. `{{reply:<text>}}` — a tappable pill. `{{form:<slug>:<serial>}}` — an
   in-chat form (defined under Procedures → Forms).

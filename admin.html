@@ -261,6 +261,13 @@
   .tok-ref td{ padding:8px 10px; border-top:1px solid var(--hairline-dim); vertical-align:top; color:var(--wool); }
   .tok-ref td:first-child{ white-space:nowrap; width:1%; }
   .tok-ref code{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft); background:rgba(196,155,91,.08); padding:1px 5px; border-radius:4px; }
+  .imgrow{ display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--hairline-dim); flex-wrap:wrap; }
+  .imgrow .imgprev{ width:44px; height:44px; object-fit:cover; border:1px solid var(--hairline-dim); border-radius:6px; background:rgba(38,51,43,.4); flex:0 0 auto; }
+  .imgrow input{ font-size:12px; background:rgba(38,51,43,.4); border:1px solid var(--hairline-dim); color:var(--wool); border-radius:7px; padding:5px 8px; }
+  .imgrow .imgtok{ flex:0 0 110px; font-family:'IBM Plex Mono', monospace; }
+  .imgrow .imgsrc{ flex:2 1 200px; min-width:0; }
+  .imgrow .imgalt{ flex:1 1 130px; min-width:0; }
+  .imgrow .imgdesc{ flex:2 1 180px; min-width:0; }
 
   /* customers */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
@@ -502,13 +509,26 @@
         </div>
         <p class="note">You can drop <code>{{reply:…}}</code> pills straight into the greeting. The rest, the concierge emits itself as its procedures call for — shape <em>when</em> via the SOPs (Procedures) and the tuning notes above.</p>
         <table class="tok-ref">
-          <tr><td><code>{{img:pack-wide}}</code><br><code>{{img:pack-seal}}</code><br><code>{{img:hero}}</code></td>
-            <td>A photograph, on its own line. <strong>These three are the only images available</strong> (defined in <code>assets/concierge-kb.js</code>); adding more is a code change today.</td></tr>
+          <tr><td><code>{{img:pack-wide}}</code><br><code>{{img:pack-seal}}</code><br><code>{{img:hero}}</code><br>+ your own</td>
+            <td>A photograph, on its own line. These three are built in; add your own in the <strong>Bot images</strong> card below and the concierge can share them too.</td></tr>
           <tr><td><code>{{action:commission}}</code></td><td>A “Begin the commission” button.</td></tr>
           <tr><td><code>{{action:signin}}</code></td><td>A “Sign in” button.</td></tr>
           <tr><td><code>{{reply:Some text}}</code></td><td>A tappable pill that sends “Some text” as the shopper’s next message. One per line; consecutive lines group; up to 6.</td></tr>
           <tr><td><code>{{form:slug:serial}}</code></td><td>Renders an in-chat form (forms are defined under Procedures → Forms).</td></tr>
         </table>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Bot images</h3>
+          <span class="micro">what {{img:token}} can show</span>
+        </div>
+        <p class="note">Add images the concierge can share in chat. <strong>Token</strong> is the handle (letters, numbers, <code>-</code> <code>_</code>); <strong>Source</strong> is an image URL or a <code>data:image</code> URI; <strong>Description</strong> tells the bot when to use it. The three built-in images (<code>pack-wide</code>, <code>pack-seal</code>, <code>hero</code>) are always available.</p>
+        <div id="img-list"></div>
+        <div class="card-foot">
+          <button id="img-add" class="btn ghost" type="button">Add image</button>
+          <button id="save-images" class="btn primary" type="button">Save images</button>
+        </div>
       </section>
 
       <section class="card">
@@ -821,6 +841,7 @@ const state = {
   customers: [],
   waitlist: [],
   emailsBySerial: {},
+  images: [],
   forms: [],
   goalDefs: [],
   convos: [],
@@ -1077,6 +1098,10 @@ function wireStatic() {
   $('save-engagement').addEventListener('click', function () {
     withBusy($('save-engagement'), saveEngagement);
   });
+  $('img-add').addEventListener('click', addImageRow);
+  $('save-images').addEventListener('click', function () {
+    withBusy($('save-images'), saveImages);
+  });
   $('save-edition').addEventListener('click', function () {
     withBusy($('save-edition'), saveEdition);
   });
@@ -1202,6 +1227,9 @@ async function loadConfig() {
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
   $('cfg-goalrate').value = (typeof cfg.goal_sample_rate === 'number') ? cfg.goal_sample_rate : '';
 
+  state.images = imgObjToRows(cfg.images);
+  renderImageRows();
+
   setPill(cfg.enabled === true);
 }
 
@@ -1224,6 +1252,74 @@ async function saveEngagement() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save engagement', res.error); return; }
   toast('Engagement saved');
+}
+
+/* ---- Bot images (config key 'images') ---- */
+const BUILTIN_IMG = ['pack-wide', 'pack-seal', 'hero'];
+function imgObjToRows(o) {
+  if (!o || typeof o !== 'object') return [];
+  const rows = [];
+  Object.keys(o).forEach(function (t) {
+    const v = o[t];
+    if (v && typeof v === 'object') {
+      rows.push({ token: t, src: v.src || '', alt: v.alt || '', description: v.description || '' });
+    }
+  });
+  return rows;
+}
+function renderImageRows() {
+  const list = $('img-list');
+  list.textContent = '';
+  if (!state.images.length) {
+    list.appendChild(el('div', 'empty micro', 'No custom images yet — the three built-ins are always available.'));
+  }
+  state.images.forEach(function (r, idx) {
+    const wrap = el('div', 'imgrow');
+    const prev = document.createElement('img');
+    prev.className = 'imgprev';
+    prev.alt = '';
+    if (r.src) prev.setAttribute('src', r.src);
+    const mk = function (ph, key, cls) {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.placeholder = ph; inp.value = r[key] || ''; inp.className = cls;
+      inp.addEventListener('input', function () {
+        r[key] = inp.value;
+        if (key === 'src') { if (inp.value) prev.setAttribute('src', inp.value); else prev.removeAttribute('src'); }
+      });
+      return inp;
+    };
+    wrap.appendChild(prev);
+    wrap.appendChild(mk('token', 'token', 'imgtok'));
+    wrap.appendChild(mk('image URL or data:image URI', 'src', 'imgsrc'));
+    wrap.appendChild(mk('alt text', 'alt', 'imgalt'));
+    wrap.appendChild(mk('when the bot should use it', 'description', 'imgdesc'));
+    const rm = el('button', 'btn ghost', 'Remove');
+    rm.type = 'button';
+    rm.addEventListener('click', function () { state.images.splice(idx, 1); renderImageRows(); });
+    wrap.appendChild(rm);
+    list.appendChild(wrap);
+  });
+}
+function addImageRow() { state.images.push({ token: '', src: '', alt: '', description: '' }); renderImageRows(); }
+async function saveImages() {
+  const out = {};
+  for (let i = 0; i < state.images.length; i++) {
+    const r = state.images[i];
+    const t = (r.token || '').trim();
+    if (!t) continue;
+    if (!/^[A-Za-z0-9_-]+$/.test(t)) { toast('Token "' + t + '" — letters, numbers, - _ only', true); return; }
+    if (BUILTIN_IMG.indexOf(t) >= 0) { toast('"' + t + '" is a built-in token — pick another', true); return; }
+    const s = (r.src || '').trim();
+    if (!s) { toast('Image "' + t + '" needs a source', true); return; }
+    if (!/^https?:\/\//i.test(s) && !/^data:image\//i.test(s)) {
+      toast('Source for "' + t + '" must be an http(s) URL or a data:image URI', true); return;
+    }
+    out[t] = { src: s, alt: (r.alt || '').trim(), description: (r.description || '').trim() };
+  }
+  const res = await sb.from('concierge_config')
+    .upsert([{ key: 'images', value: out, updated_at: nowIso() }], { onConflict: 'key' });
+  if (res.error) { fail('Save images', res.error); return; }
+  toast('Images saved');
 }
 
 function renderStarters(starters) {
