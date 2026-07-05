@@ -25,6 +25,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      # Bake seo.* from the CMS into index.html <head> so social crawlers (which
+      # don't run the runtime hydrator's JS) see the current title/OG tags. Reads
+      # the public ?site=1 endpoint (no DB creds); best-effort, never fails the
+      # publish (bake_seo.py exits 0 on any error, leaving the HTML untouched).
+      - name: Bake SEO into <head>
+        run: python3 scripts/bake_seo.py
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:

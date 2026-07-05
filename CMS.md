@@ -107,7 +107,7 @@ from the branch. To bake the head, Pages must publish through a **workflow**
 instead: checkout → run the bake script (rewrite `<head>` from the DB) → 
 `actions/upload-pages-artifact` → `actions/deploy-pages`. Copy and images stay
 runtime-hydrated (instant, no deploy); **only `seo.*` changes need a republish**
-(next push, or a manual "Publish site" workflow run) to reach social crawlers.
+(next push, or a manual `deploy-pages` workflow run) to reach social crawlers.
 The tab title still updates instantly via the runtime layer in the meantime.
 
 ## 7. Build sequence
@@ -142,14 +142,19 @@ Phase 1 is live: `site_content` table, `data-cms` slot tags (59 copy slots),
 and the **Website** admin tab (all copy + SEO, grouped by section). Copy + SEO
 hydrate at runtime (browser tab + Google).
 
-The **deploy-time head bake** (`scripts/bake_seo.py` + `.github/workflows/
-pages.yml`) is built. It reads the public `?site=1` endpoint (no DB creds) and
-writes the current title/description/OG into `index.html <head>` before publish,
-for social crawlers.
+The **deploy-time head bake** (`scripts/bake_seo.py`) is live. It reads the
+public `?site=1` endpoint (no DB creds) and writes the current
+title/description/OG into `index.html <head>` before publish, for social
+crawlers. It runs as a step in **`.github/workflows/deploy-pages.yml`** — the
+active Pages deployer (Pages source is already **"GitHub Actions"**, so this
+workflow builds and publishes the site on every push; `pages-retry.yml`
+auto-re-runs it through GitHub's occasional transient "try again later" deploy
+errors). The bake is best-effort: `bake_seo.py` exits 0 on any failure, leaving
+the HTML untouched, so a publish never breaks on it.
 
-**One manual switch to activate the head bake:** Settings → Pages → Build and
-deployment → **Source → "GitHub Actions"**. Until then the `pages.yml` run fails
-harmlessly and the existing branch-based Pages keeps serving the site.
+*(Historical note: an earlier `pages.yml` duplicated this deployer under the
+mistaken assumption Pages still served from a branch. It was redundant and has
+been removed; the bake now lives in the one real deployer.)*
 
 Deferred (noted): the stylized **wordmark** and **section images** (graphics
 phase — image uploads via Supabase Storage, per BACKLOG.md), and server-side
