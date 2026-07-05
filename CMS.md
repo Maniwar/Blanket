@@ -11,6 +11,8 @@ Decisions (locked):
 - **Delivery:** runtime hydrate; the HTML holds the defaults (instant paint +
   SEO baseline), an early fetch overrides only changed slots, `localStorage`
   caches to avoid flash on repeat visits.
+- **SEO/OG:** two layers — runtime hydrate (tab + Google) **and** a deploy-time
+  `<head>` bake so social crawlers get correct previews (§6).
 - **Data model:** a dedicated `site_content` table (per-slot audit + future
   history/rollback).
 
@@ -88,7 +90,27 @@ Arrival, CTA). Each slot is a labeled field showing the default as placeholder;
 image slots use the bot-images picker (URL / `data:` now, Storage upload later).
 Later polish: iframe live preview, change history/rollback.
 
-## 6. Build sequence
+## 6. SEO/OG — two layers (decided: include the deploy-time bake)
+
+`seo.*` slots are applied in **both** places so every audience sees them:
+
+- **Runtime hydrate** (instant): the hydrator sets `document.title` and the
+  meta/OG tags live — covers the browser tab and **Google** (it runs JS).
+- **Deploy-time `<head>` bake** (on publish): a CI step reads the `seo.*` slots
+  from `site_content` (via `psql "$SUPABASE_DB_URL"`, already wired) and writes
+  the `<title>`/description/OG tags into `index.html` **before Pages serves it** —
+  so **social unfurlers** (Slack, iMessage, Facebook, X) that read raw HTML and
+  don't run JS also get the right preview.
+
+**Infra change this requires:** today Pages auto-deploys the raw `index.html`
+from the branch. To bake the head, Pages must publish through a **workflow**
+instead: checkout → run the bake script (rewrite `<head>` from the DB) → 
+`actions/upload-pages-artifact` → `actions/deploy-pages`. Copy and images stay
+runtime-hydrated (instant, no deploy); **only `seo.*` changes need a republish**
+(next push, or a manual "Publish site" workflow run) to reach social crawlers.
+The tab title still updates instantly via the runtime layer in the meantime.
+
+## 7. Build sequence
 
 1. `site_content` table + RLS (migration `0032` + `setup.sql`).
 2. `data-cms` tags across `index.html` (+ finalize the slot manifest).
@@ -96,29 +118,13 @@ Later polish: iframe live preview, change history/rollback.
 4. Client hydrator (inline early script + `localStorage` cache + fallback + SEO
    meta application).
 5. Admin **Website** panel (fields per section + image pickers + SEO + reset).
-6. Docs + validate (esbuild/node/pg) + deploy (function + Pages) + bump version.
+6. **Pages publish workflow** + `<head>` bake script (converts Pages from
+   branch auto-deploy to workflow artifact deploy; reads `seo.*` from the DB).
+7. Docs + validate (esbuild/node/pg/YAML) + deploy (function + Pages) + bump
+   version.
 
-*Effort: sizable — several deploys. Phase it: copy first, then images, then SEO
-meta, so each lands testable.*
-
----
-
-## ⚠️ One caveat these choices create: SEO/OG for social crawlers
-
-Runtime hydration updates the **browser tab title** and works for **Google**
-(it executes JS). But **social link unfurlers** (Slack, iMessage, Facebook,
-X/Twitter) read the **raw HTML** and do **not** run JavaScript — so a
-runtime-swapped `<title>` / OG image **won't** show in link previews.
-
-If social previews matter, the fix is a **deploy-time bake** for the `<head>`
-only: a GitHub Action step reads `site_content` (we already have the DB URL in
-CI now) and writes the meta tags into `index.html` on deploy. That reintroduces
-"needs a deploy" for *meta* changes only — copy and images stay instant.
-
-**Recommendation:** ship runtime hydration for everything (title updates live in
-the tab + for Google). Add the deploy-time `<head>` bake **only if** link-preview
-fidelity becomes a requirement. Flagging so it's a conscious choice, not a
-surprise.
+*Effort: sizable — several deploys. Phase it so each slice lands testable:*
+*(a) copy → (b) images → (c) SEO meta runtime → (d) Pages workflow + head bake.*
 
 ## Future (post-Phase-1)
 
