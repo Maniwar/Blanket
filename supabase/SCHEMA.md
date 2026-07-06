@@ -442,36 +442,91 @@ edition RPCs are the exception — granted to `authenticated` (they self-gate on
 
 ## HTTP endpoints
 
+The backend is **two Deno edge functions**. The browser holds only the
+publishable key and talks to these; the functions hold the secrets and talk to
+Anthropic, Postgres (service role, so they bypass RLS by design), and Resend.
+Every entrypoint is gated **public** / **signed-in** (verified JWT) / **admin**
+(`is_concierge_admin`) / **service** (bearer = service-role key).
+
+```mermaid
+flowchart LR
+  A["Storefront widget<br/>anon · or signed-in JWT"]
+  B["Admin studio<br/>admin JWT"]
+  I["concierge internal<br/>service-role key"]
+
+  subgraph CONCIERGE["concierge — Deno edge function"]
+    direction TB
+    CP["PUBLIC (rate-limited)<br/>?config · ?site · ?selftest<br/>POST chat · ?reengage · ?wrapup"]
+    CU["SIGNED-IN<br/>?starters · POST ?form"]
+    CA["ADMIN<br/>?tools · ?evals · ?secrets<br/>?cachecheck · POST ?judge"]
+  end
+
+  subgraph COMMISSION["commission — Deno edge function"]
+    direction TB
+    MP["PUBLIC (rate-limited)<br/>?recent · ?next<br/>POST ?hold · ?waitlist"]
+    MU["SIGNED-IN<br/>?me · POST place-order"]
+    MA["ADMIN<br/>?fulfill · ?editaddr · ?resend"]
+    MS["SERVICE ONLY<br/>?custresend"]
+  end
+
+  ANT["Anthropic Claude<br/>streaming + tool use"]
+  PG[("Postgres + RLS<br/>service role")]
+  RS["Resend<br/>email"]
+
+  A --> CP
+  A --> CU
+  B --> CA
+  A --> MP
+  A --> MU
+  B --> MA
+  I --> MS
+
+  CP --> ANT
+  CA --> ANT
+  CONCIERGE --> PG
+  COMMISSION --> PG
+  COMMISSION --> RS
+  CP --> RS
+```
+
+*Gate legend:* **PUBLIC** = no auth (abuse-bounded by per-IP rate limits);
+**SIGNED-IN** = verified user JWT, own data only; **ADMIN** = JWT email in
+`concierge_admins`; **SERVICE** = server-to-server only, unreachable from a
+browser.
+
 ### concierge (`functions/concierge/index.ts`)
-| Method / query | Handler | Purpose |
-| --- | --- | --- |
-| `GET ?config=1` | `handleConfigGet` | Public bootstrap: enabled, greeting, starters, forms, images, outreach timings, assertiveness. |
-| `GET ?site=1` | `handleSiteGet` | Storefront CMS slot values (`site_content`) for the runtime hydrator + head bake. |
-| `GET ?tools=1` | `handleToolsGet` | The built-in tools manifest (name, enabled, core, effective + default instruction, overridden) for the admin Tools tab. |
-| `GET ?starters=1` | `handleStartersGet` | **Signed-in only.** Personalized conversation starters built deterministically from the caller's real orders (status/cloth/gift); `[]` when anonymous or no orders. The widget leads with these, topped up with the section defaults. |
-| `GET ?cachecheck=1` | inline | Self-diagnosis of the semantic cache round-trip. |
-| `GET ?evals=1` | `handleEvalsGet` | **Admin only.** The enabled behavior-eval deck (`concierge_evals`), shaped like `evals/scenarios.mjs`, so the CLI runner can share the DB deck (`--remote`). |
-| `POST ?judge=1` | `handleJudgePost` | **Admin only.** Runs the pinned binary LLM judge server-side: body `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
-| `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, **proactive openers** (`context.opener` = `reengage`/`greet` — the bot speaks first on panel open), tools (incl. `recall_context` to pull prior notes/conversation), cache, logging, goal scheduling. |
-| `POST ?wrapup=1` | `handleWrapup` | **Records a conversation as closed/snoozed.** Body `{session_key, reason}` where reason is `quiet` (→ snoozed), `close` or `auto` (→ closed). Stamps `status`+`ended_at` **once** (already-ended threads are left alone), and for a signed-in patron adds one `customer_notes` line. |
-| `POST ?form=1` | `handleFormPost` | Structured form submission (verified JWT, routed through `submit_tool`). |
+| Method / query | Handler | Gate | Purpose |
+| --- | --- | --- | --- |
+| `GET ?config=1` | `handleConfigGet` | public | Bootstrap: enabled, greeting, starters, forms, images, outreach timings, assertiveness. |
+| `GET ?site=1` | `handleSiteGet` | public | Storefront CMS slot values (`site_content`) for the runtime hydrator + head bake. |
+| `GET ?selftest=1` | `handleSelfTest` | public (tiered) | Diagnostics: recognition, schema presence, attribution, the exact CUSTOMER block. Per-user + admin detail are gated; anon sees only schema presence + counts. |
+| `POST` (chat) | `handleChatPost` | public (rate-limited) | Streaming reply (SSE). Nudges, **proactive openers** (`context.opener`), tools (incl. `recall_context`), cache, logging, goal scheduling. |
+| `POST ?reengage=1` | `handleReengage` | public (rate-limited) | One short goal-/journey-aware outreach line for the closed-panel bubble (90-token cap; client fallback if unavailable). |
+| `POST ?wrapup=1` | `handleWrapup` | public (rate-limited) | Records a conversation closed/snoozed. Body `{session_key, reason}` (`quiet`→snoozed, `close`/`auto`→closed). Stamps `status`+`ended_at` **once**; adds one `customer_notes` line for a signed-in patron. |
+| `GET ?starters=1` | `handleStartersGet` | signed-in | Personalized starters built deterministically from the caller's real orders; `[]` when anonymous or no orders. |
+| `POST ?form=1` | `handleFormPost` | signed-in | Structured form submission (verified JWT, routed through `submit_tool`, ownership-scoped). |
+| `GET ?tools=1` | `handleToolsGet` | **admin** | The built-in tools manifest (name, enabled, core, effective + default instruction, overridden) for the admin Tools tab. |
+| `GET ?evals=1` | `handleEvalsGet` | **admin** | The enabled behavior-eval deck (`concierge_evals`), shaped like `evals/scenarios.mjs`, so the CLI runner can share the DB deck (`--remote`). |
+| `GET ?secrets=1` | `handleSecretsGet` | **admin** | Server-secret **presence** (booleans only, never values) + build tag + model-in-effect, for the studio's Keys & connection readout. |
+| `GET ?cachecheck=1` | inline | **admin** | Self-diagnosis of the semantic cache round-trip (writes+deletes a probe row, so admin-gated). |
+| `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
 
 **SSE frames** (chat): `{"t":…}` text, `{"s":…}` status, `{"m":{cid,mid}}`
 meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
 
 ### commission (`functions/commission/index.ts`)
-| Method / query | Purpose |
-| --- | --- |
-| `GET ?recent=1` | Recent real orders (for the site ticker). |
-| `GET ?next=1` | The live edition figures: `{next_serial, run_size, remaining}` (drives the ticker). |
-| `GET ?me=1` | Signed-in patron's orders + shipping details, for checkout prefill. |
-| `POST ?hold=1` | Reserve the visit's serial (`hold_serial`). |
-| `POST` | Place the order (`commission_order`); emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
-| `POST ?fulfill=1` | **Admin only** (`verifyUser` + `is_concierge_admin`). Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
-| `POST ?waitlist=1` | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (rate-limited; no auth required, links `user_id` if signed in). |
-| `POST ?resend=1` | **Admin only.** Re-send an order email: `{serial, kind}` (`placed`/`shipped`/`cancelled`) → rebuilds from the order and sends, logging to `email_log`. |
-| `POST ?editaddr=1` | **Admin only.** Correct a shipping address on a not-yet-shipped order (validated field-by-field). |
-| `POST ?custresend=1` | **Service key only** (bearer = `SUPABASE_SERVICE_ROLE_KEY`; no browser can reach it). Re-send an order email on a customer's behalf, reusing `orderEmail`. Called internally by the concierge's `resend_confirmation` tool **after** it has verified the signed-in owner owns the order; guards the `kind` against the order's real status. |
+| Method / query | Gate | Purpose |
+| --- | --- | --- |
+| `GET ?recent=1` | public | Recent real orders (serial + city/state only — no name/email) for the site ticker. |
+| `GET ?next=1` | public | The live edition figures: `{next_serial, run_size, remaining}` (drives the ticker). |
+| `GET ?me=1` | signed-in | Signed-in patron's orders + shipping details, for checkout prefill (`Cache-Control: no-store`). |
+| `POST ?hold=1` | public (rate-limited) | Reserve the visit's serial (`hold_serial`). |
+| `POST` | signed-in (rate-limited) | Place the order (`commission_order`) with the **verified** email; emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
+| `POST ?waitlist=1` | public (rate-limited) | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (links `user_id` if signed in). |
+| `POST ?fulfill=1` | **admin** | Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
+| `POST ?editaddr=1` | **admin** | Correct a shipping address on a not-yet-shipped order (validated field-by-field). |
+| `POST ?resend=1` | **admin** | Re-send an order email: `{serial, kind}` → rebuilds from the order and sends, logging to `email_log`. |
+| `POST ?custresend=1` | **service** | Bearer = `SUPABASE_SERVICE_ROLE_KEY`; no browser can reach it. Re-send an order email on a customer's behalf; called internally by the concierge's `resend_confirmation` tool **after** it has verified the signed-in owner owns the order; guards `kind` against the order's real status. |
 
 Transactional email uses Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`,
 default `Feierabend <onboarding@resend.dev>`). With the default Resend sender,
