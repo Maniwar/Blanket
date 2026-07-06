@@ -86,8 +86,9 @@ uses the public **publishable** key. Auth is passwordless email (magic link).
 
 ### Custom SMTP (Resend, free, ~5 min)
 1. resend.com → create an account + an **API key** (Sending access).
-2. Sender: use `onboarding@resend.dev` (sends only to your Resend account email —
-   fine for solo testing) or verify your own domain for real sending.
+2. Sender: use an address on a **domain you've verified in Resend** (e.g.
+   `concierge@feier-abend.co`) for real sending. `onboarding@resend.dev` also
+   works but only delivers to your own Resend-account email — fine for solo tests.
 3. Supabase → Authentication → **SMTP Settings** → Enable Custom SMTP:
    Host `smtp.resend.com`, Port `465`, Username `resend`, Password = API key,
    Sender = your address. Save.
@@ -107,10 +108,9 @@ sent by the **commission function** through the Resend HTTP API, not SMTP.
 
 1. Reuse the same Resend **API key** (or make a second one) as the
    `RESEND_API_KEY` GitHub secret.
-2. `EMAIL_FROM` is optional; it defaults to `Feierabend <onboarding@resend.dev>`.
-   With that default sender, Resend only delivers to **your own Resend-account
-   email** — verify a domain and set `EMAIL_FROM` to an address on it to email
-   real customers.
+2. `EMAIL_FROM` is optional; it defaults to `Feierabend <concierge@feier-abend.co>`
+   — an address on the verified Resend domain, so real recipients receive it.
+   Override it with an `EMAIL_FROM` secret to send from a different domain.
 3. Re-run **Deploy Concierge** so the secrets land on the function.
 
 ---

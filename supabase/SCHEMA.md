@@ -519,6 +519,37 @@ flowchart LR
 `concierge_admins`; **SERVICE** = server-to-server only, unreachable from a
 browser.
 
+### Browser access — CORS & allowed origins
+
+Before any gate above, a request from a browser must pass a **CORS origin check**.
+Both functions read a comma-separated **`ALLOWED_ORIGINS`** allowlist and echo
+`Access-Control-Allow-Origin` **only** when the request's `Origin` is on it;
+otherwise the browser blocks the response (this is what surfaces as the widget's
+"the line to the mill is quiet"). It is **browser-enforced defense-in-depth** — it
+stops *other sites'* pages from calling the API on a visitor's behalf, but does
+**not** stop a direct `curl` (rate limits + the auth gates do that).
+
+```mermaid
+flowchart LR
+  A["feier-abend.co"] --> CK
+  B["www.feier-abend.co"] --> CK
+  C["maniwar.github.io<br/>(GitHub Pages)"] --> CK
+  X["any other origin"] -. blocked .-> CK
+  CK{"Origin in<br/>ALLOWED_ORIGINS?"}
+  CK -->|yes → echo Origin| GATE["auth gate<br/>(public / signed-in / admin)"]
+  CK -->|no → no ACAO header| BLK["browser drops the response"]
+  GATE --> FN["concierge / commission"]
+```
+
+**`ALLOWED_ORIGINS` is an ops-level deploy secret, not admin-editable** — it's set
+by the **Deploy Concierge** workflow (`supabase secrets set ALLOWED_ORIGINS="…"`,
+project-wide, so it covers both functions) and is deliberately kept out of the
+admin panel because it's a security boundary. To add or change an origin, edit the
+allowlist in `.github/workflows/deploy-concierge.yml` and re-run the workflow;
+setting it in the dashboard alone is overwritten on the next deploy. Current
+allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
+`https://maniwar.github.io`.
+
 ### concierge (`functions/concierge/index.ts`)
 | Method / query | Handler | Gate | Purpose |
 | --- | --- | --- | --- |
@@ -563,9 +594,9 @@ wall-clock limit.
 | `POST ?custresend=1` | **service** | Bearer = `SUPABASE_SERVICE_ROLE_KEY`; no browser can reach it. Re-send an order email on a customer's behalf; called internally by the concierge's `resend_confirmation` tool **after** it has verified the signed-in owner owns the order; guards `kind` against the order's real status. |
 
 Transactional email uses Resend (`RESEND_API_KEY`, optional `EMAIL_FROM`,
-default `Feierabend <onboarding@resend.dev>`). With the default Resend sender,
-delivery is limited to the Resend account's own address until a domain is
-verified — see SETUP.md.
+default `Feierabend <concierge@feier-abend.co>` — an address on the verified
+Resend domain, so real recipients receive it). Override `EMAIL_FROM` for a
+different sender — see SETUP.md.
 
 ---
 

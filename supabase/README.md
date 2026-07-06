@@ -243,9 +243,9 @@ is emailed. This is what the admin studio's per-order fulfillment control calls.
 
 Order confirmation and shipment/return notices are sent via the **Resend HTTP
 API** (not SMTP — that's only for auth magic links). Set `RESEND_API_KEY` and
-optionally `EMAIL_FROM` (default `Feierabend <onboarding@resend.dev>`) as
-function secrets. With the default sender, Resend only delivers to your own
-Resend-account address until a domain is verified. Sending is best-effort and
+optionally `EMAIL_FROM` (default `Feierabend <concierge@feier-abend.co>`, an
+address on the verified Resend domain) as function secrets. Override `EMAIL_FROM`
+to send from a different domain. Sending is best-effort and
 fired via `EdgeRuntime.waitUntil`, so it never blocks or fails the response.
 
 ### Data minimization by design

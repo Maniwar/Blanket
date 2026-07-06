@@ -31,7 +31,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 // Transactional email (order confirmation / shipping / cancellation) via Resend.
 // Optional: if RESEND_API_KEY is unset, emails are simply skipped (never an error).
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
+const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <concierge@feier-abend.co>";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
