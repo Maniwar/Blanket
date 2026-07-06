@@ -81,7 +81,7 @@
       },
       {
         match: ['my order', 'my blanket', 'order status', 'my deliveries', 'where is my', 'track', 'tracking', 'delivery status', 'status of my'],
-        answer: 'The register can tell you exactly — each of your numbers, each with its own status — once it knows it is you. Sign in and I will read your entries back to you.\n\n{{action:signin}}\n\nFor changes or cancellations, write hello@feierabend.example.'
+        answer: 'The register can tell you exactly — each of your numbers, each with its own status — once it knows it is you. Sign in and I will read your entries back to you.\n\n{{action:signin}}\n\nFor changes or cancellations, write concierge@feier-abend.co.'
       },
       {
         match: ['buy', 'checkout', 'purchase', 'order one', 'get one', 'commission', 'reserve', 'want one', 'take my money', 'sign me up', 'how do i order'],
@@ -105,7 +105,7 @@
       },
       {
         match: ['ship', 'shipping', 'delivery', 'deliver', 'duties', 'customs', 'import', 'how long', 'when will it arrive', 'arrive'],
-        answer: 'Each blanket is **woven to order** in the Allgäu, so allow **3–5 weeks to your door**. The mill weaves about four yards an hour and sees no reason to hurry.\n\n- **Duties and U.S. delivery are included** in the $589. Nothing owed at the door\n- It ships wrapped in **cotton twill, never plastic**\n- It arrives in the forest-green rigid box, sealed in beeswax, with your numbered register card\n\nOrder-specific questions — tracking, address changes — go to hello@feierabend.example.'
+        answer: 'Each blanket is **woven to order** in the Allgäu, so allow **3–5 weeks to your door**. The mill weaves about four yards an hour and sees no reason to hurry.\n\n- **Duties and U.S. delivery are included** in the $589. Nothing owed at the door\n- It ships wrapped in **cotton twill, never plastic**\n- It arrives in the forest-green rigid box, sealed in beeswax, with your numbered register card\n\nOrder-specific questions — tracking, address changes — go to concierge@feier-abend.co.'
       },
       {
         match: ['return', 'returns', 'refund', 'trial', '30 night', '30-night', 'send it back', 'money back'],

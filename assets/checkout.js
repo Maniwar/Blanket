@@ -1023,7 +1023,7 @@
     var notice = el('p', 'ck-notice');
     notice.appendChild(document.createTextNode(
       'We collect only what the register needs: your name, email, and address. ' +
-      'Nothing is sold or shared; delete it any time at hello@feierabend.example. ' +
+      'Nothing is sold or shared; delete it any time at concierge@feier-abend.co. ' +
       'California residents: see our '));
     var privacyA = document.createElement('a');
     privacyA.setAttribute('href', 'privacy.html');

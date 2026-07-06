@@ -5,7 +5,7 @@
  * next serial number from public.allocation_counter and records a minimal
  * order: email, name, city/state, colorway. No street address, no card data,
  * no payment processor — minimal data, CCPA-minded. Deletion requests go to
- * hello@feierabend.example.
+ * concierge@feier-abend.co.
  *
  * Wire contract:
  *   POST <fn> {"name","email","city","state","colorway","session_key"?}
@@ -424,7 +424,7 @@ function emailShell(heading: string, lines: string[]): string {
     `<tr><td style="padding:0 34px;border-top:1px solid #3a4139;"></td></tr>` +
     `<tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">${heading}</td></tr>` +
     body +
-    `<tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">An automated note from the mill's register. This is a demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>` +
+    `<tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">An automated note from the mill's register. This is a demo — nothing ships and no payment is taken. concierge@feier-abend.co</td></tr>` +
     `</table></td></tr></table>`;
 }
 

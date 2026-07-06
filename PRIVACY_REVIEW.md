@@ -72,9 +72,10 @@ corrections, and what still needs a human before a real launch.
 These are **not gaps in the current US-only demo** (see Scope). They apply if you
 later serve real customers or target the EU:
 
-- A **real legal entity name + postal address** and a **monitored contact inbox**
-  (the demo uses a fictional house and an `@…example` address) — so the delete /
-  access rights the notice promises are actually actionable.
+- A **real legal entity name + postal address** — the demo names a fictional
+  house as the controller. *(The **monitored contact inbox** is now real:
+  `concierge@feier-abend.co` forwards to a live mailbox, so the delete/access
+  rights the notice promises are actually actionable.)*
 - A **signed DPA with each processor** (Anthropic and Supabase both offer one) —
   needed once a privacy law attaches; **not required for this demo**, and the
   policy no longer claims one is in force.

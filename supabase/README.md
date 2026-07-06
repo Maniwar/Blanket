@@ -255,7 +255,7 @@ ships), no phone number, no payment data of any kind (nothing is charged),
 no analytics fields. City/state exist purely so the concierge can answer
 "where is my blanket headed?"; the CCPA-minded stance is that data never
 collected never needs safeguarding or disclosure. Deletion requests:
-hello@feierabend.example.
+concierge@feier-abend.co.
 
 ### Counter table + RPC
 

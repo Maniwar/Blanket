@@ -37,7 +37,7 @@ Subject: `Your Feierabend sign-in`
   <tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">Your sign-in link</td></tr>
   <tr><td style="padding:0 34px 14px;font-family:Helvetica,Arial,sans-serif;color:#c9c3b6;font-size:14px;line-height:1.6;">Guten Tag — tap below to open the register. The link is single-use and expires shortly.</td></tr>
   <tr><td style="padding:4px 34px 22px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#c49b5b;color:#1c211d;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px;">Sign in</a></td></tr>
-  <tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">If you didn't request this, you can ignore it. A demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>
+  <tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">If you didn't request this, you can ignore it. A demo — nothing ships and no payment is taken. concierge@feier-abend.co</td></tr>
 </table></td></tr></table>
 ```
 
@@ -53,7 +53,7 @@ Subject: `Confirm your email · Feierabend`
   <tr><td style="padding:24px 34px 8px;font-family:Georgia,serif;color:#f1ece2;font-size:19px;line-height:1.35;">Confirm your email</td></tr>
   <tr><td style="padding:0 34px 14px;font-family:Helvetica,Arial,sans-serif;color:#c9c3b6;font-size:14px;line-height:1.6;">Willkommen — confirm this address to open the register in your name.</td></tr>
   <tr><td style="padding:4px 34px 22px;"><a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#c49b5b;color:#1c211d;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;text-decoration:none;padding:12px 26px;border-radius:8px;">Confirm email</a></td></tr>
-  <tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">If this wasn't you, ignore it. A demo — nothing ships and no payment is taken. hello@feierabend.example</td></tr>
+  <tr><td style="padding:12px 34px 24px;border-top:1px solid #3a4139;font-family:Helvetica,Arial,sans-serif;color:#7f7a6e;font-size:11px;line-height:1.6;">If this wasn't you, ignore it. A demo — nothing ships and no payment is taken. concierge@feier-abend.co</td></tr>
 </table></td></tr></table>
 ```
 

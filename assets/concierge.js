@@ -144,7 +144,7 @@
   } catch (eVer) { /* ignore */ }
   var HISTORY_CAP = 40;
   var SEND_TURNS = 12;
-  var ERROR_LINE = 'The line to the mill is quiet. Try once more, or write hello@feierabend.example.';
+  var ERROR_LINE = 'The line to the mill is quiet. Try once more, or write concierge@feier-abend.co.';
   var BUSY_LINE = 'The mill is resting. Try again in a moment.';
   var STAMP_SRC = 'assets/concierge-stamp.webp';
   var SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
@@ -1305,7 +1305,7 @@
 
     /* footer */
     panel.appendChild(el('div', 'cx-foot',
-      'An automated AI concierge — answers by Anthropic\u2019s Claude · woven, not warranted · hello@feierabend.example'));
+      'An automated AI concierge — answers by Anthropic\u2019s Claude · woven, not warranted · concierge@feier-abend.co'));
 
     document.body.appendChild(launcher);
     document.body.appendChild(scrim);

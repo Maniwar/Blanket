@@ -718,7 +718,7 @@ insert into public.concierge_kb (slug, title, content_md, sort_order) values
 - **Wash it less than you think**; wool self-cleans, and airing out handles most everyday use
 - Plant-dyed or undyed cloth dislikes hot water and harsh detergent; avoid both$kb$, 4),
 
-('shipping-duties', 'Shipping & duties', $kb$Every blanket is **woven to order — allow 3–5 weeks to your door**. **Duties and U.S. delivery are included** in the $589; nothing is owed on arrival. It ships wrapped in **cotton twill, never plastic**. Order-specific matters (tracking, addresses, holds) are handled by hello@feierabend.example.$kb$, 5),
+('shipping-duties', 'Shipping & duties', $kb$Every blanket is **woven to order — allow 3–5 weeks to your door**. **Duties and U.S. delivery are included** in the $589; nothing is owed on arrival. It ships wrapped in **cotton twill, never plastic**. Order-specific matters (tracking, addresses, holds) are handled by concierge@feier-abend.co.$kb$, 5),
 
 ('trial-returns', 'Trial & returns', $kb$A **30-night trial**: sleep under it, and if it is not right, return it **clean** within 30 nights for a **full refund**. Returned blankets are inspected at the mill.$kb$, 6),
 
@@ -750,7 +750,7 @@ Notes: Pendleton is a fine brand with real heritage. Weighted blankets work via 
 
 ('value', 'Value', $kb$Built for the fifty years it takes to be inherited, Decke 01 works out to **about twelve dollars a year**. The 30-night trial and lifetime mending carry the risk; the buyer carries the blanket.$kb$, 12);
 
-update public.concierge_kb set content_md = $kb$Every blanket is **woven to order — allow 3–5 weeks to your door**. **Duties and U.S. delivery are included** in the $589; nothing is owed on arrival. It ships wrapped in **cotton twill, never plastic**. Signed-in owners handle status, tracking, address changes (before shipment), and cancellations (before weaving) right here with the concierge; only matters after shipment — carrier redirects, returns in motion — go to hello@feierabend.example.$kb$,
+update public.concierge_kb set content_md = $kb$Every blanket is **woven to order — allow 3–5 weeks to your door**. **Duties and U.S. delivery are included** in the $589; nothing is owed on arrival. It ships wrapped in **cotton twill, never plastic**. Signed-in owners handle status, tracking, address changes (before shipment), and cancellations (before weaving) right here with the concierge; only matters after shipment — carrier redirects, returns in motion — go to concierge@feier-abend.co.$kb$,
   updated_at = now()
   where slug = 'shipping-duties';
 
@@ -777,7 +777,7 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 2. If more than one order could be meant, list them (Nº, cloth, destination) and offer one {{reply:…}} pill per order so they pick the exact one.
 3. Emit the address-change form for that order on its own line: {{form:address-change:<serial>}} (use the real serial). The owner types the street, unit, city, state, and ZIP into labeled fields themselves.
 4. NEVER compose, dictate, or "correct" the street/city/state/ZIP in chat, and never call a tool to set an address — mistyping one field (a city into the street line) is exactly what the form prevents. The register records the submission and the chat shows the confirmation; read that back so the owner sees what was saved.
-5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer hello@feierabend.example for a carrier redirect.$sop$, 2),
+5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer concierge@feier-abend.co for a carrier redirect.$sop$, 2),
 
 ('cancellation', 'Cancellations', $sop$An owner may cancel an order only while it is still 'placed' (the loom has not started):
 1. Call get_my_orders to check the status.
@@ -786,7 +786,7 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 4. Only then call cancel_order with the serial. Confirm the cancellation from the tool result.
 5. Once weaving has begun the cloth carries their number — no cancellation, but the 30-night trial still applies on arrival. Offer that instead.$sop$, 3),
 
-('escalation', 'When to hand off', $sop$Hand off to hello@feierabend.example only when the register cannot do it:
+('escalation', 'When to hand off', $sop$Hand off to concierge@feier-abend.co only when the register cannot do it:
 - Carrier redirects after shipment, returns in progress, mending arrangements, anything involving payment.
 - Say it lightly — the desk handles those by hand for now.
 Everything else about an owner's orders you handle yourself with the tools. Never deflect a status or tracking question to email.$sop$, 4);
@@ -805,7 +805,7 @@ update public.concierge_sops set content_md = $sop$An owner may change the shipp
 2. If several orders are eligible, list them (Nº, cloth, destination) and offer one pill per order: {{reply:Change the address on Nº 14,228}}.
 3. Once the exact order is chosen, emit the address-change form on its own line: {{form:address-change:<serial>}} (use the real serial). The owner types the street, unit, city, state, and ZIP into labeled fields themselves.
 4. NEVER compose, dictate, or "correct" the street/city/state/ZIP in chat, and never call a tool to set an address — mistyping one field (a city into the street line) is exactly what the form prevents. The register records the submission and the chat shows the confirmation; read that back so the owner sees what was saved.
-5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer hello@feierabend.example for a carrier redirect.$sop$,
+5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer concierge@feier-abend.co for a carrier redirect.$sop$,
   updated_at = now()
   where slug = 'address-change';
 
@@ -824,7 +824,7 @@ update public.concierge_sops set content_md = $sop$An owner may change the shipp
 2. If several orders are eligible, list them (Nº, cloth, status) and offer one pill per order: {{reply:Change the address on Nº 14,228}}.
 3. Once the order is chosen, emit {{form:address-change:14228}} on its own line (using the real serial). The form collects the full address with proper fields — do not ask the owner to type the address into chat.
 4. The register records the submission directly and the chat shows the confirmation; acknowledge it and read the recorded address back.
-5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer hello@feierabend.example for a carrier redirect.$sop$,
+5. If the order has already shipped or been delivered, the register is closed on it — apologize once and offer concierge@feier-abend.co for a carrier redirect.$sop$,
   updated_at = now()
   where slug = 'address-change';
 
@@ -929,7 +929,7 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 2. Choose the note from the status: a 'placed'/'weaving'/'finishing' order gets the order confirmation; only a 'shipped'/'delivered' order has a shipping note; only a 'cancelled'/'returned' order has a cancellation note. Don't offer a note that doesn't exist yet.
 3. Confirm the destination in one line ("I'll send Nº 14,228's confirmation to the email on your account") and call resend_confirmation with the serial and the right kind (confirmation | shipping | cancellation).
 4. Read the result back — it re-sends to the email on file, not to a typed address. Suggest they check spam if it's shy. Nothing is charged; this only re-sends an existing note.
-5. If they want it sent to a DIFFERENT address, the register can't do that — offer hello@feierabend.example.$sop$, 11),
+5. If they want it sent to a DIFFERENT address, the register can't do that — offer concierge@feier-abend.co.$sop$, 11),
 ('mending', 'Mending & repairs', $sop$Wool is meant to be mended, not discarded — the mill offers lifetime mending, and this is a point of pride, not a chore.
 1. When an owner mentions damage — a pull, a loose bind, a moth nibble, a worn edge — respond with reassurance first: this is exactly what the mill is for, and the piece can almost always be brought back.
 2. Call get_my_orders to find which blanket it is (by cloth or Nº). If it's ambiguous, ask which one with a pill per candidate.
@@ -941,7 +941,7 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 2. Confirm the exact spelling with the owner, reading it back, before you change anything ("the card will read 'für Anneliese' — spelled A-N-N-E-L-I-E-S-E?").
 3. Call update_gift_details with the serial and the recipient_name. Read the confirmation back.
 4. This changes ONLY the name on the card — it does not change where the gift ships. If they also want a new address, that goes through the address-change form separately.
-5. If the order has shipped, the card is already enclosed — apologize once and offer hello@feierabend.example.$sop$, 13),
+5. If the order has shipped, the card is already enclosed — apologize once and offer concierge@feier-abend.co.$sop$, 13),
 ('care-guide', 'Care & keeping the wool', $sop$Owners often ask how to look after the blanket. The care guide is tailored to the cloth.
 1. If they have an order, call get_care_guide with the serial for cloth-specific notes; otherwise give the general wool care from the knowledge base.
 2. The heart of it: air, don't wash — wool is self-cleaning. Spot-clean spills at once; hand-wash cool only when truly needed, dry flat, never tumble. Store folded and breathing with cedar or lavender against moth.
@@ -1035,3 +1035,16 @@ insert into public.concierge_evals (slug, name, description, signed_in, context,
 
   end if;
 end $seed$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Contact-address migration. The KB/SOP seeds are insert-only-if-empty, so an
+-- install seeded earlier still carries the old placeholder contact. Rewrite any
+-- lingering fictional address to the real monitored inbox on every re-apply
+-- (idempotent — a no-op once none remain).
+-- ─────────────────────────────────────────────────────────────────────────────
+update public.concierge_kb
+  set content_md = replace(content_md, 'hello@feierabend.example', 'concierge@feier-abend.co')
+  where content_md like '%hello@feierabend.example%';
+update public.concierge_sops
+  set content_md = replace(content_md, 'hello@feierabend.example', 'concierge@feier-abend.co')
+  where content_md like '%hello@feierabend.example%';
