@@ -222,9 +222,11 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   so a push mismatch never halts the function deploy.)*
 - **As the operator**, I want to audit at scale — filter logs, conversations,
   customers, and the waitlist by date range and keyword, jump straight to an order
-  by its **Nº**, and see each conversation's **sales stage** — so that nothing is
-  buried once volume grows. *(Server-side trigram filters; order-number lookup;
-  stage chips; goal-outcome filter.)*
+  by its **Nº** or a conversation by its **id**, page through long lists instead
+  of hitting a hard cap, and **export** what I'm looking at to CSV — so that
+  nothing is buried once volume grows. *(Server-side trigram filters; order-number
+  and conversation-id lookup; range-paged lists with "Load more"; CSV export of
+  the register, a transcript, and the waitlist; stage chips; goal-outcome filter.)*
 - **As the operator**, I want to change what the concierge says and shows without a
   deploy — copy, tuning notes, starters, **selling angles**, **objection playbook**,
   **assertiveness**, engagement pacing, in-chat **forms**, and the **images** the

@@ -832,7 +832,10 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         </select>
         <button id="cust-apply" class="btn">Search</button>
         <button id="cust-clear" class="btn ghost">Clear</button>
+        <button id="cust-more" class="btn ghost" style="display:none;">Load more</button>
+        <button id="cust-export" class="btn ghost">Export CSV</button>
         <button id="cust-refresh" class="btn">Refresh</button>
+        <span class="micro" id="cust-count" style="color:var(--wool-faint);"></span>
       </div>
 
       <div id="cust-list"></div>
@@ -1360,7 +1363,8 @@ function wireStatic() {
 
   // ---- Audit filters: Search / Clear / Load more + Enter-to-search ----
   wireFilter('act', loadActions, ['act-q'], $('act-apply'), $('act-clear'), $('actions-more'));
-  wireFilter('cust', loadCustomers, ['cust-search', 'cust-serial', 'cust-status', 'cust-colorway', 'cust-gift'], $('cust-apply'), $('cust-clear'), null);
+  wireFilter('cust', loadCustomers, ['cust-search', 'cust-serial', 'cust-status', 'cust-colorway', 'cust-gift'], $('cust-apply'), $('cust-clear'), $('cust-more'));
+  $('cust-export').addEventListener('click', exportCustomersCsv);
   wireFilter('convo', loadConversations, ['convo-q', 'convo-goal'], $('convo-apply'), $('convo-clear'), $('convo-more'));
   wireFilter('wl', loadWaitlist, ['wl-q'], $('wl-apply'), $('wl-clear'), $('wl-more'));
   // Selects apply on change: the order attributes hit the server; the goal
@@ -3080,7 +3084,8 @@ function badge(text, color) {
    wildcard is * (not %), and commas/parens/wildcards are stripped so a search
    term can't break the filter grammar. */
 const PAGE = 40;
-const pageState = { act: 0, convo: 0, wl: 0 };
+const CUST_PAGE = 200; // orders per page for the register view (aggregated by patron)
+const pageState = { act: 0, convo: 0, wl: 0, cust: 0 };
 
 function fval(id) { const e = $(id); return e ? (e.value || '').replace(/^\s+|\s+$/g, '') : ''; }
 function fkw(id) { return fval(id).replace(/[,()%*]/g, ''); }           // safe for or()
@@ -3382,19 +3387,25 @@ async function saveEdition() {
   loadEdition();
 }
 
-async function loadCustomers() {
-  let q = sb.from('orders')
-    .select('email,name,serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
-    .order('placed_at', { ascending: false })
-    .limit(1000);
-  const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
+async function loadCustomers(more) {
+  if (!more) pageState.cust = 0;
   const serialQ = fkw('cust-serial'), statusQ = fval('cust-status'),
         cwQ = fval('cust-colorway'), giftQ = fval('cust-gift');
+  const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
+  const isSerial = /^\d+$/.test(serialQ);
+  // Page the underlying ORDERS (placed_at desc) and aggregate the accumulated
+  // set by patron — the same incremental model the Conversations tab uses, so it
+  // scales past the old hard 1000 cap. A specific order Nº bypasses paging.
+  const from = pageState.cust * CUST_PAGE;
+  let q = sb.from('orders')
+    .select('email,name,serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
+    .order('placed_at', { ascending: false });
   // A bare order number jumps straight to that entry (live or struck), ignoring
   // the other narrowing so the admin always finds the number they typed.
-  if (/^\d+$/.test(serialQ)) {
-    q = q.or('serial.eq.' + serialQ + ',cancelled_serial.eq.' + serialQ);
+  if (isSerial) {
+    q = q.or('serial.eq.' + serialQ + ',cancelled_serial.eq.' + serialQ).limit(50);
   } else {
+    q = q.range(from, from + CUST_PAGE - 1);
     if (df) q = q.gte('placed_at', df);
     if (dt) q = q.lte('placed_at', dt);
     if (kw) q = q.or(orIlike(['email', 'name', 'recipient_name'], kw)); // server search, not just the fetched page
@@ -3405,6 +3416,10 @@ async function loadCustomers() {
   }
   const res = await q;
   if (res.error) { fail('Load customers', res.error); return; }
+  const pageOrders = res.data || [];
+  state.custOrders = more ? (state.custOrders || []).concat(pageOrders) : pageOrders;
+  pageState.cust++;
+  showMore('cust-more', !isSerial && pageOrders.length === CUST_PAGE);
   let notesByKey = new Map();
   const nres = await sb.from('customer_notes')
     .select('id,email,user_id,note,created_at')
@@ -3434,7 +3449,7 @@ async function loadCustomers() {
   }
 
   const byKey = new Map();
-  (res.data || []).forEach(function (o) {
+  (state.custOrders || []).forEach(function (o) {
     const key = (o.email || o.user_id || 'unknown').toLowerCase();
     if (!byKey.has(key)) {
       byKey.set(key, { email: o.email || '—', name: o.name || '', orders: [], latest: o.placed_at });
@@ -3457,6 +3472,25 @@ async function loadCustomers() {
   renderCustomers();
 }
 
+/* Export the loaded register as CSV — one row per ORDER (the natural grain for
+   the register). Reflects what's currently loaded; Load more first for the full
+   history. */
+function exportCustomersCsv() {
+  const orders = state.custOrders || [];
+  if (!orders.length) { toast('Nothing loaded to export', true); return; }
+  const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  const head = ['placed_at', 'serial', 'cancelled_serial', 'status', 'colorway', 'email', 'name',
+    'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking'];
+  const lines = [head.join(',')];
+  orders.forEach(function (o) { lines.push(head.map(function (k) { return esc(o[k]); }).join(',')); });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'register-orders.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
 function renderCustomers() {
   const list = $('cust-list');
   list.textContent = '';
@@ -3474,6 +3508,10 @@ function renderCustomers() {
   $('m-cust-count').textContent = String(state.customers.length);
   $('m-cust-orders').textContent = String(totalOrders);
   $('m-cust-ltv').textContent = '$' + (totalActive * PRICE).toLocaleString('en-US');
+  // The register view is paged (200 orders/page); figures reflect what's loaded.
+  const moreShown = $('cust-more') && $('cust-more').style.display !== 'none';
+  if ($('cust-count')) $('cust-count').textContent =
+    state.customers.length ? (state.customers.length + ' patrons · ' + totalOrders + ' orders loaded' + (moreShown ? ' — Load more for older' : '')) : '';
 
   if (!rows.length) {
     list.appendChild(el('div', 'empty micro',
