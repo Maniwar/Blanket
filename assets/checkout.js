@@ -464,7 +464,28 @@
       'text-transform:uppercase;line-height:1.7;color:rgba(241,236,226,.78);',
       'overflow-wrap:break-word;word-break:break-word;}',
       '.ck-cardrow.ck-cardrow-soft{color:rgba(241,236,226,.5);text-transform:none;letter-spacing:.08em;}',
-      '.ck-returnrow{display:flex;justify-content:center;}',
+      '.ck-returnrow{display:flex;justify-content:center;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:1.4rem;}',
+      /* finale pills — a special send-off after a commission */
+      '.ck-finbtn{position:relative;overflow:hidden;min-height:46px;padding:.72rem 1.5rem;border-radius:999px;cursor:pointer;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;',
+      'transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease,background .25s ease,color .25s ease,border-color .25s ease;',
+      'animation:ckRise .6s cubic-bezier(.2,.8,.2,1) both;}',
+      '.ck-finbtn:focus-visible{outline:1px solid var(--ck-brass-soft);outline-offset:3px;}',
+      '.ck-finbtn:active{transform:translateY(1px) scale(.99);}',
+      /* primary — brass pill with a slow shine sweep + glow */
+      '.ck-again{background:linear-gradient(135deg,var(--ck-brass-soft),var(--ck-brass));color:#171F1A;font-weight:700;',
+      'border:1px solid var(--ck-brass-soft);animation-delay:.05s;',
+      'box-shadow:0 6px 22px -8px rgba(196,155,91,.7),inset 0 1px 0 rgba(255,255,255,.28);}',
+      '.ck-again:hover{transform:translateY(-2px);box-shadow:0 12px 32px -8px rgba(196,155,91,.92),inset 0 1px 0 rgba(255,255,255,.38);}',
+      '.ck-again::after{content:"";position:absolute;top:0;left:-60%;width:42%;height:100%;pointer-events:none;',
+      'background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-18deg);',
+      'animation:ckShine 4s ease-in-out 1.4s infinite;}',
+      /* secondary — refined ghost pill */
+      '.ck-return{background:rgba(241,236,226,.02);color:rgba(241,236,226,.6);border:1px solid rgba(196,155,91,.32);animation-delay:.15s;}',
+      '.ck-return:hover{transform:translateY(-2px);color:var(--ck-ink);border-color:var(--ck-brass-soft);background:rgba(196,155,91,.08);}',
+      '@keyframes ckShine{0%{left:-60%;}55%{left:130%;}100%{left:130%;}}',
+      '@keyframes ckRise{0%{opacity:0;transform:translateY(10px);}100%{opacity:1;transform:translateY(0);}}',
+      '@media (prefers-reduced-motion:reduce){.ck-finbtn{animation:none;}.ck-again::after{display:none;}.ck-finbtn:hover{transform:none;}}',
 
       '.ck-fade{animation:ckFade .6s ease both;}',
       '@keyframes ckFade{from{opacity:0;}to{opacity:1;}}',
@@ -1755,7 +1776,7 @@
     box.appendChild(el('p', 'ck-demoline', DEMO_LINE));
 
     var returnRow = el('div', 'ck-returnrow');
-    var againBtn = el('button', 'ck-back', 'Commission another →');
+    var againBtn = el('button', 'ck-finbtn ck-again', 'Commission another →');
     againBtn.type = 'button';
     againBtn.addEventListener('click', function () {
       commissioned = null;
@@ -1763,7 +1784,7 @@
       showAct(1, 1); /* details stay filled; only the cloth is chosen anew */
     });
     returnRow.appendChild(againBtn);
-    var closeBtn = el('button', 'ck-back', 'Return to the evening');
+    var closeBtn = el('button', 'ck-finbtn ck-return', 'Return to the evening');
     closeBtn.type = 'button';
     closeBtn.addEventListener('click', function () { closePanel(); });
     returnRow.appendChild(closeBtn);
