@@ -228,6 +228,14 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the operator**, I want to verify the live system end-to-end without
   guessing — is sign-in recognized, is the schema applied, is attribution
   working — so that I can trust it. *(`?selftest=1`, `?cachecheck=1`.)*
+- **As the operator**, I want an automated way to prove the concierge still
+  *behaves* — shows the commission button on a buying signal, never leaks
+  `[HOLD]`, doesn't loop in discovery, reads the register instead of guessing —
+  after any prompt or model change, so that a fix I already shipped can't quietly
+  regress. *(`evals/` behavior deck: scripted conversations replayed against the
+  deployed function, deterministic checks + a pinned binary LLM judge, reported as
+  a pass rate; see* [`evals/README.md`](evals/README.md)*. Design rationale in
+  §4.9.)*
 - **As the operator**, I want a complete audit trail of every order change and
   tool action, so that nothing mutates the register invisibly.
   *(`order_events` trigger records field-level `{old,new}` diffs on every update
@@ -502,6 +510,37 @@ Because the pitch is "it's a virtual sales associate," it has to be measurable:
 - **Attribution** — an order carries the `chat_session` that drove it, so the
   admin sees the concierge's assisted revenue.
 
+### 4.9 Behavior evals — catching regressions in a non-deterministic bot
+**Decision:** a small automated test deck (`evals/`) replays scripted
+conversations against the **deployed** concierge and reports a **pass rate** per
+behavior, so a prompt or model change can't silently reintroduce a bug we already
+fixed.
+**Why:** the concierge's most important properties aren't unit-testable — *does it
+show the commission button on a buying signal, never leak the internal `[HOLD]`
+token, stop looping in discovery once the cloth is known, and call
+`get_my_orders` instead of guessing a count?* Every one of those was a real bug
+this build hit; each is now a scenario in the deck.
+**How it judges, grounded in current LLM-as-judge practice:**
+- **Deterministic checks first.** Most behaviors are mechanically observable — a
+  reply *contains* `{{action:commission}}`, *never contains* `[HOLD]`, asks *at
+  most one* question, or emitted the "Reading the register…" status frame (which
+  proves a tool ran). These are cheap, stable, and pinpoint the regression.
+- **An LLM judge only for the genuinely fuzzy** ("did it *advance the sale*?"),
+  always phrased as **one concrete, binary yes/no criterion** — binary is far more
+  self-consistent run-to-run than a 1–10 score, and a specific criterion blunts a
+  judge's verbosity/position bias. The judge is pinned (temperature 0, a fixed
+  contract, told to ignore tone/length) and forced to answer through a `verdict`
+  tool.
+- **Repeat N times, report a *rate*** (e.g. 9/10). One green run doesn't prove an
+  LLM won't flake next time; a rate below `EVAL_THRESHOLD` fails the run, so it
+  drops straight into CI.
+**Trade-off:** it tests against a live deployment (a token cost and a network
+dependency), not a mock — but that's the point: it measures the behavior a real
+shopper would get, prompt + model + tools together. The judge checks need an
+`ANTHROPIC_API_KEY` and are skipped without one; a `--selftest` mode proves the
+harness itself with zero network. Full design and how to run it:
+[`evals/README.md`](evals/README.md).
+
 ---
 
 ## 5. Subsystems
@@ -571,6 +610,12 @@ reports recognition, schema presence, attribution, and the exact context the
 model receives; `?cachecheck=1` exercises the whole cache round-trip; and every
 tool call, order change, feedback, and knowledge gap is logged for the admin.
 
+Beyond diagnosing a single request, the **`evals/` behavior deck** (§4.9) is how
+we prove the concierge still *behaves* across a change: it replays scripted
+conversations against the deployed function and reports a pass rate per behavior,
+so a prompt or model tweak that reintroduces a known bug shows up as a failing
+check rather than a customer complaint.
+
 ---
 
 ## 8. Roadmap
@@ -636,6 +681,9 @@ the same change updates whichever of these it touches:
 - **[supabase/README.md](supabase/README.md)** — any new endpoint/wire contract.
 - **[SETUP.md](SETUP.md)** / **[DEMO.md](DEMO.md)** — if setup, verification, or
   the walkthrough changes.
+- **[evals/](evals/)** — when a behavior change fixes (or risks) something a
+  shopper would notice, add or update a scenario so the fix is guarded. A recurring
+  behavior bug that isn't in the deck is a gap.
 
 A feature isn't "done" until its docs are.
 
