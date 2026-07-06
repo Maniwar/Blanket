@@ -508,6 +508,34 @@
 
       <section class="card">
         <div class="card-head">
+          <h3>Keys &amp; connection</h3>
+          <span class="micro">what's configured — and where each key belongs</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">The studio connects with the Supabase <strong>publishable</strong> key — that one is public by design and safe to hold in the browser, so you can set it here. Every <strong>server</strong> secret (the Anthropic key, Resend, etc.) must stay on the server; this panel only shows whether each is <em>set</em> — never its value. Change those in the Supabase dashboard (Edge Functions → Secrets) or as a GitHub secret, then re-run <strong>Deploy Concierge</strong>.</p>
+
+        <div class="field" style="max-width:560px;">
+          <label class="micro" for="cfg-conn-key">Publishable (connection) key — safe to store in this browser</label>
+          <input type="text" id="cfg-conn-key" class="mono-field" placeholder="sb_publishable_…" autocomplete="off" spellcheck="false">
+          <p class="micro" style="margin-top:4px;opacity:.7;">Saved to this browser only (localStorage). Blank = use the key built into the page.</p>
+        </div>
+        <div class="card-foot">
+          <button id="conn-key-save" class="btn primary">Save &amp; reconnect</button>
+          <button id="conn-key-clear" class="btn ghost">Clear override</button>
+        </div>
+
+        <div class="card-head" style="margin-top:18px;">
+          <h3 style="font-size:15px;">Server secrets</h3>
+          <span class="micro">presence only — never the value</span>
+        </div>
+        <div id="secrets-list"><div class="empty micro">Checking…</div></div>
+        <div class="card-foot">
+          <button id="secrets-refresh" class="btn">Re-check</button>
+          <span class="micro" id="secrets-status" style="color:var(--wool-faint);"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Voice</h3>
           <span class="micro">concierge_config</span>
         </div>
@@ -1023,7 +1051,13 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
    ============================================================ */
 
 const SUPABASE_URL = 'https://kvkjxjdpqoqasiehdlcw.supabase.co';
-const SUPABASE_ANON_KEY = (window.FEIER_ADMIN_KEY || 'sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy');
+/* Connection key resolution: a locally-saved override (set in Tuning → Keys &
+   connection) wins, then a page-injected global, then the key built into the
+   page. This is the PUBLISHABLE key — public by design, safe in the browser. */
+function storedConnKey() {
+  try { return (window.localStorage && localStorage.getItem('feier_admin_key')) || ''; } catch (e) { return ''; }
+}
+const SUPABASE_ANON_KEY = (storedConnKey() || window.FEIER_ADMIN_KEY || 'sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy');
 /* Placeholder rebuilt from parts so a deploy-time search/replace of the
    literal placeholder cannot clobber this comparison. */
 const KEY_PLACEHOLDER = ['__ANON', '_KEY__'].join('');
@@ -1184,6 +1218,7 @@ async function route() {
     loadSite();
     loadTools();
     loadEvals();
+    loadSecretStatus();
   }
 }
 
@@ -1296,6 +1331,9 @@ function wireStatic() {
   $('save-engine').addEventListener('click', function () {
     withBusy($('save-engine'), saveEngine);
   });
+  $('conn-key-save').addEventListener('click', saveConnKey);
+  $('conn-key-clear').addEventListener('click', clearConnKey);
+  $('secrets-refresh').addEventListener('click', function () { withBusy($('secrets-refresh'), loadSecretStatus); });
   $('save-voice').addEventListener('click', function () {
     withBusy($('save-voice'), saveVoice);
   });
@@ -1446,6 +1484,7 @@ async function loadConfig() {
 
   $('cfg-enabled').checked = cfg.enabled === true;
   $('cfg-enabled-label').textContent = cfg.enabled === true ? 'Live' : 'Paused';
+  if ($('cfg-conn-key')) $('cfg-conn-key').value = storedConnKey();
   $('cfg-model').value = (typeof cfg.model === 'string') ? cfg.model : '';
   $('cfg-model-fallback').value = (typeof cfg.model_fallback === 'string') ? cfg.model_fallback : '';
   $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
@@ -2609,6 +2648,61 @@ function goalChips(goalStatus) {
     wrap.appendChild(row);
   });
   return wrap;
+}
+
+/* ============================================================
+   KEYS & CONNECTION (Tuning) — publishable-key input + secret status
+   The publishable key is public/safe, so it lives in localStorage. Server
+   secrets are NEVER entered here — we only read their presence from ?secrets=1.
+   ============================================================ */
+
+function saveConnKey() {
+  const v = ($('cfg-conn-key').value || '').trim();
+  try {
+    if (v) localStorage.setItem('feier_admin_key', v);
+    else localStorage.removeItem('feier_admin_key');
+  } catch (e) { fail('Save key', e); return; }
+  toast('Connection key saved — reconnecting…');
+  setTimeout(function () { location.reload(); }, 600);
+}
+
+function clearConnKey() {
+  try { localStorage.removeItem('feier_admin_key'); } catch (e) { fail('Clear key', e); return; }
+  $('cfg-conn-key').value = '';
+  toast('Override cleared — reconnecting…');
+  setTimeout(function () { location.reload(); }, 600);
+}
+
+async function loadSecretStatus() {
+  const list = $('secrets-list');
+  const token = state.session && state.session.access_token;
+  let res;
+  try {
+    res = await fetch(SUPABASE_URL + '/functions/v1/concierge?secrets=1', {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) }
+    });
+  } catch (e) { list.textContent = ''; list.appendChild(el('div', 'micro', 'Could not reach the function.')); return; }
+  if (!res.ok) {
+    list.textContent = '';
+    list.appendChild(el('div', 'micro', res.status === 403 ? 'Admins only — sign in as an admin to see secret status.' : ('Status check failed (' + res.status + ').')));
+    return;
+  }
+  const data = await res.json();
+  const secrets = (data && data.secrets) || {};
+  list.textContent = '';
+  Object.keys(secrets).forEach(function (k) {
+    const s = secrets[k];
+    const row = el('div'); row.style.cssText = 'display:flex; gap:10px; align-items:baseline; margin:6px 0;';
+    const ok = s.set === true;
+    const dot = el('span', null, ok ? '● set' : (s.required ? '✗ MISSING' : '○ not set'));
+    dot.style.cssText = 'flex:0 0 96px; font-weight:600; color:' + (ok ? '#3b7a4b' : (s.required ? '#b23b3b' : '#8a8a8a')) + ';';
+    row.appendChild(dot);
+    row.appendChild(el('span', 'mono', k));
+    row.appendChild(el('span', 'micro', s.purpose || ''));
+    list.appendChild(row);
+  });
+  if ($('secrets-status')) $('secrets-status').textContent =
+    'build ' + (data.build || '?') + ' · model in effect: ' + (data.model_in_effect || '?');
 }
 
 /* ============================================================
