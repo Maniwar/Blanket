@@ -90,7 +90,8 @@ supabase secrets set MODEL="claude-haiku-4-5-20251001"
 
 ## Security
 
-`ALLOWED_ORIGINS` (set by the workflow to `https://maniwar.github.io`)
+`ALLOWED_ORIGINS` (set by the workflow to the site origins —
+`https://feier-abend.co,https://www.feier-abend.co,https://maniwar.github.io`)
 restricts which **browsers** may call the function via CORS — it does not
 stop direct `curl` calls. Abuse is bounded by the built-in rate limit
 (**20 requests per 10 minutes per IP**) and the `max_tokens: 1024` cap on

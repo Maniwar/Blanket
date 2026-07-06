@@ -50,7 +50,7 @@ jobs:
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/setup.sql
 
       - name: Set allowed origins
-        run: supabase secrets set ALLOWED_ORIGINS="https://maniwar.github.io"
+        run: supabase secrets set ALLOWED_ORIGINS="https://feier-abend.co,https://www.feier-abend.co,https://maniwar.github.io"
 
       - name: Set Anthropic key (only when the GitHub secret exists)
         if: env.ANTHROPIC_API_KEY != ''
