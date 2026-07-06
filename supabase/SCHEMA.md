@@ -36,6 +36,31 @@ gates the **browser** (anon key) and the **admin portal** (a signed-in admin).
 
 ## Tables
 
+### Core entity relationships
+
+The transactional heart — who bought what, the chat that drove it, and the audit
+trail. (The `concierge_config`/`_kb`/`_sops`/`_forms`/`_goals`/`_tools`/`_evals`/
+`site_content` tables are standalone registry/key-value content the admin edits;
+`allocation_counter`/`serial_holds`/`rate_limits` back the serial + rate machinery.)
+
+```mermaid
+erDiagram
+  customers ||--o{ orders : "places"
+  orders ||--o{ order_events : "field-level audit"
+  orders ||--o{ email_log : "transactional email (by serial)"
+  customers ||--o{ customer_notes : "client book"
+  concierge_conversations ||--o{ concierge_messages : "contains"
+  concierge_messages ||--o| concierge_feedback : "thumbs (by message_id)"
+  concierge_conversations }o--o| orders : "attributes via chat_session"
+  concierge_conversations ||--o{ concierge_actions : "tool calls"
+  allocation_counter ||--o{ serial_holds : "issues numbers"
+```
+
+Key columns: `orders.serial` (UNIQUE), `orders.user_id`/`email` (owner, RLS),
+`orders.chat_session` (→ the conversation that drove it); `concierge_messages`
+carries `role`/`content`/**`model`**/`latency_ms`; `concierge_conversations`
+carries `session_key`/`user_email`/`status`/`sales_stage`/`goal_status`.
+
 ### `concierge_config` — runtime settings (key → jsonb)
 One row per setting. Cached in the function for 60s, so edits reach live
 traffic within a minute.
@@ -458,7 +483,7 @@ flowchart LR
     direction TB
     CP["PUBLIC (rate-limited)<br/>?config · ?site · ?selftest<br/>POST chat · ?reengage · ?wrapup"]
     CU["SIGNED-IN<br/>?starters · POST ?form"]
-    CA["ADMIN<br/>?tools · ?evals · ?secrets<br/>?cachecheck · POST ?judge"]
+    CA["ADMIN<br/>?tools · ?evals · ?secrets · ?export<br/>?cachecheck · POST ?judge"]
   end
 
   subgraph COMMISSION["commission — Deno edge function"]
@@ -508,11 +533,20 @@ browser.
 | `GET ?tools=1` | `handleToolsGet` | **admin** | The built-in tools manifest (name, enabled, core, effective + default instruction, overridden) for the admin Tools tab. |
 | `GET ?evals=1` | `handleEvalsGet` | **admin** | The enabled behavior-eval deck (`concierge_evals`), shaped like `evals/scenarios.mjs`, so the CLI runner can share the DB deck (`--remote`). |
 | `GET ?secrets=1` | `handleSecretsGet` | **admin** | Server-secret **presence** (booleans only, never values) + build tag + model-in-effect, for the studio's Keys & connection readout. |
+| `GET ?export=1` | `handleExportGet` | **admin** | **Streaming** transcript export: keyset-paginates conversations and streams a CSV (one row per message, `user` pseudonymized unless `?pii=1`; `?from`/`?to` date bounds). Bounded memory on both ends — the scalable export tier (see note below). |
 | `GET ?cachecheck=1` | inline | **admin** | Self-diagnosis of the semantic cache round-trip (writes+deletes a probe row, so admin-gated). |
 | `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
 
 **SSE frames** (chat): `{"t":…}` text, `{"s":…}` status, `{"m":{cid,mid}}`
 meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
+
+**Export tiers** (transcripts): the admin panel exports one open transcript or
+the current filtered set entirely in the **browser** (bounded by memory); the
+**`?export=1`** endpoint is the **streaming** tier — the server keyset-paginates
+and streams the CSV, piped to disk via the File System Access API, so neither end
+buffers the whole result. The next tier for warehouse-scale (not built) is an
+**async COPY to a Storage bucket + signed URL**, which survives the function's
+wall-clock limit.
 
 ### commission (`functions/commission/index.ts`)
 | Method / query | Gate | Purpose |

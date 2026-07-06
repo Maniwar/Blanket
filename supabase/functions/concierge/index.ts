@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-06-evals-secrets-harden";
+const BUILD_TAG = "2026-07-06-streaming-export";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1895,6 +1895,94 @@ async function handleSecretsGet(req: Request): Promise<Response> {
   });
 }
 
+// ── GET ?export=1 — STREAMING conversation-transcript export (admin only) ────
+// The scalable export: instead of the browser holding the whole result set in
+// memory (which caps out), the server keyset-paginates conversations and streams
+// CSV rows straight to the download, so memory stays bounded on BOTH ends and the
+// size is limited only by the function's wall-clock, not RAM. One row per message,
+// keyed by conversation_id + metadata. The `user` column is pseudonymized (a
+// stable hash) unless ?pii=1. Filters: ?from / ?to (ISO date bounds).
+// (For truly unbounded / warehouse-scale, the next tier is an async COPY to a
+// Storage bucket + signed URL — see SCHEMA.md; this endpoint is the streaming tier.)
+function csvCell(v: unknown): string {
+  return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+}
+// Stable pseudonym for an email — FNV-1a → base36, matching the admin client so a
+// person reads as the same token in browser- and server-made exports.
+function pseudoEmail(s: string | null): string {
+  if (!s) return "";
+  let h = 2166136261 >>> 0;
+  const t = s.toLowerCase();
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return "u_" + (h >>> 0).toString(36);
+}
+async function handleExportGet(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const url = new URL(req.url);
+  const from = url.searchParams.get("from") || "";
+  const to = url.searchParams.get("to") || "";
+  const pii = url.searchParams.get("pii") === "1";
+  const enc = new TextEncoder();
+  const HEAD = ["conversation_id", "user", "section", "sales_stage", "conversation_created_at",
+    "message_created_at", "role", "model", "latency_ms", "content"];
+  const CONVO_BATCH = 300, ID_CHUNK = 50;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        controller.enqueue(enc.encode(HEAD.join(",") + "\n"));
+        let cursorTs: string | null = null, cursorId: string | null = null;
+        for (;;) {
+          let q = "concierge_conversations?select=id,created_at,user_email,section,sales_stage" +
+            `&order=created_at.desc,id.desc&limit=${CONVO_BATCH}`;
+          if (from) q += `&created_at=gte.${encodeURIComponent(from)}`;
+          if (to) q += `&created_at=lte.${encodeURIComponent(to)}`;
+          if (cursorTs && cursorId) {
+            // keyset: rows strictly "after" the cursor in (created_at desc, id desc)
+            q += `&or=(created_at.lt.${encodeURIComponent(cursorTs)},` +
+              `and(created_at.eq.${encodeURIComponent(cursorTs)},id.lt.${encodeURIComponent(cursorId)}))`;
+          }
+          const convos = await pgSelect<{ id: string; created_at: string; user_email: string | null; section: string | null; sales_stage: string | null }>(q);
+          if (!convos || convos.length === 0) break;
+          const last = convos[convos.length - 1];
+          cursorTs = last.created_at; cursorId = last.id;
+
+          const byId: Record<string, typeof convos[number]> = {};
+          convos.forEach((c) => { byId[c.id] = c; });
+          const ids = convos.map((c) => c.id);
+          for (let i = 0; i < ids.length; i += ID_CHUNK) {
+            const chunk = ids.slice(i, i + ID_CHUNK);
+            const msgs = await pgSelect<{ conversation_id: string; created_at: string; role: string; model: string | null; latency_ms: number | null; content: string | null }>(
+              "concierge_messages?select=conversation_id,created_at,role,model,latency_ms,content" +
+              `&conversation_id=in.(${chunk.join(",")})&order=conversation_id.asc,created_at.asc&limit=100000`,
+            );
+            let buf = "";
+            for (const m of (msgs || [])) {
+              const c = byId[m.conversation_id] || {} as typeof convos[number];
+              const user = pii ? (c.user_email || "") : pseudoEmail(c.user_email);
+              buf += [csvCell(m.conversation_id), csvCell(user), csvCell(c.section), csvCell(c.sales_stage),
+                csvCell(c.created_at), csvCell(m.created_at), csvCell(m.role), csvCell(m.model),
+                csvCell(m.latency_ms), csvCell(m.content)].join(",") + "\n";
+            }
+            if (buf) controller.enqueue(enc.encode(buf));
+          }
+          if (convos.length < CONVO_BATCH) break;
+        }
+        controller.close();
+      } catch (e) {
+        controller.enqueue(enc.encode(`\n"ERROR","${String(e instanceof Error ? e.message : e).replace(/"/g, "'")}"\n`));
+        controller.close();
+      }
+    },
+  });
+
+  const headers = corsHeaders(req);
+  headers["Content-Type"] = "text/csv; charset=utf-8";
+  headers["Content-Disposition"] = `attachment; filename="conversations-export${pii ? "-pii" : ""}.csv"`;
+  headers["Cache-Control"] = "no-store";
+  return new Response(stream, { status: 200, headers });
+}
+
 // ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
 // Deterministic, built from their REAL orders (status, cloth, gift), so every chip
 // points at something they actually have — no model call, no guessing. Anonymous
@@ -2786,6 +2874,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("secrets")) {
     return await handleSecretsGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("export")) {
+    return await handleExportGet(req);
   }
   if (req.method === "POST" && new URL(req.url).searchParams.get("judge")) {
     return await handleJudgePost(req);
