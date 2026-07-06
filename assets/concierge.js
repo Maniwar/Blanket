@@ -409,7 +409,7 @@
       '-webkit-overflow-scrolling:touch;overscroll-behavior:contain;position:relative;}',
       '.cx-turn{padding:1.05rem 0;border-bottom:1px solid var(--cx-hair-soft);}',
       '.cx-turn:last-child{border-bottom:none;}',
-      '.cx-turn-user{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:.66rem;',
+      '.cx-turn-user{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:.75rem;',
       'letter-spacing:.18em;text-transform:uppercase;color:rgba(241,236,226,.78);line-height:1.7;',
       'word-break:break-word;}',
       '.cx-turn-assistant{font-family:"Hanken Grotesk",sans-serif;font-weight:300;',
@@ -463,7 +463,7 @@
       '.cx-dots i:nth-child(2){animation-delay:.18s;}',
       '.cx-dots i:nth-child(3){animation-delay:.36s;}',
       '@keyframes cxWeave{0%,100%{transform:translateY(0);opacity:.4;}50%{transform:translateY(-4px);opacity:1;}}',
-      '.cx-status{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
+      '.cx-status{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.1em;',
       'text-transform:uppercase;color:rgba(196,155,91,.75);margin-left:10px;vertical-align:middle;}',
 
       /* time divider — marks a real pause so re-engagement reads as a return */
@@ -482,7 +482,7 @@
 
       /* quick replies */
       '.cx-replies{display:flex;flex-wrap:wrap;gap:8px;margin:.65rem 0 .2rem;}',
-      '.cx-reply{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.14em;',
+      '.cx-reply{font-family:"IBM Plex Mono",monospace;font-size:.8rem;letter-spacing:.08em;',
       'text-transform:uppercase;color:var(--cx-brass-soft);background:rgba(196,155,91,.07);',
       'border:1px solid rgba(196,155,91,.45);border-radius:999px;padding:.65em 1.1em;',
       'cursor:pointer;transition:background .25s,color .25s,border-color .25s,opacity .25s;}',
@@ -494,17 +494,17 @@
       /* in-chat forms */
       '.cx-form{border:1px solid rgba(196,155,91,.4);background:rgba(196,155,91,.05);',
       'padding:1rem 1rem .9rem;margin:.65rem 0 .3rem;display:flex;flex-direction:column;gap:.6rem;}',
-      '.cx-form-title{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.18em;',
+      '.cx-form-title{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.14em;',
       'text-transform:uppercase;color:var(--cx-brass-soft);margin-bottom:.15rem;}',
       '.cx-form-field{display:flex;flex-direction:column;gap:4px;}',
-      '.cx-form-label{font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.14em;',
+      '.cx-form-label{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.08em;',
       'text-transform:uppercase;color:rgba(241,236,226,.55);}',
       '.cx-form-input{background:rgba(23,31,26,.6);border:1px solid rgba(196,155,91,.3);',
       'border-radius:2px;color:#F1ECE2;font-size:.9rem;padding:.55em .7em;outline:none;}',
       '.cx-form-input:focus{border-color:var(--cx-brass-soft);}',
-      '.cx-form-err{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.12em;',
+      '.cx-form-err{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.08em;',
       'text-transform:uppercase;color:#d3766a;line-height:1.7;}',
-      '.cx-form-done{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.14em;',
+      '.cx-form-done{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.1em;',
       'text-transform:uppercase;color:var(--cx-brass-soft);line-height:1.8;}',
 
       /* outreach — the concierge speaks first, chat closed or not */
@@ -590,7 +590,7 @@
       /* ---------- account (magic link) ---------- */
       '.cx-authbox{flex:0 0 auto;display:flex;align-items:center;gap:.55rem;',
       'margin-left:auto;margin-top:-.2rem;min-width:0;}',
-      '.cx-authmail{font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.12em;',
+      '.cx-authmail{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.08em;',
       'text-transform:uppercase;color:rgba(241,236,226,.55);max-width:8.5rem;overflow:hidden;',
       'text-overflow:ellipsis;white-space:nowrap;}',
       '.cx-authlink{background:none;border:none;padding:.6rem .2rem;min-height:44px;cursor:pointer;',
@@ -599,7 +599,7 @@
       '.cx-authlink:hover{color:var(--cx-ink);}',
       '.cx-authlink:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
       '.cx-authrow{flex:0 0 auto;padding:.85rem 1.4rem .95rem;border-bottom:1px solid var(--cx-hair-soft);}',
-      '.cx-authcap{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.16em;',
+      '.cx-authcap{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.1em;',
       'text-transform:uppercase;color:rgba(241,236,226,.6);line-height:1.7;}',
       '.cx-authline{display:flex;align-items:flex-end;gap:.7rem;margin-top:.55rem;}',
       '.cx-authinput{flex:1 1 auto;min-width:0;background:transparent;border:none;',
@@ -616,7 +616,7 @@
       '.cx-authsend:hover:not(:disabled){border-color:var(--cx-brass-soft);}',
       '.cx-authsend:disabled{opacity:.45;cursor:default;}',
       '.cx-authsend:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
-      '.cx-signedline{margin-top:.7rem;font-family:"IBM Plex Mono",monospace;font-size:.6rem;',
+      '.cx-signedline{margin-top:.7rem;font-family:"IBM Plex Mono",monospace;font-size:.68rem;',
       'letter-spacing:.18em;text-transform:uppercase;color:rgba(241,236,226,.5);}',
 
       /* ---------- feedback (↑ / ↓) ---------- */
@@ -627,7 +627,7 @@
       '.cx-fbbtn:hover:not(:disabled){opacity:1;color:var(--cx-brass-soft);}',
       '.cx-fbbtn:disabled{cursor:default;}',
       '.cx-fbbtn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
-      '.cx-fbnote{font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.18em;',
+      '.cx-fbnote{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.12em;',
       'text-transform:uppercase;color:rgba(241,236,226,.5);padding:.4rem 0;}',
 
       /* ---------- inline starters woven into the page ---------- */
