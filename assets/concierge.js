@@ -412,7 +412,7 @@
       '.cx-turn-user{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:.75rem;',
       'letter-spacing:.18em;text-transform:uppercase;color:rgba(241,236,226,.78);line-height:1.7;',
       'word-break:break-word;}',
-      '.cx-turn-assistant{font-family:"Hanken Grotesk",sans-serif;font-weight:300;',
+      '.cx-turn-assistant{font-family:"Hanken Grotesk",sans-serif;font-weight:400;',
       'font-size:.95rem;line-height:1.65;color:var(--cx-ink);word-break:break-word;}',
       '.cx-turn-assistant p{margin:0 0 .85em;}',
       '.cx-turn-assistant p:last-child{margin-bottom:0;}',
