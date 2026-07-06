@@ -23,7 +23,7 @@ corrections, and what still needs a human before a real launch.
 | --- | --- | --- |
 | §02 "we don't ask for **street addresses**" | `orders` stores `address/address2/city/state/zip`; checkout + address-change form collect them | **Fixed** — policy now states a shipping address is collected (register mirrors a real commission) |
 | §01 "**Anonymous** chat messages" | signed-in chat is attributed (conversation carries `user_email`) | **Fixed** — "tied to your account when signed in" |
-| IP addresses (not mentioned) | used transiently for rate-limiting (`rate_limits`), never on a conversation/order | **Added** — disclosed as transient security data |
+| IP addresses | now **recorded on the conversation** (`concierge_conversations.ip`) for abuse prevention and lawful-request response, in addition to transient rate-limiting | **Disclosed** in §01/§07 (legitimate interest: security; retained for the demo, admin-only, PII-gated in export) |
 | "No payment data, ever" | no card/payment fields anywhere in schema/functions | **Verified accurate** |
 | "No third-party ad trackers" | no analytics/ad scripts; only Google Fonts (not a tracker) | **Verified accurate** |
 | Supabase (US) + Anthropic sub-processor, not used to train | matches deployment + Anthropic commercial terms | **Verified accurate** |

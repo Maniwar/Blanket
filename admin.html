@@ -4070,6 +4070,18 @@ async function openConvo(c) {
     toast('Conversation id copied');
   });
   head.appendChild(cid);
+  if (c.ip) {
+    // Admin-only forensic detail (this whole view is admin-gated). Click to copy —
+    // the IP you'd cite when reporting abuse to a provider or authority.
+    const ipEl = el('span', 'mono', 'IP ' + String(c.ip));
+    ipEl.style.cssText = 'color:var(--wool-faint); cursor:pointer;';
+    ipEl.title = 'Latest client IP for this conversation — click to copy';
+    ipEl.addEventListener('click', function () {
+      if (navigator.clipboard) navigator.clipboard.writeText(String(c.ip));
+      toast('IP copied');
+    });
+    head.appendChild(ipEl);
+  }
   const exp = el('button', 'btn ghost', 'Export transcript');
   exp.style.cssText = 'margin-left:auto; padding:4px 12px;';
   exp.addEventListener('click', function () { exportTranscriptCsv(c); });
@@ -4136,10 +4148,11 @@ function exportTranscriptCsv(c) {
   const msgs = state.activeMsgs || [];
   if (!msgs.length) { toast('No transcript to export', true); return; }
   const u = userCell(c.user_email);
-  const head = ['conversation_id', 'user', 'created_at', 'role', 'model', 'latency_ms', 'content'];
+  const ipCell = piiOn() ? (c.ip || '') : ''; // IP is real PII — only in a PII export
+  const head = ['conversation_id', 'user', 'ip', 'created_at', 'role', 'model', 'latency_ms', 'content'];
   const lines = [head.join(',')];
   msgs.forEach(function (m) {
-    lines.push([csvEsc(c.id), csvEsc(u), csvEsc(m.created_at), csvEsc(m.role),
+    lines.push([csvEsc(c.id), csvEsc(u), csvEsc(ipCell), csvEsc(m.created_at), csvEsc(m.role),
       csvEsc(m.model), csvEsc(m.latency_ms), csvEsc(m.content)].join(','));
   });
   downloadCsv('conversation-' + String(c.id).slice(0, 8) + (piiOn() ? '-pii' : '') + '.csv', lines.join('\n'));

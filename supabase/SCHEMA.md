@@ -143,6 +143,7 @@ SQL, after which the roster is self-serve.
 | `goal_status` | jsonb | Per-goal scoring: `{ "<slug>": {"status":"met|partial|unmet","note":"…"} }`. |
 | `goal_status_at` | timestamptz | When goals were last judged. |
 | `sales_stage` | text | Funnel stage from the async grader: `browsing`/`engaged`/`evaluating`/`objection`/`ready`/`won`/`lost`. Written in a **separate best-effort PATCH** from `goal_status`, so a missing column can't break grading. Shown as a chip in the admin Conversations tab. |
+| `ip` | text | Latest client IP for the session (from `x-forwarded-for`), stored for **abuse/legal forensics**. Admin-only (RLS), shown in the transcript header, and included in the transcript export **only** when the PII option is on. Disclosed in the privacy notice. |
 
 **Written by:** `logUserTurn` (create + identity back-fill), `handleWrapup`
 (status/ended_at), `evaluateGoals` (goal_status + sales_stage). **Read by:** `logUserTurn`

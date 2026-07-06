@@ -1608,8 +1608,11 @@ function buildSystemPrompt(
 
 // ── Logging — concierge_conversations / concierge_messages ───────────────────
 
-/** Resolves the conversation, logs the last user message. Never throws. */
-async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipUser = false): Promise<string | null> {
+/** Resolves the conversation, logs the last user message. Never throws.
+ * `ip` (the client's forwarded IP) is stored on the conversation for abuse/legal
+ * forensics — admin-only (RLS), shown only in the PII-gated export. */
+async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipUser = false, ip = ""): Promise<string | null> {
+  const realIp = ip && ip !== "unknown" ? ip.slice(0, 64) : null;
   try {
     // Reuse the latest conversation for this session_key, else insert one.
     let cid: string | null = null;
@@ -1632,6 +1635,7 @@ async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipU
         // panel-close) — it's resuming, so clear the ended flag. (An explicit
         // close/quiet rotates the session key, so this never revives those.)
         if (rows[0].ended_at) { patch.status = "active"; patch.ended_at = null; }
+        if (realIp) patch.ip = realIp; // keep the latest IP seen for this session
         if (Object.keys(patch).length > 0) {
           await pgPatch(`concierge_conversations?id=eq.${cid}`, patch);
         }
@@ -1642,6 +1646,7 @@ async function logUserTurn(body: ValidatedBody, customer: Customer | null, skipU
         session_key: body.sessionKey,
         user_id: customer?.id ?? null,
         user_email: customer?.email ?? null,
+        ip: realIp,
         section: typeof body.context.section === "string"
           ? body.context.section.slice(0, 64)
           : null,
@@ -1923,7 +1928,7 @@ async function handleExportGet(req: Request): Promise<Response> {
   const to = url.searchParams.get("to") || "";
   const pii = url.searchParams.get("pii") === "1";
   const enc = new TextEncoder();
-  const HEAD = ["conversation_id", "user", "section", "sales_stage", "conversation_created_at",
+  const HEAD = ["conversation_id", "user", "ip", "section", "sales_stage", "conversation_created_at",
     "message_created_at", "role", "model", "latency_ms", "content"];
   const CONVO_BATCH = 300, ID_CHUNK = 50;
 
@@ -1933,7 +1938,7 @@ async function handleExportGet(req: Request): Promise<Response> {
         controller.enqueue(enc.encode(HEAD.join(",") + "\n"));
         let cursorTs: string | null = null, cursorId: string | null = null;
         for (;;) {
-          let q = "concierge_conversations?select=id,created_at,user_email,section,sales_stage" +
+          let q = "concierge_conversations?select=id,created_at,user_email,section,sales_stage,ip" +
             `&order=created_at.desc,id.desc&limit=${CONVO_BATCH}`;
           if (from) q += `&created_at=gte.${encodeURIComponent(from)}`;
           if (to) q += `&created_at=lte.${encodeURIComponent(to)}`;
@@ -1942,7 +1947,7 @@ async function handleExportGet(req: Request): Promise<Response> {
             q += `&or=(created_at.lt.${encodeURIComponent(cursorTs)},` +
               `and(created_at.eq.${encodeURIComponent(cursorTs)},id.lt.${encodeURIComponent(cursorId)}))`;
           }
-          const convos = await pgSelect<{ id: string; created_at: string; user_email: string | null; section: string | null; sales_stage: string | null }>(q);
+          const convos = await pgSelect<{ id: string; created_at: string; user_email: string | null; section: string | null; sales_stage: string | null; ip: string | null }>(q);
           if (!convos || convos.length === 0) break;
           const last = convos[convos.length - 1];
           cursorTs = last.created_at; cursorId = last.id;
@@ -1960,7 +1965,8 @@ async function handleExportGet(req: Request): Promise<Response> {
             for (const m of (msgs || [])) {
               const c = byId[m.conversation_id] || {} as typeof convos[number];
               const user = pii ? (c.user_email || "") : pseudoEmail(c.user_email);
-              buf += [csvCell(m.conversation_id), csvCell(user), csvCell(c.section), csvCell(c.sales_stage),
+              const ipCell = pii ? (c.ip || "") : ""; // IP is real PII — only in a PII export
+              buf += [csvCell(m.conversation_id), csvCell(user), csvCell(ipCell), csvCell(c.section), csvCell(c.sales_stage),
                 csvCell(c.created_at), csvCell(m.created_at), csvCell(m.role), csvCell(m.model),
                 csvCell(m.latency_ms), csvCell(m.content)].join(",") + "\n";
             }
@@ -2222,7 +2228,7 @@ async function handleChatPost(req: Request): Promise<Response> {
 
   // Logging: resolve conversation + store the user turn, concurrently with
   // the model work; awaited again before the stream finishes.
-  const conversationPromise = logUserTurn(validated, customer, isNudge || isOpener);
+  const conversationPromise = logUserTurn(validated, customer, isNudge || isOpener, ip);
   const startedAt = Date.now();
 
   // ── Semantic cache — anonymous, single-turn questions only ────────────────

@@ -44,7 +44,8 @@ alter table public.concierge_conversations
   add column if not exists ended_at timestamptz,
   add column if not exists goal_status jsonb,
   add column if not exists goal_status_at timestamptz,
-  add column if not exists sales_stage text;   -- funnel stage from the async grader (browsing…won/lost)
+  add column if not exists sales_stage text,    -- funnel stage from the async grader (browsing…won/lost)
+  add column if not exists ip text;             -- latest client IP (abuse/legal forensics; admin-only, PII-gated in export)
 create index if not exists concierge_conversations_ended_idx
   on public.concierge_conversations (user_id, ended_at desc) where ended_at is not null;
 
