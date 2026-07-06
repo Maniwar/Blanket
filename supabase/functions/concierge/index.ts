@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <concierge@feier-abend.co>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-06-streaming-export";
+const BUILD_TAG = "2026-07-06-ip-and-regrade";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1989,6 +1989,34 @@ async function handleExportGet(req: Request): Promise<Response> {
   return new Response(stream, { status: 200, headers });
 }
 
+// ── POST ?regrade=1 — grade conversation goals on demand (admin only) ────────
+// The async grader is sampled; this lets the admin re-run goal scoring for one or
+// more chats from the Conversations panel and see the scorecard update. Body:
+// { conversation_id } or { ids: [...] }. Grades against the current goal set.
+async function handleRegradePost(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
+  let body: { ids?: unknown; conversation_id?: unknown };
+  try { body = await req.json(); } catch { return jsonError(req, 400, "Bad JSON."); }
+  const raw = Array.isArray(body.ids) ? body.ids : (typeof body.conversation_id === "string" ? [body.conversation_id] : []);
+  const ids = (raw as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 30);
+  if (!ids.length) return jsonError(req, 400, "ids or conversation_id required.");
+  const data = await loadConciergeData();
+  if (data.goals.length === 0) return jsonError(req, 400, "No goals are defined to grade against.");
+  const model = resolveModel(data);
+  let graded = 0;
+  for (const cid of ids) {
+    try {
+      const msgs = await pgSelect<{ role: string; content: string }>(
+        `concierge_messages?select=role,content&conversation_id=eq.${encodeURIComponent(cid)}&order=created_at.asc&limit=100`,
+      );
+      if (msgs && msgs.length) { await evaluateGoals(cid, data, msgs as ChatMessage[], apiKey, model); graded++; }
+    } catch { /* skip this one, continue the batch */ }
+  }
+  return jsonResponse(req, 200, { graded, requested: ids.length });
+}
+
 // ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
 // Deterministic, built from their REAL orders (status, cloth, gift), so every chip
 // points at something they actually have — no model call, no guessing. Anonymous
@@ -2883,6 +2911,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("export")) {
     return await handleExportGet(req);
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("regrade")) {
+    return await handleRegradePost(req);
   }
   if (req.method === "POST" && new URL(req.url).searchParams.get("judge")) {
     return await handleJudgePost(req);

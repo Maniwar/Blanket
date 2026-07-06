@@ -484,7 +484,7 @@ flowchart LR
     direction TB
     CP["PUBLIC (rate-limited)<br/>?config · ?site · ?selftest<br/>POST chat · ?reengage · ?wrapup"]
     CU["SIGNED-IN<br/>?starters · POST ?form"]
-    CA["ADMIN<br/>?tools · ?evals · ?secrets · ?export<br/>?cachecheck · POST ?judge"]
+    CA["ADMIN<br/>?tools · ?evals · ?secrets · ?export<br/>?cachecheck · POST ?judge · ?regrade"]
   end
 
   subgraph COMMISSION["commission — Deno edge function"]
@@ -568,6 +568,7 @@ allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
 | `GET ?export=1` | `handleExportGet` | **admin** | **Streaming** transcript export: keyset-paginates conversations and streams a CSV (one row per message, `user` pseudonymized unless `?pii=1`; `?from`/`?to` date bounds). Bounded memory on both ends — the scalable export tier (see note below). |
 | `GET ?cachecheck=1` | inline | **admin** | Self-diagnosis of the semantic cache round-trip (writes+deletes a probe row, so admin-gated). |
 | `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
+| `POST ?regrade=1` | `handleRegradePost` | **admin** | Re-run **goal grading** on demand for `{conversation_id}` or `{ids:[…]}` (≤30) — the Conversations panel's "Re-grade goals" / "Re-grade shown" buttons, so grading isn't only the sampled async pass. |
 
 **SSE frames** (chat): `{"t":…}` text, `{"s":…}` status, `{"m":{cid,mid}}`
 meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
