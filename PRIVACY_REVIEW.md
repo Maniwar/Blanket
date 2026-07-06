@@ -6,9 +6,16 @@ against the code. It records the required-disclosure gap analysis, the factual
 corrections, and what still needs a human before a real launch.
 
 > **Not legal advice.** This is a good-faith, standards-aligned engineering
-> review. A production launch needs counsel review, a real legal entity + address,
-> signed DPAs with each processor, and (if targeting the EU at scale) an Article 27
-> representative.
+> review.
+
+> **Scope.** The current deployment is a **US-based demonstration served to US
+> visitors, with no real customers**. On those facts neither the **GDPR**
+> (territorial scope keys on *targeting EU data subjects* — this demo doesn't) nor
+> the **CCPA/CPRA** (applies to *businesses* over revenue/consumer thresholds — a
+> demo meets none) *formally attaches*. The published notice is therefore a
+> **good-faith transparency courtesy**, not a legal obligation. The items below are
+> what would be required **if this went to production with real (or EU) customers**
+> — not gaps in the demo.
 
 ## Part 1 — Factual accuracy (policy vs. what the code actually does)
 
@@ -30,7 +37,7 @@ corrections, and what still needs a human before a real launch.
 | **Legal basis** for each purpose | ❌ missing | ✅ §02 (contract / legitimate interest / consent) |
 | Legitimate interests, where relied on | ❌ | ✅ §02 (answering, improving, rate-limiting) |
 | Recipients / sub-processors | ✅ | ✅ §04 (Supabase, Anthropic) |
-| **International transfers + safeguard** | ❌ missing | ✅ §04 (US processors; Standard Contractual Clauses) |
+| **International transfers** | ❌ missing | ✅ §04 — **N/A**: US-only demo, US processors, no cross-border transfer to safeguard |
 | Retention period / criteria | ✅ | ✅ §07 |
 | Rights: access, rectification, erasure | ✅ partial | ✅ §05 |
 | Rights: **restriction, portability, objection, withdraw consent** | ❌ missing | ✅ §05 |
@@ -60,18 +67,27 @@ corrections, and what still needs a human before a real launch.
 - **Security measures** (§08) — RLS, encryption in transit, server-only secrets.
 - **Children's data** (§09) — not directed to under-16s; removal on notice.
 
-## Still needs a human before production
+## Only if this goes to production (real customers) — not needed for the demo
 
-- A **real legal entity name + postal address** and a monitored contact (the demo
-  uses a fictional house and an `@…example` address).
-- **Signed DPAs** with Supabase and Anthropic, and confirmation of the **transfer
-  mechanism** actually in force (SCCs / UK IDTA / adequacy).
-- An **EU Art. 27 representative** if you target EU data subjects at scale.
-- ~~Google Fonts send the visitor's IP to Google — self-host to avoid it.~~
-  **Done** — the typefaces are now self-hosted (`fonts/`), so the pages load no
-  third-party resources at all; §04 states this. Revisit only if you later add
-  analytics or any other third-party embed.
-- A **cookie/consent banner** only if you later add non-essential cookies.
+These are **not gaps in the current US-only demo** (see Scope). They apply if you
+later serve real customers or target the EU:
+
+- A **real legal entity name + postal address** and a **monitored contact inbox**
+  (the demo uses a fictional house and an `@…example` address) — so the delete /
+  access rights the notice promises are actually actionable.
+- A **signed DPA with each processor** (Anthropic and Supabase both offer one) —
+  needed once a privacy law attaches; **not required for this demo**, and the
+  policy no longer claims one is in force.
+- **EU-only items** — an Article 27 representative and Standard Contractual
+  Clauses — **only if you serve EU data subjects**, which this US-only demo does
+  not. The policy makes no EU-transfer claim.
+- A **cookie/consent banner** only if you later add non-essential cookies (none
+  today).
+
+Resolved in code (needs nothing further):
+
+- ~~Google Fonts send the visitor's IP to Google.~~ **Done** — typefaces are
+  self-hosted (`fonts/`); the pages load no third-party resources at all (§04).
 
 ## Method
 
