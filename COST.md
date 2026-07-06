@@ -50,7 +50,15 @@ Admin-tunable (Tuning → Engagement pace). At `1.0` the grader runs on every
 eligible turn; drop to ~`0.2` to grade 1 in 5 — analytics stay representative and
 a whole class of calls falls away. No deploy.
 
-### 4. Config cache
+### 4. Trimmed CUSTOMER block
+The signed-in LIVE STATE tail (uncached, re-sent every turn) used to list **every**
+order inline — ~600–700 tokens on a heavy account, for data the prompt tells the
+bot to ignore in favour of `get_my_orders`. Now: ≤3 orders still list inline
+(cheap, natural greeting); **>3 collapse to a cloth tally + the two most recent**,
+with an explicit "call `get_my_orders` for the full list." Cheaper per turn, and
+one authoritative order source (which also prevents miscounts).
+
+### 5. Config cache
 `concierge_config`/KB/SOPs/tools are read once and held in module memory for 60s,
 so the prompt is assembled from memory, not a DB round-trip, on most calls. (This
 also keeps the cached prefix identical for the TTL.)
