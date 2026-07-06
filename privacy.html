@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Feierabend — Privacy</title>
 <meta name="description" content="Privacy notice for Feierabend — Decke 01, a concept demonstration.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Self-hosted fonts — no request leaves the origin (privacy: no visitor IP sent to Google). See PRIVACY_REVIEW.md. -->
+<link rel="stylesheet" href="fonts/feier-fonts.css">
 <style>
   :root{
     --loden:#26332B;
@@ -176,6 +175,7 @@
     <span class="micro">04 &mdash; Where it lives, and international transfers</span>
     <p>Register entries are stored with <strong>Supabase</strong> (hosted Postgres, US region). Concierge chat is processed by <strong>Anthropic's Claude API</strong> as our AI sub-processor: messages you type are sent to Anthropic to generate the answer, handled under its commercial terms, and <strong>not</strong> used to train models. Both providers process data only on our instructions.</p>
     <p>Because both are in the <strong>United States</strong>, using the demo from the EEA, the UK, or Switzerland means your data is transferred outside your region. Those transfers rely on the providers' <strong>Standard Contractual Clauses</strong> and data-processing agreements as the safeguard.</p>
+    <p>The pages themselves load <strong>no third-party resources</strong> &mdash; even the typefaces are served from our own origin &mdash; so simply visiting sends your IP address to no other company.</p>
   </section>
 
   <section>

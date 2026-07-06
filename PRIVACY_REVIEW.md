@@ -67,8 +67,10 @@ corrections, and what still needs a human before a real launch.
 - **Signed DPAs** with Supabase and Anthropic, and confirmation of the **transfer
   mechanism** actually in force (SCCs / UK IDTA / adequacy).
 - An **EU Art. 27 representative** if you target EU data subjects at scale.
-- If you add analytics or self-host vs. embed Google Fonts, revisit §03/§04 (fonts
-  send the visitor's IP to Google — consider self-hosting to avoid it).
+- ~~Google Fonts send the visitor's IP to Google — self-host to avoid it.~~
+  **Done** — the typefaces are now self-hosted (`fonts/`), so the pages load no
+  third-party resources at all; §04 states this. Revisit only if you later add
+  analytics or any other third-party embed.
 - A **cookie/consent banner** only if you later add non-essential cookies.
 
 ## Method
