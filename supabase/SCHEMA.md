@@ -47,8 +47,10 @@ traffic within a minute.
 | `updated_at` | timestamptz | Last edit. |
 
 **Keys the concierge reads** (`loadConciergeData`): `enabled` (bool — false ⇒
-chat returns 503 and `?config=1` reports resting), `model` (Anthropic model id,
-overrides the `MODEL` env var), `max_tokens` (per-reply cap, default 1024),
+chat returns 503 and `?config=1` reports resting), `model` (Anthropic model id),
+`model_fallback` (model used when `model` is blank — the fully configurable
+fallback; `resolveModel()` resolves `model` → `model_fallback` → `MODEL` env →
+a compiled cheap default), `max_tokens` (per-reply cap, default 1024),
 `greeting` (opening line; may embed `{{reply:…}}` pills), `voice_notes`
 (appended to the system prompt as tuning notes), `starters` (per-section
 suggested questions), `images` (admin-added `{{img:token}}` sources, merged
@@ -394,6 +396,26 @@ is sent to the model (disabled dropped, descriptions overridden). The admin Tool
 tab reads the built-in catalog from `GET ?tools=1` and the live override state
 straight from this table. No seed — every tool starts at its default.
 
+### `concierge_evals` — behavior-eval scenarios (studio Evals tab)
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | uuid PK | — |
+| `slug` | text UNIQUE | Stable name (used as the scenario key in results). |
+| `name` | text | Human label shown in the panel. |
+| `description` | text | What the scenario proves. |
+| `signed_in` | boolean | `true` → runs against a signed-in session (the admin's own in the panel; `EVAL_TOKEN` in the CLI). |
+| `context` | jsonb | Browsing context sent with each turn, e.g. `{"section":"reserve","device":"desktop"}`. |
+| `turns` | jsonb | `[{ "user": "...", "checks": [ {"includes":"…"}, {"maxQuestions":1}, {"judge":"…"} ] }]`. Check kinds: `includes`/`excludes`/`regex`/`notRegex`/`maxQuestions`/`toolCalled` (deterministic) and `judge` (binary LLM). |
+| `enabled` | boolean | `false` → skipped in a "run enabled" pass. |
+| `sort_order` | int | Display order. |
+| `updated_at` | timestamptz | Last edit. |
+
+**Written by:** admin (Evals tab CRUD). **Read by:** the panel runner (direct
+RLS select) and, for the CLI, `GET ?evals=1`. The deterministic checks run in the
+browser; the `judge` checks go to the admin-gated `POST ?judge=1`, which runs a
+pinned binary judge server-side (so the Anthropic key stays off the client).
+Seeded with a starter deck (only when empty), mirroring `evals/scenarios.mjs`.
+
 ---
 
 ## Functions (RPCs) — all `security definer`, `search_path = ''`
@@ -428,6 +450,8 @@ edition RPCs are the exception — granted to `authenticated` (they self-gate on
 | `GET ?tools=1` | `handleToolsGet` | The built-in tools manifest (name, enabled, core, effective + default instruction, overridden) for the admin Tools tab. |
 | `GET ?starters=1` | `handleStartersGet` | **Signed-in only.** Personalized conversation starters built deterministically from the caller's real orders (status/cloth/gift); `[]` when anonymous or no orders. The widget leads with these, topped up with the section defaults. |
 | `GET ?cachecheck=1` | inline | Self-diagnosis of the semantic cache round-trip. |
+| `GET ?evals=1` | `handleEvalsGet` | **Admin only.** The enabled behavior-eval deck (`concierge_evals`), shaped like `evals/scenarios.mjs`, so the CLI runner can share the DB deck (`--remote`). |
+| `POST ?judge=1` | `handleJudgePost` | **Admin only.** Runs the pinned binary LLM judge server-side: body `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
 | `POST` (chat) | `handleChatPost` | Streaming reply (SSE). Handles nudges, **proactive openers** (`context.opener` = `reengage`/`greet` — the bot speaks first on panel open), tools (incl. `recall_context` to pull prior notes/conversation), cache, logging, goal scheduling. |
 | `POST ?wrapup=1` | `handleWrapup` | **Records a conversation as closed/snoozed.** Body `{session_key, reason}` where reason is `quiet` (→ snoozed), `close` or `auto` (→ closed). Stamps `status`+`ended_at` **once** (already-ended threads are left alone), and for a signed-in patron adds one `customer_notes` line. |
 | `POST ?form=1` | `handleFormPost` | Structured form submission (verified JWT, routed through `submit_tool`). |

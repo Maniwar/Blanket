@@ -80,11 +80,12 @@ alongside any schema change so the backend stays explainable.
 ## Cost
 
 A typical answer costs well under a cent (short prompts, `max_tokens` capped
-at 1024). If you want it even cheaper, set a `MODEL` env var on the function
-to a cheaper model, e.g.:
+at 1024). The model is normally chosen in the Studio (Tuning → Model / Fallback
+model); the `MODEL` env var is the ops-level fallback used only when neither
+config value is set (or the config read fails):
 
 ```bash
-supabase secrets set MODEL="claude-haiku-4-5"
+supabase secrets set MODEL="claude-haiku-4-5-20251001"
 ```
 
 ## Security
@@ -112,7 +113,8 @@ so admin edits take up to a minute to reach live traffic.
 | key | effect |
 | --- | --- |
 | `enabled` (bool) | `false` → chat POSTs return 503 ("The concierge is resting…") and `?config=1` reports `enabled: false` so the widget shows a resting state |
-| `model` (string) | Anthropic model id for replies. Takes precedence over the `MODEL` env var; final fallback is `claude-sonnet-4-5` |
+| `model` (string) | Anthropic model id for replies. Resolution order (`resolveModel()`): `model` → `model_fallback` → `MODEL` env var → the built-in default (`claude-haiku-4-5-20251001`). |
+| `model_fallback` (string) | Model used when `model` is blank — lets you set the fallback from the Studio without a redeploy. Only the last-resort default is compiled in. |
 | `max_tokens` (number) | per-reply output cap (default 1024) |
 | `greeting` (string) | opening line the widget shows before the first message |
 | `voice_notes` (string) | appended to the system prompt as `ADMIN TUNING NOTES (follow these):` — tune tone/emphasis without redeploying |

@@ -456,6 +456,7 @@
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
     <button class="tab" data-tab="website" role="tab">Website</button>
     <button class="tab" data-tab="tools" role="tab">Tools</button>
+    <button class="tab" data-tab="evals" role="tab">Evals</button>
   </nav>
 
   <main>
@@ -483,12 +484,17 @@
           </div>
           <div class="field">
             <label class="micro" for="cfg-model">Model</label>
-            <input type="text" id="cfg-model" class="mono-field" list="model-list" placeholder="claude-sonnet-4-5" autocomplete="off" spellcheck="false">
+            <input type="text" id="cfg-model" class="mono-field" list="model-list" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false">
             <datalist id="model-list">
               <option value="claude-sonnet-4-5"></option>
               <option value="claude-sonnet-5"></option>
               <option value="claude-haiku-4-5-20251001"></option>
             </datalist>
+          </div>
+          <div class="field">
+            <label class="micro" for="cfg-model-fallback">Fallback model</label>
+            <input type="text" id="cfg-model-fallback" class="mono-field" list="model-list" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false">
+            <p class="micro" style="margin-top:4px;opacity:.7;">Used only if <em>Model</em> is blank. If the config itself can't be read (a rare DB blip), the server falls back to the <code>MODEL</code> env var, then a built-in default.</p>
           </div>
           <div class="field">
             <label class="micro" for="cfg-max-tokens">Max tokens</label>
@@ -872,7 +878,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <div class="row-tools filters">
         <input type="date" id="convo-from" title="From date">
         <input type="date" id="convo-to" title="To date">
-        <input type="text" id="convo-q" placeholder="patron email, or a word in the chat…" style="max-width:280px;">
+        <input type="text" id="convo-q" placeholder="email, a word in the chat, or a conversation id…" style="max-width:300px;">
         <select id="convo-goal" title="Goal outcome (filters loaded conversations)">
           <option value="">Any outcome</option>
           <option value="met">Any goal met</option>
@@ -950,6 +956,50 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <div class="card-foot">
           <button id="forms-add" class="btn primary">Create form tool</button>
           <button id="forms-refresh" class="btn">Refresh</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="panel-evals" class="panel">
+      <div class="panel-head">
+        <span class="micro">Does the concierge still behave?</span>
+        <h2>Evals</h2>
+        <p class="note">Scripted conversations replayed against the <strong>live concierge</strong>, scoring the behaviors that matter — it shows the commission button on a buying signal, never leaks <code>[HOLD]</code>, doesn't loop in discovery, reads the register instead of guessing. Each scenario runs a few times and reports a <strong>pass rate</strong>, so a prompt or model change can't quietly bring back a bug you already fixed.</p>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Run the deck</h3>
+          <span class="micro">live model calls — costs a little each run</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">Two kinds of check. <strong>Deterministic</strong> ones are exact (the reply <em>contains</em> a token, asks <em>at most</em> one question, a tool actually ran) — cheap and stable. The fuzzy ones ("did it advance the sale?") go to a <strong>binary LLM judge</strong> (yes/no, pinned) on the server, so no API key ever touches the browser. Signed-in scenarios use <strong>your</strong> admin session, so they read a real register.</p>
+        <div class="grid-2">
+          <div class="field">
+            <label class="micro" for="evals-reps">Repetitions per scenario</label>
+            <input type="number" id="evals-reps" class="mono-field" min="1" max="20" step="1" value="3">
+          </div>
+          <div class="field">
+            <label class="micro" for="evals-threshold">Pass threshold</label>
+            <input type="number" id="evals-threshold" class="mono-field" min="0" max="1" step="0.05" value="0.8">
+          </div>
+        </div>
+        <div class="card-foot" style="margin-top:16px;">
+          <button id="evals-run" class="btn primary">Run enabled scenarios</button>
+          <button id="evals-refresh" class="btn">Refresh</button>
+          <span class="micro" id="evals-status" style="color:var(--wool-faint);"></span>
+        </div>
+        <div id="evals-results" style="margin-top:18px;"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Scenarios</h3>
+          <span class="micro">the behavior deck — editable, no deploy</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">A scenario is a short scripted conversation plus <strong>checks</strong> on the bot's reply for a turn. Prefer a deterministic check whenever the behavior is mechanically observable; reserve the judge for genuine judgment, and phrase its criterion as one concrete yes/no. Turn a scenario off to skip it in a run.</p>
+        <div id="evals-list"></div>
+        <div class="card-foot">
+          <button id="evals-add" class="btn primary">Add scenario</button>
         </div>
       </section>
     </div>
@@ -1130,6 +1180,7 @@ async function route() {
     loadConversations();
     loadSite();
     loadTools();
+    loadEvals();
   }
 }
 
@@ -1291,6 +1342,9 @@ function wireStatic() {
     withBusy($('goals-def-refresh'), loadGoalDefs);
   });
   $('goal-add').addEventListener('click', addGoalDef);
+  $('evals-add').addEventListener('click', addEval);
+  $('evals-refresh').addEventListener('click', function () { withBusy($('evals-refresh'), loadEvals); });
+  $('evals-run').addEventListener('click', function () { withBusy($('evals-run'), runEnabledEvals); });
   $('cache-refresh').addEventListener('click', function () {
     withBusy($('cache-refresh'), loadCache);
   });
@@ -1356,7 +1410,7 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'website', 'tools'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'website', 'tools', 'evals'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
   if (name === 'knowledge') autoGrowAll('#kb-list');
@@ -1364,6 +1418,7 @@ function activateTab(name) {
   if (name === 'cache') autoGrowAll('#cache-list');
   if (name === 'website') autoGrowAll('#site-list');
   if (name === 'tools') { autoGrowAll('#tools-list'); autoGrowAll('#forms-list'); }
+  if (name === 'evals') autoGrowAll('#evals-list');
 }
 
 /* ---------------- header pill ---------------- */
@@ -1388,6 +1443,7 @@ async function loadConfig() {
   $('cfg-enabled').checked = cfg.enabled === true;
   $('cfg-enabled-label').textContent = cfg.enabled === true ? 'Live' : 'Paused';
   $('cfg-model').value = (typeof cfg.model === 'string') ? cfg.model : '';
+  $('cfg-model-fallback').value = (typeof cfg.model_fallback === 'string') ? cfg.model_fallback : '';
   $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
   $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
   $('cfg-voice').value = (typeof cfg.voice_notes === 'string') ? cfg.voice_notes : '';
@@ -1984,6 +2040,7 @@ async function saveEngine() {
   const rows = [
     { key: 'enabled',    value: enabled,                     updated_at: nowIso() },
     { key: 'model',      value: $('cfg-model').value.trim(), updated_at: nowIso() },
+    { key: 'model_fallback', value: $('cfg-model-fallback').value.trim(), updated_at: nowIso() },
     { key: 'max_tokens', value: Math.round(mt),              updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
@@ -2548,6 +2605,468 @@ function goalChips(goalStatus) {
     wrap.appendChild(row);
   });
   return wrap;
+}
+
+/* ============================================================
+   TAB 8 — EVALS (concierge_evals) — edit the deck + run it live
+   ============================================================ */
+
+/* The check kinds a turn can assert on the bot's reply. Keep in lockstep with
+   evals/scenarios.mjs and the runner's deterministic() below. */
+const EVAL_CHECK_KINDS = [
+  ['includes', 'reply contains', 'text'],
+  ['excludes', 'reply does NOT contain', 'text'],
+  ['regex', 'reply matches (regex)', 'text'],
+  ['notRegex', 'reply does NOT match (regex)', 'text'],
+  ['maxQuestions', 'at most N questions', 'number'],
+  ['toolCalled', 'a tool ran (status label)', 'text'],
+  ['judge', 'LLM judge — binary criterion', 'area']
+];
+const EVAL_SECTIONS = ['', 'top', 'hero', 'why', 'wool', 'label', 'ritual', 'arrival', 'reserve'];
+
+async function loadEvals() {
+  const res = await sb.from('concierge_evals').select('*').order('sort_order', { ascending: true });
+  if (res.error) { fail('Load evals', res.error); return; }
+  state.evals = res.data || [];
+  renderEvals();
+}
+
+function renderEvals() {
+  const list = $('evals-list');
+  list.textContent = '';
+  if (!state.evals.length) {
+    list.appendChild(el('div', 'empty micro', 'No scenarios yet — run setup.sql to seed the deck, or add the first.'));
+    return;
+  }
+  state.evals.forEach(function (row) { list.appendChild(evalEditor(row)); });
+  if ($('panel-evals').classList.contains('on')) autoGrowAll('#evals-list');
+}
+
+function addEval() {
+  let maxOrder = 0;
+  state.evals.forEach(function (r) { if (r.sort_order > maxOrder) maxOrder = r.sort_order; });
+  const fresh = { id: null, slug: '', name: '', description: '', signed_in: false,
+    context: { section: 'reserve', device: 'desktop' }, turns: [{ user: '', checks: [] }],
+    enabled: true, sort_order: maxOrder + 10 };
+  state.evals.push(fresh);
+  const list = $('evals-list');
+  const em = list.querySelector('.empty'); if (em) em.remove();
+  const node = evalEditor(fresh);
+  list.appendChild(node);
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/* ---- one check row: a kind <select> + a value input ---- */
+function checkRow(check) {
+  const kind = check ? Object.keys(check).filter(function (k) { return k !== '_'; })[0] : 'includes';
+  const val = check ? check[kind] : '';
+  const row = el('div', 'eval-check');
+  row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-top:6px;';
+  const sel = el('select', 'mono-field eval-check-kind');
+  sel.style.cssText = 'flex:0 0 200px;';
+  EVAL_CHECK_KINDS.forEach(function (k) {
+    const o = el('option', null, k[1]); o.value = k[0]; if (k[0] === kind) o.selected = true; sel.appendChild(o);
+  });
+  const valWrap = el('div'); valWrap.style.cssText = 'flex:1 1 auto;';
+  function renderVal() {
+    const k = sel.value;
+    const meta = EVAL_CHECK_KINDS.filter(function (x) { return x[0] === k; })[0];
+    valWrap.textContent = '';
+    let input;
+    if (meta[2] === 'area') { input = el('textarea', 'eval-check-val'); input.rows = 2; input.addEventListener('input', function () { autoGrow(input); }); }
+    else { input = el('input', 'mono-field eval-check-val'); input.type = (meta[2] === 'number') ? 'number' : 'text'; }
+    if (meta[2] === 'number') { input.min = '0'; input.step = '1'; }
+    input.value = (val !== undefined && val !== null) ? String(val) : '';
+    input.placeholder = k === 'judge' ? 'One concrete yes/no criterion…'
+      : k === 'toolCalled' ? 'Reading the register'
+      : k === 'maxQuestions' ? '1' : '{{action:commission}}';
+    valWrap.appendChild(input);
+  }
+  sel.addEventListener('change', renderVal);
+  renderVal();
+  const del = el('button', 'btn danger', '×');
+  del.style.cssText = 'flex:0 0 auto; padding:6px 12px;';
+  del.addEventListener('click', function () { row.remove(); });
+  row.appendChild(sel); row.appendChild(valWrap); row.appendChild(del);
+  return row;
+}
+
+/* ---- one turn block: a user line + its checks ---- */
+function turnBlock(turn, index) {
+  const wrap = el('div', 'eval-turn');
+  wrap.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:10px;';
+  const head = el('div');
+  head.style.cssText = 'display:flex; justify-content:space-between; align-items:center;';
+  head.appendChild(el('span', 'micro', 'Turn ' + (index + 1) + ' — what the shopper says'));
+  const rmTurn = el('button', 'btn danger', 'Remove turn');
+  rmTurn.style.cssText = 'padding:4px 10px;';
+  rmTurn.addEventListener('click', function () { wrap.remove(); });
+  head.appendChild(rmTurn);
+  wrap.appendChild(head);
+
+  const ta = el('textarea', 'eval-user'); ta.rows = 2; ta.value = (turn && turn.user) || '';
+  ta.placeholder = 'e.g. i want to commission it';
+  ta.addEventListener('input', function () { autoGrow(ta); });
+  wrap.appendChild(ta);
+
+  wrap.appendChild(el('span', 'micro', 'Checks on the reply (leave empty for a setup turn)'));
+  const checks = el('div', 'eval-checks');
+  wrap.appendChild(checks);
+  ((turn && Array.isArray(turn.checks)) ? turn.checks : []).forEach(function (c) { checks.appendChild(checkRow(c)); });
+
+  const addChk = el('button', 'btn', 'Add check');
+  addChk.style.cssText = 'margin-top:8px; padding:4px 12px;';
+  addChk.addEventListener('click', function () { checks.appendChild(checkRow(null)); });
+  wrap.appendChild(addChk);
+  return wrap;
+}
+
+/* read the DOM back into the turns[] structure at save/run time */
+function readTurns(turnsMount) {
+  const turns = [];
+  turnsMount.querySelectorAll('.eval-turn').forEach(function (tn) {
+    const user = (tn.querySelector('.eval-user').value || '').trim();
+    const checks = [];
+    tn.querySelectorAll('.eval-check').forEach(function (cr) {
+      const kind = cr.querySelector('.eval-check-kind').value;
+      const raw = (cr.querySelector('.eval-check-val').value || '').trim();
+      if (!raw && kind !== 'maxQuestions') return; // skip blank checks
+      const o = {};
+      o[kind] = (kind === 'maxQuestions') ? (parseInt(raw, 10) || 0) : raw;
+      checks.push(o);
+    });
+    turns.push({ user: user, checks: checks });
+  });
+  return turns;
+}
+
+function evalEditor(row) {
+  const wrap = el('div', 'kb-row' + (row.id ? '' : ' is-new'));
+
+  const top = el('div', 'kb-top');
+  const chk = el('label', 'checkline');
+  const cb = el('input'); cb.type = 'checkbox'; cb.checked = row.enabled !== false;
+  chk.appendChild(cb); chk.appendChild(el('span', 'micro', 'Enabled'));
+  top.appendChild(chk);
+  const slugEl = el('span', 'slug', row.id ? (row.slug || '') : '(slug from name)');
+  top.appendChild(slugEl);
+  const sChk = el('label', 'checkline'); sChk.style.cssText = 'margin-left:auto;';
+  const sCb = el('input'); sCb.type = 'checkbox'; sCb.checked = row.signed_in === true;
+  sChk.appendChild(sCb); sChk.appendChild(el('span', 'micro', 'Signed-in (uses your admin session)'));
+  top.appendChild(sChk);
+  wrap.appendChild(top);
+
+  const fName = el('div', 'field');
+  fName.appendChild(el('span', 'micro', 'Scenario name'));
+  const name = el('input'); name.type = 'text'; name.placeholder = 'Short behavior name'; name.value = row.name || '';
+  fName.appendChild(name); wrap.appendChild(fName);
+  if (!row.id) { name.addEventListener('input', function () { slugEl.textContent = kebab(name.value) || '(slug from name)'; }); }
+
+  const fDesc = el('div', 'field');
+  fDesc.appendChild(el('span', 'micro', 'What it proves'));
+  const desc = el('textarea'); desc.rows = 2; desc.value = row.description || '';
+  desc.addEventListener('input', function () { autoGrow(desc); });
+  fDesc.appendChild(desc); wrap.appendChild(fDesc);
+
+  const ctx = (row.context && typeof row.context === 'object') ? row.context : {};
+  const fCtx = el('div', 'field');
+  fCtx.appendChild(el('span', 'micro', 'Browsing context — the page section the shopper is on, and device'));
+  const ctxWrap = el('div'); ctxWrap.style.cssText = 'display:flex; gap:10px; flex-wrap:wrap;';
+  const secSel = el('select', 'mono-field eval-ctx-section'); secSel.style.cssText = 'flex:0 0 160px;';
+  EVAL_SECTIONS.forEach(function (s) { const o = el('option', null, s || '(none)'); o.value = s; if (s === (ctx.section || '')) o.selected = true; secSel.appendChild(o); });
+  const devSel = el('select', 'mono-field eval-ctx-device'); devSel.style.cssText = 'flex:0 0 140px;';
+  ['desktop', 'mobile'].forEach(function (d) { const o = el('option', null, d); o.value = d; if (d === (ctx.device || 'desktop')) o.selected = true; devSel.appendChild(o); });
+  ctxWrap.appendChild(secSel); ctxWrap.appendChild(devSel);
+  fCtx.appendChild(ctxWrap); wrap.appendChild(fCtx);
+
+  const turnsMount = el('div', 'eval-turns');
+  ((Array.isArray(row.turns) && row.turns.length) ? row.turns : [{ user: '', checks: [] }])
+    .forEach(function (t, i) { turnsMount.appendChild(turnBlock(t, i)); });
+  wrap.appendChild(turnsMount);
+  const addTurn = el('button', 'btn', 'Add turn');
+  addTurn.style.cssText = 'margin-top:10px; padding:4px 12px;';
+  addTurn.addEventListener('click', function () {
+    turnsMount.appendChild(turnBlock({ user: '', checks: [] }, turnsMount.querySelectorAll('.eval-turn').length));
+  });
+  wrap.appendChild(addTurn);
+
+  const actions = el('div', 'kb-actions');
+  const btnDel = el('button', 'btn danger', 'Delete');
+  const btnRun = el('button', 'btn', 'Run this');
+  const btnSave = el('button', 'btn primary', 'Save');
+  actions.appendChild(btnDel); actions.appendChild(btnRun); actions.appendChild(btnSave);
+  wrap.appendChild(actions);
+
+  function collect() {
+    return {
+      name: name.value.trim(),
+      description: desc.value.trim(),
+      signed_in: sCb.checked,
+      enabled: cb.checked,
+      context: { section: secSel.value, device: devSel.value },
+      turns: readTurns(turnsMount)
+    };
+  }
+
+  btnSave.addEventListener('click', function () {
+    withBusy(btnSave, async function () {
+      const data = collect();
+      if (!data.name) { toast('A scenario needs a name', true); return; }
+      if (!data.turns.length || !data.turns[0].user) { toast('The first turn needs a shopper line', true); return; }
+      if (row.id) {
+        const res = await sb.from('concierge_evals').update({
+          name: data.name, description: data.description, signed_in: data.signed_in,
+          enabled: data.enabled, context: data.context, turns: data.turns, updated_at: nowIso()
+        }).eq('id', row.id);
+        if (res.error) { fail('Save scenario', res.error); return; }
+        Object.assign(row, data); toast('Scenario saved');
+      } else {
+        const slug = kebab(data.name);
+        if (!slug) { toast('Could not derive a slug', true); return; }
+        const res = await sb.from('concierge_evals').insert({
+          slug: slug, name: data.name, description: data.description, signed_in: data.signed_in,
+          enabled: data.enabled, context: data.context, turns: data.turns, sort_order: row.sort_order, updated_at: nowIso()
+        }).select().single();
+        if (res.error) { fail('Add scenario', res.error); return; }
+        row.id = res.data.id; row.slug = res.data.slug; Object.assign(row, data);
+        slugEl.textContent = row.slug; wrap.classList.remove('is-new'); toast('Scenario added — ' + row.slug);
+      }
+    });
+  });
+
+  btnRun.addEventListener('click', function () {
+    withBusy(btnRun, async function () {
+      const sc = Object.assign({ slug: row.slug || kebab(name.value) || 'scenario' }, collect());
+      await runScenarios([sc]);
+    });
+  });
+
+  btnDel.addEventListener('click', function () {
+    withBusy(btnDel, async function () {
+      if (!row.id) { state.evals = state.evals.filter(function (r) { return r !== row; }); wrap.remove(); return; }
+      if (!window.confirm('Delete scenario "' + (row.name || row.slug) + '"?')) return;
+      const res = await sb.from('concierge_evals').delete().eq('id', row.id);
+      if (res.error) { fail('Delete scenario', res.error); return; }
+      state.evals = state.evals.filter(function (r) { return r !== row; });
+      wrap.remove(); toast('Scenario deleted');
+    });
+  });
+
+  return wrap;
+}
+
+/* ============================================================
+   EVAL RUNNER (in-browser) — replay + deterministic checks + judge
+   ============================================================ */
+
+/* Parse the concierge's SSE stream into { reply, statuses }. */
+async function evalReadSSE(res) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', reply = '';
+  const statuses = [];
+  for (;;) {
+    const r = await reader.read();
+    if (r.done) break;
+    buf += dec.decode(r.value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+      chunk.split('\n').forEach(function (line) {
+        if (line.indexOf('data:') !== 0) return;
+        const p = line.slice(5).trim();
+        if (p === '[DONE]' || p === '') return;
+        try {
+          const o = JSON.parse(p);
+          if (typeof o.t === 'string') reply += o.t;
+          if (typeof o.s === 'string') statuses.push(o.s);
+          if (o.hold) statuses.push('[hold]');
+        } catch (e) { /* meta frame */ }
+      });
+    }
+  }
+  return { reply: reply, statuses: statuses };
+}
+
+async function evalPostTurn(messages, context, sessionKey, signedIn, token) {
+  const headers = { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY };
+  /* signed-in scenarios use the admin's JWT so the function reads a real
+     register; anon scenarios send only the publishable key, so the bot sees an
+     anonymous shopper — exactly the two audiences we want to test. */
+  headers['Authorization'] = 'Bearer ' + ((signedIn && token) ? token : SUPABASE_ANON_KEY);
+  const res = await fetch(SUPABASE_URL + '/functions/v1/concierge', {
+    method: 'POST', headers: headers,
+    body: JSON.stringify({ messages: messages, context: context || {}, session_key: sessionKey })
+  });
+  if (!res.ok) { const t = await res.text().catch(function () { return ''; }); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 160)); }
+  return evalReadSSE(res);
+}
+
+/* deterministic check → {ok, label, detail} | null (null ⇒ it's a judge check) */
+function evalDeterministic(check, reply, statuses) {
+  const r = (reply || '').toLowerCase();
+  if ('includes' in check) return { ok: r.indexOf(check.includes.toLowerCase()) >= 0, label: 'contains "' + check.includes + '"' };
+  if ('excludes' in check) return { ok: r.indexOf(check.excludes.toLowerCase()) < 0, label: 'excludes "' + check.excludes + '"' };
+  if ('regex' in check) { try { return { ok: new RegExp(check.regex, 'i').test(reply), label: 'matches /' + check.regex + '/' }; } catch (e) { return { ok: false, label: 'bad regex', detail: String(e) }; } }
+  if ('notRegex' in check) { try { return { ok: !new RegExp(check.notRegex, 'i').test(reply), label: 'excludes /' + check.notRegex + '/' }; } catch (e) { return { ok: false, label: 'bad regex', detail: String(e) }; } }
+  if ('maxQuestions' in check) { const n = (reply.match(/\?/g) || []).length; return { ok: n <= check.maxQuestions, label: '≤' + check.maxQuestions + ' question(s)', detail: 'saw ' + n }; }
+  if ('toolCalled' in check) { const hit = statuses.some(function (s) { return s.toLowerCase().indexOf(check.toolCalled.toLowerCase()) >= 0; }); return { ok: hit, label: 'tool ran ("' + check.toolCalled + '")', detail: hit ? '' : ('statuses: ' + (statuses.join(' | ') || 'none')) }; }
+  return null;
+}
+
+function evalDescribe(check) {
+  if ('judge' in check) return 'judge: ' + String(check.judge).slice(0, 70) + '…';
+  return Object.keys(check).map(function (k) { return k + '=' + check[k]; }).join(' ');
+}
+
+function evalTranscript(messages, reply) {
+  const lines = messages.map(function (m) { return (m.role === 'user' ? 'User' : 'Assistant') + ': ' + m.content; });
+  lines.push('Assistant: ' + reply);
+  return lines.join('\n');
+}
+
+async function evalJudge(criterion, transcript, token) {
+  const res = await fetch(SUPABASE_URL + '/functions/v1/concierge?judge=1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ criterion: criterion, transcript: transcript })
+  });
+  if (!res.ok) { const t = await res.text().catch(function () { return ''; }); return { error: 'judge HTTP ' + res.status + ' ' + t.slice(0, 120) }; }
+  const j = await res.json();
+  return { pass: j.pass === true, reason: j.reason || '' };
+}
+
+async function runEnabledEvals() {
+  const list = (state.evals || []).filter(function (r) { return r.enabled !== false; })
+    .map(function (r) {
+      return { slug: r.slug, name: r.name, description: r.description, signed_in: r.signed_in === true,
+        context: r.context || {}, turns: Array.isArray(r.turns) ? r.turns : [] };
+    });
+  if (!list.length) { toast('No enabled scenarios to run', true); return; }
+  await runScenarios(list);
+}
+
+/* Run a set of scenarios REPS times each; render a live pass-rate report. */
+async function runScenarios(list) {
+  const reps = Math.max(1, Math.min(20, parseInt($('evals-reps').value, 10) || 3));
+  const threshold = Math.max(0, Math.min(1, parseFloat($('evals-threshold').value) || 0.8));
+  let token = '';
+  try { const s = await sb.auth.getSession(); token = (s.data && s.data.session && s.data.session.access_token) || ''; } catch (e) { /* */ }
+
+  const mount = $('evals-results');
+  mount.textContent = '';
+  const status = $('evals-status');
+  const agg = {};        // key -> {scenario, check, pass, total, fails:[], skipped}
+  const transcripts = {}; // scenario -> array of {user, reply} (last rep)
+
+  function keyOf(scenario, check) {
+    const k = scenario + ' :: ' + check;
+    return (agg[k] = agg[k] || { scenario: scenario, check: check, pass: 0, total: 0, fails: [], skipped: '' });
+  }
+
+  let done = 0;
+  const totalRuns = list.length * reps;
+  for (let li = 0; li < list.length; li++) {
+    const sc = list[li];
+    for (let rep = 0; rep < reps; rep++) {
+      status.textContent = 'Running ' + sc.name + ' — rep ' + (rep + 1) + '/' + reps + ' (' + (done) + '/' + totalRuns + ' done)';
+      const sessionKey = 'eval-' + (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
+      const messages = [];
+      const lastTranscript = [];
+      for (let ti = 0; ti < sc.turns.length; ti++) {
+        const turn = sc.turns[ti];
+        messages.push({ role: 'user', content: turn.user });
+        let out;
+        try {
+          out = await evalPostTurn(messages, sc.context, sessionKey, sc.signed_in, token);
+        } catch (e) {
+          (turn.checks || []).forEach(function (c) { keyOf(sc.name, evalDescribe(c)).total++; });
+          keyOf(sc.name, '(request)').fails.push(e.message);
+          keyOf(sc.name, '(request)').total++;
+          break;
+        }
+        const reply = (out.reply || '').trim();
+        lastTranscript.push({ user: turn.user, reply: reply, statuses: out.statuses });
+        const checks = turn.checks || [];
+        for (let ci = 0; ci < checks.length; ci++) {
+          const c = checks[ci];
+          const a = keyOf(sc.name, evalDescribe(c));
+          a.total++;
+          const det = evalDeterministic(c, reply, out.statuses);
+          if (det) { if (det.ok) a.pass++; else a.fails.push((det.detail ? det.detail + ' — ' : '') + reply.slice(0, 120)); }
+          else if ('judge' in c) {
+            if (!token) { a.skipped = 'no admin session token'; a.total--; continue; }
+            const v = await evalJudge(c.judge, evalTranscript(messages, reply), token);
+            if (v.error) { a.skipped = v.error; a.total--; }
+            else if (v.pass) a.pass++;
+            else a.fails.push('judge: ' + (v.reason || reply.slice(0, 120)));
+          }
+        }
+        messages.push({ role: 'assistant', content: reply });
+      }
+      transcripts[sc.name] = lastTranscript;
+      done++;
+    }
+  }
+  status.textContent = 'Done — ' + totalRuns + ' run(s).';
+  renderEvalResults(mount, agg, transcripts, threshold);
+}
+
+function renderEvalResults(mount, agg, transcripts, threshold) {
+  mount.textContent = '';
+  const keys = Object.keys(agg).sort();
+  if (!keys.length) { mount.appendChild(el('div', 'micro', 'No checks scored.')); return; }
+  // group by scenario
+  const byScenario = {};
+  keys.forEach(function (k) { const a = agg[k]; (byScenario[a.scenario] = byScenario[a.scenario] || []).push(a); });
+  let anyFail = false;
+  Object.keys(byScenario).sort().forEach(function (scn) {
+    const card = el('div', 'eval-result');
+    card.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:12px;';
+    card.appendChild(el('h4', null, scn));
+    byScenario[scn].forEach(function (a) {
+      const row = el('div'); row.style.cssText = 'display:flex; gap:10px; align-items:baseline; margin-top:6px;';
+      if (a.total === 0) {
+        row.appendChild(badge('SKIP', '#8a8a8a'));
+        row.appendChild(el('span', 'micro', a.check + (a.skipped ? ' — ' + a.skipped : '')));
+      } else {
+        const rate = a.pass / a.total;
+        const bad = rate < threshold; if (bad) anyFail = true;
+        row.appendChild(badge((rate * 100).toFixed(0) + '%', bad ? '#b23b3b' : '#3b7a4b'));
+        row.appendChild(el('span', 'micro', a.check + '  (' + a.pass + '/' + a.total + ')'));
+        if (bad && a.fails.length) {
+          const why = el('div', 'micro'); why.style.cssText = 'flex-basis:100%; margin-left:8px; opacity:.75;';
+          why.textContent = '↳ e.g. ' + a.fails[a.fails.length - 1];
+          row.appendChild(why);
+        }
+      }
+      card.appendChild(row);
+    });
+    // expandable transcript of the last rep
+    const tr = transcripts[scn];
+    if (tr && tr.length) {
+      const det = el('details'); det.style.cssText = 'margin-top:10px;';
+      const sum = el('summary', 'micro', 'Show last transcript'); sum.style.cssText = 'cursor:pointer;';
+      det.appendChild(sum);
+      tr.forEach(function (t) {
+        const u = el('div', 'micro'); u.style.cssText = 'margin-top:8px;'; u.textContent = '▸ Shopper: ' + t.user; det.appendChild(u);
+        if (t.statuses && t.statuses.length) { const s = el('div', 'micro'); s.style.cssText = 'opacity:.6;'; s.textContent = '   [' + t.statuses.join(' · ') + ']'; det.appendChild(s); }
+        const a = el('div'); a.style.cssText = 'margin-top:2px; white-space:pre-wrap;'; a.textContent = 'Concierge: ' + t.reply; det.appendChild(a);
+      });
+      card.appendChild(det);
+    }
+    mount.appendChild(card);
+  });
+  const verdict = el('div', 'micro'); verdict.style.cssText = 'margin-top:6px; font-weight:600;';
+  verdict.textContent = anyFail ? '⚠️ Some checks fell below the ' + (threshold * 100).toFixed(0) + '% threshold.'
+    : '✅ All checks met the ' + (threshold * 100).toFixed(0) + '% threshold.';
+  mount.appendChild(verdict);
+}
+
+function badge(text, color) {
+  const b = el('span', null, text);
+  b.style.cssText = 'flex:0 0 auto; display:inline-block; min-width:44px; text-align:center; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:600; color:#fff; background:' + color + ';';
+  return b;
 }
 
 /* ============================================================
@@ -3226,11 +3745,12 @@ async function loadConversations(more) {
   if (!more) pageState.convo = 0;
   const df = fFrom('convo-from'), dt = fTo('convo-to'), kw = fkw('convo-q');
 
-  // Keyword also searches transcript CONTENT: find conversations whose messages
-  // contain the term (capped so the id list can't bloat the URL), then match on
-  // patron email OR one of those conversations.
+  // A bare conversation UUID (or session key) is looked up DIRECTLY — this is how
+  // you pull one specific conversation to vet it (e.g. which model each message
+  // used). Otherwise the keyword searches patron email OR transcript content.
+  const isUuid = kw && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(kw);
   let msgIds = null;
-  if (kw) {
+  if (kw && !isUuid) {
     const mm = await sb.from('concierge_messages')
       .select('conversation_id')
       .ilike('content', '%' + kw + '%')
@@ -3249,7 +3769,10 @@ async function loadConversations(more) {
     .range(from, from + PAGE - 1);
   if (df) q = q.gte('created_at', df);
   if (dt) q = q.lte('created_at', dt);
-  if (kw) {
+  if (isUuid) {
+    // match either the conversation id or its session key
+    q = q.or('id.eq.' + kw + ',session_key.eq.' + kw);
+  } else if (kw) {
     const ids = (msgIds && msgIds.length) ? msgIds : ['00000000-0000-0000-0000-000000000000'];
     q = q.or('user_email.ilike.*' + kw + '*,id.in.(' + ids.join(',') + ')');
   }
@@ -3402,6 +3925,19 @@ async function openConvo(c) {
     sk.style.color = 'var(--wool-faint)';
     head.appendChild(sk);
   }
+  // Full conversation id — click to copy, so it's easy to reference or re-look-up.
+  const cid = el('span', 'mono', 'id ' + String(c.id));
+  cid.style.cssText = 'color:var(--wool-faint); cursor:pointer;';
+  cid.title = 'Click to copy the conversation id';
+  cid.addEventListener('click', function () {
+    if (navigator.clipboard) navigator.clipboard.writeText(String(c.id));
+    toast('Conversation id copied');
+  });
+  head.appendChild(cid);
+  const exp = el('button', 'btn ghost', 'Export transcript');
+  exp.style.cssText = 'margin-left:auto; padding:4px 12px;';
+  exp.addEventListener('click', function () { exportTranscriptCsv(c); });
+  head.appendChild(exp);
 
   const body = $('transcript-body');
   body.textContent = '';
@@ -3430,7 +3966,25 @@ async function openConvo(c) {
   }
 
   if (state.activeConvoId !== c.id) return; // user clicked away meanwhile
+  state.activeMsgs = msgs;
   renderTranscript(msgs, fbMap);
+}
+
+/* Export the open conversation as CSV (created_at, role, model, latency_ms,
+   content) — the transcript is the record you'd attach when vetting behavior. */
+function exportTranscriptCsv(c) {
+  const msgs = state.activeMsgs || [];
+  if (!msgs.length) { toast('No transcript to export', true); return; }
+  const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  const head = ['created_at', 'role', 'model', 'latency_ms', 'content'];
+  const lines = [head.join(',')];
+  msgs.forEach(function (m) { lines.push(head.map(function (k) { return esc(m[k]); }).join(',')); });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'conversation-' + String(c.id).slice(0, 8) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
 }
 
 function renderTranscript(msgs, fbMap) {
@@ -3444,6 +3998,19 @@ function renderTranscript(msgs, fbMap) {
     head.appendChild(el('div', 'micro', 'Goals'));
     head.appendChild(goalChips(convo.goal_status));
     body.appendChild(head);
+  }
+
+  /* Which model(s) actually answered in this conversation — the fast way to vet
+     that a config change (e.g. haiku) really took effect, since each reply is
+     logged with the model that produced it. */
+  const models = {};
+  msgs.forEach(function (m) { if (m.model) models[m.model] = (models[m.model] || 0) + 1; });
+  const modelNames = Object.keys(models);
+  if (modelNames.length) {
+    const mline = el('div', 'micro');
+    mline.style.cssText = 'opacity:.75; margin-bottom:6px;';
+    mline.textContent = 'Models used: ' + modelNames.map(function (n) { return n + ' ×' + models[n]; }).join('  ·  ');
+    body.appendChild(mline);
   }
 
   if (!msgs.length) {

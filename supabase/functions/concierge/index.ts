@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-trim-customer-block";
+const BUILD_TAG = "2026-07-06-evals-panel";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -195,6 +195,22 @@ interface ConciergeData {
 
 const CACHE_TTL_MS = 60_000;
 let dataCache: ConciergeData | null = null;
+
+// Which model answers. Precedence, most to least specific:
+//   1. config.model          — the admin's explicit choice (Tuning → Model)
+//   2. config.model_fallback  — the admin's configured fallback (Tuning)
+//   3. MODEL env var          — an ops-set default (survives a DB-config read failure)
+//   4. DEFAULT_MODEL          — the built-in last resort
+// Nothing here is a magic string scattered across call sites: every model
+// decision goes through resolveModel() so the fallback is configurable, not
+// hard-coded. Kept cheap by default so a config blip degrades DOWN, not up.
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+function resolveModel(data: ConciergeData): string {
+  const c = data.config || {};
+  if (typeof c.model === "string" && c.model.trim()) return c.model.trim();
+  if (typeof c.model_fallback === "string" && c.model_fallback.trim()) return c.model_fallback.trim();
+  return Deno.env.get("MODEL") || DEFAULT_MODEL;
+}
 
 async function loadConciergeData(): Promise<ConciergeData> {
   if (dataCache && Date.now() - dataCache.at < CACHE_TTL_MS) return dataCache;
@@ -1747,6 +1763,108 @@ async function handleToolsGet(req: Request): Promise<Response> {
   return jsonResponse(req, 200, { tools: toolsManifest(data) });
 }
 
+// ── admin gate — verify the JWT AND that the caller is in concierge_admins ────
+// Returns the Customer if they're a registered admin, else null. Used by the
+// eval endpoints, which read the deck and spend a (small) judge model call.
+async function requireAdmin(req: Request): Promise<Customer | null> {
+  const customer = await verifyUser(req);
+  if (!customer?.email) return null;
+  const probe = await pgProbe(
+    `concierge_admins?select=email&email=eq.${encodeURIComponent(customer.email)}`,
+  );
+  return probe.ok && (probe.count ?? 0) > 0 ? customer : null;
+}
+
+// ── GET ?evals=1 — the behavior-eval deck (admin only) ───────────────────────
+// The studio's Evals tab reads scenarios straight from concierge_evals under RLS;
+// this endpoint exists so the CLI runner (evals/run.mjs) can share the SAME deck
+// when given a test-admin token, keeping one source of truth. Enabled scenarios
+// only; shaped exactly like evals/scenarios.mjs so the runner needs no mapping.
+async function handleEvalsGet(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const rows = await pgSelect<{
+    slug: string; name: string; description: string;
+    signed_in: boolean; context: unknown; turns: unknown; sort_order: number;
+  }>("concierge_evals?select=slug,name,description,signed_in,context,turns,sort_order" +
+     "&enabled=is.true&order=sort_order.asc");
+  if (!rows) return jsonError(req, 500, "Could not read the eval deck.");
+  const scenarios = rows.map((r) => ({
+    name: r.slug,
+    label: r.name,
+    desc: r.description,
+    signedIn: r.signed_in === true,
+    context: (r.context && typeof r.context === "object") ? r.context : {},
+    turns: Array.isArray(r.turns) ? r.turns : [],
+  }));
+  return jsonResponse(req, 200, { scenarios });
+}
+
+// ── POST ?judge=1 — the pinned binary LLM judge (admin only) ─────────────────
+// The eval runner (browser or CLI) sends ONE concrete criterion + a transcript;
+// we return a binary {pass, reason}. Kept server-side because the Anthropic key
+// must never reach the browser. Mirrors evals/judge.mjs: temperature 0, a fixed
+// contract, a forced `verdict` tool, told to ignore tone/length. Cheap model.
+const JUDGE_SYSTEM =
+  "You are a strict, literal evaluator of a sales-concierge chatbot. You are given " +
+  "ONE criterion and a chat transcript. Decide ONLY whether the ASSISTANT's LAST " +
+  "message satisfies that exact criterion. Ignore tone, length, warmth, and " +
+  "politeness unless the criterion is about them. Tokens like {{action:commission}}, " +
+  "{{action:signin}}, and {{reply:...}} are UI elements the assistant legitimately " +
+  "emits — treat them as the button/pill they render. Do not be lenient: if the " +
+  "criterion is not clearly met, it fails. Reply with a single tool call.";
+
+async function handleJudgePost(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
+  let body: { criterion?: unknown; transcript?: unknown };
+  try { body = await req.json(); } catch { return jsonError(req, 400, "Bad JSON."); }
+  const criterion = typeof body.criterion === "string" ? body.criterion.slice(0, 2000) : "";
+  const transcript = typeof body.transcript === "string" ? body.transcript.slice(0, 12000) : "";
+  if (!criterion || !transcript) return jsonError(req, 400, "criterion and transcript are required.");
+  const model = Deno.env.get("EVAL_JUDGE_MODEL") || "claude-haiku-4-5-20251001";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 200, temperature: 0,
+        system: JUDGE_SYSTEM,
+        tool_choice: { type: "tool", name: "verdict" },
+        tools: [{
+          name: "verdict",
+          description: "Record the pass/fail verdict for the criterion.",
+          input_schema: {
+            type: "object",
+            properties: {
+              pass: { type: "boolean", description: "true only if the last assistant message clearly satisfies the criterion" },
+              reason: { type: "string", description: "one short clause (<=20 words) citing the deciding evidence" },
+            },
+            required: ["pass", "reason"],
+          },
+        }],
+        messages: [{
+          role: "user",
+          content: "CRITERION:\n" + criterion + "\n\nTRANSCRIPT (most recent assistant message is the one to judge):\n" + transcript,
+        }],
+      }),
+    });
+    if (!res.ok) {
+      return jsonError(req, 502, `Judge model error ${res.status}: ${(await res.text().catch(() => "")).slice(0, 160)}`);
+    }
+    // deno-lint-ignore no-explicit-any
+    const j = await res.json() as any;
+    // deno-lint-ignore no-explicit-any
+    const tool = (j.content || []).find((b: any) => b.type === "tool_use" && b.name === "verdict");
+    if (!tool || typeof tool.input?.pass !== "boolean") {
+      return jsonError(req, 502, "Judge returned no verdict.");
+    }
+    return jsonResponse(req, 200, { pass: tool.input.pass, reason: String(tool.input.reason || "").slice(0, 200), model });
+  } catch (e) {
+    return jsonError(req, 502, "Judge error: " + (e instanceof Error ? e.message : String(e)));
+  }
+}
+
 // ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
 // Deterministic, built from their REAL orders (status, cloth, gift), so every chip
 // points at something they actually have — no model call, no guessing. Anonymous
@@ -1948,8 +2066,7 @@ async function handleChatPost(req: Request): Promise<Response> {
   if (data.config?.enabled === false) {
     return jsonError(req, 503, "The concierge is resting. Write hello@feierabend.example.");
   }
-  const model = (typeof data.config?.model === "string" && data.config.model) ||
-    Deno.env.get("MODEL") || "claude-sonnet-4-5";
+  const model = resolveModel(data);
   const maxTokens = typeof data.config?.max_tokens === "number" &&
       data.config.max_tokens > 0
     ? Math.floor(data.config.max_tokens)
@@ -2335,8 +2452,7 @@ async function handleWrapup(req: Request): Promise<Response> {
     if (customer) {
       const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
       const data = await loadConciergeData();
-      const model = (typeof data.config?.model === "string" && data.config.model) ||
-        Deno.env.get("MODEL") || "claude-sonnet-4-5";
+      const model = resolveModel(data);
       if (apiKey) scheduleClientBookNote(cid, customer, apiKey, model);
     }
     return jsonResponse(req, 200, { ok: true, noted: !!customer, status });
@@ -2539,8 +2655,7 @@ async function handleReengage(req: Request): Promise<Response> {
     if (data.config?.enabled === false || data.goals.length === 0) return fallback();
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return fallback();
-    const model = (typeof data.config?.model === "string" && data.config.model) ||
-      Deno.env.get("MODEL") || "claude-sonnet-4-5";
+    const model = resolveModel(data);
     const customer = await verifyUser(req);
 
     let cid: string | null = null;
@@ -2630,6 +2745,12 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("starters")) {
     return await handleStartersGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("evals")) {
+    return await handleEvalsGet(req);
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("judge")) {
+    return await handleJudgePost(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("selftest")) {
     return await handleSelfTest(req);

@@ -46,6 +46,25 @@ node evals/run.mjs --selftest      # offline: prove the SSE parser + checks (no 
 Exit code is `0` if every check meets the threshold, `1` otherwise — so it drops
 straight into CI.
 
+## Run it from the admin panel
+
+The same deck lives in the **`concierge_evals`** table and is editable + runnable
+in the studio's **Evals** tab — no CLI needed. Add or edit a scenario, build its
+turns and typed checks, hit **Run enabled scenarios**, and each reply, the status
+frames, and the pass-rate per behavior render inline (expandable to the full
+transcript and the judge's reason). The browser replays scenarios against the
+live function; the LLM judge runs server-side behind an **admin-gated
+`POST ?judge=1`** endpoint (the Anthropic key never reaches the browser).
+Signed-in scenarios use the admin's own session, so they read a real register.
+
+To keep one source of truth, the CLI can pull that DB deck instead of the local
+`scenarios.mjs`:
+
+```bash
+export EVAL_TOKEN="eyJ…"          # a test-ADMIN access token (see below)
+node evals/run.mjs --remote       # fetch the deck from ?evals=1, then run it
+```
+
 ### Env vars
 | var | default | meaning |
 | --- | --- | --- |

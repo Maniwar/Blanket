@@ -147,11 +147,30 @@ function key(agg, scenario, check) {
   return (agg[k] = agg[k] || { scenario, check, pass: 0, total: 0, lastFail: "", skipped: "" });
 }
 
+// Optionally pull the SAME deck the admin panel edits, from the admin-gated
+// ?evals=1 endpoint (needs EVAL_TOKEN = a test-admin access token). Keeps one
+// source of truth; falls back to the local scenarios.mjs on any error.
+async function loadDeck() {
+  if (!has("--remote")) return scenarios;
+  if (!TOKEN) { console.error("--remote needs EVAL_TOKEN (a test-admin token)."); process.exit(2); }
+  try {
+    const res = await fetch(ENDPOINT + "?evals=1", { headers: { "Authorization": "Bearer " + TOKEN } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = await res.json();
+    if (!Array.isArray(j.scenarios) || !j.scenarios.length) throw new Error("empty deck");
+    console.log(`(loaded ${j.scenarios.length} scenario(s) from the DB deck via ?evals=1)\n`);
+    return j.scenarios;
+  } catch (e) {
+    console.error(`--remote deck fetch failed (${e.message}); using local scenarios.mjs`);
+    return scenarios;
+  }
+}
+
 async function main() {
   if (has("--selftest")) return selftest();
   if (!ENDPOINT) { console.error("EVAL_ENDPOINT is required. See evals/README.md."); process.exit(2); }
 
-  const list = scenarios.filter((s) => !FILTER || s.name.includes(FILTER));
+  const list = (await loadDeck()).filter((s) => !FILTER || s.name.includes(FILTER));
   const runnable = list.filter((s) => !s.signedIn || TOKEN);
   const skipped = list.filter((s) => s.signedIn && !TOKEN);
   if (skipped.length) console.log(`(skipping ${skipped.length} signed-in scenario(s) — set EVAL_TOKEN to run them)\n`);

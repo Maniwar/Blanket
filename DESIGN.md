@@ -132,6 +132,13 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   per chat, which were met — with the evidence — so that I can measure quality.
   *(Procedures tab: admin-editable goals; LLM-judge scoring with cited
   justifications.)*
+- **As the merchant**, I want to keep a deck of behavior tests — "shows the
+  commission button on a buying signal," "never leaks `[HOLD]`," "reads the
+  register instead of guessing" — edit them without a deploy, run them against
+  the live concierge, and see a pass rate with the actual replies, so that I can
+  prove a prompt or model change didn't quietly break something I fixed. *(Evals
+  tab: `concierge_evals` scenarios + typed checks; in-browser replay + an
+  admin-gated server-side binary LLM judge; see §4.9 and* [`evals/README.md`](evals/README.md)*.)*
 - **As the merchant**, I want one place that shows everything the concierge can
   *do*, lets me switch each capability on or off and re-instruct it, **and lets me
   create new capabilities myself** — so that the bot's powers are mine to shape
@@ -232,10 +239,15 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   *behaves* — shows the commission button on a buying signal, never leaks
   `[HOLD]`, doesn't loop in discovery, reads the register instead of guessing —
   after any prompt or model change, so that a fix I already shipped can't quietly
-  regress. *(`evals/` behavior deck: scripted conversations replayed against the
-  deployed function, deterministic checks + a pinned binary LLM judge, reported as
-  a pass rate; see* [`evals/README.md`](evals/README.md)*. Design rationale in
-  §4.9.)*
+  regress. *(`evals/` behavior deck, runnable from the CLI or the admin Evals tab:
+  scripted conversations replayed against the deployed function, deterministic
+  checks + a pinned binary LLM judge, reported as a pass rate; see*
+  [`evals/README.md`](evals/README.md)*. Design rationale in §4.9.)*
+- **As the operator**, I want to look up one conversation by its id and see which
+  model answered each message, so that I can confirm a model or fallback change
+  actually took effect instead of trusting the config screen. *(Conversations tab:
+  search by conversation id / session key; per-message model + "models used"
+  summary; CSV transcript export. Model resolution is fully configurable — §4.7.)*
 - **As the operator**, I want a complete audit trail of every order change and
   tool action, so that nothing mutates the register invisibly.
   *(`order_events` trigger records field-level `{old,new}` diffs on every update
@@ -496,11 +508,23 @@ timers, or pinging until a hard cap) either annoys present users or wastes calls
 on absent ones.
 
 ### 4.7 Everything tunable is data
-Config, knowledge base, standard operating procedures, in-chat forms, and
-conversation goals are **rows**, cached in the function for 60 seconds. The
-merchant edits tone, policy, and goals in the admin studio and sees them live
-within a minute — no deploy. The compiled-in knowledge (`kb.ts`) is only a
-fallback if the DB is empty or unreachable, so the concierge never goes blank.
+Config, knowledge base, standard operating procedures, in-chat forms,
+conversation goals, and behavior-eval scenarios are **rows**, cached in the
+function for 60 seconds. The merchant edits tone, policy, goals, and the eval
+deck in the admin studio and sees them live within a minute — no deploy. The
+compiled-in knowledge (`kb.ts`) is only a fallback if the DB is empty or
+unreachable, so the concierge never goes blank.
+
+**The model choice follows the same rule — nothing about it is hard-coded.**
+Which model answers is resolved, most to least specific, by `resolveModel()`:
+`config.model` (the admin's Tuning → Model choice) → `config.model_fallback`
+(a configured fallback, also editable in Tuning) → the `MODEL` env var (an
+ops-level default that survives even a config-read failure) → a single compiled
+last-resort constant. The last resort is deliberately the **cheap** model, so a
+rare config blip degrades *down* in cost, never silently up. Every model call
+site goes through this one function, so there is no stray literal to surprise
+you — and because each reply is logged with the model that produced it
+(`concierge_messages.model`), you can always vet what actually ran (§7).
 
 ### 4.8 Measuring the concierge
 Because the pitch is "it's a virtual sales associate," it has to be measurable:
@@ -540,6 +564,18 @@ shopper would get, prompt + model + tools together. The judge checks need an
 `ANTHROPIC_API_KEY` and are skipped without one; a `--selftest` mode proves the
 harness itself with zero network. Full design and how to run it:
 [`evals/README.md`](evals/README.md).
+
+**In the studio, too.** True to "everything tunable is data" (§4.7), the deck is
+also a table (`concierge_evals`) the merchant edits in the admin **Evals** tab:
+add or edit a scenario, build its turns and typed checks, toggle it, then hit
+**Run** and watch each reply, the status frames, and the pass-rate per behavior
+render inline — expandable to the full transcript and the judge's one-line
+reason. The scenario replay runs in the browser against the live function; the
+LLM judge can't (its Anthropic key must never reach the client), so it goes
+through an **admin-gated `POST ?judge=1`** endpoint that runs the same pinned
+binary judge server-side. Signed-in scenarios use the admin's own session, so
+they read a real register. The CLI and the panel share one source of truth: the
+runner can pull the same deck from the admin-gated `GET ?evals=1`.
 
 ---
 
@@ -610,11 +646,22 @@ reports recognition, schema presence, attribution, and the exact context the
 model receives; `?cachecheck=1` exercises the whole cache round-trip; and every
 tool call, order change, feedback, and knowledge gap is logged for the admin.
 
-Beyond diagnosing a single request, the **`evals/` behavior deck** (§4.9) is how
-we prove the concierge still *behaves* across a change: it replays scripted
-conversations against the deployed function and reports a pass rate per behavior,
-so a prompt or model tweak that reintroduces a known bug shows up as a failing
-check rather than a customer complaint.
+Beyond diagnosing a single request, the **behavior-eval deck** (§4.9) — runnable
+from the CLI *or* the admin **Evals** tab — is how we prove the concierge still
+*behaves* across a change: it replays scripted conversations against the deployed
+function and reports a pass rate per behavior, so a prompt or model tweak that
+reintroduces a known bug shows up as a failing check rather than a customer
+complaint.
+
+**Every reply is attributable.** Each assistant message is logged with the model
+that produced it (`concierge_messages.model`) and its latency. In the admin
+**Conversations** tab you can pull a specific conversation by its **id** (or
+session key) straight from the search box, and the transcript shows the model on
+every reply plus a "models used" summary — so a question like "did my switch to
+haiku actually take effect?" is answered by looking, not guessing. (A brief mix
+of models right after a change is expected: config is cached for 60 s per warm
+function instance, so in-flight instances finish on the previous model before
+the new one propagates.) The open transcript exports to CSV for a record.
 
 ---
 
