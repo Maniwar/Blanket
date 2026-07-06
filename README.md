@@ -31,10 +31,17 @@ when it's software?*
   *acknowledgement/presence* as a proxy: it pauses when it's talking to no one and
   resumes the moment you show a sign of life.
 - **Everything tunable is data.** Voice, knowledge, selling procedures, in-chat
-  forms, and conversation goals are database rows editable in an admin studio —
+  forms, conversation goals, **behavior-eval scenarios**, and even the **model**
+  (with a configurable fallback) are database rows editable in an admin studio —
   live, no redeploy.
+- **Tested behavior, not vibes.** A behavior-eval deck replays scripted
+  conversations against the live concierge and reports a **pass rate** per
+  behavior (deterministic checks + a pinned binary LLM judge), so a prompt or
+  model change can't silently regress a fixed bug. Runnable from the CLI or the
+  admin **Evals** tab.
 - **No server to run.** Static site (GitHub Pages) + two Deno edge functions +
-  managed Postgres, with Row-Level Security as the authorization boundary.
+  managed Postgres, with Row-Level Security as the authorization boundary and a
+  documented [security review](SECURITY.md).
 
 ## Stack
 
@@ -53,6 +60,7 @@ passwordless email auth.
 | **[supabase/README.md](supabase/README.md)** | Backend reference — the edge functions, wire contracts (SSE frames, endpoints), rate limits. |
 | **[supabase/SCHEMA.md](supabase/SCHEMA.md)** | Data model — every table, column, RPC, and what reads/writes it. |
 | **[evals/README.md](evals/README.md)** | Behavior evals — how the concierge is regression-tested (deterministic checks + a pinned binary LLM judge, reported as a pass rate), runnable from the CLI or the admin **Evals** tab. |
+| **[SECURITY.md](SECURITY.md)** | Security review — CISSP/OWASP-framed audit (injection, XSS, access control, RLS, secrets): what was found and fixed, residual risks, and the path to a formal certification. |
 | **[SCALING.md](SCALING.md)** | Scaling review — what holds at millions of users, what was hardened, what's next. |
 | **[BACKLOG.md](BACKLOG.md)** | Prioritized future work (scalability, features, quality) — none blocking. |
 
