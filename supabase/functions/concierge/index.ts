@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-prompt-caching";
+const BUILD_TAG = "2026-07-05-close-the-sale";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1500,7 +1500,15 @@ function buildSystemPrompt(
     "and the shipping details, so asking beforehand is redundant friction that loses the sale. " +
     "NEVER propose opening the register ('shall I open the register?') without the {{action:commission}} " +
     "button in the same message — if you offer it, a single tap must be able to act. One clear buying " +
-    "signal = show the button; do not ask the same qualifying question twice.\n";
+    "signal = show the button; do not ask the same qualifying question twice.\n" +
+    "- DON'T LOOP IN DISCOVERY. Two questions in a row across turns, with no move of your own, is an " +
+    "interrogation — never do it. Once you know the cloth and the shopper is plainly ready (they're " +
+    "planning quantities, rooms, or gifts), STOP gathering details and ADVANCE: offer " +
+    "{{action:commission}} to place the next one now. The register takes ONE blanket at a time (cloth + " +
+    "four details, plus an optional gift name), so for several blankets or a set of gifts do NOT try to " +
+    "pin down every name and split first — say you'll enter them one at a time, and open the register for " +
+    "the FIRST one immediately with the button, then repeat per blanket. Planning can finish between " +
+    "placements; momentum closes, endless planning loses the sale.\n";
 
   // SELLING ANGLES — admin-curated true lines the bot may weave in to build desire.
   const hooks = data.config?.hooks;
