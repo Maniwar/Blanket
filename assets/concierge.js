@@ -2966,22 +2966,27 @@
       send.disabled = false;
       send.textContent = 'Send key';
       var noClient = !!(err && err.noClient);
-      var msg = '';
+      var msg = '', status = 0, code = '';
       try {
-        if (err && typeof err === 'object' && !noClient) { msg = err.message || (err.error && err.error.message) || ''; }
-        else if (typeof err === 'string') { msg = err; }
+        if (err && typeof err === 'object' && !noClient) {
+          msg = err.message || (err.error && err.error.message) || '';
+          status = err.status || (err.error && err.error.status) || 0;
+          code = (err.code || (err.error && err.error.code) || '').toString();
+        } else if (typeof err === 'string') { msg = err; }
       } catch (eM) { msg = ''; }
       try { if (window.console && window.console.warn) { window.console.warn('[concierge] sign-in failed:', err); } } catch (eC) { /* ignore */ }
+      var rateLike = /rate|too many|seconds|limit/i.test(msg) || status === 429 || /rate/i.test(code);
       /* Distinguish "the sign-in library never loaded" (Supabase is never even
-         contacted, so its logs are empty) from a real send failure. */
+         contacted, so its logs are empty) from a real send failure. An opaque/
+         empty error on a send is almost always the email sender's rate limit. */
       if (noClient) {
         cap.textContent = 'The sign-in service didn’t load — check your connection or a script/ad blocker, then retry.';
-      } else if (/rate|too many|seconds|limit/i.test(msg)) {
-        cap.textContent = 'Too many key requests just now — wait a minute and try again.';
+      } else if (rateLike) {
+        cap.textContent = 'Too many key requests just now — the email sender is rate-limited. Wait a few minutes and try again.';
       } else if (msg) {
         cap.textContent = 'Could not send the key: ' + msg;
       } else {
-        cap.textContent = 'The key could not be sent. Try once more (see the browser console for details).';
+        cap.textContent = 'The key couldn’t be sent — usually the email sender hitting its limit. Wait a few minutes and retry; if it keeps failing, the site’s email settings need a look.';
       }
     }
     function submit() {
