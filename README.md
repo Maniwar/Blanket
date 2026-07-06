@@ -52,6 +52,7 @@ passwordless email auth.
 | **[SETUP.md](SETUP.md)** | Stand it up and verify it — setup steps, custom SMTP, a `selftest`-driven checklist, troubleshooting. |
 | **[supabase/README.md](supabase/README.md)** | Backend reference — the edge functions, wire contracts (SSE frames, endpoints), rate limits. |
 | **[supabase/SCHEMA.md](supabase/SCHEMA.md)** | Data model — every table, column, RPC, and what reads/writes it. |
+| **[evals/README.md](evals/README.md)** | Behavior evals — how the concierge is regression-tested (deterministic checks + a pinned binary LLM judge, reported as a pass rate), runnable from the CLI or the admin **Evals** tab. |
 | **[SCALING.md](SCALING.md)** | Scaling review — what holds at millions of users, what was hardened, what's next. |
 | **[BACKLOG.md](BACKLOG.md)** | Prioritized future work (scalability, features, quality) — none blocking. |
 

@@ -514,14 +514,12 @@ function orderEmail(
 async function isAdmin(email: string | null): Promise<boolean> {
   if (!email) return false;
   try {
-    const safe = email.replace(/["\\,()]/g, "");
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/concierge_admins?select=email&email=eq.${encodeURIComponent(email)}`,
       { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
     );
     if (!res.ok) return false;
     const rows = await res.json() as unknown[];
-    void safe;
     return Array.isArray(rows) && rows.length > 0;
   } catch { return false; }
 }

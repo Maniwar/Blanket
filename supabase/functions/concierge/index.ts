@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-06-evals-panel";
+const BUILD_TAG = "2026-07-06-evals-secrets-harden";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -1759,6 +1759,9 @@ async function handleConfigGet(req: Request): Promise<Response> {
 // enable/disable toggles and description editors. Writes go straight to the
 // concierge_tools table under RLS, like the other config tables.
 async function handleToolsGet(req: Request): Promise<Response> {
+  // Admin-only: the tool manifest describes internal capabilities/prompt surface,
+  // and the only caller (admin Tools tab) already sends the admin JWT.
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
   const data = await loadConciergeData();
   return jsonResponse(req, 200, { tools: toolsManifest(data) });
 }
@@ -1863,6 +1866,33 @@ async function handleJudgePost(req: Request): Promise<Response> {
   } catch (e) {
     return jsonError(req, 502, "Judge error: " + (e instanceof Error ? e.message : String(e)));
   }
+}
+
+// ── GET ?secrets=1 — server-secret STATUS for the admin panel (admin only) ───
+// Returns ONLY booleans (is each secret present) plus the model in effect — never
+// a value. Lets the studio show a live "what's configured" readout so setup isn't
+// doc-only, without ever putting a secret in the browser. Secret VALUES are set
+// in the Supabase dashboard or as GitHub secrets (Deploy Concierge applies them);
+// this endpoint just reports presence.
+async function handleSecretsGet(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const has = (n: string) => !!(Deno.env.get(n) || "").trim();
+  const data = await loadConciergeData();
+  return jsonResponse(req, 200, {
+    build: BUILD_TAG,
+    model_in_effect: resolveModel(data),
+    secrets: {
+      // required for the concierge to answer at all
+      anthropic_api_key: { set: has("ANTHROPIC_API_KEY"), required: true, purpose: "Concierge chat (required)" },
+      // Supabase injects these into every function; shown for completeness
+      supabase_url: { set: has("SUPABASE_URL"), required: true, purpose: "Auto-provided by Supabase" },
+      supabase_service_role_key: { set: has("SUPABASE_SERVICE_ROLE_KEY"), required: true, purpose: "Auto-provided by Supabase" },
+      // optional feature secrets
+      resend_api_key: { set: has("RESEND_API_KEY"), required: false, purpose: "Transactional order email (optional)" },
+      email_from: { set: has("EMAIL_FROM"), required: false, purpose: "Order-email sender (optional; has a default)" },
+      allowed_origins: { set: has("ALLOWED_ORIGINS"), required: false, purpose: "CORS (set by the deploy workflow)" },
+    },
+  });
 }
 
 // ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
@@ -2421,6 +2451,11 @@ async function handleChatPost(req: Request): Promise<Response> {
 // conversations are left alone, which dedupes repeat closes). From then on the
 // next message opens a fresh conversation the bot treats as a re-engagement.
 async function handleWrapup(req: Request): Promise<Response> {
+  // Public lifecycle beacon (fires on pagehide, so it can't require auth), but
+  // bound it: without a limit an anon caller could spam status flips. Beacons are
+  // rare per visitor, so a per-IP window is invisible to real use.
+  const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  if (await rateLimited(ip)) return jsonResponse(req, 200, { ok: true, noted: false });
   let body: Record<string, unknown>;
   try { body = await req.json() as Record<string, unknown>; } catch {
     return jsonError(req, 400, "Request body must be valid JSON.");
@@ -2749,6 +2784,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET" && new URL(req.url).searchParams.get("evals")) {
     return await handleEvalsGet(req);
   }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("secrets")) {
+    return await handleSecretsGet(req);
+  }
   if (req.method === "POST" && new URL(req.url).searchParams.get("judge")) {
     return await handleJudgePost(req);
   }
@@ -2756,6 +2794,10 @@ Deno.serve(async (req: Request) => {
     return await handleSelfTest(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("cachecheck")) {
+    // Admin-only: this diagnostic WRITES (insert+delete a probe row) and runs an
+    // embedding, so leaving it unauthenticated is a write/compute-amplification
+    // surface. It has no client caller — it's a manual health check.
+    if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
     // Self-diagnosis: run the semantic cache's WHOLE round trip — embed a
     // probe, write it, semantically match it back, delete it — and report
     // which step fails, with the raw error. Exposes no data beyond counts.

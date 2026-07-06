@@ -1521,13 +1521,22 @@ footer{
   var navLive = document.getElementById('navLive');
   if(navLive){
     var tickN = 0;
+    /* Escape any DB/user-derived value before it enters innerHTML. `city` is
+       free-typed at checkout (length-checked only server-side), so it must be
+       output-encoded here — otherwise a crafted city is stored XSS on every
+       homepage. The static <b> markup below is ours and stays literal. */
+    function escHtml(s){
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
     function liveMsg(){
       switch(tickN % 4){
         case 0:
           /* only real register entries — never an invented claim */
           if(recentOrders.length){
             var o = recentOrders[tickN % recentOrders.length];
-            var place = (o.city ? o.city + ', ' : '') + (o.state || '');
+            var place = (o.city ? escHtml(o.city) + ', ' : '') + escHtml(o.state || '');
             return 'Nº <b>' + fmtN(o.serial) + '</b> · ' + (place || 'the register') + ' · ' + relTime(o.placed_at);
           }
           return 'Woven to order · <b>3–5 weeks</b> to your door';
