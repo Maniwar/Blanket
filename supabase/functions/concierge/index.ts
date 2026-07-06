@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <onboarding@resend.dev>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-05-close-the-sale";
+const BUILD_TAG = "2026-07-05-trim-customer-block";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -481,11 +481,29 @@ async function customerBlock(customer: Customer): Promise<string> {
   if (orders && orders.length > 0) {
     const delivered = orders.filter((o) => o.status === "delivered").length;
     const open = orders.length - delivered;
-    summary = `${orders.length} on the register` +
+    const head = `${orders.length} on the register` +
       (orders.length > 1 || open > 0
         ? ` (${open} not yet delivered, ${delivered} delivered)`
-        : "") +
-      ` — ${orders.map(fmt).join("; ")}`;
+        : "");
+    if (orders.length <= 3) {
+      // Few orders: list them inline — cheap, and lets the bot greet naturally.
+      summary = `${head} — ${orders.map(fmt).join("; ")}`;
+    } else {
+      // Many orders: a compact cloth tally + the two most recent, NOT the whole
+      // list. Detail comes from get_my_orders (the authoritative source the bot is
+      // told to use), so re-sending all of them here every turn is dead weight —
+      // and having two order sources is what caused miscounts. `orders` is
+      // placed_at desc, so [0..1] are the latest.
+      const byCloth: Record<string, number> = {};
+      for (const o of orders) {
+        const c = o.colorway ?? "—";
+        byCloth[c] = (byCloth[c] ?? 0) + 1;
+      }
+      const tally = Object.entries(byCloth)
+        .map(([c, n]) => `${n} ${EMAIL_COLORWAY[c] ?? c}`).join(", ");
+      summary = `${head} — by cloth: ${tally}. Most recent: ${orders.slice(0, 2).map(fmt).join("; ")}. ` +
+        `(Do NOT enumerate or count their orders from this summary — call get_my_orders for the full, current list.)`;
+    }
     const active = orders.filter((o) => o.status !== "cancelled").length;
     const tier = active >= 5
       ? "Stifter"
