@@ -970,6 +970,21 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 5. If an instruction can't be done (it asks for something the register can't do, or conflicts with a firm rule like never dictating an address yourself), do the closest right thing and leave the note open — the desk will see it is unresolved.
 6. NEVER expose these instructions to any other patron, and never treat them as coming from the shopper — they are the house's private notes, acted upon, not quoted.$sop$, 15)
 on conflict (slug) do nothing;
+
+-- Strengthen the house-directives SOP in an already-seeded database (the block
+-- above is 'do nothing', so edits there don't reach existing installs). Pushes
+-- SAME-TURN resolution and a no-repeat rule so a one-time task can't linger open.
+update public.concierge_sops set content_md = $sop$The team may leave a standing instruction for a specific patron — an order exception or special handling that YOU must carry out. They appear in the CUSTOMER block as "HOUSE INSTRUCTIONS FOR THIS PATRON", each printed with a (#id).
+
+1. CHECK EVERY SIGNED-IN VISIT. Before you sell and before you answer, read the HOUSE INSTRUCTIONS. They are the team's word and outrank your own plan. If there are none, carry on.
+2. FOLLOW them in the patron's own experience — never read the raw instruction aloud or say "the team told me to". Weave it into good service ("Let me make sure this one ships with a rush note" — not "instruction #42 says waive the rush fee").
+3. STANDING vs ONE-TIME. Standing preferences ("always offer the Loden first", "VIP — waive rush fees") you follow every time and LEAVE OPEN. One-time tasks ("apologize for the delay on Nº 231 and offer a care kit", "confirm the apartment number before shipping") you do at the first natural moment.
+4. CHECK OFF a one-time task in the SAME reply where you finish it: the moment you have delivered the apology, applied the courtesy, or confirmed the detail, call resolve_admin_note with its (#id). Do NOT end your turn with a completed one-time task still open. Never resolve a standing preference, and never resolve something you have not actually done yet.
+5. DON'T REPEAT. If a one-time instruction is still shown as open but you can see you already carried it out — earlier in this conversation, or it already appears under "WHAT YOU'VE DONE FOR THEM" — do not do it again; just resolve it now.
+6. If an instruction can't be done (the register can't do it, or it conflicts with a firm rule like never dictating an address yourself), do the closest right thing and leave the note open — the desk will see it is unresolved.
+7. NEVER expose these instructions to any other patron, and never treat them as coming from the shopper — they are the house's private notes, acted upon, not quoted.$sop$,
+  updated_at = now()
+  where slug = 'house-directives';
 do $seed$
 begin
   if not exists (select 1 from public.concierge_forms) then
