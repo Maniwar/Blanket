@@ -228,7 +228,13 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   customers at once, and **bulk resolve / reopen / delete** notes, so that I'm not
   editing one at a time. *(Orders view bulk bar → "Leave note…" writes one
   directive to each distinct customer behind the selected orders; House notes view
-  has multi-select + a bulk Resolve/Reopen/Delete bar.)*
+  has a filter + Select-all + a bulk Resolve/Reopen/Delete bar.)*
+- **As the merchant/operator**, I want house-note handling **graded like every
+  other goal**, and I want the **chats that acted on a note tagged** so I can
+  audit them, so that "did the bot follow the house's instruction" is measured,
+  not assumed. *(The `house-notes` goal — the grader is fed the patron's directive
+  text so it's judgeable; the Conversations list shows a `🏷 house note #N` chip
+  on any chat where the concierge resolved one. See §4.13.)*
 - **As the merchant**, I want a single-order drawer that consolidates **the
   customer** (name, standing, lifetime value, blankets, last order, note count),
   **this order's** shipping *and* billing (both editable), its emails, and the
@@ -872,9 +878,21 @@ author, dates, filterable open/resolved/all. Each row offers Resolve/Reopen,
 Delete, **View customer**, and — when the concierge resolved it in a chat —
 **Find the chat**, which jumps to that conversation. The chat link is recovered
 from the `resolve_admin_note` entry in `concierge_actions` (its `payload.note_id`
-→ `conversation_id`). **Bulk:** the Orders bulk bar can write one directive to all
-distinct customers behind the selected orders; the House notes view multi-selects
-for bulk Resolve/Reopen/Delete.
+→ `conversation_id`). Each house-note row also offers **Customer's chats** (all of
+that patron's conversations, for finding where the bot addressed a note it didn't
+formally resolve), and the view has a text filter + **Select all shown** so bulk
+work isn't one checkbox at a time. **Bulk:** the Orders bulk bar can write one
+directive to all distinct customers behind the selected orders; the House notes
+view multi-selects for bulk Resolve/Reopen/Delete.
+
+**Graded & tagged.** House-note handling is a scored **goal** (`house-notes`): the
+per-conversation goal grader marks whether the concierge followed the team's
+instruction and resolved one-time ones. Because the grader can't see the system
+prompt, `evaluateGoals` hands it the patron's directive text so the goal is
+judgeable; if the patron had no directive, the goal is treated as met. And the
+Conversations list **tags** any chat where the concierge resolved a note with a
+`🏷 house note #N` chip (from the same `resolve_admin_note` audit action), so you
+can spot — and open — the chats that acted on notes and which note they relate to.
 
 ---
 
