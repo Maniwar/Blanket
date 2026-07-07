@@ -344,6 +344,18 @@
   .dsec{ border-top:1px solid var(--hairline-dim); padding:16px 0 4px; }
   .dsec > .lbl{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em;
     text-transform:uppercase; color:var(--wool-faint); margin-bottom:10px; }
+  /* Order-drawer conversation jump rows */
+  .cj-head{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--wool-faint); margin:12px 0 6px; }
+  .cj-head:first-child{ margin-top:0; }
+  .convojump{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; width:100%;
+    text-align:left; background:var(--ink-well); border:1px solid var(--hairline-dim);
+    border-radius:3px; padding:8px 11px; margin-bottom:6px; cursor:pointer; color:var(--wool-dim); }
+  .convojump:hover{ border-color:var(--brass); color:var(--wool); }
+  .cj-when{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool); }
+  .cj-mid{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .cj-goals{ color:var(--wool-faint); }
+  .cj-touch{ color:var(--brass-soft); font-weight:600; }
   .cust-book-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--loden-deep); background:var(--brass-soft);
     border-radius:20px; padding:3px 10px; }
@@ -435,6 +447,17 @@
   .msg .meta{ margin-top:5px; font-size:10px; color:var(--wool-faint); }
   .msg .meta .fb{ font-size:13px; }
   .msg .meta .fbnote{ display:block; margin-top:3px; color:var(--wool-dim); font-style:normal; }
+  /* When you jump in from a house note, the acted-on reply pulses so the eye
+     lands on it, then settles to a persistent brass rail marking the spot. */
+  .msg.flash .bubble{ box-shadow:0 0 0 2px var(--brass); animation:msgflash 2.6s ease-out 1; }
+  .msg.acted-here .bubble{ border-left:3px solid var(--brass); }
+  .msg.acted-here .actedtag{ display:inline; }
+  .msg .actedtag{ display:none; margin-left:8px; color:var(--brass-soft); font-weight:600; }
+  @keyframes msgflash{
+    0%{ box-shadow:0 0 0 3px var(--brass); background:rgba(196,155,91,.22); }
+    70%{ box-shadow:0 0 0 3px var(--brass); }
+    100%{ box-shadow:0 0 0 2px var(--brass); background:transparent; }
+  }
   .empty{ color:var(--wool-faint); padding:26px 20px; text-align:center; }
   .row-tools{ display:flex; gap:12px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
   .filters{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
@@ -1218,6 +1241,7 @@ const state = {
   admins: [],
   isSuper: false,
   activeConvoId: null,
+  jumpTo: null,            // { conv, at } — scroll the open transcript to the acted-on moment
   loaded: false
 };
 
@@ -4099,13 +4123,19 @@ function openOrderDrawer(o) {
     });
     who.appendChild(ipLine);
   }
-  if (o.email) {
-    const chatsBtn = el('button', 'btn ghost', 'View this customer’s conversations'); chatsBtn.type = 'button';
-    chatsBtn.style.marginTop = '10px';
-    chatsBtn.addEventListener('click', function () { closeDrawer(); openCustomerChats(o.email); });
-    who.appendChild(chatsBtn);
-  }
   dw.appendChild(who);
+
+  // Conversations — right here in the panel: the chats that TOUCHED this order
+  // (a register action logged against its Nº), then the patron's other chats.
+  // Each row opens the transcript; an order chat scrolls to the moment it was
+  // touched. Loaded async so opening the drawer stays instant.
+  if (o.email || o.user_id) {
+    const cv = drawerSection('Conversations');
+    const holder = el('div', 'micro', 'Loading conversations…');
+    cv.appendChild(holder);
+    dw.appendChild(cv);
+    loadOrderConversations(o, holder);
+  }
 
   // Fulfillment (advance + tracking), only for live orders
   if (o.serial != null && o.status !== 'cancelled') {
@@ -4555,6 +4585,103 @@ function openCustomerChats(email) {
   loadConversations();
 }
 
+/* Open ONE conversation by id and scroll the transcript to the moment it matters
+   — the reply nearest `atIso` (when a house note was acted on / an order was
+   touched). Used by the house-notes and order-drawer jumps. Fetches the row
+   directly so it works even if that chat isn't in the currently loaded page. */
+async function jumpToConversation(convId, atIso) {
+  if (!convId) return;
+  state.jumpTo = { conv: convId, at: atIso || null };
+  activateTab('conversations');
+  const q = $('convo-q'); if (q) q.value = convId;
+  const sr = $('convo-serial'); if (sr) sr.value = '';
+  await loadConversations();
+  let c = (state.convos || []).find(function (x) { return x.id === convId; });
+  if (!c) {
+    const r = await sb.from('concierge_conversations').select('*').eq('id', convId).single();
+    if (!r.error && r.data) c = r.data;
+  }
+  if (c) { openConvo(c); }
+  else { state.jumpTo = null; toast('That conversation could not be found.', true); }
+}
+
+/* Populate an order drawer's Conversations section: the chats that TOUCHED this
+   order (a register action logged against its Nº) first, then the patron's other
+   chats. Each row opens the transcript; an order chat scrolls to the moment the
+   order was touched. Loaded async so the drawer opens instantly. */
+async function loadOrderConversations(o, holder) {
+  const serial = (o.serial != null ? o.serial : o.cancelled_serial);
+  try {
+    // 1) Conversations that acted on THIS order — keep the FIRST action time per
+    //    chat so the jump lands on the moment it was touched.
+    const related = {};
+    if (serial != null) {
+      const ar = await sb.from('concierge_actions')
+        .select('conversation_id,created_at')
+        .eq('serial', serial)
+        .order('created_at', { ascending: true })
+        .limit(300);
+      if (!ar.error) (ar.data || []).forEach(function (a) {
+        if (a.conversation_id && !related[a.conversation_id]) related[a.conversation_id] = a.created_at;
+      });
+    }
+    // 2) This patron's conversations (by email and/or user_id), newest first.
+    let q = sb.from('concierge_conversations')
+      .select('id,created_at,section,user_email,user_id,session_key,ip,goal_status')
+      .order('created_at', { ascending: false }).limit(30);
+    if (o.email && o.user_id) q = q.or('user_email.eq.' + o.email + ',user_id.eq.' + o.user_id);
+    else if (o.email) q = q.eq('user_email', o.email);
+    else q = q.eq('user_id', o.user_id);
+    const cr = await q;
+    let convos = cr.error ? [] : (cr.data || []);
+    // Pull in any order-related chat that fell outside the newest-30 window.
+    const have = {}; convos.forEach(function (c) { have[c.id] = 1; });
+    const missing = Object.keys(related).filter(function (id) { return !have[id]; });
+    if (missing.length) {
+      const mr = await sb.from('concierge_conversations')
+        .select('id,created_at,section,user_email,user_id,session_key,ip,goal_status')
+        .in('id', missing);
+      if (!mr.error) convos = convos.concat(mr.data || []);
+    }
+
+    holder.textContent = '';
+    if (!convos.length) { holder.appendChild(el('div', 'micro', 'No conversations on record for this patron.')); return; }
+
+    const about = convos.filter(function (c) { return related[c.id]; });
+    const other = convos.filter(function (c) { return !related[c.id]; });
+
+    function rowFor(c, actedAt) {
+      const r = el('button', 'convojump'); r.type = 'button';
+      const d = new Date(c.created_at);
+      r.appendChild(el('span', 'cj-when', isNaN(d.getTime()) ? '—' : d.toLocaleString()));
+      const mid = el('span', 'cj-mid');
+      mid.appendChild(el('span', 'micro', c.section || 'no section'));
+      const gs = (c.goal_status && typeof c.goal_status === 'object') ? c.goal_status : null;
+      if (gs) {
+        const keys = Object.keys(gs);
+        const met = keys.filter(function (k) { return gs[k] && gs[k].status === 'met'; }).length;
+        mid.appendChild(el('span', 'micro cj-goals', met + '/' + keys.length + ' goals'));
+      }
+      if (actedAt) mid.appendChild(el('span', 'micro cj-touch', '◆ touched this order'));
+      r.appendChild(mid);
+      r.addEventListener('click', function () { closeDrawer(); jumpToConversation(c.id, actedAt || null); });
+      return r;
+    }
+
+    if (about.length) {
+      holder.appendChild(el('div', 'cj-head', 'About this order Nº ' + Number(serial).toLocaleString('en-US')));
+      about.forEach(function (c) { holder.appendChild(rowFor(c, related[c.id])); });
+    }
+    if (other.length) {
+      holder.appendChild(el('div', 'cj-head', about.length ? 'Other conversations' : 'This patron’s conversations'));
+      other.forEach(function (c) { holder.appendChild(rowFor(c, null)); });
+    }
+  } catch (e) {
+    holder.textContent = '';
+    holder.appendChild(el('div', 'micro', 'Could not load conversations.'));
+  }
+}
+
 /* Load every house directive across all patrons + the map of which conversation
    the concierge resolved each in (from the resolve_admin_note audit action). */
 async function loadHouseNotes() {
@@ -4572,9 +4699,14 @@ async function loadHouseNotes() {
     .order('created_at', { ascending: false })
     .limit(1000);
   if (!ar.error) {
+    // Keep the MOST RECENT resolve per note (rows arrive created_at desc), and
+    // remember WHEN it happened so "Find the resolving chat" can scroll straight
+    // to the message where the concierge acted on it.
     (ar.data || []).forEach(function (a) {
       const nid = (a.payload && a.payload.note_id != null) ? String(a.payload.note_id) : null;
-      if (nid && a.conversation_id && !state.houseActedIn[nid]) state.houseActedIn[nid] = a.conversation_id;
+      if (nid && a.conversation_id && !state.houseActedIn[nid]) {
+        state.houseActedIn[nid] = { conv: a.conversation_id, at: a.created_at };
+      }
     });
   }
 }
@@ -4713,23 +4845,25 @@ function renderHouseNotes(list) {
       });
       acts.appendChild(vc);
 
-      // All of this customer's conversations — the way to find where the bot
-      // addressed a note that wasn't formally resolved.
-      if (n.email) {
-        const cc = el('button', 'btn ghost', "Customer's chats"); cc.type = 'button';
-        cc.addEventListener('click', function () { openCustomerChats(n.email); });
-        acts.appendChild(cc);
+      // Primary jump: straight to the chat where the concierge acted on this
+      // note, scrolled to the exact reply. Present whenever we have a resolving
+      // action for it (the reconciler now records one even when the model itself
+      // forgot to resolve, so this button is the norm, not the exception).
+      const acted = state.houseActedIn && state.houseActedIn[String(n.id)];
+      if (acted && acted.conv) {
+        const fc = el('button', 'btn ghost', 'Go to where it was acted on'); fc.type = 'button';
+        fc.addEventListener('click', function () { jumpToConversation(acted.conv, acted.at); });
+        acts.appendChild(fc);
       }
 
-      const conv = state.houseActedIn && state.houseActedIn[String(n.id)];
-      if (conv) {
-        const fc = el('button', 'btn ghost', 'Find the resolving chat'); fc.type = 'button';
-        fc.addEventListener('click', function () {
-          activateTab('conversations');
-          const cq = $('convo-q'); if (cq) cq.value = conv;
-          loadConversations();
-        });
-        acts.appendChild(fc);
+      // Fallback / browse-all: every conversation this patron had — for a note
+      // with no recorded resolving action, this is how you find where it was
+      // addressed.
+      if (n.email) {
+        const cc = el('button', 'btn ghost', acted && acted.conv ? "All of their chats" : "Customer's chats");
+        cc.type = 'button';
+        cc.addEventListener('click', function () { openCustomerChats(n.email); });
+        acts.appendChild(cc);
       }
 
       const del = el('button', 'btn ghost danger', 'Delete'); del.type = 'button';
@@ -5318,8 +5452,11 @@ async function postRegrade(payload) {
     body: JSON.stringify(payload)
   });
 }
-/* Re-grade one open conversation, then refresh its scorecard. */
-async function regradeConversation(c) {
+/* Re-grade one open conversation, then refresh its scorecard. The server now
+   reports {graded, empty, failed} honestly: `failed` means the judge ran but
+   returned nothing to write (a transient model error), so we auto-retry once
+   before surfacing it — the common case is the second attempt lands cleanly. */
+async function regradeConversation(c, _retried) {
   let res;
   try { res = await postRegrade({ conversation_id: c.id }); }
   catch (e) { fail('Re-grade', e); return; }
@@ -5332,10 +5469,11 @@ async function regradeConversation(c) {
     if (state.activeConvoId === c.id) openConvo(c); // re-render with the new scorecard
   }
   // Surface the real outcome, so a silent no-op is diagnosable.
-  if (j && j.graded === 0) {
+  if (j && j.empty > 0 && !j.graded) {
     toast('Nothing to grade — this conversation has no stored messages yet.', true);
-  } else if (!gr.data || !gr.data.goal_status) {
-    toast('Graded, but the judge returned no scorecard — try once more (transient model error).', true);
+  } else if (j && j.failed > 0 && !j.graded) {
+    if (!_retried) { return regradeConversation(c, true); }   // one automatic retry
+    toast('The judge returned no scorecard even after a retry — try again shortly.', true);
   } else {
     toast('Goals re-graded');
   }
@@ -5476,9 +5614,32 @@ function renderTranscript(msgs, fbMap) {
 
   if (!msgs.length) {
     body.appendChild(el('div', 'empty micro', 'Empty conversation.'));
+    state.jumpTo = null;
     return;
   }
-  msgs.forEach(function (m) {
+
+  // If we arrived here via a house-note / order jump, find the reply the action
+  // lands on: the LAST assistant message at or before the action's timestamp
+  // (that's the turn the concierge acted on). With no timestamp, the last
+  // assistant message. The matched message gets a lasting brass rail + a one-shot
+  // pulse, and we scroll to it instead of the bottom.
+  let targetIdx = -1;
+  const jump = (state.jumpTo && state.jumpTo.conv === state.activeConvoId) ? state.jumpTo : null;
+  if (jump) {
+    const at = jump.at ? new Date(jump.at).getTime() : NaN;
+    for (let i = 0; i < msgs.length; i++) {
+      if (msgs[i].role !== 'assistant') continue;
+      if (isNaN(at)) { targetIdx = i; continue; }
+      const mt = new Date(msgs[i].created_at).getTime();
+      if (!isNaN(mt) && mt <= at + 1500) targetIdx = i;   // small skew tolerance
+    }
+    if (targetIdx < 0) {                                   // action logged before any reply landed
+      for (let i = 0; i < msgs.length; i++) { if (msgs[i].role === 'assistant') { targetIdx = i; break; } }
+    }
+  }
+
+  let targetNode = null;
+  msgs.forEach(function (m, i) {
     const isUser = m.role === 'user';
     const node = el('div', 'msg ' + (isUser ? 'user' : 'assistant'));
 
@@ -5502,10 +5663,25 @@ function renderTranscript(msgs, fbMap) {
       meta.appendChild(emo);
       if (fb.note) meta.appendChild(el('em', 'fbnote', '“' + String(fb.note) + '”'));
     }
+    if (i === targetIdx) {
+      node.classList.add('flash', 'acted-here');
+      meta.appendChild(el('span', 'actedtag', '↳ acted on here'));
+      targetNode = node;
+    }
     node.appendChild(meta);
     body.appendChild(node);
   });
-  body.scrollTop = body.scrollHeight;
+
+  if (targetNode) {
+    // Let layout settle, then center the acted-on reply in the transcript pane.
+    requestAnimationFrame(function () {
+      try { targetNode.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      catch (e) { body.scrollTop = targetNode.offsetTop - 40; }
+    });
+  } else {
+    body.scrollTop = body.scrollHeight;
+  }
+  state.jumpTo = null;   // consume the jump so a later re-render scrolls normally
 }
 
 /* ---------------- go ---------------- */

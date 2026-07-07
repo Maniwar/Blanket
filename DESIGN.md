@@ -420,6 +420,15 @@ rather than merely reacting:
   ready · won · lost* — stored on `concierge_conversations.sales_stage` and shown
   as a chip in the Conversations tab, so the admin can see where chats stall. The
   live bot also reads the stage each turn to choose a stage-appropriate move.
+- **Grader token budget & honest re-grade.** The judge returns one JSON entry
+  per goal (`{status, note}`, note ≤160 chars) plus `_stage`. A flat `max_tokens`
+  cap silently truncated that JSON once the goal set grew (adding `house-notes`
+  tipped it over) — the parse then threw and **no scorecard was written**, which
+  surfaced as "graded, but the judge returned no scorecard." The budget now
+  **scales with goal count** (`320 + goals×160`, capped 2000). `evaluateGoals`
+  also returns a real success boolean, so `?regrade=1` reports `{graded, empty,
+  failed}` honestly instead of counting a silent judge failure as success, and
+  the admin's per-chat Re-grade **auto-retries once** on a transient `failed`.
 
 - **Proactive re-engagement (closed panel).** When a visitor is active
   (scrolls) then goes idle with the widget closed, the concierge reaches out. It
@@ -875,15 +884,27 @@ flowchart LR
 **Management & follow-up (the House notes view).** A dedicated view in Orders &
 Customers lists **every** directive across all patrons: status (open/resolved),
 author, dates, filterable open/resolved/all. Each row offers Resolve/Reopen,
-Delete, **View customer**, and — when the concierge resolved it in a chat —
-**Find the chat**, which jumps to that conversation. The chat link is recovered
-from the `resolve_admin_note` entry in `concierge_actions` (its `payload.note_id`
-→ `conversation_id`). Each house-note row also offers **Customer's chats** (all of
-that patron's conversations, for finding where the bot addressed a note it didn't
-formally resolve), and the view has a text filter + **Select all shown** so bulk
-work isn't one checkbox at a time. **Bulk:** the Orders bulk bar can write one
-directive to all distinct customers behind the selected orders; the House notes
-view multi-selects for bulk Resolve/Reopen/Delete.
+Delete, **View customer**, and — when the concierge acted on it in a chat — **Go
+to where it was acted on**, which opens that conversation *and scrolls the
+transcript straight to the reply where it happened*, pulsing it and marking it
+with a brass rail (`↳ acted on here`). The jump target is the resolve action's
+`conversation_id` **and its timestamp**: `jumpToConversation(conv, at)` opens the
+chat and `renderTranscript` selects the last assistant message at/just-before
+`at`. Each row also offers **Customer's chats** (all of that patron's
+conversations — the fallback for a note with no recorded resolving action), and
+the view has a text filter + **Select all shown** so bulk work isn't one checkbox
+at a time. **Bulk:** the Orders bulk bar can write one directive to all distinct
+customers behind the selected orders; the House notes view multi-selects for bulk
+Resolve/Reopen/Delete.
+
+**Order drawer → Conversations.** Opening an order shows, in the same panel, a
+**Conversations** section: the chats that **touched this order** (a register
+action logged against its Nº in `concierge_actions`) listed first and badged `◆
+touched this order`, then the patron's other chats. Each row opens the
+transcript; an order chat scrolls to the moment the order was touched (same
+`jumpToConversation` mechanism, keyed on the first action's timestamp). Loaded
+async so the drawer opens instantly, and it back-fills any order-related chat
+that fell outside the newest-30 window.
 
 **Self-resolve backstop (reconciliation).** Acting on a one-time directive and
 remembering to *check it off* are two steps: the model reliably does the first

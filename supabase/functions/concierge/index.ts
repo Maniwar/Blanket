@@ -1529,12 +1529,15 @@ function scheduleDirectiveReconcile(
 }
 
 
+// Returns true only when a fresh scorecard was written. The regrade endpoint
+// uses this to report honestly ("graded" vs. "judge returned nothing") instead
+// of counting a silent judge failure as a success.
 async function evaluateGoals(
   cid: string, data: ConciergeData, transcript: ChatMessage[],
   apiKey: string, model: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    if (!cid || data.goals.length === 0) return;
+    if (!cid || data.goals.length === 0) return false;
     const convo = transcript
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-16)
@@ -1586,7 +1589,11 @@ async function evaluateGoals(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model, max_tokens: 500,
+        // Budget scales with the number of goals: each returns {status,note} with
+        // a note up to ~160 chars, plus the _stage key. A flat cap truncated the
+        // JSON once the goal set grew (the parse then threw and NO scorecard was
+        // written), so give generous, goal-count-scaled headroom.
+        model, max_tokens: Math.min(2000, 320 + data.goals.length * 160),
         system: judgeSystem,
         messages: [{
           role: "user",
@@ -1594,14 +1601,14 @@ async function evaluateGoals(
         }],
       }),
     });
-    if (!res.ok) return;
+    if (!res.ok) return false;
     // deno-lint-ignore no-explicit-any
     const msg = await res.json() as any;
     const blocks = Array.isArray(msg.content) ? msg.content : [];
     // deno-lint-ignore no-explicit-any
     let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
     const a = text.indexOf("{"), z = text.lastIndexOf("}");
-    if (a < 0 || z < 0) return;
+    if (a < 0 || z < 0) return false;
     text = text.slice(a, z + 1);
     const parsed = JSON.parse(text) as Record<string, unknown>;
     const clean: Record<string, { status: string; note: string }> = {};
@@ -1626,7 +1633,9 @@ async function evaluateGoals(
         await pgPatch(`concierge_conversations?id=eq.${cid}`, { sales_stage: stage });
       } catch { /* column may not exist yet — ignore */ }
     }
+    return true;
   } catch { /* evaluation is best-effort */ }
+  return false;
 }
 
 // ── System prompt assembly ───────────────────────────────────────────────────
@@ -2262,16 +2271,20 @@ async function handleRegradePost(req: Request): Promise<Response> {
   const data = await loadConciergeData();
   if (data.goals.length === 0) return jsonError(req, 400, "No goals are defined to grade against.");
   const model = resolveModel(data);
-  let graded = 0;
+  let graded = 0;   // wrote a fresh scorecard
+  let empty = 0;    // no stored messages to grade
+  let failed = 0;   // had messages, but the judge returned nothing to write
   for (const cid of ids) {
     try {
       const msgs = await pgSelect<{ role: string; content: string }>(
         `concierge_messages?select=role,content&conversation_id=eq.${encodeURIComponent(cid)}&order=created_at.asc&limit=100`,
       );
-      if (msgs && msgs.length) { await evaluateGoals(cid, data, msgs as ChatMessage[], apiKey, model); graded++; }
-    } catch { /* skip this one, continue the batch */ }
+      if (!msgs || !msgs.length) { empty++; continue; }
+      const ok = await evaluateGoals(cid, data, msgs as ChatMessage[], apiKey, model);
+      if (ok) graded++; else failed++;
+    } catch { failed++; /* continue the batch */ }
   }
-  return jsonResponse(req, 200, { graded, requested: ids.length });
+  return jsonResponse(req, 200, { graded, requested: ids.length, empty, failed });
 }
 
 // ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
