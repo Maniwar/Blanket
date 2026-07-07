@@ -2865,6 +2865,9 @@
       var prevOwner = authEmail;   /* who the current thread belonged to before this change */
       var wasResolved = !firstResolve;
       authEmail = em;
+      /* Remember the verified email so it prefills the next sign-in (survives
+         sign-out on purpose — it's this device's convenience, not a session). */
+      if (em) { try { window.localStorage.setItem('feier_last_email', em); } catch (eSE) { /* ignore */ } }
       if (em) { closeAuthRow(); }
       updateAuthUI();
       if (em) { personalStarters = []; fetchPersonalStarters(); } else { personalStarters = []; }
@@ -2960,6 +2963,14 @@
     input.placeholder = 'you@example.com';
     input.autocomplete = 'email';
     input.setAttribute('aria-label', 'Email for sign-in key');
+    /* Prefill the last email this device signed in with, so a returning patron
+       needn't retype it — selected, so a tap-Enter sends or a keystroke replaces. */
+    var lastEmail = '';
+    try { lastEmail = window.localStorage.getItem('feier_last_email') || ''; } catch (eLE) { lastEmail = ''; }
+    if (lastEmail) {
+      input.value = lastEmail;
+      cap.textContent = 'Welcome back — send a key to this email, or edit it.';
+    }
     var send = el('button', 'cx-authsend', 'Send key');
     send.type = 'button';
     function fail(err) {
@@ -3009,6 +3020,8 @@
             options: { emailRedirectTo: redirectTo }
           }).then(function (r) {
             if (r && r.error) { fail(r.error); return; }
+            /* Remember the email so it prefills next time they sign in. */
+            try { window.localStorage.setItem('feier_last_email', em); } catch (eRem) { /* ignore */ }
             var row = authRow;
             if (!row) { return; }
             while (row.firstChild) { row.removeChild(row.firstChild); }
@@ -3025,7 +3038,7 @@
     line.appendChild(send);
     authRow.appendChild(line);
     panel.insertBefore(authRow, msgsEl);
-    try { input.focus(); } catch (eI) { /* ignore */ }
+    try { input.focus(); if (lastEmail) { input.select(); } } catch (eI) { /* ignore */ }
   }
 
   function closeAuthRow() {

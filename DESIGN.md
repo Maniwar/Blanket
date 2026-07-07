@@ -67,6 +67,12 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 - **As a guest ready to buy**, I want to commission with just an email
   verification, so that I don't have to create a password. *(Magic-link OTP guest
   checkout.)*
+- **As a returning patron**, I want my email already filled in when I sign in
+  again, so that I don't retype it every visit. *(The last email used to request a
+  key — and the last one actually verified — is kept in `localStorage`
+  (`feier_last_email`) and prefills the sign-in row, selected so a tap-Enter sends
+  or a keystroke replaces it. Device-local convenience; it deliberately survives
+  sign-out and never leaves the browser.)*
 
 ### 2.2 Customer — signed-in / returning patron
 
