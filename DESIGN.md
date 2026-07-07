@@ -270,10 +270,18 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   customer** (name, standing, lifetime value, blankets, last order, note count),
   **this order's** shipping *and* billing (both editable), its emails, and the
   patron's client book + a leave-a-note box — so that managing one order needs
-  nothing else open. *(Order detail drawer, read top-to-bottom as customer →
-  order → conversation: **Customer → Client book & house instructions**
-  (leave-a-note kept near the top with the customer) **→ Fulfillment → Shipping &
-  billing → Emails → Conversations**.)*
+  nothing else open, **without a wall of text**. *(Order detail drawer, **tabbed**:
+  a pinned header (Nº · cloth · status · name · tier · email) over three tabs —
+  **Overview** (standing stat row, gift/IP links, fulfilment, shipping & billing,
+  emails), **Notes** (open house instructions pinned at top, then the client book
+  with older notes **collapsed** behind "Show N older", then the leave-a-note box),
+  and **Chats** (conversations). The active tab persists across in-drawer edits.)*
+- **As the merchant**, I want the client book to stay legible as it grows — quiet
+  notes, long ones **collapsed** — so that the signal isn't buried and a house
+  note can't be missed. *(Each note is a card with a kind-colored rail, a compact
+  `kind · date · state · actions` line, and a body clamped to a few lines that
+  expands on click; open directives sit above the book and are never collapsed.
+  A deeper **relevance/consolidation** pass is planned — see [`BACKLOG.md`](BACKLOG.md).)*
 - **As the merchant**, I want the order drawer to show, in the same panel, **the
   chats tied to this order and the patron's other chats**, so that I can see the
   conversation behind an order without leaving it. *(Drawer **Conversations**

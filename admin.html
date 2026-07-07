@@ -344,6 +344,61 @@
   .dsec{ border-top:1px solid var(--hairline-dim); padding:16px 0 4px; }
   .dsec > .lbl{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em;
     text-transform:uppercase; color:var(--wool-faint); margin-bottom:10px; }
+
+  /* ---- Order drawer: tabbed header + panels ---- */
+  .dhead{ padding-bottom:14px; margin-bottom:0; }
+  .dhead .dsub{ margin-bottom:12px; }
+  .dident{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .dident-name{ font-size:16px; color:var(--wool); }
+  .dtier{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--loden-deep); background:var(--brass-soft);
+    border-radius:20px; padding:2px 9px; }
+  .dlink{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft);
+    cursor:pointer; margin-top:5px; }
+  .dlink:hover{ text-decoration:underline; }
+  .dtabs{ display:flex; gap:2px; border-bottom:1px solid var(--hairline); margin-bottom:18px; }
+  .dtab{ background:none; border:none; cursor:pointer; padding:9px 14px; margin-bottom:-1px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--wool-faint); border-bottom:2px solid transparent; display:inline-flex; align-items:center; gap:6px; }
+  .dtab:hover{ color:var(--wool-dim); }
+  .dtab.on{ color:var(--wool); border-bottom-color:var(--brass); }
+  .dtab-n{ font-size:10px; color:var(--wool-faint); background:var(--ink-well);
+    border:1px solid var(--hairline-dim); border-radius:10px; padding:0 6px; }
+  .dtab.on .dtab-n{ color:var(--wool-dim); }
+  .dtab-dot{ width:7px; height:7px; border-radius:50%; background:#7a5aa0; }
+  .dpanel{ display:none; }
+  .dpanel.on{ display:block; }
+  .dpanel .dsec:first-child{ border-top:none; padding-top:0; }
+  .dsub-lbl{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--wool-faint); margin:18px 0 8px; }
+  .dsub-lbl:first-child{ margin-top:0; }
+  .dmicro{ font-size:12.5px; color:var(--wool-dim); margin-top:6px; }
+  .dmore{ margin-top:6px; font-size:11px; }
+  /* Standing stat row */
+  .dstats{ display:flex; gap:10px; margin-bottom:4px; }
+  .dstat{ display:flex; flex-direction:column; gap:2px; min-width:78px; padding:9px 12px;
+    background:var(--ink-well); border:1px solid var(--hairline-dim); border-radius:3px; }
+  .dstat-v{ font-family:'IBM Plex Mono', monospace; font-size:15px; color:var(--wool); }
+  .dstat-l{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--wool-faint); }
+  /* Client-book note card */
+  .btn.mini{ padding:2px 8px; font-size:11px; }
+  .cbnote{ border-left:3px solid var(--wool-faint); background:var(--ink-well);
+    border-radius:0 3px 3px 0; padding:8px 11px; margin-bottom:8px; }
+  .cbnote-head{ display:flex; align-items:center; gap:9px; }
+  .cbnote-kind{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.12em;
+    text-transform:uppercase; }
+  .cbnote-date{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--wool-faint); }
+  .cbnote-state{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.08em;
+    text-transform:uppercase; padding:1px 6px; border-radius:10px; }
+  .cbnote-state.open{ color:#d9c6f5; border:1px solid #7a5aa0; }
+  .cbnote-state.res{ color:var(--wool-faint); border:1px solid var(--hairline); }
+  .cbnote-actions{ margin-left:auto; display:inline-flex; gap:4px; align-items:center; }
+  .cbnote-body{ margin-top:5px; font-size:13.5px; color:var(--wool-dim); line-height:1.5;
+    white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere; cursor:pointer; }
+  .cbnote-body.clamp{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .cbnote.done .cbnote-body{ opacity:.5; text-decoration:line-through; }
+  .cbnote-foot{ margin-top:5px; font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--wool-faint); }
   /* Order-drawer conversation jump rows */
   .cj-head{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--wool-faint); margin:12px 0 6px; }
@@ -1285,6 +1340,7 @@ const state = {
   isSuper: false,
   activeConvoId: null,
   jumpTo: null,            // { conv, at } — scroll the open transcript to the acted-on moment
+  drawerTab: 'overview',   // order drawer active tab: overview | notes | chats
   loaded: false
 };
 
@@ -4126,78 +4182,125 @@ function drawerSection(label) {
 function openOrderDrawer(o) {
   const dw = ensureDrawer(), bd = $('drawer-bd');
   state.custDrawerKey = orderKey(o);
+  if (['overview', 'notes', 'chats'].indexOf(state.drawerTab) < 0) state.drawerTab = 'overview';
   dw.textContent = '';
+
+  const c = custByEmail(o.email);
+  const notes = (c && c.notes) || [];
+  const dirsOpen = notes.filter(function (n) { return n.kind === 'directive' && !n.resolved; });
+  const oip = orderIp(o);
 
   const x = el('button', 'drawer-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close');
   x.addEventListener('click', closeDrawer);
   dw.appendChild(x);
 
-  const title = el('h3'); title.appendChild(document.createTextNode('Nº ' + orderNo(o).toLocaleString('en-US')));
-  dw.appendChild(title);
+  // ---- Pinned header: number · cloth · status · who ----
+  const head = el('div', 'dhead');
+  const title = el('h3'); title.textContent = 'Nº ' + orderNo(o).toLocaleString('en-US');
+  head.appendChild(title);
   const sub = el('div', 'dsub');
   sub.appendChild(clothDot(o.colorway));
   sub.appendChild(document.createTextNode(' ' + (o.colorway || '—') + '  ·  '));
   sub.appendChild(stBadge(o.status));
-  dw.appendChild(sub);
-
-  // Customer — the consolidated standing summary (name, tier, lifetime value,
-  // blankets, recency, note count). All their notes are in the client book below.
-  const who = drawerSection('Customer');
-  const c = custByEmail(o.email);
-  const nameLine = el('div', null, o.name || '—'); nameLine.style.cssText = 'color:var(--wool); font-size:15px;';
-  who.appendChild(nameLine);
+  head.appendChild(sub);
+  const ident = el('div', 'dident');
+  ident.appendChild(el('span', 'dident-name', o.name || '—'));
+  if (c) ident.appendChild(el('span', 'dtier', c.tier));
+  head.appendChild(ident);
   if (o.email) {
-    // Click the email to pull up every order by this patron (same as the IP line).
-    const emailLine = el('div', 'micro', o.email + ' — click to find every order by this email');
-    emailLine.style.cssText = 'color:var(--brass-soft); cursor:pointer;';
+    const emailLine = el('div', 'dlink', o.email);
+    emailLine.title = 'Find every order by this email';
     emailLine.addEventListener('click', function () {
-      $('cust-search').value = o.email;
-      if ($('cust-serial')) $('cust-serial').value = '';
-      closeDrawer();
-      loadCustomers();
+      $('cust-search').value = o.email; if ($('cust-serial')) $('cust-serial').value = '';
+      closeDrawer(); loadCustomers();
     });
-    who.appendChild(emailLine);
-  } else {
-    who.appendChild(el('div', 'micro', '—'));
+    head.appendChild(emailLine);
   }
-  if (c) {
-    const stand = el('div', 'micro');
-    stand.style.cssText = 'margin-top:5px; color:var(--wool-dim);';
-    stand.textContent = c.tier + ' · $' + c.ltv.toLocaleString('en-US') + ' lifetime · ' +
-      c.count + (c.count === 1 ? ' blanket' : ' blankets') + ' · last ' + fmtWhen(c.latest) +
-      (c.notes && c.notes.length ? ' · ' + c.notes.length + ' note' + (c.notes.length === 1 ? '' : 's') : '');
-    who.appendChild(stand);
-  }
-  if (o.is_gift && o.recipient_name) who.appendChild(el('div', 'micro', 'This order is a gift → ' + o.recipient_name));
-  const oip = orderIp(o);
-  if (oip) {
-    const ipLine = el('div', 'micro', 'Ordered from IP ' + oip + ' — click to find every order from it');
-    ipLine.style.cssText = 'color:var(--brass-soft); cursor:pointer;';
-    ipLine.addEventListener('click', function () {
-      $('cust-search').value = oip;
-      if ($('cust-serial')) $('cust-serial').value = '';
-      closeDrawer();
-      loadCustomers();
-    });
-    who.appendChild(ipLine);
-  }
-  dw.appendChild(who);
+  dw.appendChild(head);
 
-  // Client book & house instructions — kept near the top, with the customer, so
-  // leaving a house instruction is right where you read who they are (what the
-  // concierge has learned, plus the standing instructions the team leaves it).
-  const bs = drawerSection('Client book & house instructions');
-  const notes = (c && c.notes) || [];
-  if (!notes.length) {
-    bs.appendChild(el('div', 'empty micro',
-      'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time — and you can leave it a house instruction below.'));
-  } else {
-    notes.forEach(function (n) { bs.appendChild(clientBookNoteLine(n)); });
+  // ---- Tabs: Overview · Notes · Chats ----
+  const tabs = el('div', 'dtabs');
+  function setDrawerTab(key) {
+    state.drawerTab = key;
+    tabs.querySelectorAll('.dtab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === key); });
+    dw.querySelectorAll('.dpanel').forEach(function (p) { p.classList.toggle('on', p.dataset.tab === key); });
   }
-  bs.appendChild(directiveComposer(o.email, function () {
+  function tabBtn(key, label, count, dotTitle) {
+    const b = el('button', 'dtab' + (state.drawerTab === key ? ' on' : '')); b.type = 'button'; b.dataset.tab = key;
+    b.appendChild(document.createTextNode(label));
+    if (count != null) b.appendChild(el('span', 'dtab-n', String(count)));
+    if (dotTitle) { const d = el('span', 'dtab-dot'); d.title = dotTitle; b.appendChild(d); }
+    b.addEventListener('click', function () { setDrawerTab(key); });
+    return b;
+  }
+  tabs.appendChild(tabBtn('overview', 'Overview', null, ''));
+  tabs.appendChild(tabBtn('notes', 'Notes', notes.length,
+    dirsOpen.length ? (dirsOpen.length + ' open house note' + (dirsOpen.length === 1 ? '' : 's')) : ''));
+  tabs.appendChild(tabBtn('chats', 'Chats', null, ''));
+  dw.appendChild(tabs);
+
+  // ---- Panel: OVERVIEW (standing + order management; sections appended below) ----
+  const pOv = el('div', 'dpanel' + (state.drawerTab === 'overview' ? ' on' : '')); pOv.dataset.tab = 'overview';
+  if (c) {
+    const stats = el('div', 'dstats');
+    const stat = function (v, l) { const d = el('div', 'dstat'); d.appendChild(el('span', 'dstat-v', v)); d.appendChild(el('span', 'dstat-l', l)); return d; };
+    stats.appendChild(stat('$' + c.ltv.toLocaleString('en-US'), 'Lifetime'));
+    stats.appendChild(stat(String(c.count), c.count === 1 ? 'Blanket' : 'Blankets'));
+    stats.appendChild(stat(fmtWhen(c.latest), 'Last order'));
+    pOv.appendChild(stats);
+  }
+  if (o.is_gift && o.recipient_name) pOv.appendChild(el('div', 'dmicro', '🎁 Gift → ' + o.recipient_name));
+  if (oip) {
+    const ipLine = el('div', 'dlink dmicro', 'IP ' + oip);
+    ipLine.title = 'Find every order from this IP';
+    ipLine.addEventListener('click', function () {
+      $('cust-search').value = oip; if ($('cust-serial')) $('cust-serial').value = '';
+      closeDrawer(); loadCustomers();
+    });
+    pOv.appendChild(ipLine);
+  }
+  dw.appendChild(pOv);
+
+  // ---- Panel: NOTES (open house instructions pinned, client book collapsed) ----
+  const pN = el('div', 'dpanel' + (state.drawerTab === 'notes' ? ' on' : '')); pN.dataset.tab = 'notes';
+  if (dirsOpen.length) {
+    pN.appendChild(el('div', 'dsub-lbl', 'House instructions — open'));
+    dirsOpen.forEach(function (n) { pN.appendChild(clientBookNoteLine(n)); });
+  }
+  const rest = notes.filter(function (n) { return !(n.kind === 'directive' && !n.resolved); });
+  pN.appendChild(el('div', 'dsub-lbl', 'Client book' + (rest.length ? ' · ' + rest.length : '')));
+  if (!notes.length) {
+    pN.appendChild(el('div', 'empty micro', 'Nothing recorded yet — leave a house instruction below.'));
+  } else if (!rest.length) {
+    pN.appendChild(el('div', 'empty micro', 'No other notes yet.'));
+  } else {
+    const SHOW = 4;
+    rest.slice(0, SHOW).forEach(function (n) { pN.appendChild(clientBookNoteLine(n)); });
+    if (rest.length > SHOW) {
+      const more = el('button', 'btn ghost dmore', 'Show ' + (rest.length - SHOW) + ' older note' + (rest.length - SHOW === 1 ? '' : 's'));
+      more.type = 'button';
+      more.addEventListener('click', function () {
+        rest.slice(SHOW).forEach(function (n) { pN.insertBefore(clientBookNoteLine(n), more); });
+        more.remove();
+      });
+      pN.appendChild(more);
+    }
+  }
+  pN.appendChild(directiveComposer(o.email, function () {
     loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
   }, o.user_id));
-  dw.appendChild(bs);
+  dw.appendChild(pN);
+
+  // ---- Panel: CHATS (chats tied to this order + the patron's others) ----
+  const pC = el('div', 'dpanel' + (state.drawerTab === 'chats' ? ' on' : '')); pC.dataset.tab = 'chats';
+  if (o.email || o.user_id) {
+    const holder = el('div', 'micro', 'Loading conversations…');
+    pC.appendChild(holder);
+    loadOrderConversations(o, holder);
+  } else {
+    pC.appendChild(el('div', 'empty micro', 'No customer on this order.'));
+  }
+  dw.appendChild(pC);
 
   // Fulfillment (advance + tracking), only for live orders
   if (o.serial != null && o.status !== 'cancelled') {
@@ -4226,8 +4329,7 @@ function openOrderDrawer(o) {
     });
     ctl.appendChild(sel); ctl.appendChild(trk); ctl.appendChild(btn);
     ff.appendChild(ctl);
-    dw.appendChild(ff);
-
+    pOv.appendChild(ff);
   }
 
   // This order's shipping & billing — the addresses THIS order used. Shipping is
@@ -4335,7 +4437,7 @@ function openOrderDrawer(o) {
       bw.appendChild(bform);
       as.appendChild(bw);
     }
-    dw.appendChild(as);
+    pOv.appendChild(as);
   }
 
   // Email timeline + resend
@@ -4366,20 +4468,7 @@ function openOrderDrawer(o) {
       em.appendChild(rb);
     });
     es.appendChild(em);
-    dw.appendChild(es);
-  }
-
-
-  // Conversations — LAST, after the order detail: the chats that TOUCHED this
-  // order (a register action logged against its Nº), then the patron's other
-  // chats. Each row opens the transcript; an order chat scrolls to the moment it
-  // was touched. Loaded async so opening the drawer stays instant.
-  if (o.email || o.user_id) {
-    const cv = drawerSection('Conversations');
-    const holder = el('div', 'micro', 'Loading conversations…');
-    cv.appendChild(holder);
-    dw.appendChild(cv);
-    loadOrderConversations(o, holder);
+    pOv.appendChild(es);
   }
 
   bd.classList.add('on');
@@ -4391,47 +4480,60 @@ function openOrderDrawer(o) {
    concierge must follow) also gets a Resolve/Reopen toggle and shows its author
    and open/resolved state. Shared by the order drawer and the Patrons view. */
 function clientBookNoteLine(n) {
-  const line = el('div', 'cust-order');
-  line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
   const kind = (['event', 'reflection', 'directive'].indexOf(n.kind) >= 0) ? n.kind : 'fact';
   const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a', directive: '#7a5aa0' }[kind];
-  const tag = el('span', null, kind === 'directive' ? 'house' : kind);
-  tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
-  line.appendChild(tag);
+  const kindLabel = kind === 'directive' ? 'house' : kind;
 
-  const txt = el('span', null, n.note || ''); txt.style.flex = '1 1 200px';
-  if (kind === 'directive' && n.resolved) { txt.style.opacity = '.5'; txt.style.textDecoration = 'line-through'; }
-  line.appendChild(txt);
+  // A tidy card: a kind-colored left rail, a quiet top line (kind · date · state ·
+  // actions), then the note body clamped to a few lines and click-to-expand.
+  const card = el('div', 'cbnote');
+  card.style.borderLeftColor = kindColor;
+  if (kind === 'directive' && n.resolved) card.classList.add('done');
 
+  const head = el('div', 'cbnote-head');
+  const kd = el('span', 'cbnote-kind', kindLabel); kd.style.color = kindColor;
+  head.appendChild(kd);
+  head.appendChild(el('span', 'cbnote-date', fmtWhen(n.created_at)));
   if (kind === 'directive') {
-    const meta = el('span', 'place', (n.author ? 'by ' + n.author : 'house') + (n.resolved ? ' · resolved' : ' · open'));
-    meta.style.flex = '0 0 auto';
-    line.appendChild(meta);
-    const tgl = el('button', 'btn ghost', n.resolved ? 'Reopen' : 'Resolve'); tgl.type = 'button';
+    head.appendChild(el('span', 'cbnote-state ' + (n.resolved ? 'res' : 'open'), n.resolved ? 'resolved' : 'open'));
+  }
+
+  const actions = el('span', 'cbnote-actions');
+  if (kind === 'directive') {
+    const tgl = el('button', 'btn ghost mini', n.resolved ? 'Reopen' : 'Resolve'); tgl.type = 'button';
     tgl.addEventListener('click', function () {
       withBusy(tgl, async function () {
         const patch = n.resolved ? { resolved: false, resolved_at: null } : { resolved: true, resolved_at: nowIso() };
         const r = await sb.from('customer_notes').update(patch).eq('id', n.id);
         if (r.error) { fail('Update instruction', r.error); return; }
         n.resolved = !n.resolved; n.resolved_at = patch.resolved_at;
-        line.replaceWith(clientBookNoteLine(n));   /* re-render in place */
+        card.replaceWith(clientBookNoteLine(n));   /* re-render in place */
         toast(n.resolved ? 'Instruction marked resolved' : 'Instruction reopened');
       });
     });
-    line.appendChild(tgl);
+    actions.appendChild(tgl);
   }
-
-  const del = el('button', 'btn ghost danger', '×'); del.setAttribute('aria-label', 'Delete note');
+  const del = el('button', 'btn ghost danger mini', '×'); del.setAttribute('aria-label', 'Delete note'); del.type = 'button';
   del.addEventListener('click', function () {
     withBusy(del, async function () {
       const r = await sb.from('customer_notes').delete().eq('id', n.id);
       if (r.error) { fail('Delete note', r.error); return; }
-      line.remove();
+      card.remove();
       toast('Note removed from the client book');
     });
   });
-  line.appendChild(del);
-  return line;
+  actions.appendChild(del);
+  head.appendChild(actions);
+  card.appendChild(head);
+
+  // Body: clamped to a few lines; click to expand/collapse long notes.
+  const body = el('div', 'cbnote-body clamp', n.note || '');
+  body.title = 'Click to expand / collapse';
+  body.addEventListener('click', function () { body.classList.toggle('clamp'); });
+  card.appendChild(body);
+
+  if (kind === 'directive' && n.author) card.appendChild(el('div', 'cbnote-foot', 'by ' + n.author));
+  return card;
 }
 
 /* Distinct ship-to addresses from a patron's orders (the admin-side mirror of the
