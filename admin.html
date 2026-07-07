@@ -62,6 +62,15 @@
   input::placeholder, textarea::placeholder{ color:var(--wool-faint); }
   textarea{ resize:vertical; min-height:84px; }
   input.mono-field{ font-family:'IBM Plex Mono', monospace; font-size:13.5px; }
+  /* Selects must be constrained to their column — otherwise a long model id in an
+     <option> stretches the control past the card edge. */
+  select{
+    width:100%; max-width:100%; box-sizing:border-box;
+    background:var(--ink-well); border:1px solid var(--hairline-dim); border-radius:2px;
+    color:var(--wool); font-family:'Hanken Grotesk', system-ui, sans-serif;
+    font-size:15px; padding:9px 12px; outline:none;
+  }
+  select.mono-field{ font-family:'IBM Plex Mono', monospace; font-size:13.5px; }
   .field{ margin-bottom:18px; }
   .field > .micro{ display:block; margin-bottom:7px; }
   .field .hint{ display:block; margin-top:6px; font-size:12.5px; color:var(--wool-faint); }
@@ -784,6 +793,7 @@
     <button class="tab" data-tab="website" role="tab">Website</button>
     <button class="tab" data-tab="tools" role="tab">Tools</button>
     <button class="tab" data-tab="evals" role="tab">Evals</button>
+    <button class="tab" data-tab="edition" role="tab">Edition &amp; access</button>
   </nav>
 
   <main>
@@ -800,7 +810,6 @@
         <button class="tsub-tab" type="button" data-tsub="selling">Selling</button>
         <button class="tsub-tab" type="button" data-tsub="engagement">Engagement</button>
         <button class="tsub-tab" type="button" data-tsub="engine">Engine &amp; keys</button>
-        <button class="tsub-tab" type="button" data-tsub="edition">Edition &amp; access</button>
       </div>
 
       <div class="tsub" data-tsub="engine">
@@ -882,10 +891,15 @@
         </div>
         <p class="note">The concierge's system prompt is a small always-on <strong>core constitution</strong> (identity, voice, the display tokens, the honesty rules) followed by these sections, each the single owner of its concern. The core points to each one as the source of truth, so nothing is stated twice. Turn a section off to drop it from the prompt; preview the whole thing, or ask the tuner to check for conflicts.</p>
         <div id="section-toggles" class="ed-grid" style="margin:6px 0 14px;"><div class="empty micro">Loading sections…</div></div>
+        <div class="field" style="max-width:520px;margin:4px 0 0;">
+          <label class="micro" for="cfg-promptreview-model">Prompt-tuner model<span class="info-badge" title="Which model reviews the assembled prompt when you press “Ask the prompt tuner”. Blank = the concierge's own model. Pick a stronger model here for a sharper review — it doesn't change what answers shoppers.">i</span></label>
+          <select id="cfg-promptreview-model-pick" class="mono-field" style="margin-bottom:6px;"><option value="">— use the concierge model —</option></select>
+          <input type="text" id="cfg-promptreview-model" class="mono-field" placeholder="or type a custom model id" autocomplete="off" spellcheck="false">
+        </div>
         <div class="card-foot" style="flex-wrap:wrap;gap:8px;">
-          <button id="save-sections" class="btn primary">Save sections</button>
+          <button id="save-sections" class="btn primary">Save prompt settings</button>
           <span style="flex:1"></span>
-          <label class="micro" for="preview-audience" style="align-self:center;">Preview as</label>
+          <label class="micro" for="preview-audience" style="align-self:center;">Preview / review as</label>
           <select id="preview-audience" class="mono-field" style="width:auto;">
             <option value="0">Anonymous visitor</option>
             <option value="1">Signed-in owner</option>
@@ -1120,7 +1134,14 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       </section>
       </div>
 
-      <div class="tsub" data-tsub="edition">
+    </div>
+
+    <!-- ============ TAB : EDITION & ACCESS ============ -->
+    <div id="panel-edition" class="panel">
+      <div class="panel-head">
+        <span class="micro">Edition &amp; access</span>
+        <h2>Edition &amp; access</h2>
+      </div>
       <section class="card">
         <div class="card-head">
           <h3>Edition run</h3>
@@ -1158,8 +1179,6 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         </form>
         <div id="admin-add-note" class="micro"></div>
       </section>
-      </div>
-
     </div>
 
     <!-- ============ TAB 2 : KNOWLEDGE ============ -->
@@ -1999,7 +2018,7 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'actions', 'website', 'tools', 'evals'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'actions', 'website', 'tools', 'evals', 'edition'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
   if (name === 'tuning') autoGrowAll('#panel-tuning .tsub.on');
@@ -2157,7 +2176,11 @@ async function adminPost(query) {
    only when "Custom id…" is chosen (or a saved id isn't in the live list) — so a
    custom model can still be typed. The text box remains the value the engine saves.
    If the live list can't load, the box stays visible and the reason is surfaced. */
-const _MODEL_PAIRS = [['cfg-model-pick', 'cfg-model'], ['cfg-model-fallback-pick', 'cfg-model-fallback']];
+const _MODEL_PAIRS = [
+  ['cfg-model-pick', 'cfg-model', '— use fallback / default —'],
+  ['cfg-model-fallback-pick', 'cfg-model-fallback', '— use fallback / default —'],
+  ['cfg-promptreview-model-pick', 'cfg-promptreview-model', '— use the concierge model —']
+];
 let _modelCatalog = null;       // cached [{id,name}]
 let _modelLoadError = '';       // last load error, if any
 async function populateModelPickers() {
@@ -2172,15 +2195,15 @@ async function populateModelPickers() {
       toast('Couldn’t load the live model list (' + _modelLoadError + ') — you can still type a model id', true);
     }
   }
-  _MODEL_PAIRS.forEach(function (pair) { renderModelPicker(pair[0], pair[1]); });
+  _MODEL_PAIRS.forEach(function (pair) { renderModelPicker(pair[0], pair[1], pair[2]); });
 }
-function renderModelPicker(selId, inpId) {
+function renderModelPicker(selId, inpId, placeholder) {
   const sel = $(selId), inp = $(inpId);
   if (!sel || !inp) return;
   const cur = (inp.value || '').trim();
   const ids = {};
   sel.textContent = '';
-  sel.appendChild(new Option('— use fallback / default —', ''));
+  sel.appendChild(new Option(placeholder || '— use fallback / default —', ''));
   _modelCatalog.forEach(function (m) {
     ids[m.id] = true;
     const label = (m.name && m.name !== m.id) ? (m.name + ' — ' + m.id) : m.id;
@@ -2238,11 +2261,14 @@ async function saveSections() {
   host.querySelectorAll('input[type=checkbox][data-section]').forEach(function (cb) {
     val[cb.dataset.section] = cb.checked; // store explicit true/false for every section
   });
-  const res = await sb.from('concierge_config').upsert(
-    [{ key: 'prompt_sections', value: val, updated_at: nowIso() }], { onConflict: 'key' });
-  if (res.error) { fail('Save sections', res.error); return; }
-  if (state.config) state.config.prompt_sections = val;
-  toast('Prompt sections saved');
+  const tuner = String(($('cfg-promptreview-model') && $('cfg-promptreview-model').value) || '').trim();
+  const res = await sb.from('concierge_config').upsert([
+    { key: 'prompt_sections', value: val, updated_at: nowIso() },
+    { key: 'promptreview_model', value: tuner, updated_at: nowIso() }
+  ], { onConflict: 'key' });
+  if (res.error) { fail('Save prompt settings', res.error); return; }
+  if (state.config) { state.config.prompt_sections = val; state.config.promptreview_model = tuner; }
+  toast('Prompt settings saved');
 }
 
 /* A simple centered modal (backdrop + scrollable box). Returns the backdrop node. */
@@ -2322,10 +2348,81 @@ async function runPromptReview() {
         m.box.appendChild(card);
       });
     }
+    // Applyable edits — each carries a full replacement for an editable target.
+    const edits = Array.isArray(d.edits) ? d.edits : [];
+    if (edits.length) {
+      const h = el('div', 'micro'); h.style.cssText = 'margin:16px 0 4px; letter-spacing:.06em; text-transform:uppercase; color:var(--brass,#b7975a);';
+      h.textContent = 'Suggested edits (apply one at a time)';
+      m.box.appendChild(h);
+      edits.forEach(function (e) {
+        const card = el('div'); card.style.cssText = 'border:1px solid var(--hairline); border-radius:5px; padding:11px 13px; margin:10px 0;';
+        const top = el('div'); top.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:5px;';
+        top.appendChild(el('strong', '', e.label || e.target));
+        const tgt = el('span', 'mono'); tgt.style.cssText = 'font-size:10px; opacity:.6;'; tgt.textContent = targetLabel(e.target);
+        top.appendChild(tgt);
+        card.appendChild(top);
+        if (e.rationale) { const r = el('div', 'micro'); r.style.cssText = 'color:var(--brass-soft,#c9b487); margin-bottom:6px;'; r.textContent = '→ ' + e.rationale; card.appendChild(r); }
+        const prev = el('pre'); prev.style.cssText = 'white-space:pre-wrap; word-break:break-word; font-family:"IBM Plex Mono",monospace; font-size:11px; line-height:1.5; background:rgba(0,0,0,.22); border:1px solid var(--hairline); border-radius:5px; padding:10px; max-height:180px; overflow:auto; margin:0 0 8px;';
+        prev.textContent = e.new_value || '';
+        card.appendChild(prev);
+        const applyBtn = el('button', 'btn primary mini', 'Apply this edit'); applyBtn.type = 'button';
+        applyBtn.addEventListener('click', function () {
+          if (!window.confirm('Apply this edit to ' + targetLabel(e.target) + '? The current value is saved to history first, so you can roll it back.')) return;
+          withBusy(applyBtn, async function () {
+            const ok = await applyTunerEdit(e.target, e.new_value);
+            if (ok) { applyBtn.textContent = 'Applied ✓'; applyBtn.disabled = true; }
+          });
+        });
+        card.appendChild(applyBtn);
+        m.box.appendChild(card);
+      });
+    }
     const foot = el('p', 'micro'); foot.style.cssText = 'margin-top:12px; opacity:.6;';
-    foot.textContent = 'Reviewed by ' + (d.model || 'the model') + '. Suggestions only — nothing is changed automatically.';
+    foot.textContent = 'Reviewed by ' + (d.model || 'the model') +
+      '. Edits apply to your editable fields only (objective, angles, objections, procedures) and are saved to History for rollback; the fixed engine sections are advisory.';
     m.box.appendChild(foot);
   });
+}
+
+/* Human label for a tuner edit target id (config:key or sop:slug). */
+function targetLabel(target) {
+  if (typeof target !== 'string') return String(target);
+  if (target === 'config:primary_objective') return 'Primary objective';
+  if (target === 'config:hooks') return 'Selling angles';
+  if (target === 'config:objections') return 'Objection playbook';
+  if (target.indexOf('sop:') === 0) return 'Procedure · ' + target.slice(4);
+  return target;
+}
+
+/* Apply one tuner edit to its editable target, through the normal write path so the
+   edit-history triggers record a rollback point. Returns true on success. */
+async function applyTunerEdit(target, newValue) {
+  try {
+    if (target === 'config:primary_objective') {
+      const r = await sb.from('concierge_config').upsert([{ key: 'primary_objective', value: String(newValue), updated_at: nowIso() }], { onConflict: 'key' });
+      if (r.error) throw r.error;
+    } else if (target === 'config:hooks') {
+      const arr = String(newValue).split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l; }).slice(0, 30);
+      const r = await sb.from('concierge_config').upsert([{ key: 'hooks', value: arr, updated_at: nowIso() }], { onConflict: 'key' });
+      if (r.error) throw r.error;
+    } else if (target === 'config:objections') {
+      const arr = textToObjections(String(newValue)).slice(0, 30);
+      const r = await sb.from('concierge_config').upsert([{ key: 'objections', value: arr, updated_at: nowIso() }], { onConflict: 'key' });
+      if (r.error) throw r.error;
+    } else if (target.indexOf('sop:') === 0) {
+      const slug = target.slice(4);
+      const r = await sb.from('concierge_sops').update({ content_md: String(newValue), updated_at: nowIso() }).eq('slug', slug);
+      if (r.error) throw r.error;
+    } else {
+      toast('Unknown edit target: ' + target, true);
+      return false;
+    }
+    toast('Applied to ' + targetLabel(target) + ' — saved to History for rollback');
+    // Refresh the affected editors so the change is reflected in the Studio.
+    if (target.indexOf('sop:') === 0) { await loadSections(SOP_SPEC); }
+    else { await loadConfig(); }
+    return true;
+  } catch (e) { fail('Apply edit', e); return false; }
 }
 
 /* Version-history modal for an edit-tracked row (concierge_edit_history). Lists
@@ -2416,6 +2513,7 @@ async function loadConfig() {
   if ($('cfg-conn-key')) $('cfg-conn-key').value = storedConnKey();
   $('cfg-model').value = (typeof cfg.model === 'string') ? cfg.model : '';
   $('cfg-model-fallback').value = (typeof cfg.model_fallback === 'string') ? cfg.model_fallback : '';
+  if ($('cfg-promptreview-model')) $('cfg-promptreview-model').value = (typeof cfg.promptreview_model === 'string') ? cfg.promptreview_model : '';
   $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
   $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
   if ($('cfg-voice-base')) $('cfg-voice-base').value = (typeof cfg.voice_base === 'string') ? cfg.voice_base : '';

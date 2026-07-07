@@ -218,7 +218,7 @@ interface ToolReg { name: string; enabled: boolean; description: string | null }
 // One enabled SOP row, with its audience so buildSystemPrompt can inject register/
 // service procedures only when the shopper is signed in (audience 'signed_in') and
 // keep universal ones ('all') always. 'anon' is available for signed-out-only notes.
-interface SopRow { title: string; content_md: string; audience: string }
+interface SopRow { slug: string; title: string; content_md: string; audience: string }
 
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
@@ -261,7 +261,7 @@ async function loadConciergeData(): Promise<ConciergeData> {
     // deployed before setup.sql ran), fall back to the plain select and treat every
     // SOP as 'all' so procedures never silently vanish mid-migration.
     pgSelect<SopRow>(
-      "concierge_sops?select=title,content_md,audience&enabled=is.true&order=sort_order.asc",
+      "concierge_sops?select=slug,title,content_md,audience&enabled=is.true&order=sort_order.asc",
     ),
     pgSelect<FormDef>(
       "concierge_forms?select=slug,title,submit_tool,fields&enabled=is.true",
@@ -273,13 +273,13 @@ async function loadConciergeData(): Promise<ConciergeData> {
   ]);
   let sopRows: SopRow[] | null = sopRowsRaw;
   if (!sopRows) {
-    const plain = await pgSelect<{ title: string; content_md: string }>(
-      "concierge_sops?select=title,content_md&enabled=is.true&order=sort_order.asc",
+    const plain = await pgSelect<{ slug: string; title: string; content_md: string }>(
+      "concierge_sops?select=slug,title,content_md&enabled=is.true&order=sort_order.asc",
     );
     sopRows = plain ? plain.map((r) => ({ ...r, audience: "all" })) : null;
   }
   const sops: SopRow[] = (sopRows ?? []).map((r) => ({
-    title: r.title, content_md: r.content_md,
+    slug: r.slug, title: r.title, content_md: r.content_md,
     audience: typeof r.audience === "string" && r.audience.trim() ? r.audience.trim() : "all",
   }));
   dataCache = {
@@ -2427,7 +2427,44 @@ const PROMPT_DOCTOR_SYSTEM =
   "obvious rule the goal needs that is missing. Ignore tone and house style. Tokens like " +
   "{{action:commission}}, {{reply:...}}, {{img:...}}, {{form:...}}, {{KB}}, {{OBJECTIVE}} are " +
   "legitimate UI/template markers — never flag them as syntax errors. Be specific and " +
-  "conservative: if the prompt is sound, return few or no findings. Reply with a single tool call.";
+  "conservative: if the prompt is sound, return few or no findings.\n" +
+  "You may ALSO propose concrete, applyable EDITS — but ONLY to the editable targets listed " +
+  "under EDITABLE TARGETS in the message. For each edit, give the exact target id, the COMPLETE " +
+  "replacement text for that target (not a diff, not a fragment — the whole new value in the " +
+  "format noted for that target), a short label, and a one-line rationale. If a problem lives in " +
+  "a part of the prompt that is NOT an editable target (the core constitution or the fixed engine " +
+  "sections), describe it as a finding only — do NOT invent an edit for it. Never change the " +
+  "template markers or the honesty/price/scope rules. Reply with a single tool call.";
+
+// The prompt surfaces an admin can edit from the Studio, so the tuner can propose an
+// applyable replacement value for each. Everything else (the fixed engine sections) is
+// advisory-only. Kept small on purpose — these are the fields operators actually iterate.
+function editableTargets(data: ConciergeData): { id: string; purpose: string; format: string; current: string }[] {
+  const t: { id: string; purpose: string; format: string; current: string }[] = [];
+  const cfg = data.config || {};
+  const objective = (typeof cfg.primary_objective === "string" && cfg.primary_objective.trim())
+    ? cfg.primary_objective.trim() : PRIMARY_OBJECTIVE_DEFAULT;
+  t.push({ id: "config:primary_objective", purpose: "the single primary-objective line the model leads with",
+    format: "one short paragraph of plain text", current: objective });
+  const hooks = Array.isArray(cfg.hooks) ? (cfg.hooks as unknown[]).filter((h) => typeof h === "string").join("\n") : "";
+  t.push({ id: "config:hooks", purpose: "SELLING ANGLES — true house-approved lines to build desire",
+    format: "plain text, ONE angle per line (no bullets)", current: hooks || "(none)" });
+  const objections = Array.isArray(cfg.objections)
+    ? (cfg.objections as unknown[]).map((o) => {
+      if (o && typeof o === "object") {
+        const r = o as Record<string, unknown>;
+        return `${(r.trigger ?? "").toString()} | ${(r.response ?? "").toString()}`;
+      }
+      return typeof o === "string" ? o : "";
+    }).filter((s) => s.trim()).join("\n") : "";
+  t.push({ id: "config:objections", purpose: "OBJECTION PLAYBOOK — how to reassure on a hesitation",
+    format: "plain text, ONE per line as 'trigger | response'", current: objections || "(none)" });
+  for (const s of data.sops) {
+    t.push({ id: `sop:${s.slug}`, purpose: `SOP '${s.title}' (${s.audience})`,
+      format: "markdown, the full procedure body", current: s.content_md });
+  }
+  return t;
+}
 
 async function handlePromptReviewPost(req: Request): Promise<Response> {
   if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
@@ -2439,19 +2476,28 @@ async function handlePromptReviewPost(req: Request): Promise<Response> {
   const data = await loadConciergeData();
   const liveState = "(live BROWSING + CUSTOMER blocks are substituted per request)";
   const { sections, suffix } = assemblePromptSections(data, { signedIn, section, liveState });
-  const assembled = (sections.filter((s) => s.included).map((s) => s.text).join("") + suffix).slice(0, 60000);
-  const model = resolveModel(data);
+  const assembled = (sections.filter((s) => s.included).map((s) => s.text).join("") + suffix).slice(0, 55000);
+  // A separate, admin-chosen model can review — pick a stronger one for a sharper pass
+  // without changing what answers shoppers. Falls back to the concierge model.
+  const model = (typeof data.config?.promptreview_model === "string" && data.config.promptreview_model.trim())
+    ? data.config.promptreview_model.trim()
+    : resolveModel(data);
+  const targets = editableTargets(data);
+  const allowed = new Set(targets.map((t) => t.id));
+  const targetsBlock = targets.map((t) =>
+    `--- TARGET ${t.id}\npurpose: ${t.purpose}\nformat: ${t.format}\ncurrent value:\n${t.current}`,
+  ).join("\n\n").slice(0, 24000);
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model, max_tokens: 1800, temperature: 0,
+        model, max_tokens: 3200, temperature: 0,
         system: PROMPT_DOCTOR_SYSTEM,
         tool_choice: { type: "tool", name: "review" },
         tools: [{
           name: "review",
-          description: "Record the prompt review: an overall read and a list of concrete findings.",
+          description: "Record the prompt review: an overall read, concrete findings, and any applyable edits.",
           input_schema: {
             type: "object",
             properties: {
@@ -2471,6 +2517,20 @@ async function handlePromptReviewPost(req: Request): Promise<Response> {
                   required: ["kind", "severity", "issue", "suggestion"],
                 },
               },
+              edits: {
+                type: "array",
+                description: "applyable edits, ONLY for the listed EDITABLE TARGETS; empty if none apply. Each carries the COMPLETE replacement value for that target in its stated format.",
+                items: {
+                  type: "object",
+                  properties: {
+                    target: { type: "string", description: "the exact target id from EDITABLE TARGETS (e.g. config:primary_objective, config:hooks, sop:cancellation)" },
+                    label: { type: "string", description: "a short human title for the change" },
+                    rationale: { type: "string", description: "one line: why this edit helps" },
+                    new_value: { type: "string", description: "the COMPLETE new value for the target, in the format noted for it — not a diff or fragment" },
+                  },
+                  required: ["target", "label", "rationale", "new_value"],
+                },
+              },
             },
             required: ["summary", "findings"],
           },
@@ -2478,8 +2538,11 @@ async function handlePromptReviewPost(req: Request): Promise<Response> {
         messages: [{
           role: "user",
           content: "Review this assembled system prompt (the '" +
-            (signedIn ? "signed-in" : "anonymous") + "' assembly). Find conflicts, redundancy, " +
-            "ambiguity, and gaps.\n\n===== ASSEMBLED PROMPT =====\n" + assembled,
+            (signedIn ? "signed-in" : "anonymous") + "' assembly) for conflicts, redundancy, " +
+            "ambiguity, and gaps. Propose applyable edits ONLY for the EDITABLE TARGETS below; " +
+            "everything else is advisory.\n\n===== ASSEMBLED PROMPT =====\n" + assembled +
+            "\n\n===== EDITABLE TARGETS (you may propose a full replacement value for any of these) =====\n" +
+            targetsBlock,
         }],
       }),
     });
@@ -2492,9 +2555,24 @@ async function handlePromptReviewPost(req: Request): Promise<Response> {
     const tool = (j.content || []).find((b: any) => b.type === "tool_use" && b.name === "review");
     if (!tool || typeof tool.input !== "object") return jsonError(req, 502, "Reviewer returned nothing.");
     const findings = Array.isArray(tool.input.findings) ? tool.input.findings.slice(0, 40) : [];
+    // Keep only edits that target a real editable surface, with a non-empty replacement.
+    // deno-lint-ignore no-explicit-any
+    const edits = (Array.isArray(tool.input.edits) ? tool.input.edits : [])
+      // deno-lint-ignore no-explicit-any
+      .filter((e: any) => e && typeof e.target === "string" && allowed.has(e.target) &&
+        typeof e.new_value === "string" && e.new_value.trim().length > 0)
+      // deno-lint-ignore no-explicit-any
+      .map((e: any) => ({
+        target: e.target,
+        label: String(e.label || e.target).slice(0, 120),
+        rationale: String(e.rationale || "").slice(0, 300),
+        new_value: String(e.new_value).slice(0, 12000),
+      }))
+      .slice(0, 20);
     return jsonResponse(req, 200, {
       summary: String(tool.input.summary || "").slice(0, 800),
       findings,
+      edits,
       model,
       signedIn,
     });

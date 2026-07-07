@@ -764,8 +764,18 @@ direct controls over the result.
   conflicts I'd miss by eye. **"Ask the prompt tuner"** (`?promptreview=1`) feeds
   the assembled prompt to the model as an expert prompt engineer and returns
   structured findings — **conflict · redundancy · ambiguity · gap**, each with a
-  location and a concrete suggested fix — plus a one-line overall read. It only
-  suggests; nothing is changed automatically.
+  location and a concrete suggested fix — plus a one-line overall read.
+- **As the admin, I want to apply the tuner's suggestions with one click**, so that
+  I don't hand-copy edits. Alongside its findings the tuner returns **applyable
+  edits**, each a *complete* replacement for one **editable** target — the primary
+  objective, selling angles, objection playbook, or a specific SOP's body (the fixed
+  engine sections stay advisory-only). Each edit shows a preview and an **Apply**
+  button that writes through the normal path, so every apply lands in
+  **version history** and is one-click revertible. Nothing changes without a click.
+- **As the admin, I want the tuner to run on its own model**, so that I can review
+  with a stronger model than the one answering shoppers. A separate
+  **Prompt-tuner model** (`config.promptreview_model`, blank = the concierge model)
+  is picked from the same live dropdown and used only for the review pass.
 - **As the admin, I want to pick the model from the current lineup**, so that I'm
   not typing an id from memory. The Model and Fallback fields gain a dropdown
   populated live from Anthropic's model list (`?models=1`, key stays server-side),
