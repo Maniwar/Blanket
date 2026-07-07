@@ -1029,6 +1029,9 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
           <option value="graded">Graded only</option>
           <option value="ungraded">Not yet graded</option>
         </select>
+        <label class="micro" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;" title="Only chats where the concierge acted on a house note">
+          <input type="checkbox" id="convo-house" style="accent-color:var(--brass);"> 🏷 House-note chats
+        </label>
         <button id="convo-apply" class="btn">Search</button>
         <button id="convo-clear" class="btn ghost">Clear</button>
         <button id="convo-more" class="btn ghost" style="display:none;">Load more</button>
@@ -1556,6 +1559,10 @@ function wireStatic() {
     $(id).addEventListener('change', function () { withBusy($('cust-apply'), loadCustomers); });
   });
   $('convo-goal').addEventListener('change', renderConversations);
+  // House-note-chats filter needs a server round-trip (it constrains by id set).
+  $('convo-house').addEventListener('change', function () { loadConversations(); });
+  // Clear also unchecks it — capture phase, so it's off before wireFilter reloads.
+  $('convo-clear').addEventListener('click', function () { $('convo-house').checked = false; }, true);
   $('wl-refresh').addEventListener('click', function () { withBusy($('wl-refresh'), loadWaitlist); });
   $('wl-export').addEventListener('click', exportWaitlistCsv);
 }
@@ -4971,12 +4978,33 @@ async function loadConversations(more) {
     }
   }
 
+  // House-note chats — chats the concierge ACTED on a directive in, whether or not
+  // it formally resolved it. Two signals, unioned: a resolve_admin_note audit
+  // action (resolved), and the house-notes GOAL graded met/partial (acted). This
+  // is why the goal exists — it's the only signal for "addressed but not resolved".
+  const houseOnly = $('convo-house') && $('convo-house').checked;
+  let houseIds = null;
+  if (houseOnly) {
+    const acted = new Set();
+    const ar = await sb.from('concierge_actions').select('conversation_id')
+      .eq('action', 'resolve_admin_note').limit(5000);
+    if (!ar.error) (ar.data || []).forEach(function (r) { if (r.conversation_id) acted.add(r.conversation_id); });
+    const gr = await sb.from('concierge_conversations').select('id,goal_status')
+      .not('goal_status', 'is', null).order('created_at', { ascending: false }).limit(3000);
+    if (!gr.error) (gr.data || []).forEach(function (r) {
+      const s = r.goal_status && r.goal_status['house-notes'] && r.goal_status['house-notes'].status;
+      if (s === 'met' || s === 'partial') acted.add(r.id);
+    });
+    houseIds = [...acted];
+  }
+
   const from = pageState.convo * PAGE;
   let q = sb.from('concierge_conversations').select('*')
     .order('created_at', { ascending: false })
     .range(from, from + PAGE - 1);
   if (df) q = q.gte('created_at', df);
   if (dt) q = q.lte('created_at', dt);
+  if (houseOnly) q = q.in('id', houseIds.length ? houseIds : ['00000000-0000-0000-0000-000000000000']);
   if (isUuid) {
     // match either the conversation id or its session key
     q = q.or('id.eq.' + kw + ',session_key.eq.' + kw);
