@@ -346,9 +346,15 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   jsonb.)*
 - **As the merchant**, I want to see every **register action** the concierge took
   on a customer's behalf — status reads, address and colorway changes,
-  cancellations, context recalls, notes written — so that nothing the bot did to
-  the register is invisible to me. *(Register-action log: `concierge_actions`,
-  surfaced in the studio; every order change also captured in `order_events`.)*
+  cancellations, context recalls, notes written — and to **click through to the
+  chat, the order, and the IP** behind each one, so that nothing the bot did is
+  invisible and I can trace it to its source. *(Register-action log:
+  `concierge_actions`, surfaced in the studio; every order change also captured in
+  `order_events`. Each row is **clickable → jumps to the conversation** where it
+  happened, scrolled to the moment (reason-tagged marker); the **Nº opens that
+  order's drawer**; and the **origin IP** is shown (joined from the conversation —
+  admin-only, click-to-copy). The search box also takes an **IP** (full = exact,
+  prefix = substring), resolved through the conversations that originated there.)*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
   and what the concierge learned *and did* for them, so that I can serve them well
   — with the same **client summary** the bot reads and **without a long tail of

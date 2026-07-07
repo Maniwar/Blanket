@@ -216,6 +216,17 @@
     font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--wool-faint);
     flex:1 1 160px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
+  .action-row.clickable{ cursor:pointer; border-radius:4px; }
+  .action-row.clickable:hover{ background:rgba(196,155,91,.06); }
+  .action-row .act-link{ cursor:pointer; text-decoration:underline; text-underline-offset:2px;
+    text-decoration-color:var(--hairline); }
+  .action-row .act-link:hover{ color:var(--brass); }
+  .action-row .act-ip{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--wool-faint);
+    cursor:pointer; }
+  .action-row .act-ip:hover{ color:var(--wool-dim); }
+  .action-row .act-jump{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:11px;
+    letter-spacing:.06em; color:var(--brass-soft); cursor:pointer; white-space:nowrap; }
+  .action-row .act-jump:hover{ color:var(--brass); }
 
   /* goal chips */
   .goal-scorecard{ display:flex; align-items:center; gap:12px; flex-wrap:wrap;
@@ -1054,7 +1065,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <div class="filters">
           <input type="date" id="act-from" title="From date">
           <input type="date" id="act-to" title="To date">
-          <input type="text" id="act-q" placeholder="email, action, or keyword…" style="max-width:240px;">
+          <input type="text" id="act-q" placeholder="email, action, Nº, IP, or keyword…" style="max-width:240px;">
           <button id="act-apply" class="btn">Search</button>
           <button id="act-clear" class="btn ghost">Clear</button>
         </div>
@@ -3562,14 +3573,32 @@ function showMore(id, on) { const b = $(id); if (b) b.style.display = on ? '' : 
 async function loadActions(more) {
   if (!more) pageState.act = 0;
   const from = pageState.act * PAGE;
+  const df = fFrom('act-from'), dt = fTo('act-to'), kw = fkw('act-q');
+
+  // IP search — actions carry no `ip` column (it lives on the conversation), so
+  // resolve the conversations that originated from that IP first, then constrain
+  // the actions to them. Full IPv4 is an exact match; anything shorter (a /24
+  // prefix, a partial v6) matches as a substring.
+  const isIp = kw && isIpLike(kw);
+  let ipConvIds = null;
+  if (isIp) {
+    const fullV4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(kw);
+    let cq = sb.from('concierge_conversations').select('id');
+    cq = fullV4 ? cq.eq('ip', kw) : cq.ilike('ip', '%' + kw + '%');
+    const cres = await cq.limit(500);   // cap: an admin forensic view, not a full export
+    ipConvIds = [...new Set((cres.data || []).map(function (r) { return r.id; }).filter(Boolean))];
+  }
+
   let q = sb.from('concierge_actions')
-    .select('created_at,email,action,serial,payload,result')
+    .select('created_at,email,action,serial,payload,result,conversation_id')
     .order('created_at', { ascending: false })
     .range(from, from + PAGE - 1);
-  const df = fFrom('act-from'), dt = fTo('act-to'), kw = fkw('act-q');
   if (df) q = q.gte('created_at', df);
   if (dt) q = q.lte('created_at', dt);
-  if (kw) {
+  if (isIp) {
+    // No action from that IP → an impossible id, so the result is empty.
+    q = q.in('conversation_id', ipConvIds.length ? ipConvIds : ['00000000-0000-0000-0000-000000000000']);
+  } else if (kw) {
     let ors = orIlike(['email', 'action', 'result'], kw);
     if (/^\d+$/.test(kw)) ors += ',serial.eq.' + kw;   // a bare number matches an order Nº
     q = q.or(ors);
@@ -3579,8 +3608,28 @@ async function loadActions(more) {
   const rows = res.data || [];
   state.actions = more ? state.actions.concat(rows) : rows;
   pageState.act++;
+
+  // Resolve the origin IP for each loaded action's conversation (one indexed
+  // lookup over the distinct conversations present), so the row can show it and
+  // it's searchable above. Admin-only, PII-gated column.
+  if (!more) state.actionIp = {};
+  const cids = [...new Set(state.actions.map(function (a) { return a.conversation_id; }).filter(Boolean))];
+  if (cids.length) {
+    const ipr = await sb.from('concierge_conversations').select('id,ip').in('id', cids).limit(2000);
+    if (!ipr.error) (ipr.data || []).forEach(function (r) { if (r.ip) state.actionIp[r.id] = r.ip; });
+  }
   renderActions();
   showMore('actions-more', rows.length === PAGE);
+}
+
+/* Open one order's detail drawer straight from a serial (used by the Actions log,
+   where a row knows its Nº but not the full order row). Fetches live/struck. */
+async function openOrderBySerial(serial) {
+  const r = await sb.from('orders').select('*')
+    .or('serial.eq.' + serial + ',cancelled_serial.eq.' + serial)
+    .order('placed_at', { ascending: false }).limit(1);
+  if (r.error || !r.data || !r.data.length) { toast('Order Nº ' + Number(serial).toLocaleString('en-US') + ' not found', true); return; }
+  openOrderDrawer(r.data[0]);
 }
 
 function renderActions() {
@@ -3594,10 +3643,45 @@ function renderActions() {
     const row = el('div', 'action-row');
     row.appendChild(el('span', 'micro', fmtWhen(a.created_at)));
     row.appendChild(el('span', 'act', a.action || ''));
-    if (a.serial != null) row.appendChild(el('span', 'serial', 'Nº ' + a.serial));
+
+    // Nº — click to open that order's detail drawer.
+    if (a.serial != null) {
+      const no = el('span', 'serial act-link', 'Nº ' + Number(a.serial).toLocaleString('en-US'));
+      no.title = 'Open order Nº ' + Number(a.serial).toLocaleString('en-US');
+      no.addEventListener('click', function (e) { e.stopPropagation(); openOrderBySerial(a.serial); });
+      row.appendChild(no);
+    }
     row.appendChild(el('span', 'who', a.email || ''));
+
+    // Origin IP (admin-only) — click to copy, so it's ready to cite or search.
+    const ip = state.actionIp && state.actionIp[a.conversation_id];
+    if (ip) {
+      const ipEl = el('span', 'act-ip', 'IP ' + ip);
+      ipEl.title = 'Origin IP for this action’s conversation — click to copy';
+      ipEl.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (navigator.clipboard) navigator.clipboard.writeText(String(ip));
+        toast('IP copied');
+      });
+      row.appendChild(ipEl);
+    }
+
     const detail = a.result || (a.payload ? JSON.stringify(a.payload) : '');
     if (detail) row.appendChild(el('span', 'payload', detail));
+
+    // Jump to the relevant section: the chat where the concierge took this action,
+    // scrolled to the moment. Reason-tag the marker so it reads correctly there.
+    if (a.conversation_id) {
+      const reason = a.action === 'resolve_admin_note' ? 'house' : (a.serial != null ? 'order' : null);
+      const go = el('span', 'act-jump', '→ chat');
+      go.title = 'Jump to the conversation where this happened, at the moment it happened';
+      go.addEventListener('click', function (e) { e.stopPropagation(); jumpToConversation(a.conversation_id, a.created_at, reason); });
+      row.appendChild(go);
+      row.classList.add('clickable');
+      row.title = 'Jump to the conversation where this action happened';
+      row.addEventListener('click', function () { jumpToConversation(a.conversation_id, a.created_at, reason); });
+    }
+
     list.appendChild(row);
   });
 }
