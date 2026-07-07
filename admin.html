@@ -2151,33 +2151,62 @@ async function adminPost(query) {
   return res.json();
 }
 
-/* Live model catalog (?models=1) → fill the Model / Fallback dropdowns. The picker
-   writes its choice into the free-text field (the source of truth), so a custom id
-   can still be typed. Fire-and-forget: on failure the text fields still work. */
-let _modelsLoaded = false;
+/* Live model catalog (?models=1) → the Model / Fallback pickers. A standard
+   "select with a Custom option": the dropdown lists the currently available models
+   (pulled live from the API), reflects the saved value, and the free-text box appears
+   only when "Custom id…" is chosen (or a saved id isn't in the live list) — so a
+   custom model can still be typed. The text box remains the value the engine saves.
+   If the live list can't load, the box stays visible and the reason is surfaced. */
+const _MODEL_PAIRS = [['cfg-model-pick', 'cfg-model'], ['cfg-model-fallback-pick', 'cfg-model-fallback']];
+let _modelCatalog = null;       // cached [{id,name}]
+let _modelLoadError = '';       // last load error, if any
 async function populateModelPickers() {
-  if (_modelsLoaded) return;
-  let models = [];
-  try { const d = await adminGet('?models=1'); models = (d && Array.isArray(d.models)) ? d.models : []; }
-  catch (e) { return; /* leave the text fields; custom entry still works */ }
-  _modelsLoaded = true;
-  [['cfg-model-pick', 'cfg-model'], ['cfg-model-fallback-pick', 'cfg-model-fallback']].forEach(function (pair) {
-    const sel = $(pair[0]), inp = $(pair[1]);
-    if (!sel || !inp) return;
-    sel.textContent = '';
-    sel.appendChild(new Option('— pick a current model —', ''));
-    models.forEach(function (m) {
-      const label = (m.name && m.name !== m.id) ? (m.name + ' — ' + m.id) : m.id;
-      sel.appendChild(new Option(label, m.id));
-    });
-    sel.onchange = function () {
-      if (!sel.value) return;
-      inp.value = sel.value;
-      const f = CFG_FIELDS.find(function (x) { return x.id === pair[1]; });
-      if (f) refreshCfgState(f);
-      sel.value = '';
-    };
+  if (_modelCatalog === null) {
+    try {
+      const d = await adminGet('?models=1');
+      _modelCatalog = (d && Array.isArray(d.models)) ? d.models : [];
+      _modelLoadError = _modelCatalog.length ? '' : 'the API returned no models';
+    } catch (e) {
+      _modelCatalog = [];
+      _modelLoadError = (e && e.message) || 'request failed';
+      toast('Couldn’t load the live model list (' + _modelLoadError + ') — you can still type a model id', true);
+    }
+  }
+  _MODEL_PAIRS.forEach(function (pair) { renderModelPicker(pair[0], pair[1]); });
+}
+function renderModelPicker(selId, inpId) {
+  const sel = $(selId), inp = $(inpId);
+  if (!sel || !inp) return;
+  const cur = (inp.value || '').trim();
+  const ids = {};
+  sel.textContent = '';
+  sel.appendChild(new Option('— use fallback / default —', ''));
+  _modelCatalog.forEach(function (m) {
+    ids[m.id] = true;
+    const label = (m.name && m.name !== m.id) ? (m.name + ' — ' + m.id) : m.id;
+    sel.appendChild(new Option(label, m.id));
   });
+  if (cur && !ids[cur]) { sel.appendChild(new Option(cur + ' (current custom id)', cur)); ids[cur] = true; }
+  sel.appendChild(new Option('Custom id…', '__custom__'));
+  if (_modelLoadError) {
+    const o = new Option('(live list unavailable: ' + _modelLoadError + ')', '');
+    o.disabled = true; sel.appendChild(o);
+  }
+  // Reflect the saved value; show the text box only when there's a custom id to type.
+  sel.value = cur && ids[cur] ? cur : (cur ? '__custom__' : '');
+  inp.style.display = (sel.value === '__custom__') ? '' : 'none';
+  sel.onchange = function () {
+    if (sel.value === '__custom__') {
+      inp.style.display = '';
+      if (_modelCatalog.some(function (m) { return m.id === inp.value; })) inp.value = '';
+      try { inp.focus(); } catch (e) { /* ignore */ }
+    } else {
+      inp.value = sel.value; // '' = blank → server uses the fallback/default
+      inp.style.display = 'none';
+    }
+    const f = CFG_FIELDS.find(function (x) { return x.id === inpId; });
+    if (f) refreshCfgState(f);
+  };
 }
 
 /* Per-section on/off switches. The section list comes from ?defaults=1 (kept in sync
