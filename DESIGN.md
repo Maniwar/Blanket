@@ -211,13 +211,29 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   flag: the concierge calls `resolve_admin_note` after doing a one-time task; I
   can also Resolve/Reopen any directive by hand. An SOP tells the bot to check for
   these every signed-in visit, follow them, and resolve only what it has done.)*
-- **As the merchant**, I want to see a patron's **saved addresses** at a glance —
-  both **shipping** (their own door, past gift recipients) and **billing**,
-  clearly labelled — so that I understand their history when handling an order.
-  *(Order drawer "Saved addresses": `deriveAddressesFromOrders` (ship-to) +
-  `deriveBillingFromOrders` (`orders.billing`), grouped Shipping/Billing with a
-  type tag per row — the admin mirror of the checkout books, §4.12. Read-only:
-  both are projections of order history, edited per-order via the address form.)*
+- **As the merchant**, I want **one place that shows every house note across all
+  patrons** — open vs. resolved, who left it, when — and, for one the concierge
+  acted on in a chat, a jump straight to **that conversation**, so that I can
+  follow up and audit at a glance. *(Orders & Customers → **House notes** view:
+  lists all `kind='directive'` notes; filter open/resolved/all; Resolve/Reopen,
+  Delete, View customer, and "Find the chat" via the `resolve_admin_note` audit
+  action → `conversation_id`. See §4.13.)*
+- **As the merchant**, I want to **bulk-add** a house instruction to many
+  customers at once, and **bulk resolve / reopen / delete** notes, so that I'm not
+  editing one at a time. *(Orders view bulk bar → "Leave note…" writes one
+  directive to each distinct customer behind the selected orders; House notes view
+  has multi-select + a bulk Resolve/Reopen/Delete bar.)*
+- **As the merchant**, I want a single-order drawer that consolidates **the
+  customer** (name, standing, lifetime value, blankets, last order, note count),
+  **this order's** shipping *and* billing (both editable), its emails, and the
+  patron's client book + a leave-a-note box — so that managing one order needs
+  nothing else open. *(Order detail drawer sections: Customer → Fulfillment →
+  Shipping & billing → Emails → Client book & house instructions.)*
+- **As the merchant**, I want to correct an order's **billing** address (or set it
+  back to "same as shipping"), not just shipping, so that a mis-entered billing
+  record can be fixed. *(Drawer "Shipping & billing" → Edit billing address →
+  commission `POST ?editbilling=1`, admin-gated, writes the `orders.billing`
+  jsonb.)*
 - **As the merchant**, I want to see every **register action** the concierge took
   on a customer's behalf — status reads, address and colorway changes,
   cancellations, context recalls, notes written — so that nothing the bot did to
@@ -830,7 +846,20 @@ flowchart LR
   the 14-note window) prints them first in the CUSTOMER block.
 - **Resolve:** model tool `resolve_admin_note({note_id})` — ownership-scoped
   PATCH; books an `event` via `logAction`/`bookEvent`. Also admin Resolve/Reopen.
-- **Behaviour:** SOP `house-directives` (seeded, editable in Procedures).
+- **Behaviour:** SOP `house-directives` (seeded, editable in Procedures); the
+  CUSTOMER-block directive line demands **same-reply** resolution for a completed
+  one-time task, warning it will wrongly repeat if left open, plus the
+  `client-book-method` SOP giving the whole review → leave → resolve loop.
+
+**Management & follow-up (the House notes view).** A dedicated view in Orders &
+Customers lists **every** directive across all patrons: status (open/resolved),
+author, dates, filterable open/resolved/all. Each row offers Resolve/Reopen,
+Delete, **View customer**, and — when the concierge resolved it in a chat —
+**Find the chat**, which jumps to that conversation. The chat link is recovered
+from the `resolve_admin_note` entry in `concierge_actions` (its `payload.note_id`
+→ `conversation_id`). **Bulk:** the Orders bulk bar can write one directive to all
+distinct customers behind the selected orders; the House notes view multi-selects
+for bulk Resolve/Reopen/Delete.
 
 ---
 

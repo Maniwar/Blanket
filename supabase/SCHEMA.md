@@ -513,7 +513,7 @@ flowchart LR
     direction TB
     MP["PUBLIC (rate-limited)<br/>?recent · ?next<br/>POST ?hold · ?waitlist"]
     MU["SIGNED-IN<br/>?me · POST place-order"]
-    MA["ADMIN<br/>?fulfill · ?editaddr · ?resend"]
+    MA["ADMIN<br/>?fulfill · ?editaddr · ?editbilling · ?resend"]
     MS["SERVICE ONLY<br/>?custresend"]
   end
 
@@ -614,6 +614,7 @@ wall-clock limit.
 | `POST ?waitlist=1` | public (rate-limited) | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (links `user_id` if signed in). |
 | `POST ?fulfill=1` | **admin** | Advances `status`, sets `tracking`; emails the customer on `shipped`/`returned`. |
 | `POST ?editaddr=1` | **admin** | Correct a shipping address on a not-yet-shipped order (validated field-by-field). |
+| `POST ?editbilling=1` | **admin** | Set/clear an order's **billing** address (the `orders.billing` jsonb): `{serial, address,…}` or `{serial, same_as_shipping:true}`. Validated; editable at any status (it's a record, not a shipping instruction). |
 | `POST ?resend=1` | **admin** | Re-send an order email: `{serial, kind}` → rebuilds from the order and sends, logging to `email_log`. |
 | `POST ?custresend=1` | **service** | Bearer = `SUPABASE_SERVICE_ROLE_KEY`; no browser can reach it. Re-send an order email on a customer's behalf; called internally by the concierge's `resend_confirmation` tool **after** it has verified the signed-in owner owns the order; guards `kind` against the order's real status. |
 
