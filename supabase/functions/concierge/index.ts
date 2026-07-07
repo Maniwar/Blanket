@@ -3894,6 +3894,7 @@ async function handleReengage(req: Request): Promise<Response> {
         "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
         "{{tokens}}, no greeting boilerplate. Just the line." + houseClause;
     }
+    const started = Date.now();
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
@@ -3908,6 +3909,38 @@ async function handleReengage(req: Request): Promise<Response> {
     let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
     text = stripPlumbing(text).replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 240);
     if (text.length < 4) return fallback();
+
+    // Persist the outreach line so the conversation log stays COMPLETE. The
+    // shopper sees this in the closed-panel bubble, and — for a signed-in patron
+    // — it can carry a HOUSE-NOTE delivery. Until now this line was returned but
+    // never written to concierge_messages, so a note delivered here vanished from
+    // the transcript. Attach it to the live conversation; if a house instruction
+    // was woven in but no conversation exists yet, open one so the delivery is
+    // never lost, then reconcile the note (this beat has no tools, same as an
+    // opener). Best-effort: logging must never break the outreach line itself.
+    try {
+      const deliversHouseNote = !!houseClause && !!customer;
+      if (!cid && deliversHouseNote && customer) {
+        const row = await pgInsert<{ id: string }>("concierge_conversations", {
+          session_key: sessionKey || null,
+          user_id: customer.id,
+          user_email: customer.email,
+          section: section ? section.slice(0, 64) : null,
+        });
+        cid = row?.id ?? null;
+      }
+      if (cid) {
+        await logAssistantTurn(cid, text, model, Date.now() - started);
+        if (deliversHouseNote && customer) {
+          scheduleDirectiveReconcile(
+            cid, customer,
+            [{ role: "user", content: "(re-engagement outreach — closed-panel bubble)" }],
+            text, apiKey, model,
+          );
+        }
+      }
+    } catch { /* logging is best-effort; the shopper still gets their line */ }
+
     return jsonResponse(req, 200, { text });
   } catch { return fallback(); }
 }
