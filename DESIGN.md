@@ -91,8 +91,10 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   deference the more I've bought — so that loyalty is felt, not just logged.
   *(LTV tiers: Eintrag → Wiederkehr → Hausfreund → Stifter.)*
 - **As a patron the house knows**, I want it to remember what I told it last time
-  (the room, the person, the cloth I favored), so that each visit builds on the
-  last. *(Client book + `recall_context`.)*
+  (the room, the person, the cloth I favored) *and* what it did for me (a
+  cancellation, an address change), so that each visit builds on the last and I
+  never have to re-explain. *(Typed client book — `fact`/`event`/`reflection`
+  notes read back grouped into the prompt; `recall_context`; see §4.10.)*
 - **As someone who's done for now**, I want to say "that's all" or "don't message
   me until I write back" and have it respected, so that I'm in control.
   *(Customer-signalled close / quiet mode + auto wind-down.)*
@@ -177,8 +179,10 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   the register is invisible to me. *(Register-action log: `concierge_actions`,
   surfaced in the studio; every order change also captured in `order_events`.)*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
-  and what the concierge learned about them, so that I can serve them well.
-  *(Customers tab: LTV ledger + client book + order history.)*
+  and what the concierge learned *and did* for them, so that I can serve them well.
+  *(Customers tab: LTV ledger + order history + the typed client book — `event`/
+  `fact`/`reflection` notes, each tagged; whose recording policy I can tune in
+  Tuning → Client book. See §4.10.)*
 - **As the merchant**, I want a real waitlist — captured when the edition sells
   out (a form on the sold-out state) and by the concierge in chat — that I can
   filter, mark people notified on, and export to email, so that demand past a
