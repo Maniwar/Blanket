@@ -476,6 +476,18 @@
   .stage-objection{ color:#c98a4b; border-color:#c98a4b; }
   .stage-evaluating, .stage-engaged{ color:var(--brass-soft); border-color:var(--brass-soft); }
   .stage-lost{ color:#b06b6b; border-color:#b06b6b; }
+  /* Funnel overview — one cell per stage, count + share of graded chats, click to
+     filter. A subtle top rail in the stage's tone reads as a little funnel. */
+  .convo-funnel{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .funnel-cell{ --fc:var(--wool-faint); display:flex; flex-direction:column; align-items:flex-start;
+    gap:2px; min-width:74px; padding:8px 11px 9px; cursor:pointer; text-align:left;
+    background:var(--ink-well); border:1px solid var(--hairline-dim);
+    border-top:3px solid var(--fc); border-radius:3px; color:var(--wool-dim); }
+  .funnel-cell:hover{ border-color:var(--fc); color:var(--wool); }
+  .funnel-cell.on{ border-color:var(--fc); color:var(--wool); background:rgba(196,155,91,.08); }
+  .funnel-n{ font-family:'IBM Plex Mono', monospace; font-size:19px; color:var(--wool); line-height:1; }
+  .funnel-lbl{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--wool-faint); }
   .addr-edit{ margin:6px 0 2px; }
   .addr-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .addr-form{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
@@ -1060,6 +1072,17 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
           <option value="graded">Graded only</option>
           <option value="ungraded">Not yet graded</option>
         </select>
+        <select id="convo-stage" title="Funnel stage (filters loaded conversations)">
+          <option value="">Any stage</option>
+          <option value="browsing">browsing</option>
+          <option value="engaged">engaged</option>
+          <option value="evaluating">considering</option>
+          <option value="objection">objection</option>
+          <option value="ready">ready</option>
+          <option value="won">won</option>
+          <option value="lost">lost</option>
+          <option value="none">not yet graded</option>
+        </select>
         <label class="micro" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;" title="Only chats where the concierge acted on a house note">
           <input type="checkbox" id="convo-house" style="accent-color:var(--brass);"> 🏷 House-note chats
         </label>
@@ -1075,6 +1098,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <span class="micro" id="convo-count" style="color:var(--wool-faint);"></span>
       </div>
 
+      <div id="convo-funnel" class="convo-funnel"></div>
       <div class="convo-wrap">
         <div id="convo-list" class="convo-list">
           <div class="empty micro">Loading…</div>
@@ -1592,6 +1616,8 @@ function wireStatic() {
     $(id).addEventListener('change', function () { withBusy($('cust-apply'), loadCustomers); });
   });
   $('convo-goal').addEventListener('change', renderConversations);
+  // Funnel-stage filter re-filters the loaded conversations client-side, like goals.
+  $('convo-stage').addEventListener('change', renderConversations);
   // House-note-chats filter needs a server round-trip (it constrains by id set).
   $('convo-house').addEventListener('change', function () { loadConversations(); });
   // Clear also unchecks it — capture phase, so it's off before wireFilter reloads.
@@ -5368,10 +5394,66 @@ const STAGE_LABELS = {
   browsing: 'browsing', engaged: 'engaged', evaluating: 'considering',
   objection: 'objection', ready: 'ready', won: 'won', lost: 'lost'
 };
+// The funnel, earliest → latest. won/lost are terminal outcomes shown apart.
+const STAGE_ORDER = ['browsing', 'engaged', 'evaluating', 'objection', 'ready', 'won', 'lost'];
+function convoStageValue(c) {
+  const s = c && c.sales_stage;
+  return (s && STAGE_LABELS[s]) ? s : null;   // a valid funnel stage, or null (ungraded/unknown)
+}
+function convoStageMatch(c, mode) {
+  if (!mode) return true;
+  const s = convoStageValue(c);
+  if (mode === 'none') return !s;               // "not yet graded" / no stage
+  return s === mode;
+}
+
+/* The funnel overview: how the LOADED conversations distribute across stages, so
+   you can see where shoppers pile up or drop off and tune the pitch. Each cell is
+   a click-to-filter chip; the active stage is highlighted. Percentages are of the
+   graded conversations (a stage only exists once a chat is graded). */
+function renderFunnelBar(activeStage) {
+  const box = $('convo-funnel');
+  if (!box) return;
+  box.textContent = '';
+  const convos = state.convos || [];
+  if (!convos.length) return;
+  const counts = {}; let graded = 0, ungraded = 0;
+  convos.forEach(function (c) {
+    const s = convoStageValue(c);
+    if (s) { counts[s] = (counts[s] || 0) + 1; graded++; }
+    else ungraded++;
+  });
+  const setStage = function (v) {
+    const sel = $('convo-stage'); if (!sel) return;
+    sel.value = (sel.value === v) ? '' : v;   // click the active chip to clear
+    renderConversations();
+  };
+  const cell = function (label, n, stageVal, tone) {
+    const c = el('button', 'funnel-cell' + (activeStage === stageVal ? ' on' : ''));
+    c.type = 'button';
+    c.appendChild(el('span', 'funnel-n', String(n)));
+    const pct = graded > 0 && stageVal && stageVal !== 'none' ? Math.round((n / graded) * 100) + '%' : '';
+    c.appendChild(el('span', 'funnel-lbl', label + (pct ? ' · ' + pct : '')));
+    if (tone) c.style.setProperty('--fc', tone);
+    c.addEventListener('click', function () { setStage(stageVal); });
+    return c;
+  };
+  const TONE = { browsing: '#7a8a9a', engaged: '#c49b5b', evaluating: '#c49b5b',
+    objection: '#b5713b', ready: '#3b7a4b', won: '#3b7a4b', lost: '#8a4a4a' };
+  STAGE_ORDER.forEach(function (s) {
+    box.appendChild(cell(STAGE_LABELS[s], counts[s] || 0, s, TONE[s]));
+  });
+  if (ungraded) box.appendChild(cell('not yet graded', ungraded, 'none', '#555'));
+}
+
 function renderConvoList(counts) {
   if (counts) state.convoCounts = counts; else counts = state.convoCounts || {};
   const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
-  const shown = state.convos.filter(function (c) { return convoGoalMatch(c.goal_status, goalMode); });
+  const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+  renderFunnelBar(stageMode);
+  const shown = state.convos.filter(function (c) {
+    return convoGoalMatch(c.goal_status, goalMode) && convoStageMatch(c, stageMode);
+  });
   const list = $('convo-list');
   list.textContent = '';
   $('convo-count').textContent = state.convos.length
@@ -5389,9 +5471,27 @@ function renderConvoList(counts) {
     const line1 = el('div', 'line1');
     line1.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
     line1.appendChild(el('span', 'micro', c.section || '—'));
+    // Grading status FIRST, and explicit: a green "✓ graded · N/M goals" chip
+    // means the evaluator ran and this is the outcome; its absence means the chat
+    // hasn't been graded yet. This is what tells you it's evaluated — the stage
+    // chip beside it is only WHERE the shopper sits in the funnel, not a status.
+    const gs = (c.goal_status && typeof c.goal_status === 'object') ? c.goal_status : null;
+    if (gs) {
+      const keys = Object.keys(gs);
+      const met = keys.filter(function (k) { return gs[k] && gs[k].status === 'met'; }).length;
+      const gchip = el('span', 'stage-chip', '✓ graded · ' + met + '/' + keys.length + ' goals');
+      gchip.style.cssText = 'border-color:#3b7a4b; color:#8fd0a0;';
+      gchip.title = 'Goals evaluated — ' + met + ' of ' + keys.length + ' met. Open the chat for the scorecard.';
+      line1.appendChild(gchip);
+    } else {
+      const uchip = el('span', 'stage-chip', 'not yet graded');
+      uchip.style.cssText = 'border-color:var(--hairline); color:var(--wool-faint);';
+      uchip.title = 'The goal evaluator has not scored this conversation yet.';
+      line1.appendChild(uchip);
+    }
     if (c.sales_stage) {
-      const sc = el('span', 'stage-chip stage-' + c.sales_stage, STAGE_LABELS[c.sales_stage] || c.sales_stage);
-      sc.title = 'Sales funnel stage (from goal grading): ' + c.sales_stage;
+      const sc = el('span', 'stage-chip stage-' + c.sales_stage, 'stage · ' + (STAGE_LABELS[c.sales_stage] || c.sales_stage));
+      sc.title = 'Where this shopper sits in the sales funnel (a by-product of grading) — not an evaluation status.';
       line1.appendChild(sc);
     }
     const hn = state.convoHouse && state.convoHouse[c.id];
@@ -5542,7 +5642,10 @@ async function regradeConversation(c, _retried) {
 /* Re-grade every conversation currently shown (bounded, one model call each). */
 async function regradeShown() {
   const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
-  const shown = (state.convos || []).filter(function (c) { return convoGoalMatch(c.goal_status, goalMode); });
+  const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+  const shown = (state.convos || []).filter(function (c) {
+    return convoGoalMatch(c.goal_status, goalMode) && convoStageMatch(c, stageMode);
+  });
   const ids = shown.map(function (c) { return c.id; }).slice(0, 30);
   if (!ids.length) { toast('No conversations shown to grade', true); return; }
   if (!window.confirm('Re-grade goals for ' + ids.length + ' conversation(s)? That is one model call each.')) return;
@@ -5609,7 +5712,8 @@ async function exportAllTranscriptsCsv() {
   if (!token) { toast('Sign in as an admin to export', true); return; }
   const df = fFrom('convo-from'), dt = fTo('convo-to'), kw = fkw('convo-q');
   const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
-  if (kw || goalMode) toast('Large export covers the date range only — keyword/goal filters are not applied to it', true);
+  const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+  if (kw || goalMode || stageMode) toast('Large export covers the date range only — keyword/goal/stage filters are not applied to it', true);
 
   const params = ['export=1'];
   if (df) params.push('from=' + encodeURIComponent(df));

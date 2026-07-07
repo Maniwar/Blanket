@@ -223,6 +223,20 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   flag: the concierge calls `resolve_admin_note` after doing a one-time task; I
   can also Resolve/Reopen any directive by hand. An SOP tells the bot to check for
   these every signed-in visit, follow them, and resolve only what it has done.)*
+- **As the merchant**, I want the concierge to act on my house note **proactively**
+  — on its own first line, in its greeting or an idle nudge — not only when the
+  customer happens to ask, so that my instruction is honoured the moment they
+  arrive. *(The directive is honoured in words on every proactive beat — opener,
+  nudge, and the closed-panel re-engagement line — with no tool required;
+  "acting" is decoupled from "checking off" so a tool-less beat never blocks it.
+  See §4.13.)*
+- **As the merchant**, I want a one-time note the bot **acted on but forgot to
+  formally close** to be checked off (and the chat tagged) anyway, so that a
+  completed courtesy never wrongly repeats and I still see which chat handled it.
+  *(`reconcileDirectives`: after any signed-in turn with an open one-time
+  directive, a background tool-scoped pass re-reads the turn and calls
+  `resolve_admin_note` for anything now done — resolution and the `🏷 house note`
+  tag land together. A miss is safe; it just resurfaces next turn.)*
 - **As the merchant**, I want **one place that shows every house note across all
   patrons** — open vs. resolved, who left it, when — and, for one the concierge
   acted on in a chat, a jump straight to **that conversation**, so that I can
@@ -230,11 +244,22 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   lists all `kind='directive'` notes; filter open/resolved/all; Resolve/Reopen,
   Delete, View customer, and "Find the chat" via the `resolve_admin_note` audit
   action → `conversation_id`. See §4.13.)*
+- **As the merchant**, when I follow a note to its chat, I want to land on the
+  **exact reply where it was acted on**, not just the top of the transcript, so
+  that I can see what the concierge actually said. *("Go to where it was acted on"
+  and the Conversations-list `🏷 house note` chip both open the transcript
+  scrolled to the acted-on reply — keyed on the resolve action's timestamp — and
+  pulse it with a brass `↳ acted on here` rail.)*
+- **As the merchant**, I want to see **at a glance in the Patrons list** which
+  patrons have an open house note waiting, so that I don't have to open each card
+  to find outstanding work. *(A patron with an unresolved directive gets a purple
+  left rail and a `🏷 N open house note` badge on the collapsed row.)*
 - **As the merchant**, I want to **bulk-add** a house instruction to many
   customers at once, and **bulk resolve / reopen / delete** notes, so that I'm not
   editing one at a time. *(Orders view bulk bar → "Leave note…" writes one
-  directive to each distinct customer behind the selected orders; House notes view
-  has a filter + Select-all + a bulk Resolve/Reopen/Delete bar.)*
+  directive to each distinct customer behind the selected orders; the **Patrons**
+  view multi-selects patrons for the same bulk "Leave note to N selected"; House
+  notes view has a filter + Select-all + a bulk Resolve/Reopen/Delete bar.)*
 - **As the merchant/operator**, I want house-note handling **graded like every
   other goal**, and I want the **chats that acted on a note tagged** so I can
   audit them, so that "did the bot follow the house's instruction" is measured,
@@ -245,8 +270,21 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   customer** (name, standing, lifetime value, blankets, last order, note count),
   **this order's** shipping *and* billing (both editable), its emails, and the
   patron's client book + a leave-a-note box — so that managing one order needs
-  nothing else open. *(Order detail drawer sections: Customer → Fulfillment →
-  Shipping & billing → Emails → Client book & house instructions.)*
+  nothing else open. *(Order detail drawer, read top-to-bottom as customer →
+  order → conversation: **Customer → Client book & house instructions**
+  (leave-a-note kept near the top with the customer) **→ Fulfillment → Shipping &
+  billing → Emails → Conversations**.)*
+- **As the merchant**, I want the order drawer to show, in the same panel, **the
+  chats tied to this order and the patron's other chats**, so that I can see the
+  conversation behind an order without leaving it. *(Drawer **Conversations**
+  section: chats that touched this Nº — a `concierge_actions` row against its
+  serial, badged `◆ touched this order` — first, then the patron's other chats;
+  clicking one opens the transcript, an order chat scrolled to the moment it was
+  touched.)*
+- **As the merchant**, I want to click a customer's **email** (like the IP line)
+  to pull up every order by that patron, so that jumping from one order to their
+  whole history is one click. *(Drawer Customer block: the email is
+  click-to-search the register/patrons by that address.)*
 - **As the merchant**, I want to correct an order's **billing** address (or set it
   back to "same as shipping"), not just shipping, so that a mis-entered billing
   record can be fixed. *(Drawer "Shipping & billing" → Edit billing address →
@@ -277,6 +315,31 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, I want to browse conversations and feedback and see where
   the concierge lacked an answer, so that I can improve the knowledge base.
   *(Conversations tab + feedback + knowledge-gap flags.)*
+- **As the merchant**, I want each conversation in the list to tell me plainly
+  **whether it's been graded** — and, if so, the outcome — separate from where the
+  shopper sits in the funnel, so that I don't mistake a funnel *stage* for a
+  grading *status*. *(Conversations row: a green `✓ graded · N/M goals` chip when
+  the evaluator has run, `not yet graded` otherwise, and a distinct `stage · …`
+  chip — the funnel value `evaluating` shows as **considering** so it can't be
+  read as "still evaluating".)*
+- **As the merchant**, I want to **re-run goal grading on demand** — one
+  conversation from its transcript, or every one currently shown — and be told
+  honestly if the judge returned nothing, so that a chat is graded when I need it,
+  not only on the sampled async pass. *(Per-chat **Re-grade goals** and
+  **Re-grade shown** → `POST ?regrade=1`; reports `{graded, empty, failed}`, the
+  per-chat button auto-retries once on a transient failure, and the list re-renders
+  in place.)*
+- **As the merchant**, I want to **filter conversations by funnel stage** and see
+  a **funnel overview** — how many chats sit at browsing, engaged, considering,
+  objection, ready, won, lost (and how many aren't graded yet) — so that I can see
+  where shoppers pile up or drop off and **optimize how they move through**.
+  *(Conversations tab: a **funnel bar** of click-to-filter cells with counts and
+  each stage's share of graded chats, plus a stage `<select>`. The stage is the
+  AI grader's per-conversation `sales_stage`; every graded chat carries one, and
+  the `not yet graded` bucket + **Re-grade shown** lets me drive coverage to 100%.
+  Working the loop — filter to `objection`, read those chats, then tune the
+  **objection playbook** / **assertiveness** in Tuning — is how the funnel gets
+  optimized. See §2.8, §4.7.)*
 - **As the merchant**, I want to inspect the semantic answer cache and clear stale
   entries, so that a changed policy isn't served from an old answer. *(Cache tab:
   view entries + hit counts, evict on demand.)*
@@ -424,8 +487,17 @@ rather than merely reacting:
 - **Sales stage (per conversation).** The async grader classifies each
   conversation's funnel stage — *browsing · engaged · evaluating · objection ·
   ready · won · lost* — stored on `concierge_conversations.sales_stage` and shown
-  as a chip in the Conversations tab, so the admin can see where chats stall. The
-  live bot also reads the stage each turn to choose a stage-appropriate move.
+  as a `stage · …` chip in the Conversations tab (the value `evaluating` displays
+  as **considering** so it can't be read as "still being graded"). The live bot
+  also reads the stage each turn to choose a stage-appropriate move. Every graded
+  conversation carries a stage; short/older chats that were never graded show as
+  **not yet graded**, and **Re-grade shown** (which grades any chat with messages,
+  no substance gate) drives coverage to 100%. The Conversations tab adds a
+  **funnel overview** — click-to-filter cells with per-stage counts and each
+  stage's share of graded chats, plus a stage `<select>` — so the admin can see
+  where shoppers pile up or drop off and **optimize movement** by working a stuck
+  stage (e.g. filter to `objection`, read those chats, tune the objection playbook
+  / assertiveness). `renderFunnelBar` + `convoStageMatch` in `admin.html`.
 - **Grader token budget & honest re-grade.** The judge returns one JSON entry
   per goal (`{status, note}`, note ≤160 chars) plus `_stage`. A flat `max_tokens`
   cap silently truncated that JSON once the goal set grew (adding `house-notes`
