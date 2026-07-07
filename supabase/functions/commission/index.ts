@@ -598,7 +598,7 @@ interface OrderRow {
   serial: number | null; email: string; name?: string | null; colorway?: string | null;
   tracking?: string | null; recipient_name?: string | null; is_gift?: boolean; status?: string | null;
   address?: string | null; address2?: string | null; city?: string | null;
-  state?: string | null; zip?: string | null; placed_at?: string | null;
+  state?: string | null; zip?: string | null; placed_at?: string | null; cancelled_at?: string | null;
 }
 
 const PRICE_USD = 589; // the edition's fixed price; duties + U.S. delivery included
@@ -689,10 +689,22 @@ function orderEmail(
       ]),
     };
   }
+  const safeDate = (v?: string | null): string => {
+    if (!v) return "";
+    const dt = new Date(v);
+    return isNaN(dt.getTime()) ? "" : fmtEmailDate(dt);
+  };
+  const placedStr = safeDate(o.placed_at);
+  const cancelledStr = safeDate(o.cancelled_at);
+  let dateLine = "";
+  if (placedStr && cancelledStr) dateLine = `Placed <strong>${placedStr}</strong> · cancelled <strong>${cancelledStr}</strong>.`;
+  else if (cancelledStr) dateLine = `Cancelled <strong>${cancelledStr}</strong>.`;
+  else if (placedStr) dateLine = `Placed <strong>${placedStr}</strong>.`;
   return {
     subject: `${no} — cancelled`,
     html: emailShell("Struck from the register", [
       `${greet} <strong>${no}</strong> has been cancelled, and the number returns to the edition.`,
+      dateLine,
       "Nothing was charged — this is a demo. If it was in error, write to us and we'll set it right.",
     ]),
   };
@@ -716,7 +728,7 @@ async function isAdmin(email: string | null): Promise<boolean> {
 async function fetchOrder(serial: number): Promise<OrderRow | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status,address,address2,city,state,zip,placed_at&serial=eq.${serial}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status,address,address2,city,state,zip,placed_at,cancelled_at&serial=eq.${serial}&limit=1`,
       { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
     );
     if (!res.ok) return null;
@@ -901,13 +913,16 @@ Deno.serve(async (req: Request) => {
     if (!before) return jsonError(req, 404, `No order Nº ${serial} on the register.`);
     const patch: Record<string, unknown> = { status };
     if (trackingRaw !== null) patch.tracking = trackingRaw || null;
+    // Stamp the strike time on a return (if not already struck) so the note shows it.
+    const struckAt = status === "returned" ? (before.cancelled_at || new Date().toISOString()) : null;
+    if (struckAt && !before.cancelled_at) patch.cancelled_at = struckAt;
     if (!(await patchOrder(serial, patch))) {
       return jsonError(req, 502, "The register could not be updated. Nothing was changed.");
     }
     // Notify the buyer when it ships or is struck (best-effort).
     if (status === "shipped" || status === "returned") {
       const kind = status === "shipped" ? "shipped" : "returned";
-      const mail = orderEmail(status === "shipped" ? "shipped" : "cancelled", { ...before, tracking: trackingRaw ?? before.tracking });
+      const mail = orderEmail(status === "shipped" ? "shipped" : "cancelled", { ...before, cancelled_at: struckAt ?? before.cancelled_at, tracking: trackingRaw ?? before.tracking });
       const p = sendEmail(before.email, mail.subject, mail.html, { kind, serial });
       const er = (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime;
       if (typeof er?.waitUntil === "function") er.waitUntil(p); else p.catch(() => {});

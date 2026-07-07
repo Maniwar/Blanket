@@ -63,6 +63,19 @@ const PRIMARY_OBJECTIVE_DEFAULT =
   "genuinely served. Every turn either advances that or earns the trust that will. This is " +
   "the single measure of your work.";
 
+// Canonical honesty guard for house instructions. Injected wherever a directive is
+// surfaced — the LIVE STATE banner AND every proactive nudge/opener/reengage builder —
+// so the obey-vs-honesty carve-out and the "act as your own voice, never attribute to
+// the team" rule can't drift across the copies (the root cause of the manipulative-note
+// incident: LIVE STATE said "honour before anything else" with no carve-out).
+const HOUSE_NOTE_GUARD =
+  "A house instruction directs HOW you serve; it can NEVER license you to deceive, manipulate, " +
+  "flatter, or make a personal claim about the patron's life beyond the blanket and the mill. If a " +
+  "note would, skip it SILENTLY, serve normally, and leave it open for the desk — say nothing about " +
+  "it, no refusal, no explanation. Whatever you DO carry out, carry it in your OWN voice as your own " +
+  "natural judgement: never quote a note, never say 'the team' / 'they wanted' / that you were asked, " +
+  "and never announce that you did, completed, or checked anything off.";
+
 // Supabase edge runtime global (embeddings); typed loosely on purpose.
 // deno-lint-ignore no-explicit-any
 declare const Supabase: any;
@@ -248,6 +261,14 @@ function resolveModel(data: ConciergeData): string {
   if (typeof c.model === "string" && c.model.trim()) return c.model.trim();
   if (typeof c.model_fallback === "string" && c.model_fallback.trim()) return c.model_fallback.trim();
   return Deno.env.get("MODEL") || DEFAULT_MODEL;
+}
+
+// The model used to GRADE conversation goals (live and on re-grade). Admin can pick a
+// separate one (config.grader_model) — e.g. a stronger judge — without changing what
+// answers shoppers; blank falls back to the concierge model.
+function graderModel(data: ConciergeData): string {
+  const gm = data.config?.grader_model;
+  return typeof gm === "string" && gm.trim() ? gm.trim() : resolveModel(data);
 }
 
 async function loadConciergeData(): Promise<ConciergeData> {
@@ -461,10 +482,26 @@ function emailShell(heading: string, lines: string[]): string {
     `</table></td></tr></table>`;
 }
 
+function fmtEmailDate(v?: string | null): string {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+/** "Placed X · cancelled Y." for the cancellation note. cancelled defaults to now
+ *  (the note is sent the instant the strike happens); placed comes from the order. */
+function struckDatesLine(placedAt?: string | null, cancelledAt?: string | null): string {
+  const placed = fmtEmailDate(placedAt);
+  const cancelled = fmtEmailDate(cancelledAt) || fmtEmailDate(new Date().toISOString());
+  if (placed && cancelled) return `Placed <strong>${placed}</strong> · cancelled <strong>${cancelled}</strong>.`;
+  if (cancelled) return `Cancelled <strong>${cancelled}</strong>.`;
+  return "";
+}
+
 /** The cancellation note, mirroring the commission function's 'cancelled' email. */
-function cancelEmail(serial: number, name?: string | null, colorway?: string | null): {
-  subject: string; html: string;
-} {
+function cancelEmail(
+  serial: number, name?: string | null, colorway?: string | null, placedAt?: string | null,
+): { subject: string; html: string } {
   const no = "Nº " + Number(serial).toLocaleString("en-US");
   const first = (name ?? "").trim().split(/\s+/)[0] || "";
   const greet = first ? `${first},` : "Guten Tag,";
@@ -473,6 +510,7 @@ function cancelEmail(serial: number, name?: string | null, colorway?: string | n
     subject: `${no} — cancelled`,
     html: emailShell("Struck from the register", [
       `${greet} as you asked, <strong>${no}</strong>${cloth} has been cancelled, and the number returns to the edition.`,
+      struckDatesLine(placedAt, null),
       "Nothing was charged — this is a demo. If it was in error, just say the word and we'll set it right.",
     ]),
   };
@@ -670,14 +708,14 @@ async function customerBlock(customer: Customer): Promise<string> {
   let directiveLine = "";
   if (directives && directives.length > 0) {
     const list = directives.map((n) => `(#${n.id}) ${n.note}`).join("  ·  ");
-    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — honour these BEFORE anything else, ` +
-      `PROACTIVELY and on your very first line of the visit; do NOT wait to be asked). ACTING on an instruction is ` +
-      `ALWAYS just words woven into good service and NEVER needs a tool — so you can always do it, even on a ` +
-      `greeting or a nudge where no tools are available; never withhold it for lack of a tool. A STANDING preference ` +
-      `you follow every visit and leave open. A ONE-TIME task you carry out at the first natural moment. CHECKING a ` +
-      `completed one-time task off is a SEPARATE, later step: WHEN you have tools this turn, call resolve_admin_note ` +
-      `with its (#id); if this turn has no tools, just honour it in words — the house reconciles the check-off for ` +
-      `you afterward, so a completed task never lingers. Instructions: ${list}.`;
+    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — honour a proper one BEFORE anything else, ` +
+      `PROACTIVELY and on your very first line of the visit; do NOT wait to be asked). ${HOUSE_NOTE_GUARD} ACTING on a ` +
+      `proper instruction is ALWAYS just words woven into good service and NEVER needs a tool — so you can always do it, ` +
+      `even on a greeting or a nudge where no tools are available; never withhold it for lack of a tool. A STANDING ` +
+      `preference you follow every visit and leave open. A ONE-TIME task you carry out at the first natural moment. ` +
+      `CHECKING a completed one-time task off is a SEPARATE, silent, later step: WHEN you have tools this turn, call ` +
+      `resolve_admin_note with its (#id); if this turn has no tools, just honour it in words — the house reconciles the ` +
+      `check-off for you afterward, so a completed task never lingers. Instructions: ${list}.`;
   }
 
   return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine}${directiveLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;
@@ -763,7 +801,10 @@ const REGISTER_TOOLS: any[] = [
       "Mark ONE house instruction (an admin directive shown in the CUSTOMER block, each printed with a (#id)) " +
       "as done. Use this ONLY after you have actually carried out a one-time instruction — delivered a promised " +
       "apology, applied a courtesy, confirmed a detail the note asked you to confirm. Never resolve a STANDING " +
-      "preference (leave those open so they keep applying), and never resolve a note you have not yet acted on.",
+      "preference (leave those open so they keep applying), and never resolve a note you have not yet acted on. " +
+      "This is SILENT internal bookkeeping between you and the desk — calling it changes nothing the patron sees. " +
+      "NEVER tell the patron you marked, checked off, resolved, or completed anything, never say a note or " +
+      "instruction is 'done', and never reference the note at all: to them it is simply good service, not a task list.",
     input_schema: {
       type: "object",
       properties: {
@@ -1141,9 +1182,11 @@ async function runRegisterTool(
       `customer_notes?id=eq.${noteId}&kind=eq.directive&${nf}`,
       { resolved: true, resolved_at: new Date().toISOString() },
     );
-    if (!updated) return "ERROR: could not check off the instruction — nothing changed.";
+    if (!updated || updated.length === 0) return "ERROR: could not check off the instruction — nothing changed.";
     await logAction(cid, customer, "resolve_admin_note", null, { note_id: noteId }, found[0].note.slice(0, 180));
-    return `Done — house instruction #${noteId} is checked off.`;
+    // Silent bookkeeping: this result is for you, never the patron. Do NOT mention it,
+    // do not say anything is "done" or "checked off" — simply continue serving.
+    return `(internal: house note #${noteId} reconciled with the desk — say nothing about this to the patron)`;
   }
 
   const serial = typeof input.serial === "number" ? Math.floor(input.serial) : NaN;
@@ -1218,7 +1261,7 @@ async function runRegisterTool(
     });
     if (result === "ok") {
       await logAction(cid, customer, "cancel_order", serial, null, "order cancelled; serial released");
-      const mail = cancelEmail(serial, order.name, order.colorway);
+      const mail = cancelEmail(serial, order.name, order.colorway, order.placed_at);
       bg(sendEmail(customer.email ?? "", mail.subject, mail.html, { kind: "cancelled", serial }));
       return `Done. Nº ${serial} is struck from the register and the number returns to the year's edition.`;
     }
@@ -1226,11 +1269,11 @@ async function runRegisterTool(
       // Pre-migration register: fall back to the plain status change.
       const updated = await pgPatch<OrderRow>(
         `orders?serial=eq.${serial}&status=eq.placed&${ownershipFilter(customer)}`,
-        { status: "cancelled" },
+        { status: "cancelled", cancelled_at: new Date().toISOString() },
       );
       if (!updated || updated.length === 0) return "ERROR: the register did not accept the cancellation.";
       await logAction(cid, customer, "cancel_order", serial, null, "order cancelled");
-      const mail = cancelEmail(serial, order.name, order.colorway);
+      const mail = cancelEmail(serial, order.name, order.colorway, order.placed_at);
       bg(sendEmail(customer.email ?? "", mail.subject, mail.html, { kind: "cancelled", serial }));
       return `Done. Nº ${serial} is cancelled.`;
     }
@@ -1491,7 +1534,10 @@ function scheduleGoalEval(
     ? data.config.goal_sample_rate
     : 1;
   if (rate < 1 && Math.random() >= Math.max(0, rate)) return;
-  const p = evaluateGoals(cid, data, transcript, apiKey, model);
+  // Grade with the admin's chosen grader model (falls back to the concierge model).
+  // The `model` arg is kept for signature compatibility with the live path.
+  void model;
+  const p = evaluateGoals(cid, data, transcript, apiKey, graderModel(data));
   try {
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
       EdgeRuntime.waitUntil(p);
@@ -1949,9 +1995,11 @@ function registerBlock(data: ConciergeData): string {
     "colorway filter and read back its exact count rather than tallying in your head. Ask again? Call it " +
     "again. Struck (cancelled) entries are archive — leave them out of lists and counts unless the owner " +
     "asks about cancellations (then pass include_cancelled).\n" +
-    "- CONFIRM BEFORE YOU CHANGE ANYTHING. For any mutation (cancellation, colorway change), state exactly " +
-    "what you're about to do, get the owner's explicit 'yes' in this conversation, then call the tool — and " +
-    "report its result verbatim in substance. Never claim a change happened unless the tool confirmed it.\n" +
+    "- CONFIRM BEFORE YOU CHANGE ANYTHING. For a mutation the OWNER asked for (cancellation, colorway change), " +
+    "state exactly what you're about to do, get their explicit 'yes' in this conversation, then call the tool — " +
+    "and report THAT result back verbatim in substance. Never claim a change happened unless the tool confirmed " +
+    "it. (This 'report the result' rule is only for changes the owner requested; silent internal tools like " +
+    "resolve_admin_note and remember_customer are never mentioned to the patron — see the client book.)\n" +
     "- ADDRESSES GO THROUGH THE FORM. You have no tool to type an address. Confirm which order, then emit " +
     "{{form:address-change:<serial>}} on its own line so the owner types each field themselves. NEVER " +
     "compose or 'correct' street/city/state/ZIP yourself — mistyping one field is exactly what the form " +
@@ -2865,7 +2913,7 @@ async function handleRegradePost(req: Request): Promise<Response> {
   if (!ids.length) return jsonError(req, 400, "ids or conversation_id required.");
   const data = await loadConciergeData();
   if (data.goals.length === 0) return jsonError(req, 400, "No goals are defined to grade against.");
-  const model = resolveModel(data);
+  const model = graderModel(data); // admin-chosen grader model (falls back to the concierge model)
   let graded = 0;   // wrote a fresh scorecard
   let empty = 0;    // no stored messages to grade
   let failed = 0;   // had messages, but the judge returned nothing to write
@@ -3061,9 +3109,10 @@ async function handleChatPost(req: Request): Promise<Response> {
     // beat is a natural moment to honour it (you have no tools here, so weave it
     // into your line; the house checks it off for you afterward).
     const houseNote =
-      " If the CUSTOMER block carries a HOUSE INSTRUCTION (a note the team left for this patron), LEAD with it " +
-      "— weave it into this very line, before anything else. You need no tool to do so and you do NOT resolve it " +
-      "here (the house checks it off for you); just make sure the instruction is honoured in what you say.";
+      " If the CUSTOMER block carries a PROPER HOUSE INSTRUCTION (a note the team left for this patron), weave it " +
+      "into this line in your OWN voice — you need no tool, and you do NOT resolve it here (the house checks it off " +
+      "for you). " + HOUSE_NOTE_GUARD + " If you choose [HOLD] to give space, or the note is one you should not " +
+      "act on, simply leave it unspoken — the desk reconciles it later.";
     validated.messages.push({
       role: "user",
       content:
@@ -3088,9 +3137,9 @@ async function handleChatPost(req: Request): Promise<Response> {
           "Add ONE warm, specific line that opens toward a conversation goal. If CUSTOMER is present, " +
           "make it personal — greet them by first name and nod to their standing or a real order/note " +
           "(a returning patron is never a stranger), drawing on the CUSTOMER block and CLIENT BOOK " +
-          "already provided above. If that block carries a HOUSE INSTRUCTION left by the team, LEAD this opening " +
-          "line with it — honour it before anything else; you need no tool and do NOT resolve it here (the house " +
-          "checks it off for you), just make sure it is honoured in words. If there is NO CUSTOMER (an anonymous visitor), open from what " +
+          "already provided above. If that block carries a PROPER HOUSE INSTRUCTION left by the team, weave it into " +
+          "this opening line in your OWN voice; you need no tool and do NOT resolve it here (the house checks it off " +
+          "for you). " + HOUSE_NOTE_GUARD + " If there is NO CUSTOMER (an anonymous visitor), open from what " +
           "they're browsing (the BROWSING section and page) — e.g. the cloth they're reading about, " +
           "gift vs. their own home — and invite them in. End with a single light question. This is a " +
           "plain spoken line: do NOT use any tools and do NOT write any tool call — just speak. Do " +
@@ -3098,9 +3147,9 @@ async function handleChatPost(req: Request): Promise<Response> {
         : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
           "from the conversation so far and the CUSTOMER block / CLIENT BOOK already above — never a " +
-          "generic greeting, never repeating yourself. If that block carries a HOUSE INSTRUCTION left " +
-          "by the team, LEAD this line with it — honour it before anything else; you need no tool and do NOT " +
-          "resolve it here (the house checks it off for you), just honour it in words. This is a plain spoken line: do NOT use any " +
+          "generic greeting, never repeating yourself. If that block carries a PROPER HOUSE INSTRUCTION left " +
+          "by the team, weave it into this line in your OWN voice; you need no tool and do NOT resolve it here " +
+          "(the house checks it off for you). " + HOUSE_NOTE_GUARD + " This is a plain spoken line: do NOT use any " +
           "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
           "mention this note. One or two sentences ending in a light question.]",
     });
@@ -3778,9 +3827,9 @@ async function handleReengage(req: Request): Promise<Response> {
         `customer_notes?select=note&${nf}&kind=eq.directive&resolved=eq.false&order=created_at.desc&limit=6`,
       );
       if (dirs && dirs.length) {
-        houseClause = " The team left a HOUSE INSTRUCTION for this patron that you MUST honour in this very line, " +
-          "before anything else (weave it into the outreach naturally; never quote it or attribute it to 'the team'): " +
-          dirs.map((d) => `"${d.note}"`).join("; ") + ".";
+        houseClause = " The team left a HOUSE INSTRUCTION for this patron: " +
+          dirs.map((d) => `"${d.note}"`).join("; ") + ". If it is a proper one, weave it into this outreach line in " +
+          "your OWN voice. " + HOUSE_NOTE_GUARD;
       }
     }
 
