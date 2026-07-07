@@ -93,6 +93,19 @@ bot to ignore in favour of `get_my_orders`. Now: ≤3 orders still list inline
 with an explicit "call `get_my_orders` for the full list." Cheaper per turn, and
 one authoritative order source (which also prevents miscounts).
 
+The client **book** does the same by consolidation (see below).
+
+### 4b. Rolling client-book summary
+The AI client book also rides the uncached tail, so a long-standing patron's ~14
+notes are re-sent every turn — cost scales with note count on exactly the
+highest-touch (most valuable) patrons. `consolidateClientBook` folds the raw
+`fact`/`event`/`reflection` notes into **one `kind='summary'` digest** (background,
+threshold-gated at ~8 new notes, plus an admin Regenerate button). The CUSTOMER
+block then injects **the summary + the 2 newest notes** instead of the whole pile
+— roughly a **5–8× cut** on the book's slice of the per-turn tail — while older
+detail stays reachable on demand via `recall_context`. Directives are never folded
+in, so a house note can't be buried by the compaction.
+
 ### 5. Config cache
 `concierge_config`/KB/SOPs/tools are read once and held in module memory for 60s,
 so the prompt is assembled from memory, not a DB round-trip, on most calls. (This

@@ -481,6 +481,13 @@ async function customerBlock(customer: Customer): Promise<string> {
   const directivesP = pgSelect<{ id: number; note: string; created_at: string }>(
     `customer_notes?select=id,note,created_at&${noteFilter}&kind=eq.directive&resolved=eq.false&order=created_at.desc&limit=12`,
   );
+  // Consolidated CLIENT SUMMARY — a rolling digest of the AI's own book, if one
+  // has been generated. When present it is the primary memory injected each turn
+  // (instead of the whole raw pile), keeping the uncached tail small and the
+  // directives unmissable; older raw detail is reachable via recall_context.
+  const summaryP = pgSelect<{ note: string; created_at: string }>(
+    `customer_notes?select=note,created_at&${noteFilter}&kind=eq.summary&order=created_at.desc&limit=1`,
+  );
   // Re-engagement: the last conversation we wrapped (snoozed or closed). If one
   // exists, THIS is a fresh visit picking the thread back up, not a first hello.
   const lastConvoP = pgSelect<{ ended_at: string; status: string; section: string | null }>(
@@ -490,6 +497,7 @@ async function customerBlock(customer: Customer): Promise<string> {
   const all = await myOrders(customer, true);
   const notes = await notesP;
   const directives = await directivesP;
+  const summary = await summaryP;
   const lastConvo = await lastConvoP;
   const orders = all ? all.filter((o) => o.status !== "cancelled") : null;
   const struck = all ? all.length - (orders?.length ?? 0) : 0;
@@ -544,13 +552,23 @@ async function customerBlock(customer: Customer): Promise<string> {
   // for them (events), what it knows (facts), and private reminders on how to
   // serve them better (reflections — act on these, never quote them).
   let book = "";
-  if (notes && notes.length > 0) {
+  const summaryRow = summary && summary[0];
+  if (summaryRow) {
+    // Consolidated path: the digest IS the memory, plus only the raw notes added
+    // SINCE it was written (so nothing recent is lost before the next roll-up).
+    const since = (notes || []).filter((n) =>
+      n.kind !== "directive" && n.kind !== "summary" &&
+      String(n.created_at) > String(summaryRow.created_at)).slice(0, 3);
+    book = " CLIENT BOOK (consolidated digest — act on it; weave in, never recite; " +
+      "call recall_context for older detail): " + summaryRow.note;
+    if (since.length) book += "  ·  SINCE THEN: " + since.map((n) => n.note).join(" | ");
+  } else if (notes && notes.length > 0) {
     const d = (n: { created_at: string; note: string }) => `${String(n.created_at).slice(0, 10)}: ${n.note}`;
     const events = notes.filter((n) => n.kind === "event").slice(0, 5);
     const reflections = notes.filter((n) => n.kind === "reflection").slice(0, 3);
-    // Directives are surfaced on their own (below), never mixed into the facts.
+    // Directives (and any summary) are surfaced on their own — never mixed into facts.
     const facts = notes.filter((n) =>
-      n.kind !== "event" && n.kind !== "reflection" && n.kind !== "directive").slice(0, 6);
+      n.kind !== "event" && n.kind !== "reflection" && n.kind !== "directive" && n.kind !== "summary").slice(0, 6);
     const parts: string[] = [];
     if (events.length) parts.push(`WHAT YOU'VE DONE FOR THEM (reference naturally if relevant): ${events.map(d).join(" | ")}`);
     if (facts.length) parts.push(`WHAT YOU KNOW ABOUT THEM (weave in, never recite): ${facts.map(d).join(" | ")}`);
@@ -1531,6 +1549,99 @@ function scheduleDirectiveReconcile(
   } catch { p.catch(() => {}); }
 }
 
+// ── Client-book consolidation (rolling summary) ───────────────────────────────
+// The AI's own book grows without bound and rides the UNCACHED prompt tail, so it
+// is re-sent every turn — cost scales with note count on the highest-touch patrons,
+// old notes bury current ones, and a house note can get missed. This folds the raw
+// fact/event/reflection notes into ONE short, actionable CLIENT SUMMARY
+// (kind='summary') — the digest the bot reads each turn instead of the whole pile.
+// HOUSE DIRECTIVES are never touched. Raw notes are kept as history (reachable via
+// recall_context); only the summary's timestamp moves forward, so notes added after
+// it are the "since then" tail. Returns the new summary text, or null on a no-op.
+function noteFilterFor(id: string | null | undefined, email: string | null | undefined): string | null {
+  const safe = email?.replace(/["\\,()]/g, "");
+  const parts: string[] = [];
+  if (id) parts.push(`user_id.eq.${id}`);
+  if (safe) parts.push(`email.eq."${safe}"`);
+  if (parts.length === 0) return null;
+  return parts.length > 1
+    ? `or=${encodeURIComponent(`(${parts.join(",")})`)}`
+    : parts[0].replace(".eq.", "=eq.");
+}
+
+async function consolidateClientBook(
+  customer: Customer, apiKey: string, model: string, opts?: { force?: boolean },
+): Promise<string | null> {
+  try {
+    const nf = noteFilterFor(customer.id, customer.email);
+    if (!nf) return null;
+    const raw = await pgSelect<{ id: number; note: string; created_at: string; kind: string | null }>(
+      `customer_notes?select=id,note,created_at,kind&${nf}&kind=in.(fact,event,reflection)&order=created_at.desc&limit=60`);
+    if (!raw || raw.length === 0) return null;
+    const prior = await pgSelect<{ id: number; note: string; created_at: string }>(
+      `customer_notes?select=id,note,created_at&${nf}&kind=eq.summary&order=created_at.desc&limit=1`);
+    const priorSummary = prior && prior[0];
+    // Auto path only fires when enough NEW notes accumulated since the last roll-up;
+    // the admin "Regenerate" button forces it regardless.
+    const newCount = priorSummary
+      ? raw.filter((n) => String(n.created_at) > String(priorSummary.created_at)).length
+      : raw.length;
+    const CONSOLIDATE_AT = 8;
+    if (!opts?.force && newCount < CONSOLIDATE_AT) return null;
+    if (opts?.force && !priorSummary && raw.length < 2) return null;
+
+    const bookText = raw.slice().reverse() // oldest → newest for a coherent read
+      .map((n) => `- [${n.kind}] ${String(n.created_at).slice(0, 10)}: ${n.note}`).join("\n");
+    const sys =
+      "You maintain a concise, durable CLIENT SUMMARY for a returning patron of a luxury German wool-blanket " +
+      "house — the memory the concierge reads each visit. Given the PRIOR SUMMARY (if any) and the raw " +
+      "client-book notes (facts you know, things you did, private 'serve them better' reflections), write an " +
+      "UPDATED summary a clerk could act on immediately: who they are and who they buy for, their preferences and " +
+      "home, what's been done for them, any open thread, and how to serve them better. Rules: keep it TIGHT " +
+      "(≤110 words), factual and specific; preserve durable facts from the prior summary; drop the stale and the " +
+      "trivial; never invent; do NOT include the team's house instructions (those live elsewhere). Output ONLY the " +
+      "summary prose — no headers, no preamble.";
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 400, system: sys,
+        messages: [{
+          role: "user",
+          content: (priorSummary ? `PRIOR SUMMARY:\n${priorSummary.note}\n\n` : "") +
+            `RAW NOTES (oldest first):\n${bookText}\n\nWrite the updated summary now.`,
+        }],
+      }),
+    });
+    if (!res.ok) return null;
+    // deno-lint-ignore no-explicit-any
+    const msg = await res.json() as any;
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    // deno-lint-ignore no-explicit-any
+    const text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    if (text.length < 8) return null;
+    const iso = new Date().toISOString();
+    if (priorSummary) {
+      await pgPatch(`customer_notes?id=eq.${priorSummary.id}`, { note: text.slice(0, 1200), created_at: iso });
+    } else {
+      await pgInsert("customer_notes", {
+        user_id: customer.id || null, email: customer.email || null,
+        note: text.slice(0, 1200), kind: "summary", author: "(auto)", created_at: iso,
+      });
+    }
+    return text;
+  } catch { return null; }
+}
+
+function scheduleConsolidate(customer: Customer | null, apiKey: string, model: string): void {
+  if (!customer) return;
+  const p = consolidateClientBook(customer, apiKey, model).then(() => {});
+  try {
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+    else p.catch(() => {});
+  } catch { p.catch(() => {}); }
+}
+
 
 // Returns true only when a fresh scorecard was written. The regrade endpoint
 // uses this to report honestly ("graded" vs. "judge returned nothing") instead
@@ -2299,6 +2410,26 @@ async function handleRegradePost(req: Request): Promise<Response> {
   return jsonResponse(req, 200, { graded, requested: ids.length, empty, failed });
 }
 
+// ── POST ?consolidate=1 — admin regenerates one patron's rolling CLIENT SUMMARY ─
+// Forces a consolidation of the patron's client book into the single kind='summary'
+// note (the digest the bot then reads each turn). Identified by email and/or
+// user_id from the admin drawer. Returns the fresh summary text.
+async function handleConsolidatePost(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
+  let body: { email?: unknown; user_id?: unknown };
+  try { body = await req.json(); } catch { return jsonError(req, 400, "Bad JSON."); }
+  const email = typeof body.email === "string" ? body.email : null;
+  const userId = typeof body.user_id === "string" ? body.user_id : null;
+  if (!email && !userId) return jsonError(req, 400, "email or user_id is required.");
+  const data = await loadConciergeData();
+  const model = resolveModel(data);
+  const customer = { id: userId ?? "", email } as Customer;
+  const summary = await consolidateClientBook(customer, apiKey, model, { force: true });
+  return jsonResponse(req, 200, { ok: summary !== null, summary });
+}
+
 // ── GET ?starters=1 — personalized conversation starters for a signed-in patron ─
 // Deterministic, built from their REAL orders (status, cloth, gift), so every chip
 // points at something they actually have — no model call, no guessing. Anonymous
@@ -2755,6 +2886,9 @@ async function handleChatPost(req: Request): Promise<Response> {
             // Check off any one-time house instruction the model carried out but
             // forgot to resolve — background pass, tool-scoped to resolve_admin_note.
             scheduleDirectiveReconcile(cid, customer, convo, finalText, apiKey, model);
+            // Roll the client book up into its summary once enough raw notes have
+            // piled up (background, threshold-gated — usually a no-op).
+            scheduleConsolidate(customer, apiKey, model);
             const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
             if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
           }
@@ -3257,6 +3391,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "POST" && new URL(req.url).searchParams.get("regrade")) {
     return await handleRegradePost(req);
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("consolidate")) {
+    return await handleConsolidatePost(req);
   }
   if (req.method === "POST" && new URL(req.url).searchParams.get("judge")) {
     return await handleJudgePost(req);

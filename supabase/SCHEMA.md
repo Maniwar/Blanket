@@ -375,7 +375,7 @@ widget), `handleFormPost` (`POST ?form=1`).
 | `id` | bigint identity PK | Row id. |
 | `user_id`,`email` | — | The patron. |
 | `note` | text | One durable observation (≤240 chars; directives ≤400). |
-| `kind` | text | Note type — **`event`** (something the concierge did — written deterministically by `bookEvent`), **`fact`** (a durable preference), **`reflection`** (private "serve better next time"), or **`directive`** (a HUMAN admin's standing instruction the concierge must follow — see DESIGN §4.13). Default `fact`. |
+| `kind` | text | Note type — **`event`** (something the concierge did — written deterministically by `bookEvent`), **`fact`** (a durable preference), **`reflection`** (private "serve better next time"), **`directive`** (a HUMAN admin's standing instruction the concierge must follow — see DESIGN §4.13), or **`summary`** (the rolling consolidated digest of the AI book — one per patron, written by `consolidateClientBook`; its `created_at` is bumped on each roll-up so newer raw notes are the "since then" tail). Default `fact`. No CHECK constraint. |
 | `resolved` | boolean | Directives only: a one-time instruction that's been carried out is `true`. Standing ones stay `false`. Default `false`. |
 | `resolved_at` | timestamptz | When a directive was checked off. |
 | `author` | text | Directives only: the admin email who left it. |
@@ -614,6 +614,7 @@ allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
 | `GET ?cachecheck=1` | inline | **admin** | Self-diagnosis of the semantic cache round-trip (writes+deletes a probe row, so admin-gated). |
 | `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
 | `POST ?regrade=1` | `handleRegradePost` | **admin** | Re-run **goal grading** on demand for `{conversation_id}` or `{ids:[…]}` (≤30) — the Conversations panel's "Re-grade goals" / "Re-grade shown" buttons, so grading isn't only the sampled async pass. Returns `{graded, requested, empty, failed}`: `graded` counts real scorecard writes (`evaluateGoals` returns a success boolean), `empty` = chats with no messages, `failed` = judge ran but wrote nothing (transient). The per-chat button auto-retries once on `failed`. |
+| `POST ?consolidate=1` | `handleConsolidatePost` | **admin** | Force-regenerate one patron's rolling **client summary** (`kind='summary'` note). Body `{email?, user_id?}`. Runs `consolidateClientBook(..., {force:true})` and returns `{ok, summary}` — the drawer's **Regenerate** button. (The same helper also runs automatically in the background after a signed-in turn once ~8 new notes have accrued.) |
 
 **SSE frames** (chat): `{"t":…}` text, `{"s":…}` status, `{"m":{cid,mid}}`
 meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.

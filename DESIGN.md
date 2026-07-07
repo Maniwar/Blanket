@@ -280,8 +280,20 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   notes, long ones **collapsed** — so that the signal isn't buried and a house
   note can't be missed. *(Each note is a card with a kind-colored rail, a compact
   `kind · date · state · actions` line, and a body clamped to a few lines that
-  expands on click; open directives sit above the book and are never collapsed.
-  A deeper **relevance/consolidation** pass is planned — see [`BACKLOG.md`](BACKLOG.md).)*
+  expands on click; open directives sit above the book and are never collapsed.)*
+- **As the merchant**, I want the client book to **consolidate itself** so a
+  long-standing patron doesn't get expensive to serve and their signal doesn't
+  decay — one actionable summary the bot uses, with the raw notes kept as history.
+  *(**Rolling client summary**: a `kind='summary'` note per patron. A background
+  pass (`consolidateClientBook`) folds the AI's `fact`/`event`/`reflection` notes
+  into a tight digest — never touching **directives** — and only its timestamp
+  moves forward, so raw notes after it are the "since then" tail and the rest stay
+  as history (reachable by the bot via `recall_context`). It fires automatically
+  once ~8 new notes pile up (background, threshold-gated) and on demand from the
+  drawer's **Client summary** card (**Regenerate** → admin `?consolidate=1`; the
+  summary is admin-editable). The bot's CUSTOMER block then injects **open
+  directives + the summary + the 2 newest notes** instead of ~14 — cutting the
+  per-turn uncached tail and keeping directives unmissable. See [`COST.md`](COST.md).)*
 - **As the merchant**, I want the order drawer to show, in the same panel, **the
   chats tied to this order and the patron's other chats**, so that I can see the
   conversation behind an order without leaving it. *(Drawer **Conversations**

@@ -399,6 +399,15 @@
   .cbnote-body.clamp{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
   .cbnote.done .cbnote-body{ opacity:.5; text-decoration:line-through; }
   .cbnote-foot{ margin-top:5px; font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--wool-faint); }
+  /* Consolidated client summary card (the digest the bot reads) */
+  .cbsummary{ background:rgba(196,155,91,.07); border:1px solid var(--brass-soft);
+    border-radius:4px; padding:10px 12px; margin-bottom:8px; }
+  .cbsummary-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .cbsummary-body{ font-size:13.5px; color:var(--wool); line-height:1.55; white-space:pre-wrap;
+    word-wrap:break-word; overflow-wrap:anywhere; }
+  .cbsummary-edit{ width:100%; min-height:120px; font-family:inherit; font-size:13px; line-height:1.5;
+    color:var(--wool); background:var(--ink-well); border:1px solid var(--hairline);
+    border-radius:3px; padding:8px; resize:vertical; }
   /* Order-drawer conversation jump rows */
   .cj-head{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--wool-faint); margin:12px 0 6px; }
@@ -4267,8 +4276,12 @@ function openOrderDrawer(o) {
     pN.appendChild(el('div', 'dsub-lbl', 'House instructions — open'));
     dirsOpen.forEach(function (n) { pN.appendChild(clientBookNoteLine(n)); });
   }
-  const rest = notes.filter(function (n) { return !(n.kind === 'directive' && !n.resolved); });
-  pN.appendChild(el('div', 'dsub-lbl', 'Client book' + (rest.length ? ' · ' + rest.length : '')));
+  // Rolling client summary — the consolidated digest the bot reads each turn.
+  const summaryNote = notes.find(function (n) { return n.kind === 'summary'; });
+  pN.appendChild(el('div', 'dsub-lbl', 'Client summary'));
+  pN.appendChild(summaryCard(o, summaryNote));
+  const rest = notes.filter(function (n) { return !(n.kind === 'directive' && !n.resolved) && n.kind !== 'summary'; });
+  pN.appendChild(el('div', 'dsub-lbl', 'Client book' + (rest.length ? ' · ' + rest.length + ' (history)' : '')));
   if (!notes.length) {
     pN.appendChild(el('div', 'empty micro', 'Nothing recorded yet — leave a house instruction below.'));
   } else if (!rest.length) {
@@ -4534,6 +4547,68 @@ function clientBookNoteLine(n) {
 
   if (kind === 'directive' && n.author) card.appendChild(el('div', 'cbnote-foot', 'by ' + n.author));
   return card;
+}
+
+/* POST the concierge's admin ?consolidate=1 — regenerate a patron's rolling
+   client summary from their book. */
+async function postConsolidate(payload) {
+  const token = state.session && state.session.access_token;
+  return fetch(SUPABASE_URL + '/functions/v1/concierge?consolidate=1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) },
+    body: JSON.stringify(payload)
+  });
+}
+
+/* The consolidated client summary card in the order drawer's Notes tab: the
+   digest the bot reads each turn, with Regenerate (server-side roll-up) and an
+   in-place Edit. `n` is the kind='summary' note, or undefined if none yet. */
+function summaryCard(o, n) {
+  const wrap = el('div', 'cbsummary');
+  const head = el('div', 'cbsummary-head');
+  if (n && n.created_at) head.appendChild(el('span', 'cbnote-date', 'consolidated ' + fmtWhen(n.created_at)));
+  const regen = el('button', 'btn ghost mini', n ? 'Regenerate' : 'Generate'); regen.type = 'button';
+  regen.style.marginLeft = 'auto';
+  regen.title = 'Fold the client book into one actionable summary the bot reads each turn';
+  regen.addEventListener('click', function () {
+    withBusy(regen, async function () {
+      let res;
+      try { res = await postConsolidate({ email: o.email, user_id: o.user_id }); }
+      catch (e) { fail('Consolidate', e); return; }
+      if (!res.ok) { const t = await res.text().catch(function () { return ''; }); fail('Consolidate', { message: 'HTTP ' + res.status + ' ' + t.slice(0, 100) }); return; }
+      const j = await res.json().catch(function () { return {}; });
+      if (!j || j.ok !== true || !j.summary) { toast('Not enough notes to summarize yet (or the model returned nothing).', true); return; }
+      toast('Client summary updated');
+      loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
+    });
+  });
+  head.appendChild(regen);
+  wrap.appendChild(head);
+
+  if (n && n.note) {
+    const body = el('div', 'cbsummary-body', n.note);
+    wrap.appendChild(body);
+    const editBtn = el('button', 'btn ghost mini', 'Edit'); editBtn.type = 'button';
+    editBtn.addEventListener('click', function () {
+      const ta = document.createElement('textarea'); ta.className = 'cbsummary-edit'; ta.value = n.note;
+      const save = el('button', 'btn primary mini', 'Save'); save.type = 'button';
+      save.addEventListener('click', function () {
+        withBusy(save, async function () {
+          const r = await sb.from('customer_notes').update({ note: ta.value.trim() }).eq('id', n.id);
+          if (r.error) { fail('Save summary', r.error); return; }
+          n.note = ta.value.trim();
+          toast('Summary saved');
+          loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
+        });
+      });
+      body.replaceWith(ta); editBtn.replaceWith(save);
+    });
+    wrap.appendChild(editBtn);
+  } else {
+    wrap.appendChild(el('div', 'empty micro',
+      'No summary yet. It rolls up automatically once the book grows, or press Generate.'));
+  }
+  return wrap;
 }
 
 /* Distinct ship-to addresses from a patron's orders (the admin-side mirror of the
