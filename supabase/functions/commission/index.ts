@@ -598,7 +598,7 @@ interface OrderRow {
   serial: number | null; email: string; name?: string | null; colorway?: string | null;
   tracking?: string | null; recipient_name?: string | null; is_gift?: boolean; status?: string | null;
   address?: string | null; address2?: string | null; city?: string | null;
-  state?: string | null; zip?: string | null;
+  state?: string | null; zip?: string | null; placed_at?: string | null;
 }
 
 const PRICE_USD = 589; // the edition's fixed price; duties + U.S. delivery included
@@ -637,6 +637,28 @@ function orderSummaryHtml(o: OrderRow): string {
     `</table>`;
 }
 
+const MS_DAY = 86_400_000;
+function fmtEmailDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+// The placement date and the 3–5 week delivery window shown in the confirmation.
+// Computed from placed_at when we have it (so a re-sent confirmation shows the
+// ORIGINAL date, not today's); falls back to now for the freshly-placed email,
+// which is being sent the same instant the row was written.
+function orderDates(placedAt?: string | null): { placed: string; deliver: string } {
+  let p = placedAt ? new Date(placedAt) : new Date();
+  if (isNaN(p.getTime())) p = new Date();
+  const lo = new Date(p.getTime() + 21 * MS_DAY); // 3 weeks
+  const hi = new Date(p.getTime() + 35 * MS_DAY); // 5 weeks
+  const sameMY = lo.getUTCFullYear() === hi.getUTCFullYear() && lo.getUTCMonth() === hi.getUTCMonth();
+  // Same month/year → "August 10–24, 2026"; otherwise the two dates in full.
+  const deliver = sameMY
+    ? lo.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" }) +
+      "–" + hi.getUTCDate() + ", " + hi.getUTCFullYear()
+    : fmtEmailDate(lo) + " – " + fmtEmailDate(hi);
+  return { placed: fmtEmailDate(p), deliver };
+}
+
 function orderEmail(
   kind: "placed" | "shipped" | "cancelled", o: OrderRow,
 ): { subject: string; html: string } {
@@ -645,13 +667,14 @@ function orderEmail(
   const greet = first ? `${first},` : "Guten Tag,";
   const cloth = o.colorway && COLORWAY_NAME[o.colorway] ? ` in ${COLORWAY_NAME[o.colorway]}` : "";
   if (kind === "placed") {
+    const d = orderDates(o.placed_at);
     return {
       subject: `${no} is entered in the Webbuch`,
       html: emailShell("Your number is entered", [
         `${greet} thank you — <strong>${no}</strong>${cloth} is entered in the Webbuch under your name.`,
         orderSummaryHtml(o),
         shipToHtml(o),
-        "It is woven to order — <strong>3–5 weeks</strong> to your door. When it ships, the tracking will appear in your register and in a note from us.",
+        `Placed <strong>${d.placed}</strong>. It is woven to order — <strong>3–5 weeks</strong> to your door, so look for it around <strong>${d.deliver}</strong>. When it ships, the tracking will appear in your register and in a note from us.`,
         "This is a concept demonstration: <strong>nothing was charged and nothing ships</strong>. The total above is shown only to make the confirmation feel real.",
       ]),
     };
@@ -693,7 +716,7 @@ async function isAdmin(email: string | null): Promise<boolean> {
 async function fetchOrder(serial: number): Promise<OrderRow | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status,address,address2,city,state,zip&serial=eq.${serial}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/orders?select=serial,email,name,colorway,tracking,recipient_name,is_gift,status,address,address2,city,state,zip,placed_at&serial=eq.${serial}&limit=1`,
       { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
     );
     if (!res.ok) return null;
