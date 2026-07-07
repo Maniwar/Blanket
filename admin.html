@@ -420,6 +420,8 @@
   .cj-mid{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   .cj-goals{ color:var(--wool-faint); }
   .cj-touch{ color:var(--brass-soft); font-weight:600; }
+  .cj-who{ font-family:'IBM Plex Mono', monospace; color:var(--wool-dim); }
+  .cj-otheracct{ color:#c98a4b; font-weight:600; cursor:help; }
   .cust-book-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--loden-deep); background:var(--brass-soft);
     border-radius:20px; padding:3px 10px; }
@@ -4951,9 +4953,9 @@ function openCustomerChats(email) {
    — the reply nearest `atIso` (when a house note was acted on / an order was
    touched). Used by the house-notes and order-drawer jumps. Fetches the row
    directly so it works even if that chat isn't in the currently loaded page. */
-async function jumpToConversation(convId, atIso) {
+async function jumpToConversation(convId, atIso, reason) {
   if (!convId) return;
-  state.jumpTo = { conv: convId, at: atIso || null };
+  state.jumpTo = { conv: convId, at: atIso || null, reason: reason || null };
   activateTab('conversations');
   const q = $('convo-q'); if (q) q.value = convId;
   const sr = $('convo-serial'); if (sr) sr.value = '';
@@ -4976,13 +4978,19 @@ async function loadOrderConversations(o, holder) {
   try {
     // 1) Conversations that acted on THIS order — keep the FIRST action time per
     //    chat so the jump lands on the moment it was touched.
+    //    Serial numbers are RECYCLED: cancel_order returns a Nº to the edition and
+    //    a later order can pick it up. So a bare serial match would attach the
+    //    PREVIOUS holder's chats (their cancel/colorway/address actions) to this
+    //    order. Bound the join to this order's own lifetime (created_at >=
+    //    placed_at) — every serial-bearing action is a post-placement register op,
+    //    so a prior holder's actions (all before this order was placed) drop out.
     const related = {};
     if (serial != null) {
-      const ar = await sb.from('concierge_actions')
+      let aq = sb.from('concierge_actions')
         .select('conversation_id,created_at')
-        .eq('serial', serial)
-        .order('created_at', { ascending: true })
-        .limit(300);
+        .eq('serial', serial);
+      if (o.placed_at) aq = aq.gte('created_at', o.placed_at);
+      const ar = await aq.order('created_at', { ascending: true }).limit(300);
       if (!ar.error) (ar.data || []).forEach(function (a) {
         if (a.conversation_id && !related[a.conversation_id]) related[a.conversation_id] = a.created_at;
       });
@@ -5018,6 +5026,22 @@ async function loadOrderConversations(o, holder) {
       r.appendChild(el('span', 'cj-when', isNaN(d.getTime()) ? '—' : d.toLocaleString()));
       const mid = el('span', 'cj-mid');
       mid.appendChild(el('span', 'micro', c.section || 'no section'));
+      // Whose chat this actually is. A serial-touched chat can belong to a DIFFERENT
+      // account than the order's patron (the register stores the order under one
+      // email, but the number may have been reserved/acted on from another signed-in
+      // account) — surface that up front so opening it is never a surprise.
+      const convWho = c.user_email || 'anonymous';
+      mid.appendChild(el('span', 'micro cj-who', convWho));
+      const patronEmail = (o.email || '').toLowerCase();
+      const otherAccount = c.user_email && patronEmail && c.user_email.toLowerCase() !== patronEmail;
+      if (otherAccount) {
+        const w = el('span', 'micro cj-otheracct', '⚠ other account');
+        w.title = 'This chat belongs to a different account (' + c.user_email + '), not ' +
+          (o.email || 'this patron') + '. It appears here only because it acted on this order’s ' +
+          'number (Nº ' + Number(serial).toLocaleString('en-US') + ') — e.g. a held/reserved serial ' +
+          'or a simulation. Opening it shows that other account’s conversation, not this patron’s.';
+        mid.appendChild(w);
+      }
       const gs = (c.goal_status && typeof c.goal_status === 'object') ? c.goal_status : null;
       if (gs) {
         const keys = Object.keys(gs);
@@ -5026,7 +5050,7 @@ async function loadOrderConversations(o, holder) {
       }
       if (actedAt) mid.appendChild(el('span', 'micro cj-touch', '◆ touched this order'));
       r.appendChild(mid);
-      r.addEventListener('click', function () { closeDrawer(); jumpToConversation(c.id, actedAt || null); });
+      r.addEventListener('click', function () { closeDrawer(); jumpToConversation(c.id, actedAt || null, actedAt ? 'order' : null); });
       return r;
     }
 
@@ -5214,7 +5238,7 @@ function renderHouseNotes(list) {
       const acted = state.houseActedIn && state.houseActedIn[String(n.id)];
       if (acted && acted.conv) {
         const fc = el('button', 'btn ghost', 'Go to where it was acted on'); fc.type = 'button';
-        fc.addEventListener('click', function () { jumpToConversation(acted.conv, acted.at); });
+        fc.addEventListener('click', function () { jumpToConversation(acted.conv, acted.at, 'house'); });
         acts.appendChild(fc);
       }
 
@@ -5858,7 +5882,7 @@ function renderConvoList(counts) {
       tag.title = 'House note acted on here (#' + hn.join(', #') + ') — click to jump to the moment';
       tag.addEventListener('click', function (e) {
         e.stopPropagation();
-        state.jumpTo = { conv: c.id, at: (state.convoHouseAt && state.convoHouseAt[c.id]) || null };
+        state.jumpTo = { conv: c.id, at: (state.convoHouseAt && state.convoHouseAt[c.id]) || null, reason: 'house' };
         openConvo(c);
       });
       who.appendChild(tag);
@@ -6196,7 +6220,19 @@ function renderTranscript(msgs, fbMap) {
     }
     if (i === targetIdx) {
       node.classList.add('flash', 'acted-here');
-      meta.appendChild(el('span', 'actedtag', '↳ acted on here'));
+      // The marker is reused for two kinds of jump — spell out which, with a tooltip,
+      // so it never reads as an unexplained "acted on here".
+      const reason = jump && jump.reason;
+      const label = reason === 'house' ? '↳ house instruction acted on here'
+        : reason === 'order' ? '↳ this order acted on here'
+        : '↳ jumped here';
+      const tag = el('span', 'actedtag', label);
+      tag.title = reason === 'house'
+        ? 'This is the reply where the concierge carried out (and checked off) a house instruction for this patron.'
+        : reason === 'order'
+          ? 'This is the reply where the concierge acted on this order — placed, changed, cancelled, or reserved its number. Note: this chat may belong to a different account than the order’s patron if the number was reserved elsewhere.'
+          : 'The reply this jump landed on.';
+      meta.appendChild(tag);
       targetNode = node;
     }
     node.appendChild(meta);

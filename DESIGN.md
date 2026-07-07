@@ -1044,7 +1044,8 @@ author, dates, filterable open/resolved/all. Each row offers Resolve/Reopen,
 Delete, **View customer**, and — when the concierge acted on it in a chat — **Go
 to where it was acted on**, which opens that conversation *and scrolls the
 transcript straight to the reply where it happened*, pulsing it and marking it
-with a brass rail (`↳ acted on here`). The jump target is the resolve action's
+with a brass rail (`↳ house instruction acted on here`, reason-tagged so it is
+never confused with an order-touch jump). The jump target is the resolve action's
 `conversation_id` **and its timestamp**: `jumpToConversation(conv, at)` opens the
 chat and `renderTranscript` selects the last assistant message at/just-before
 `at`. Each row also offers **Customer's chats** (all of that patron's
@@ -1062,6 +1063,31 @@ transcript; an order chat scrolls to the moment the order was touched (same
 `jumpToConversation` mechanism, keyed on the first action's timestamp). Loaded
 async so the drawer opens instantly, and it back-fills any order-related chat
 that fell outside the newest-30 window.
+
+*Recycled serials & identity, made explicit.* The "touched this order" set is a
+**serial join** — any conversation with an action on the order's Nº. Serial
+numbers are **recycled**: `cancel_order` returns a Nº to the year's edition and a
+later order can pick it up, so a *bare* serial match would attach the **previous
+holder's** chats (their cancel/colorway/address actions) to whoever holds the
+number now — a real cross-patron leak, not just a demo artifact. Two guards:
+(1) the serial join is **bounded to this order's own lifetime**
+(`concierge_actions.created_at >= order.placed_at`); every serial-bearing action
+is a post-placement register op, so a prior holder's actions (all before this
+order was placed) drop out. (2) As a safety net and for clarity, every row prints
+**whose chat it actually is** (`user_email`), and when that differs from the
+order's patron it is badged **`⚠ other account`** with a tooltip — shown (it
+genuinely touched the number, an audit trail) but never mis-presented as this
+patron's. This is also why a chat is *correct in the Conversations page* (keyed
+on the conversation's own `user_email`) yet was *cross-linked in the order
+drawer* (keyed on the serial): same data, two different join keys.
+
+*The jump marker is reason-aware.* `↳ acted on here` was one generic phrase for
+two different jumps. `jumpToConversation(conv, at, reason)` now threads a
+`reason` (`'order'` | `'house'`), so the marker reads **`↳ this order acted on
+here`** (order-touch) or **`↳ house instruction acted on here`** (a
+`resolve_admin_note`), each with a tooltip spelling out what the concierge did —
+so an order-touch jump no longer reads as a house-note action, and an unlabeled
+"acted on here" never appears.
 
 **Self-resolve backstop (reconciliation).** Acting on a one-time directive and
 remembering to *check it off* are two steps: the model reliably does the first
