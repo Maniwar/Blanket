@@ -3233,9 +3233,17 @@ async function saveEngine() {
 }
 
 async function saveVoice() {
+  const base = $('cfg-voice-base').value.trim();
+  // The base voice REPLACES the built-in constitution (it isn't merged). Guard against
+  // accidentally wiping it with a fragment — a short base, or one missing the {{KB}}
+  // marker, usually means the operator typed a note instead of editing the full default.
+  if (base && (base.length < 400 || base.indexOf('{{KB}}') === -1)) {
+    const why = base.length < 400 ? 'is quite short' : 'is missing the {{KB}} marker';
+    if (!window.confirm('Heads up: the Base voice REPLACES the entire built-in brand voice — it is not added on top. What you typed ' + why + '.\n\nIf you meant to tweak the default, cancel and press "Load built-in to edit" first. To only add a note on top of the default, use the "Voice — tuning notes" box instead and leave the base blank.\n\nSave this base anyway?')) return;
+  }
   const rows = [
     { key: 'greeting',    value: $('cfg-greeting').value,           updated_at: nowIso() },
-    { key: 'voice_base',  value: $('cfg-voice-base').value.trim(),  updated_at: nowIso() },
+    { key: 'voice_base',  value: base,                              updated_at: nowIso() },
     { key: 'voice_notes', value: $('cfg-voice').value,              updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
