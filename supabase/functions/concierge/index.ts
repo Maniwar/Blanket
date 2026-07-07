@@ -497,7 +497,7 @@ async function customerBlock(customer: Customer): Promise<string> {
   const all = await myOrders(customer, true);
   const notes = await notesP;
   const directives = await directivesP;
-  const summary = await summaryP;
+  const clientSummary = await summaryP;
   const lastConvo = await lastConvoP;
   const orders = all ? all.filter((o) => o.status !== "cancelled") : null;
   const struck = all ? all.length - (orders?.length ?? 0) : 0;
@@ -552,7 +552,7 @@ async function customerBlock(customer: Customer): Promise<string> {
   // for them (events), what it knows (facts), and private reminders on how to
   // serve them better (reflections — act on these, never quote them).
   let book = "";
-  const summaryRow = summary && summary[0];
+  const summaryRow = clientSummary && clientSummary[0];
   if (summaryRow) {
     // Consolidated path: the digest IS the memory, plus only the raw notes added
     // SINCE it was written (so nothing recent is lost before the next roll-up).
