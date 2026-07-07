@@ -708,6 +708,69 @@ SEO/meta — via the Studio's **Website** tab, backed by the `site_content` tabl
 delivered by `?site=1`, and hydrated on the page with the hardcoded HTML as the
 fallback. Full design: [`CMS.md`](CMS.md).
 
+### 2.9 The prompt architecture — one concern, one owner
+
+The system prompt grew by accretion until the same rule appeared in four places
+(the selling method was stated in NEXT MOVE, SALESCRAFT, a COMMISSION BUTTON
+block, and a `sales-skill` SOP; order handling and the pills pattern each thrice)
+and instructions began to soft-conflict. A large, self-contradicting prompt is
+harder for the model to follow and harder for an admin to steer. The rebuild
+applies one principle — **one concern, one owner; layer by stability; the
+constitution points to each owner as the source of truth** — and gives the admin
+direct controls over the result.
+
+- **As the admin, I want the prompt organized so nothing fights itself**, so that
+  the concierge behaves predictably. The prompt is now a small always-on **CORE
+  constitution** (`BRAND_SYSTEM` in `kb.ts`: identity, the objective, voice, the
+  display-token contract, and the honesty/scope rules that never bend) followed by
+  a handful of **named sections**, each the single owner of its concern —
+  **Recognition & client book**, **Register desk** (signed-in), **Selling**
+  (the six moves + the how-hard dial + the house's angles & objections),
+  **Engagement & pacing** ([HOLD] + follow-up caps), and the **Standard operating
+  procedures**. The constitution carries a **"how this brief is organized"**
+  precedence block that names each downstream section as the authority for its
+  domain — *facts → KNOWLEDGE, tasks → the matching SOP, live facts → LIVE STATE* —
+  and states the tie-break order, so a rule lives in exactly one place and the
+  others reference it. `assemblePromptSections()` in `index.ts` builds the ordered
+  list; the selling duplication was collapsed into one `sellingBlock`, and the
+  `sales-skill`, `engagement`, and `snooze` SOPs (now owned by the sections) were
+  deleted, `house-directives` merged into a self-contained `client-book-method`.
+- **As the admin, I want one field for the concierge's primary objective**, so
+  that I can state what it's *for* in a sentence and have it lead every prompt.
+  `config.primary_objective` substitutes into the `{{OBJECTIVE}}` marker at the top
+  of the constitution (blank = the built-in objective), with Load-built-in and
+  version history like the other base fields. Tuning → Selling → **Behavior**.
+- **As the admin, I want one clear "how hard to sell" dial**, so that I'm not
+  hunting across scattered knobs. The assertiveness 1–5 slider is relabeled
+  **How hard to sell** and sits in the Behavior card beside the objective; it is
+  the single lever that scales the selling section's guidance (and, as before, the
+  follow-up pace and reach-out budget).
+- **As the admin, I want each section to be switchable on or off**, so that I can
+  shape what the model is fed without editing prose. Per-section toggles
+  (`config.prompt_sections`, a section is on unless explicitly `false`) render as
+  switches in the **Assembled prompt** card; `register` is signed-in-only and drops
+  out for anonymous visitors regardless.
+- **As the admin, I want the prompt to shrink to what's relevant**, so that the
+  anonymous prompt isn't padded with register mechanics. SOPs carry an **audience**
+  (`all` · `signed_in` · `anon`); `sopTextForAudience()` injects the register/
+  order-management procedures only when the shopper is signed in. A per-SOP
+  dropdown in the Procedures editor sets it.
+- **As the admin, I want to *see* exactly what the model will be fed**, so that I
+  can confirm nothing conflicts. **"See the assembled prompt"** (`?preview=1`,
+  admin-gated) renders the whole assembly section by section — with a size for each
+  and the off ones struck through — for the anonymous or signed-in variant, plus
+  the full text.
+- **As the admin, I want an AI to check the prompt for me**, so that I catch
+  conflicts I'd miss by eye. **"Ask the prompt tuner"** (`?promptreview=1`) feeds
+  the assembled prompt to the model as an expert prompt engineer and returns
+  structured findings — **conflict · redundancy · ambiguity · gap**, each with a
+  location and a concrete suggested fix — plus a one-line overall read. It only
+  suggests; nothing is changed automatically.
+- **As the admin, I want to pick the model from the current lineup**, so that I'm
+  not typing an id from memory. The Model and Fallback fields gain a dropdown
+  populated live from Anthropic's model list (`?models=1`, key stays server-side),
+  and the free-text field stays for any custom id.
+
 ---
 
 ## 3. Architecture

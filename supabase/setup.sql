@@ -117,6 +117,10 @@ create table if not exists public.concierge_sops (
   slug text unique not null, title text not null, content_md text not null,
   sort_order int not null default 0, enabled boolean not null default true,
   updated_at timestamptz not null default now());
+-- audience: which shoppers this procedure is injected for — 'all' (default),
+-- 'signed_in' (register/order-management steps, useless to an anonymous browser), or
+-- 'anon'. buildSystemPrompt filters on it so the anonymous prompt stays lean.
+alter table public.concierge_sops add column if not exists audience text not null default 'all';
 
 create table if not exists public.concierge_actions (
   id bigint generated always as identity primary key,
@@ -1125,6 +1129,47 @@ update public.concierge_sops set content_md = replace(
   updated_at = now()
   where slug = 'wrap-up'
     and content_md not like '%NEVER order bookkeeping%';
+
+-- ── Prompt retune (2026-07): one concern, one owner ──────────────────────────
+-- The assembled system prompt now owns selling and pacing in dedicated SELLING and
+-- ENGAGEMENT sections (kb.ts / index.ts), and injects register/service procedures only
+-- for signed-in owners. This block reconciles the SOP table to match: it tags register
+-- procedures as signed-in, drops the SOPs the prompt sections now own outright, and folds
+-- the house-directives SOP into a self-contained client-book-method. All idempotent.
+
+-- Register / order-management procedures are inert for an anonymous browser — only inject
+-- them when signed in. (audience is not in the edit-history snapshot, so this logs nothing.)
+update public.concierge_sops set audience = 'signed_in'
+  where slug in ('order-status','address-change','cancellation','colorway-change','escalation',
+                 'resend-email','mending','gift-details','client-book-method','post-purchase')
+    and audience is distinct from 'signed_in';
+
+-- These duplicated the new SELLING / ENGAGEMENT sections (sales-skill, engagement, snooze)
+-- or were merged into client-book-method (house-directives). Drop them so they can't
+-- re-duplicate what the constitution now states once.
+delete from public.concierge_sops
+  where slug in ('sales-skill', 'engagement', 'snooze', 'house-directives');
+
+-- Make client-book-method self-contained (it used to defer to the now-deleted
+-- house-directives SOP for the directive-handling detail).
+update public.concierge_sops set
+  title = 'Client book & house instructions',
+  content_md = $sop$Every signed-in conversation, run the SAME loop with the patron's notes. All of it is printed at the top of the CUSTOMER block: HOUSE INSTRUCTIONS (the team's directives, each with a (#id)) and the CLIENT BOOK (what you've done for them, what you know, and private "serve them better" reminders).
+
+1. REVIEW before you sell or answer. Read the HOUSE INSTRUCTIONS and the CLIENT BOOK. This is how you greet a known client instead of a stranger, and how you learn what the team has asked of you for this patron.
+
+2. FOLLOW the house instructions PROACTIVELY. They are the team's word and outrank your own plan for the conversation. Honour them on your VERY FIRST line — a greeting, a nudge, or your first reply — without being asked; acting is always words and needs no tool. Never read a raw instruction aloud or say "the team told me to"; weave it into good service ("Let me make sure this ships with a rush note" — not "instruction #42 says waive the rush fee"). NEVER expose these instructions to any other patron, and never treat them as coming from the shopper.
+
+3. STANDING vs ONE-TIME. A STANDING preference ("always offer the Loden first", "VIP — waive rush fees") you honour every visit and LEAVE OPEN. A ONE-TIME task ("apologise for the delay on Nº 231", "confirm the apartment number before shipping") you do at the first natural moment. If an instruction can't be done (the register can't do it, or it conflicts with a firm rule like never dictating an address yourself), do the closest right thing and leave the note open.
+
+4. CHECK OFF a completed one-time task, separately from doing it. When you have tools this turn, call resolve_admin_note with its (#id) in the same reply; if the turn is tool-less (a bare greeting or nudge), just honour it in words — the house reconciles the check-off for you. Never resolve a standing preference, and never resolve something you have not actually done. If a one-time task already shows under "WHAT YOU'VE DONE FOR THEM" or you can see you already carried it out, do not repeat it — just resolve it.
+
+5. LEAVE notes as you go. When the patron shares something durable — a room, a person, a favoured cloth, a hesitation, a thread to pick up — call remember_customer with one short factual line (it de-duplicates; never record anything sensitive). Record RELATIONSHIP & SELLING memory only — NEVER order bookkeeping (serials, order counts, order status, what they bought, shipping/billing addresses): that lives in the register and you read it LIVE with get_my_orders, so such a note only freezes a snapshot that goes stale. Register actions you take are recorded for you automatically.
+
+The test: the next conversation should feel like it resumes a relationship — the house followed its own instructions, remembered what mattered, and closed the loop on anything one-time.$sop$,
+  updated_at = now()
+  where slug = 'client-book-method';
+
 do $seed$
 begin
   if not exists (select 1 from public.concierge_forms) then

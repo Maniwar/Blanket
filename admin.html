@@ -819,18 +819,19 @@
             </label>
           </div>
           <div class="field">
-            <label class="micro" for="cfg-model">Model<span class="info-badge" title="The Anthropic model the concierge answers with. Blank = use the Fallback model below, then the server's MODEL env var, then a built-in default.">i</span></label>
-            <input type="text" id="cfg-model" class="mono-field" list="model-list" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false">
-            <datalist id="model-list">
-              <option value="claude-sonnet-4-5"></option>
-              <option value="claude-sonnet-5"></option>
-              <option value="claude-haiku-4-5-20251001"></option>
-            </datalist>
+            <label class="micro" for="cfg-model">Model<span class="info-badge" title="The Anthropic model the concierge answers with. Pick a currently available model from the list (pulled live from the API), or type any custom model id. Blank = use the Fallback model below, then the server's MODEL env var, then a built-in default.">i</span></label>
+            <select id="cfg-model-pick" class="mono-field" style="margin-bottom:6px;">
+              <option value="">— pick a current model —</option>
+            </select>
+            <input type="text" id="cfg-model" class="mono-field" placeholder="or type a custom model id" autocomplete="off" spellcheck="false">
             <div class="cfg-state" id="cfg-model-state"></div>
           </div>
           <div class="field">
             <label class="micro" for="cfg-model-fallback">Fallback model</label>
-            <input type="text" id="cfg-model-fallback" class="mono-field" list="model-list" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false">
+            <select id="cfg-model-fallback-pick" class="mono-field" style="margin-bottom:6px;">
+              <option value="">— pick a current model —</option>
+            </select>
+            <input type="text" id="cfg-model-fallback" class="mono-field" placeholder="or type a custom model id" autocomplete="off" spellcheck="false">
             <p class="micro" style="margin-top:4px;opacity:.7;">Used only if <em>Model</em> is blank. If the config itself can't be read (a rare DB blip), the server falls back to the <code>MODEL</code> env var, then a built-in default.</p>
           </div>
           <div class="field">
@@ -874,6 +875,25 @@
       </div>
 
       <div class="tsub on" data-tsub="voice">
+      <section class="card">
+        <div class="card-head">
+          <h3>Assembled prompt</h3>
+          <span class="micro">what the model is actually fed — see it, check it, tune it</span>
+        </div>
+        <p class="note">The concierge's system prompt is a small always-on <strong>core constitution</strong> (identity, voice, the display tokens, the honesty rules) followed by these sections, each the single owner of its concern. The core points to each one as the source of truth, so nothing is stated twice. Turn a section off to drop it from the prompt; preview the whole thing, or ask the tuner to check for conflicts.</p>
+        <div id="section-toggles" class="ed-grid" style="margin:6px 0 14px;"><div class="empty micro">Loading sections…</div></div>
+        <div class="card-foot" style="flex-wrap:wrap;gap:8px;">
+          <button id="save-sections" class="btn primary">Save sections</button>
+          <span style="flex:1"></span>
+          <label class="micro" for="preview-audience" style="align-self:center;">Preview as</label>
+          <select id="preview-audience" class="mono-field" style="width:auto;">
+            <option value="0">Anonymous visitor</option>
+            <option value="1">Signed-in owner</option>
+          </select>
+          <button id="btn-preview" class="btn">See the assembled prompt</button>
+          <button id="btn-promptreview" class="btn ghost">Ask the prompt tuner ✦</button>
+        </div>
+      </section>
       <section class="card">
         <div class="card-head">
           <h3>Voice</h3>
@@ -1058,12 +1078,21 @@
       <div class="tsub" data-tsub="selling">
       <section class="card">
         <div class="card-head">
-          <h3>Selling style</h3>
-          <span class="micro">How hard, and with what, the concierge sells</span>
+          <h3>Behavior &amp; selling style</h3>
+          <span class="micro">The one goal, how hard to sell, and the house's angles</span>
         </div>
-        <p class="note">Assertiveness sets how far the concierge leans toward recommending, building desire, and proposing the order — versus answering and waiting. It never becomes pushy; higher just means it drives sooner.</p>
+        <div class="field" style="margin:6px 0 16px;">
+          <label class="micro" for="cfg-objective">Primary objective<span class="info-badge" title="The single line of intent the whole prompt serves — the model leads with it. Keep it about what the concierge is FOR. Blank = the built-in objective (move each shopper, honestly, toward an entry in the Webbuch). High-impact — use History to roll back.">i</span></label>
+          <textarea id="cfg-objective" rows="3" placeholder="Blank = the built-in objective. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-objective" data-default="objective_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="primary_objective">History ⟲</button>
+          </div>
+          <div class="cfg-state" id="cfg-objective-state"></div>
+        </div>
+        <p class="note">How hard to sell sets how far the concierge leans toward recommending, building desire, and proposing the order — versus answering and waiting. It never becomes pushy; higher just means it drives sooner.</p>
         <div style="margin:6px 0 16px;">
-          <label class="micro" for="cfg-assert">Assertiveness</label>
+          <label class="micro" for="cfg-assert">How hard to sell</label>
           <input type="range" id="cfg-assert" min="1" max="5" step="1" value="3" style="width:100%;max-width:420px;display:block;margin:10px 0 6px;">
           <div class="micro" id="cfg-assert-label" style="color:var(--brass-soft);"></div>
         </div>
@@ -1827,6 +1856,9 @@ function wireStatic() {
   $('save-selling').addEventListener('click', function () {
     withBusy($('save-selling'), saveSelling);
   });
+  if ($('save-sections')) $('save-sections').addEventListener('click', function () { withBusy($('save-sections'), saveSections); });
+  if ($('btn-preview')) $('btn-preview').addEventListener('click', function () { withBusy($('btn-preview'), openPromptPreview); });
+  if ($('btn-promptreview')) $('btn-promptreview').addEventListener('click', runPromptReview);
   $('cfg-assert').addEventListener('input', renderAssertLabel);
   // Live "Effect" readouts for the tuning fields that fall back to a built-in default.
   CFG_FIELDS.forEach(function (f) {
@@ -2030,6 +2062,9 @@ const CFG_FIELDS = [
   { id: 'cfg-max-tokens', state: 'cfg-max-tokens-state',
     dflt: 'the built-in default (1024)',
     custom: function (v) { return v + ' tokens'; } },
+  { id: 'cfg-objective', state: 'cfg-objective-state',
+    dflt: 'the built-in objective',
+    custom: function (v) { return 'custom objective — ' + v.length + ' chars (the model leads with it)'; } },
   { id: 'cfg-hooks', state: 'cfg-hooks-state',
     dflt: 'no extra selling angles (the salescraft still sells)',
     custom: function (v) { var n = cfgLineCount(v); return n + ' custom selling angle' + (n === 1 ? '' : 's'); } },
@@ -2086,6 +2121,182 @@ async function loadBuiltinInto(targetId, key) {
     if (f) refreshCfgState(f);
     toast('Loaded the built-in default — edit, then Save to apply');
   } catch (e) { fail('Load built-in', e); }
+}
+
+/* Admin-gated GET against the concierge function (returns parsed JSON). */
+async function adminGet(query) {
+  const token = state.session && state.session.access_token;
+  const res = await fetch(SUPABASE_URL + '/functions/v1/concierge' + query, {
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) }
+  });
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) { /* ignore */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+async function adminPost(query) {
+  const token = state.session && state.session.access_token;
+  const res = await fetch(SUPABASE_URL + '/functions/v1/concierge' + query, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY), 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) { /* ignore */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+/* Live model catalog (?models=1) → fill the Model / Fallback dropdowns. The picker
+   writes its choice into the free-text field (the source of truth), so a custom id
+   can still be typed. Fire-and-forget: on failure the text fields still work. */
+let _modelsLoaded = false;
+async function populateModelPickers() {
+  if (_modelsLoaded) return;
+  let models = [];
+  try { const d = await adminGet('?models=1'); models = (d && Array.isArray(d.models)) ? d.models : []; }
+  catch (e) { return; /* leave the text fields; custom entry still works */ }
+  _modelsLoaded = true;
+  [['cfg-model-pick', 'cfg-model'], ['cfg-model-fallback-pick', 'cfg-model-fallback']].forEach(function (pair) {
+    const sel = $(pair[0]), inp = $(pair[1]);
+    if (!sel || !inp) return;
+    sel.textContent = '';
+    sel.appendChild(new Option('— pick a current model —', ''));
+    models.forEach(function (m) {
+      const label = (m.name && m.name !== m.id) ? (m.name + ' — ' + m.id) : m.id;
+      sel.appendChild(new Option(label, m.id));
+    });
+    sel.onchange = function () {
+      if (!sel.value) return;
+      inp.value = sel.value;
+      const f = CFG_FIELDS.find(function (x) { return x.id === pair[1]; });
+      if (f) refreshCfgState(f);
+      sel.value = '';
+    };
+  });
+}
+
+/* Per-section on/off switches. The section list comes from ?defaults=1 (kept in sync
+   with the server's PROMPT_SECTIONS); `saved` is config.prompt_sections. A section is
+   on unless explicitly false. Saved via saveSections → config.prompt_sections. */
+async function renderSectionToggles(saved) {
+  const host = $('section-toggles');
+  if (!host) return;
+  const on = (saved && typeof saved === 'object' && !Array.isArray(saved)) ? saved : {};
+  let sections = [];
+  try { const d = await fetchBuiltinDefaults(); sections = (d && Array.isArray(d.sections)) ? d.sections : []; }
+  catch (e) { host.textContent = ''; host.appendChild(el('div', 'empty micro', 'Could not load the section list.')); return; }
+  host.textContent = '';
+  sections.forEach(function (s) {
+    const wrap = el('label', 'switch');
+    wrap.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 0;';
+    const cb = el('input'); cb.type = 'checkbox'; cb.checked = on[s.key] !== false; cb.dataset.section = s.key;
+    wrap.appendChild(cb);
+    wrap.appendChild(el('span', 'track'));
+    const txt = el('span', 'micro', s.label + (s.signedInOnly ? ' · signed-in only' : ''));
+    wrap.appendChild(txt);
+    host.appendChild(wrap);
+  });
+}
+async function saveSections() {
+  const host = $('section-toggles');
+  if (!host) return;
+  const val = {};
+  host.querySelectorAll('input[type=checkbox][data-section]').forEach(function (cb) {
+    val[cb.dataset.section] = cb.checked; // store explicit true/false for every section
+  });
+  const res = await sb.from('concierge_config').upsert(
+    [{ key: 'prompt_sections', value: val, updated_at: nowIso() }], { onConflict: 'key' });
+  if (res.error) { fail('Save sections', res.error); return; }
+  if (state.config) state.config.prompt_sections = val;
+  toast('Prompt sections saved');
+}
+
+/* A simple centered modal (backdrop + scrollable box). Returns the backdrop node. */
+function openStudioModal(titleText, wide) {
+  const bd = el('div');
+  bd.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(12,16,13,.62); display:flex; align-items:center; justify-content:center; padding:20px;';
+  const box = el('div');
+  box.style.cssText = 'background:var(--loden-deep,#1c261f); border:1px solid var(--hairline); border-radius:6px; padding:22px; width:min(' + (wide ? 900 : 720) + 'px,96vw); max-height:90vh; overflow:auto; box-shadow:0 24px 60px rgba(0,0,0,.5);';
+  const head = el('div'); head.style.cssText = 'display:flex; align-items:center; gap:12px; margin-bottom:12px;';
+  head.appendChild(el('div', 'micro', titleText));
+  const sp = el('span'); sp.style.flex = '1'; head.appendChild(sp);
+  const x = el('button', 'btn ghost mini', 'Close'); x.type = 'button';
+  x.addEventListener('click', function () { bd.remove(); });
+  head.appendChild(x);
+  box.appendChild(head);
+  bd.appendChild(box);
+  bd.addEventListener('click', function (e) { if (e.target === bd) bd.remove(); });
+  document.body.appendChild(bd);
+  return { bd: bd, box: box };
+}
+
+/* "See the assembled prompt" — ?preview=1 for the chosen audience, rendered section
+   by section (with sizes) plus the full text, so the operator can spot conflicts. */
+async function openPromptPreview() {
+  const signedin = ($('preview-audience') && $('preview-audience').value === '1') ? '1' : '0';
+  let d;
+  try { d = await adminGet('?preview=1&signedin=' + signedin); }
+  catch (e) { fail('Preview prompt', e); return; }
+  const m = openStudioModal('Assembled prompt — ' + (signedin === '1' ? 'signed-in owner' : 'anonymous visitor') +
+    ' · ' + (d.total_chars || 0).toLocaleString() + ' chars', true);
+  const map = el('div'); map.style.cssText = 'margin:0 0 14px;';
+  (d.sections || []).forEach(function (s) {
+    const row = el('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:3px 0;';
+    const dot = el('span'); dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:' + (s.included ? 'var(--brass,#b7975a)' : 'var(--hairline,#3a3a3a)') + ';flex:none;';
+    row.appendChild(dot);
+    const nm = el('span', 'mono', s.label);
+    nm.style.cssText = 'flex:1;' + (s.included ? '' : 'opacity:.5;text-decoration:line-through;');
+    row.appendChild(nm);
+    row.appendChild(el('span', 'micro', s.included ? (s.chars.toLocaleString() + ' chars') : 'off'));
+    map.appendChild(row);
+  });
+  m.box.appendChild(map);
+  const pre = el('pre');
+  pre.style.cssText = 'white-space:pre-wrap; word-break:break-word; font-family:"IBM Plex Mono",monospace; font-size:11.5px; line-height:1.5; background:rgba(0,0,0,.22); border:1px solid var(--hairline); border-radius:5px; padding:14px; max-height:52vh; overflow:auto;';
+  pre.textContent = d.assembled || '';
+  m.box.appendChild(pre);
+}
+
+/* "Ask the prompt tuner" — POST ?promptreview=1; the model reviews the assembled
+   prompt for conflicts / redundancy / ambiguity / gaps and returns structured findings. */
+async function runPromptReview() {
+  const btn = $('btn-promptreview');
+  const signedin = ($('preview-audience') && $('preview-audience').value === '1') ? '1' : '0';
+  await withBusy(btn, async function () {
+    let d;
+    try { d = await adminPost('?promptreview=1&signedin=' + signedin); }
+    catch (e) { fail('Prompt tuner', e); return; }
+    const m = openStudioModal('Prompt tuner — ' + (signedin === '1' ? 'signed-in' : 'anonymous') + ' assembly', true);
+    const sum = el('p', 'note'); sum.textContent = d.summary || 'No summary returned.';
+    m.box.appendChild(sum);
+    const findings = Array.isArray(d.findings) ? d.findings : [];
+    if (!findings.length) {
+      m.box.appendChild(el('div', 'empty micro', 'No conflicts, redundancy, or gaps flagged — the prompt reads clean.'));
+    } else {
+      const sevColor = { high: '#c98a86', medium: '#c9b06a', low: 'var(--wool-dim,#9a9)' };
+      findings.forEach(function (f) {
+        const card = el('div'); card.style.cssText = 'border:1px solid var(--hairline); border-left:3px solid ' + (sevColor[f.severity] || 'var(--hairline)') + '; border-radius:5px; padding:11px 13px; margin:10px 0;';
+        const top = el('div'); top.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:5px;';
+        const tag = el('span', 'mono'); tag.style.cssText = 'font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:' + (sevColor[f.severity] || 'inherit') + ';';
+        tag.textContent = (f.severity || '') + ' · ' + (f.kind || '');
+        top.appendChild(tag);
+        if (f.where) { const w = el('span', 'micro'); w.style.opacity = '.7'; w.textContent = f.where; top.appendChild(w); }
+        card.appendChild(top);
+        if (f.issue) card.appendChild(el('div', '', f.issue));
+        if (f.suggestion) { const sug = el('div', 'micro'); sug.style.cssText = 'margin-top:6px; color:var(--brass-soft,#c9b487);'; sug.textContent = '→ ' + f.suggestion; card.appendChild(sug); }
+        m.box.appendChild(card);
+      });
+    }
+    const foot = el('p', 'micro'); foot.style.cssText = 'margin-top:12px; opacity:.6;';
+    foot.textContent = 'Reviewed by ' + (d.model || 'the model') + '. Suggestions only — nothing is changed automatically.';
+    m.box.appendChild(foot);
+  });
 }
 
 /* Version-history modal for an edit-tracked row (concierge_edit_history). Lists
@@ -2208,7 +2419,8 @@ async function loadConfig() {
   $('cfg-reengage-postsale').checked = o.reengagePostSaleEnabled !== false;
   $('cfg-reengage-regrade').checked = cfg.reengage_regrade === true;
 
-  // Selling style
+  // Behavior & selling style
+  if ($('cfg-objective')) $('cfg-objective').value = (typeof cfg.primary_objective === 'string') ? cfg.primary_objective : '';
   const av = (typeof cfg.assertiveness === 'number') ? Math.min(5, Math.max(1, Math.round(cfg.assertiveness))) : 3;
   $('cfg-assert').value = av;
   renderAssertLabel();
@@ -2216,6 +2428,8 @@ async function loadConfig() {
     ? cfg.hooks.filter(function (h) { return typeof h === 'string'; }).join('\n') : '';
   $('cfg-objections').value = objectionsToText(cfg.objections);
   refreshAllCfgStates();   // "Effect" readouts + revert links reflect the loaded config
+  renderSectionToggles(cfg.prompt_sections);   // per-section on/off switches
+  populateModelPickers();  // live model dropdown (fire-and-forget)
 
   state.images = imgObjToRows(cfg.images);
   renderImageRows();
@@ -2299,17 +2513,19 @@ async function saveEngagement() {
 
 async function saveSelling() {
   const av = Math.min(5, Math.max(1, Math.round(Number($('cfg-assert').value) || 3)));
+  const objective = String($('cfg-objective').value || '').trim();
   const hooks = String($('cfg-hooks').value || '').split('\n')
     .map(function (l) { return l.trim(); }).filter(function (l) { return l; }).slice(0, 30);
   const objections = textToObjections($('cfg-objections').value).slice(0, 30);
   const rows = [
+    { key: 'primary_objective', value: objective, updated_at: nowIso() },
     { key: 'assertiveness', value: av, updated_at: nowIso() },
     { key: 'hooks', value: hooks, updated_at: nowIso() },
     { key: 'objections', value: objections, updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
-  if (res.error) { fail('Save selling style', res.error); return; }
-  toast('Selling style saved');
+  if (res.error) { fail('Save behavior & selling style', res.error); return; }
+  toast('Behavior & selling style saved');
 }
 
 /* ============================================================
@@ -2847,7 +3063,7 @@ const KB_SPEC = {
 
 const SOP_SPEC = {
   table: 'concierge_sops', stateKey: 'sops', listId: 'sop-list',
-  panelId: 'panel-procedures', noun: 'procedure',
+  panelId: 'panel-procedures', noun: 'procedure', hasAudience: true,
   placeholder: 'Step by step, the way you would brief a careful new hire…',
   empty: 'No procedures yet — add the first one.',
   deleteWarn: 'The concierge will stop following it.'
@@ -2967,6 +3183,24 @@ function kbEditor(row, spec) {
   fBody.appendChild(body);
   wrap.appendChild(fBody);
 
+  // -- audience (SOPs only): who this procedure is injected for
+  let audience = null;
+  if (spec.hasAudience) {
+    const fAud = el('div', 'field');
+    const lab = el('span', 'micro', 'Show to');
+    const badge = el('span', 'info-badge', 'i');
+    badge.title = '“Signed-in owners” for register / order-management steps (they never reach an anonymous browser and only clutter that prompt). “Everyone” for universal guidance. “Signed-out only” for anonymous-specific notes.';
+    lab.appendChild(badge);
+    fAud.appendChild(lab);
+    audience = el('select');
+    audience.className = 'mono-field';
+    [['all', 'Everyone'], ['signed_in', 'Signed-in owners only'], ['anon', 'Signed-out visitors only']]
+      .forEach(function (o) { audience.appendChild(new Option(o[1], o[0])); });
+    audience.value = (row.audience === 'signed_in' || row.audience === 'anon') ? row.audience : 'all';
+    fAud.appendChild(audience);
+    wrap.appendChild(fAud);
+  }
+
   // -- actions
   const actions = el('div', 'kb-actions');
   const btnDel = el('button', 'btn danger', 'Delete');
@@ -2987,30 +3221,36 @@ function kbEditor(row, spec) {
       if (!t) { toast('A ' + spec.noun + ' needs a title', true); return; }
 
       if (row.id) {
-        const res = await sb.from(spec.table).update({
+        const patch = {
           title: t,
           content_md: body.value,
           enabled: cb.checked,
           updated_at: nowIso()
-        }).eq('id', row.id);
+        };
+        if (spec.hasAudience && audience) patch.audience = audience.value;
+        const res = await sb.from(spec.table).update(patch).eq('id', row.id);
         if (res.error) { fail('Save ' + spec.noun, res.error); return; }
         row.title = t; row.content_md = body.value; row.enabled = cb.checked;
+        if (spec.hasAudience && audience) row.audience = audience.value;
         toast(spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' saved — ' + (row.slug || t));
       } else {
         const slug = kebab(t);
         if (!slug) { toast('Could not derive a slug from that title', true); return; }
-        const res = await sb.from(spec.table).insert({
+        const ins = {
           slug: slug,
           title: t,
           content_md: body.value,
           enabled: cb.checked,
           sort_order: row.sort_order,
           updated_at: nowIso()
-        }).select().single();
+        };
+        if (spec.hasAudience && audience) ins.audience = audience.value;
+        const res = await sb.from(spec.table).insert(ins).select().single();
         if (res.error) { fail('Add ' + spec.noun, res.error); return; }
         row.id = res.data.id;
         row.slug = res.data.slug;
         row.title = t; row.content_md = body.value; row.enabled = cb.checked;
+        if (spec.hasAudience && audience) row.audience = audience.value;
         slugEl.textContent = row.slug;
         wrap.classList.remove('is-new');
         toast(spec.noun.charAt(0).toUpperCase() + spec.noun.slice(1) + ' added — ' + row.slug);

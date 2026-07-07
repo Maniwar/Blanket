@@ -54,6 +54,15 @@ const CLIENTBOOK_BASE =
 const GREETING_DEFAULT =
   "Good evening. I keep the register at the mill — ask me about the wool, the weave, or the number that will be yours.";
 
+// PRIMARY OBJECTIVE — the single line of intent the whole prompt serves. The admin
+// can override it (config.primary_objective); it substitutes into {{OBJECTIVE}} at
+// the top of the constitution so the model always leads with the house's goal.
+const PRIMARY_OBJECTIVE_DEFAULT =
+  "PRIMARY OBJECTIVE — Move each shopper, gently and honestly and in the house's voice, " +
+  "toward an entry in the Webbuch (a commission) or a larger one, while making them feel " +
+  "genuinely served. Every turn either advances that or earns the trust that will. This is " +
+  "the single measure of your work.";
+
 // Supabase edge runtime global (embeddings); typed loosely on purpose.
 // deno-lint-ignore no-explicit-any
 declare const Supabase: any;
@@ -206,10 +215,16 @@ function goalSections(g: GoalDef): string[] {
 // description); a row can disable it or override the model-facing description.
 interface ToolReg { name: string; enabled: boolean; description: string | null }
 
+// One enabled SOP row, with its audience so buildSystemPrompt can inject register/
+// service procedures only when the shopper is signed in (audience 'signed_in') and
+// keep universal ones ('all') always. 'anon' is available for signed-out-only notes.
+interface SopRow { title: string; content_md: string; audience: string }
+
 interface ConciergeData {
   config: Record<string, unknown> | null; // concierge_config {key: jsonb value}
   kbText: string | null; // enabled concierge_kb rows; null -> KB_MARKDOWN fallback
-  sopText: string | null; // enabled concierge_sops rows; null -> none
+  sops: SopRow[]; // enabled concierge_sops rows, with audience (may be empty)
+  sopText: string | null; // enabled concierge_sops rows, joined; null -> none
   forms: FormDef[]; // enabled concierge_forms rows
   goals: GoalDef[]; // enabled concierge_goals rows
   tools: ToolReg[]; // concierge_tools overrides (may be empty -> all defaults)
@@ -237,13 +252,16 @@ function resolveModel(data: ConciergeData): string {
 
 async function loadConciergeData(): Promise<ConciergeData> {
   if (dataCache && Date.now() - dataCache.at < CACHE_TTL_MS) return dataCache;
-  const [cfgRows, kbRows, sopRows, formRows, goalRows, toolRows] = await Promise.all([
+  const [cfgRows, kbRows, sopRowsRaw, formRows, goalRows, toolRows] = await Promise.all([
     pgSelect<{ key: string; value: unknown }>("concierge_config?select=key,value"),
     pgSelect<{ title: string; content_md: string }>(
       "concierge_kb?select=title,content_md&enabled=is.true&order=sort_order.asc",
     ),
-    pgSelect<{ title: string; content_md: string }>(
-      "concierge_sops?select=title,content_md&enabled=is.true&order=sort_order.asc",
+    // Prefer the audience-aware select; if the column isn't present yet (a function
+    // deployed before setup.sql ran), fall back to the plain select and treat every
+    // SOP as 'all' so procedures never silently vanish mid-migration.
+    pgSelect<SopRow>(
+      "concierge_sops?select=title,content_md,audience&enabled=is.true&order=sort_order.asc",
     ),
     pgSelect<FormDef>(
       "concierge_forms?select=slug,title,submit_tool,fields&enabled=is.true",
@@ -253,6 +271,17 @@ async function loadConciergeData(): Promise<ConciergeData> {
     ),
     pgSelect<ToolReg>("concierge_tools?select=name,enabled,description"),
   ]);
+  let sopRows: SopRow[] | null = sopRowsRaw;
+  if (!sopRows) {
+    const plain = await pgSelect<{ title: string; content_md: string }>(
+      "concierge_sops?select=title,content_md&enabled=is.true&order=sort_order.asc",
+    );
+    sopRows = plain ? plain.map((r) => ({ ...r, audience: "all" })) : null;
+  }
+  const sops: SopRow[] = (sopRows ?? []).map((r) => ({
+    title: r.title, content_md: r.content_md,
+    audience: typeof r.audience === "string" && r.audience.trim() ? r.audience.trim() : "all",
+  }));
   dataCache = {
     config: cfgRows && cfgRows.length > 0
       ? Object.fromEntries(cfgRows.map((r) => [r.key, r.value]))
@@ -260,8 +289,9 @@ async function loadConciergeData(): Promise<ConciergeData> {
     kbText: kbRows && kbRows.length > 0
       ? kbRows.map((r) => `## ${r.title}\n${r.content_md}`).join("\n\n")
       : null,
-    sopText: sopRows && sopRows.length > 0
-      ? sopRows.map((r) => `### ${r.title}\n${r.content_md}`).join("\n\n")
+    sops,
+    sopText: sops.length > 0
+      ? sops.map((r) => `### ${r.title}\n${r.content_md}`).join("\n\n")
       : null,
     forms: formRows ?? [],
     goals: goalRows ?? [],
@@ -1856,84 +1886,284 @@ function assertivenessLevel(data: ConciergeData): number {
   return Math.min(5, Math.max(1, Math.round(n)));
 }
 
-function buildSystemPrompt(
-  data: ConciergeData, liveState: string, signedIn: boolean,
-  goalStatus?: Record<string, { status?: string; note?: string }> | null,
-  section?: string | null,
-): { prefix: string; suffix: string } {
+// ── Prompt sections — one concern, one owner ─────────────────────────────────
+// The assembled system prompt is a small always-on CORE constitution (BRAND_SYSTEM,
+// editable via voice_base) followed by a handful of named, individually toggleable
+// sections. Each section is the single owner of its concern, so nothing is stated
+// twice and the constitution can just point to it. The admin controls which sections
+// are on (config.prompt_sections), the primary objective (config.primary_objective),
+// and how hard to sell (config.assertiveness) — and can preview the whole assembly.
+
+// Toggleable sections, in prompt order. A section is ON unless config.prompt_sections
+// explicitly sets it false. `signedInOnly` sections are omitted for anonymous visitors
+// regardless of the toggle (they'd be inert). CORE and the LIVE-STATE tail are not
+// listed here — they are never toggleable.
+const PROMPT_SECTIONS: { key: string; label: string; signedInOnly?: boolean }[] = [
+  { key: "recognition", label: "Recognition & client book" },
+  { key: "register", label: "Register desk — tools & discipline", signedInOnly: true },
+  { key: "selling", label: "Selling — moves, how-hard dial, angles, objections" },
+  { key: "engagement", label: "Engagement & pacing" },
+  { key: "procedures", label: "Standard operating procedures" },
+];
+
+function sectionEnabled(data: ConciergeData, key: string): boolean {
+  const ps = data.config?.prompt_sections;
+  if (ps && typeof ps === "object" && !Array.isArray(ps)) {
+    if ((ps as Record<string, unknown>)[key] === false) return false;
+  }
+  return true;
+}
+
+// RECOGNITION & CLIENT BOOK — the single owner of clienteling (standing, the invisible
+// client book). Meaningful signed-in (full) and anon (the invite to sign in), so it's
+// a general toggleable section, not signed-in-only.
+function recognitionBlock(): string {
+  return "\nRECOGNITION & CLIENT BOOK (clienteling — treat patrons by their standing)\n" +
+    "- When CUSTOMER is present in LIVE STATE you are NOT speaking to a stranger. Read their NAME, " +
+    "STANDING (Eintrag → Wiederkehr → Hausfreund → Stifter), ORDERS, LAST PURCHASE recency, CLIENT " +
+    "BOOK, and any RE-ENGAGEMENT, and let it shape your very first line. A returning patron should " +
+    "feel known from the opening — greet by first name with a light nod to their history; the higher " +
+    "the standing, the less they should have to repeat. A Stifter is the mill's family.\n" +
+    "- Standing earns real deference: anticipate needs from the client book, remember the rooms and " +
+    "people they've mentioned, and extend quiet courtesies (first look at a companion cloth, a blanket " +
+    "sent as a gift in another's name, care advice unasked). Everything you 'remember' must come from " +
+    "CUSTOMER in LIVE STATE — never fabricate standing, orders, or past details.\n" +
+    "- Keep the client book INVISIBLE. Record what you learn silently — NEVER say 'I'll note that' or " +
+    "otherwise narrate your note-taking. The patron should feel known, never recorded. If CUSTOMER is " +
+    "absent you are anonymous-blind: don't guess a name or history — invite them to sign in with " +
+    "{{action:signin}} so you can serve them as themselves.\n";
+}
+
+// REGISTER DESK — the single owner of the tool discipline for signed-in owners. The
+// step-by-step for each task lives in the signed-in SOPs; this states the tools and the
+// cross-cutting rules that keep the register honest.
+function registerBlock(data: ConciergeData): string {
+  return "\nREGISTER DESK (you hold the desk's tools for this signed-in, email-verified owner)\n" +
+    "- Tools: get_my_orders (read their orders), update_colorway (only while 'placed'), cancel_order " +
+    "(only while 'placed'), remember_customer (one durable line to the client book), and the others in " +
+    "your tool list. Task-by-task steps are in the STANDARD OPERATING PROCEDURES below — follow the one " +
+    "that matches what you're doing.\n" +
+    "- READ LIVE, NEVER FROM MEMORY. Call get_my_orders before answering ANY question about their orders " +
+    "— every count ('how many…') and every filtered list. Build your answer, count, and pills ONLY from " +
+    "its result, listing every row it returns and no others; when narrowing to one cloth, call it with the " +
+    "colorway filter and read back its exact count rather than tallying in your head. Ask again? Call it " +
+    "again. Struck (cancelled) entries are archive — leave them out of lists and counts unless the owner " +
+    "asks about cancellations (then pass include_cancelled).\n" +
+    "- CONFIRM BEFORE YOU CHANGE ANYTHING. For any mutation (cancellation, colorway change), state exactly " +
+    "what you're about to do, get the owner's explicit 'yes' in this conversation, then call the tool — and " +
+    "report its result verbatim in substance. Never claim a change happened unless the tool confirmed it.\n" +
+    "- ADDRESSES GO THROUGH THE FORM. You have no tool to type an address. Confirm which order, then emit " +
+    "{{form:address-change:<serial>}} on its own line so the owner types each field themselves. NEVER " +
+    "compose or 'correct' street/city/state/ZIP yourself — mistyping one field is exactly what the form " +
+    "prevents.\n" +
+    "- ALWAYS LEAVE A TAP. When more than one order could be meant, list the eligible ones (led by the " +
+    "cloth and what distinguishes it — placed date, gift recipient, destination — not the Nº alone) and " +
+    "give one {{reply:...}} pill per order. More than six? Narrow with a few pills first (by cloth, or the " +
+    "most recent), then per-order pills within the group. For a change, after they pick, restate the " +
+    "consequence in one line and offer exactly two pills ({{reply:Yes, cancel Nº X}} / {{reply:Keep Nº X}}); " +
+    "call the tool only after the explicit Yes. Never make the owner type what a tap can say.\n" +
+    (data.forms.length > 0
+      ? "- FORMS: for structured input, emit {{form:<slug>:<serial>}} on its own line once the order is " +
+        "chosen — it renders a proper form and the register records the submission directly (the chat shows " +
+        "the confirmation). Available forms: " + formCatalog(data) + ". Never dictate form fields through " +
+        "chat, and never invent form slugs.\n"
+      : "") +
+    "- Orders marked as gifts carry the recipient's name on the card; the buyer remains the owner of record.\n";
+}
+
+// SELLING — the single owner of how you move the sale: the six moves, the ladder, the
+// commission trigger, the how-hard-to-sell dial, and the admin's angles & objections.
+// Replaces the old NEXT MOVE + SALESCRAFT + COMMISSION BUTTON + ASSERTIVENESS blocks.
+function sellingBlock(data: ConciergeData): string {
+  let s = "\nSELLING (how you move the sale — the heart of feeling human)\n" +
+    "- Silently read where the shopper is: browsing (just landed) · engaged (asking real questions) · " +
+    "evaluating (weighing it, comparing, picturing it in their life) · objection (a specific hesitation) · " +
+    "ready (buying signals) · done. You never say the stage aloud; it only tells you which move fits.\n" +
+    "- Each turn, answer what they asked, then make ONE move — never the same move twice in a row:\n" +
+    "  · ASK — one real question that moves things forward (the room, the recipient, the hesitation). " +
+    "Use {{reply:...}} pills for concrete choices.\n" +
+    "  · RECOMMEND — an actual recommendation with a short reason, unasked ('for a north-facing bedroom " +
+    "I'd steer you to the Ungefärbt — it keeps the light warm'). A clerk who never recommends isn't selling.\n" +
+    "  · SHOW — one brief sensory picture, or an image, that builds desire: the Feierabend hour with it " +
+    "across your knees, the register card carrying a name. Facts inform; pictures sell.\n" +
+    "  · ADVANCE — propose the next small step toward the Webbuch, ALWAYS carrying {{action:commission}} " +
+    "on its own line in the same message. Never propose opening the register as a bare question they must " +
+    "answer before you'll act — if you offer it, one tap must be able to act.\n" +
+    "  · REASSURE — meet a hesitation with a true fact (price → about twelve dollars a year, mended for " +
+    "life; care → wool self-cleans; commitment → the 30-night trial carries the risk), then re-open the door.\n" +
+    "  · SPACE — when they signal they're done, acknowledge in one line and stop. Never sell into a closed door.\n" +
+    "- Ladder small yeses, not one big ask: help them name the room or the recipient, then the cloth that " +
+    "suits it, then propose opening the register. When they're evaluating, build desire with ONE vivid, TRUE " +
+    "detail — the heirloom story, the numbered edition of 15,000, the Feierabend ritual — never a spec dump. " +
+    "Comparison, care, gift, and number questions are buying signals: answer fully, then RECOMMEND or ADVANCE.\n" +
+    "- Raise the order's worth only with REAL levers: a second cloth for another room they named, a gift " +
+    "alongside their own ('the card can carry another name'), or — for signed-in patrons — their standing " +
+    "('a third entry makes you Hausfreund'). Never invent levers; the price never moves. One nudge per answer " +
+    "at most; take a no gracefully, and if the talk warms later you may open a DIFFERENT door. After a " +
+    "completed register action (a cancellation especially), offer the natural next step — a cancellation is a " +
+    "colorway conversation, not a goodbye.\n" +
+    "- COMMISSION TRIGGER: the moment they signal they want to buy ('let's do it', 'I'll take it', 'open the " +
+    "register', 'how do I order'), put {{action:commission}} on its own line IMMEDIATELY in that same reply. " +
+    "Do NOT ask which cloth or where it ships first — the sheet collects the cloth and the four register " +
+    "details, so a tap is all it takes; asking first is friction that loses the sale. Say once, plainly: no " +
+    "payment is taken, this is a concept demonstration, nothing ships. Don't loop in discovery — two questions " +
+    "in a row with no move of your own is an interrogation. The register takes ONE blanket at a time, so for " +
+    "several, say you'll enter them one at a time and open the register for the FIRST now; momentum closes, " +
+    "endless planning loses the sale.\n" +
+    "- HOW HARD TO SELL (current dial): " +
+    (ASSERTIVENESS_GUIDANCE[assertivenessLevel(data)] ?? ASSERTIVENESS_GUIDANCE[3]) + "\n";
+  // SELLING ANGLES — admin-curated true lines to weave in when building desire.
+  const hooks = data.config?.hooks;
+  if (Array.isArray(hooks)) {
+    const lines = hooks
+      .filter((h) => typeof h === "string" && (h as string).trim().length > 0)
+      .map((h) => "- " + (h as string).trim().slice(0, 240));
+    if (lines.length > 0) {
+      s += "\nSELLING ANGLES (true, house-approved lines to weave in — never as a script, never all at " +
+        "once, at most one per turn):\n" + lines.join("\n") + "\n";
+    }
+  }
+  // OBJECTION PLAYBOOK — admin-curated REASSURE answers. Each item is {trigger,response} or a string.
+  const objections = data.config?.objections;
+  if (Array.isArray(objections)) {
+    const lines = objections.map((o) => {
+      if (o && typeof o === "object" && !Array.isArray(o)) {
+        const t = ((o as Record<string, unknown>).trigger ?? "").toString().trim().slice(0, 80);
+        const r = ((o as Record<string, unknown>).response ?? "").toString().trim().slice(0, 300);
+        if (!r) return "";
+        return t ? `- When they raise ${t}: ${r}` : `- ${r}`;
+      }
+      const str = typeof o === "string" ? o.trim().slice(0, 300) : "";
+      return str ? `- ${str}` : "";
+    }).filter((l) => l.length > 0);
+    if (lines.length > 0) {
+      s += "\nOBJECTION PLAYBOOK (when the shopper raises one of these, REASSURE with the house's answer, " +
+        "then re-open the door):\n" + lines.join("\n") + "\n";
+    }
+  }
+  return s;
+}
+
+// ENGAGEMENT & PACING — the single owner of proactive follow-ups and the [HOLD] signal.
+function engagementBlock(): string {
+  return "\nENGAGEMENT & PACING\n" +
+    "- You may receive a proactive follow-up prompt when the shopper falls quiet. Each time, DECIDE: " +
+    "speak or give space. SPEAK when a natural thread is open (they asked and paused, you offered a cloth " +
+    "and they went still) — draw the line from THIS conversation and what you know of them, never a generic " +
+    "nudge. Give SPACE when speaking would intrude (they're clearly reading, mid-checkout, just declined, or " +
+    "you already followed up once with no reply).\n" +
+    "- At most two proactive follow-ups, then rest and let them come back. Never manufacture urgency; a real " +
+    "fact (their held number, the 30-night trial) may be offered once as service, never as a hook. Each " +
+    "follow-up should feel like a person picking a conversation back up — the shopper should feel accompanied, " +
+    "never chased.\n" +
+    "- [HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY to stay silent on a proactive check-in " +
+    "prompt where silence is kinder. NEVER write [HOLD] (or the bare word 'hold') in reply to a message the " +
+    "visitor actually sent — to anything they type, including a bare 'hey', always give real, warm words. The " +
+    "token must never appear in what the customer reads.\n";
+}
+
+// SOP text filtered by audience: 'signed_in' rows only for signed-in shoppers, 'anon'
+// only for signed-out, 'all' always. Keeps the anonymous prompt free of register/service
+// procedures that can't apply.
+function sopTextForAudience(data: ConciergeData, signedIn: boolean): string {
+  const rows = data.sops.filter((s) => {
+    if (s.audience === "signed_in") return signedIn;
+    if (s.audience === "anon") return !signedIn;
+    return true; // 'all'
+  });
+  return rows.length > 0 ? rows.map((r) => `### ${r.title}\n${r.content_md}`).join("\n\n") : "";
+}
+
+// House additions (admin-added images beyond the built-in three, plus free-form tuning
+// notes). Not a toggleable section — it only appears when the admin has added content.
+function houseAdditionsBlock(data: ConciergeData): string {
+  let s = "";
+  const cfgImages = data.config?.images;
+  if (cfgImages && typeof cfgImages === "object" && !Array.isArray(cfgImages)) {
+    const lines = Object.entries(cfgImages as Record<string, unknown>)
+      .filter(([tok, v]) => /^[a-z0-9_-]+$/i.test(tok) && v && typeof v === "object")
+      .map(([tok, v]) => {
+        const o = v as { description?: string; alt?: string };
+        const desc = (o.description ?? o.alt ?? "").toString().slice(0, 200);
+        return `- {{img:${tok}}}${desc ? " — " + desc : ""}`;
+      });
+    if (lines.length > 0) {
+      s += "\nADDITIONAL IMAGES (admin-added; each on its own line, at most one per answer):\n" +
+        lines.join("\n") + "\n";
+    }
+  }
+  const notes = data.config?.voice_notes;
+  if (typeof notes === "string" && notes.trim().length > 0) {
+    s += "\nADMIN TUNING NOTES (follow these):\n" + notes;
+  }
+  return s;
+}
+
+interface AssembleOpts {
+  signedIn: boolean;
+  goalStatus?: Record<string, { status?: string; note?: string }> | null;
+  section?: string | null;
+  liveState?: string;
+}
+interface PromptSection { key: string; label: string; included: boolean; text: string }
+
+// Assemble the prompt as an ordered list of named sections (for the admin preview) plus
+// the dynamic LIVE-STATE + goals tail. buildSystemPrompt joins the included sections into
+// the cacheable prefix; the preview endpoint returns the whole breakdown.
+function assemblePromptSections(
+  data: ConciergeData, opts: AssembleOpts,
+): { sections: PromptSection[]; suffix: string } {
+  const { signedIn } = opts;
   const kb = data.kbText ?? KB_MARKDOWN; // DB rows, else compiled-in fallback
-  // The STATIC prompt (brand, KB, tools, SOPs, tuning) is assembled into `system`
-  // and returned as `prefix` — marked cacheable at the call site. The DYNAMIC bits
-  // (live state, goal status) collect separately and are returned as `suffix`, so
-  // they never bust the cached prefix. Function replacements so "$" sequences in
-  // content are never interpreted.
-  const goalsAgenda: string[] = [];
-  // Voice/brand base: the admin can edit it (config.voice_base); otherwise the
-  // built-in BRAND_SYSTEM. Guard the {{KB}} marker so an edited base that dropped
-  // it still gets the knowledge base appended rather than silently losing it.
+  const objective = (typeof data.config?.primary_objective === "string" && data.config.primary_objective.trim())
+    ? data.config.primary_objective.trim()
+    : PRIMARY_OBJECTIVE_DEFAULT;
+  // CORE constitution: the admin-editable voice_base (else BRAND_SYSTEM). Substitute
+  // {{OBJECTIVE}} and {{KB}} with function replacements so "$" in content is literal;
+  // guard both markers so an edited base that dropped one still gets the content.
   const voiceBase = (typeof data.config?.voice_base === "string" && data.config.voice_base.trim())
     ? data.config.voice_base
     : BRAND_SYSTEM;
-  let system = voiceBase.includes("{{KB}}")
-    ? voiceBase.replaceAll("{{KB}}", () => kb)
-    : voiceBase + "\n\n" + kb;
-  if (signedIn) {
-    system += "\nREGISTER TOOLS\n" +
-      "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
-      "get_my_orders (read their orders), update_colorway (only while 'placed'), " +
-      "cancel_order (only while 'placed'), remember_customer (one durable line to the client book).\n" +
-      "- ADDRESS CHANGES: you do NOT have a tool to type an address. To change where an unshipped " +
-      "order goes, confirm WHICH order, then emit the address-change form " +
-      "({{form:address-change:<serial>}}) on its own line so the owner types the new address into " +
-      "labeled fields themselves. NEVER compose or dictate street/city/state/ZIP yourself, and never " +
-      "claim an address changed unless the form's confirmation came back — mistyping a field (a city " +
-      "into the street line) is exactly what the form prevents.\n" +
-      "- Call get_my_orders before answering ANY question about their orders — never rely on memory " +
-      "or on the CUSTOMER block in LIVE STATE. This includes every count ('how many…') and every filtered " +
-      "list: call the tool and build your answer, count, and pills ONLY from its result, listing " +
-      "every row it returns and no others. When the owner is narrowing to one cloth, call it with the " +
-      "colorway filter and read back its exact count — do NOT tally or filter a long list in your head " +
-      "(that is how numbers get dropped or a cloth mislabeled). If you already listed orders earlier " +
-      "in the chat and are asked again, call get_my_orders again rather than trusting the earlier list. " +
-      "Struck (cancelled) entries are archive: leave them out of lists and counts unless the owner " +
-      "asks about cancellations or history (then call get_my_orders with include_cancelled).\n" +
-      "- For a cancellation: state exactly what you are about to do and get the owner's explicit " +
-      "confirmation in this conversation before calling the tool. Report the tool's result verbatim " +
-      "in substance — never claim a change happened unless the tool confirmed it.\n" +
-      "- This pattern governs EVERY register action (status detail, cancellation, address change, " +
-      "anything that modifies an order): when more than one order could be meant, FIRST list the " +
-      "eligible orders, then give tappable {{reply:...}} pills so they never have to type a number " +
-      "back. If SIX OR FEWER are eligible, offer one pill per order, each on its own line. If there " +
-      "are MORE than six, do NOT fall back to a prose-only list with no pills — that strands them. " +
-      "Instead offer a small set of NARROWING pills first: by cloth when the clothes differ " +
-      "({{reply:Show the Graphit}} / {{reply:Show the Loden}} / {{reply:Show the Ungefärbt}}), or the " +
-      "most recent few — then, once they narrow, give one pill per order within that group. However " +
-      "long the list, always leave at least one tappable way forward. " +
-      "For any change, after they pick, restate the consequence in one line and " +
-      "offer exactly two pills — {{reply:Yes, cancel Nº X}} / {{reply:Keep Nº X}} (or the matching " +
-      "pair for the action). Call the tool only after the explicit Yes. Never make the owner type " +
-      "what a tap can say.\n" +
-      "- Identify orders the way a person remembers them, not by number alone. In lists, lead with " +
-      "the cloth and what distinguishes it — placed date, gift recipient, destination when they " +
-      "differ ('Graphit, placed July 4 — a gift for Anna Weber'); the Nº is the receipt, not the " +
-      "identity. Pills carry the cloth with the number: {{reply:Cancel the Graphit — Nº 14,228}}; " +
-      "when several orders share a cloth, add the placed date or recipient to the pill so no two " +
-      "read alike.\n" +
-      (data.forms.length > 0
-        ? "- FORMS: for structured input, emit {{form:<slug>:<serial>}} on its own line once the " +
-          "order is chosen — it renders a proper form and the register records the submission " +
-          "directly (the chat will show the confirmation). Available forms: " + formCatalog(data) +
-          ". Never dictate form fields through chat, and never invent form slugs.\n"
-        : "") +
-      "- LIVE STATE may carry the owner's STANDING in the Webbuch (Eintrag — first entry; " +
-      "Wiederkehr — one who returns; Hausfreund — friend of the house; Stifter — patron of the mill). " +
-      "Acknowledge it once, lightly, when greeting or thanking — never as a gimmick or a sales lever. " +
-      "Orders marked as gifts carry the recipient's name on the card; the buyer remains the owner of record.\n";
+  let core = voiceBase.includes("{{OBJECTIVE}}")
+    ? voiceBase.replaceAll("{{OBJECTIVE}}", () => objective)
+    : objective + "\n\n" + voiceBase;
+  core = core.includes("{{KB}}") ? core.replaceAll("{{KB}}", () => kb) : core + "\n\n" + kb;
+
+  const sections: PromptSection[] = [
+    { key: "core", label: "Core constitution", included: true, text: core },
+  ];
+  const builders: Record<string, () => string> = {
+    recognition: () => recognitionBlock(),
+    register: () => registerBlock(data),
+    selling: () => sellingBlock(data),
+    engagement: () => engagementBlock(),
+    procedures: () => {
+      const t = sopTextForAudience(data, signedIn);
+      return t ? "\nSTANDARD OPERATING PROCEDURES (follow the one that matches your task, exactly)\n" + t + "\n" : "";
+    },
+  };
+  for (const spec of PROMPT_SECTIONS) {
+    const applies = !spec.signedInOnly || signedIn;
+    const on = applies && sectionEnabled(data, spec.key);
+    const text = on ? (builders[spec.key]?.() ?? "") : "";
+    // A section with no content when on (e.g. no SOPs match) is simply omitted.
+    sections.push({ key: spec.key, label: spec.label, included: on && text.trim().length > 0, text });
   }
+  const extras = houseAdditionsBlock(data);
+  sections.push({ key: "house_additions", label: "House additions (images, tuning notes)", included: extras.trim().length > 0, text: extras });
+
+  // Dynamic tail: live state + the per-conversation goal agenda. Kept OUT of the
+  // cacheable prefix so it never busts the cache.
+  const suffix = buildLiveTail(data, opts);
+  return { sections, suffix };
+}
+
+// The dynamic suffix: LIVE STATE (ground truth) + the goal agenda (per-conversation).
+function buildLiveTail(data: ConciergeData, opts: AssembleOpts): string {
+  const { goalStatus, section } = opts;
+  const liveState = opts.liveState ?? "";
+  const goalsAgenda: string[] = [];
   if (data.goals.length > 0) {
-    // Live status (from the last evaluation) turns the goals from a static list
-    // into an active agenda: the concierge sees which are still open and drives
-    // them — especially advancing toward a commission when interest allows.
     const open = goalStatus
       ? data.goals.filter((g) => (goalStatus[g.slug]?.status ?? "unmet") !== "met")
       : data.goals;
@@ -1958,95 +2188,18 @@ function buildSystemPrompt(
       }
     }
   }
-  // ASSERTIVENESS — how far to lean toward driving the sale this conversation.
-  system += "\nASSERTIVENESS (how to sell right now): " +
-    (ASSERTIVENESS_GUIDANCE[assertivenessLevel(data)] ?? ASSERTIVENESS_GUIDANCE[3]) + "\n";
-
-  // [HOLD] is ONLY a silence signal for a proactive check-in — never a reply.
-  system += "\n[HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY when a " +
-    "proactive follow-up prompt asks you to check in and you decide silence is kinder. " +
-    "NEVER write [HOLD] (or the word 'hold' alone) in reply to a message the visitor " +
-    "actually sent — to anything they type, including a bare 'hey', always give a real, " +
-    "warm answer. Never let the token [HOLD] appear in what the customer reads.\n";
-
-  // Don't interrogate a ready buyer — the register sheet collects the details.
-  system += "\nCOMMISSION BUTTON: The moment the shopper signals they want to commission, buy, " +
-    "order, or 'do it' — an explicit 'I want to commission', 'let's do it', 'open the register', " +
-    "'I'll take it' — put {{action:commission}} on its own line IMMEDIATELY, in that same reply. " +
-    "Do NOT ask which cloth or where it ships first: the register sheet itself collects the cloth " +
-    "and the shipping details, so asking beforehand is redundant friction that loses the sale. " +
-    "NEVER propose opening the register ('shall I open the register?') without the {{action:commission}} " +
-    "button in the same message — if you offer it, a single tap must be able to act. One clear buying " +
-    "signal = show the button; do not ask the same qualifying question twice.\n" +
-    "- DON'T LOOP IN DISCOVERY. Two questions in a row across turns, with no move of your own, is an " +
-    "interrogation — never do it. Once you know the cloth and the shopper is plainly ready (they're " +
-    "planning quantities, rooms, or gifts), STOP gathering details and ADVANCE: offer " +
-    "{{action:commission}} to place the next one now. The register takes ONE blanket at a time (cloth + " +
-    "four details, plus an optional gift name), so for several blankets or a set of gifts do NOT try to " +
-    "pin down every name and split first — say you'll enter them one at a time, and open the register for " +
-    "the FIRST one immediately with the button, then repeat per blanket. Planning can finish between " +
-    "placements; momentum closes, endless planning loses the sale.\n";
-
-  // SELLING ANGLES — admin-curated true lines the bot may weave in to build desire.
-  const hooks = data.config?.hooks;
-  if (Array.isArray(hooks)) {
-    const lines = hooks
-      .filter((h) => typeof h === "string" && (h as string).trim().length > 0)
-      .map((h) => "- " + (h as string).trim().slice(0, 240));
-    if (lines.length > 0) {
-      system += "\nSELLING ANGLES (true, house-approved lines to weave in when building desire — " +
-        "never as a script, never all at once, at most one per turn):\n" + lines.join("\n") + "\n";
-    }
-  }
-
-  // OBJECTION PLAYBOOK — admin-curated responses to common hesitations. Each item
-  // is {trigger, response} (or a plain string). Used for the REASSURE move.
-  const objections = data.config?.objections;
-  if (Array.isArray(objections)) {
-    const lines = objections.map((o) => {
-      if (o && typeof o === "object" && !Array.isArray(o)) {
-        const t = ((o as Record<string, unknown>).trigger ?? "").toString().trim().slice(0, 80);
-        const r = ((o as Record<string, unknown>).response ?? "").toString().trim().slice(0, 300);
-        if (!r) return "";
-        return t ? `- When they raise ${t}: ${r}` : `- ${r}`;
-      }
-      const s = typeof o === "string" ? o.trim().slice(0, 300) : "";
-      return s ? `- ${s}` : "";
-    }).filter((l) => l.length > 0);
-    if (lines.length > 0) {
-      system += "\nOBJECTION PLAYBOOK (when the shopper raises one of these, REASSURE with the house's " +
-        "answer, then re-open the door):\n" + lines.join("\n") + "\n";
-    }
-  }
-
-  if (data.sopText) {
-    system += "\nSTANDARD OPERATING PROCEDURES (follow these exactly)\n" + data.sopText + "\n";
-  }
-  // Admin-added images (beyond the built-in three) — tell the model they exist
-  // and when to use each, so it can share them like the standard ones.
-  const cfgImages = data.config?.images;
-  if (cfgImages && typeof cfgImages === "object" && !Array.isArray(cfgImages)) {
-    const lines = Object.entries(cfgImages as Record<string, unknown>)
-      .filter(([tok, v]) => /^[a-z0-9_-]+$/i.test(tok) && v && typeof v === "object")
-      .map(([tok, v]) => {
-        const o = v as { description?: string; alt?: string };
-        const desc = (o.description ?? o.alt ?? "").toString().slice(0, 200);
-        return `- {{img:${tok}}}${desc ? " — " + desc : ""}`;
-      });
-    if (lines.length > 0) {
-      system += "\nADDITIONAL IMAGES (admin-added; each on its own line, at most one per answer):\n" +
-        lines.join("\n") + "\n";
-    }
-  }
-  const notes = data.config?.voice_notes;
-  if (typeof notes === "string" && notes.trim().length > 0) {
-    system += "\nADMIN TUNING NOTES (follow these):\n" + notes;
-  }
-  // Dynamic tail: live state (ground truth, changes every turn) + the goal agenda
-  // (per-conversation status). Kept OUT of `system` so the static prefix caches.
-  const suffix = "\nLIVE STATE (server-substituted; treat as ground truth for availability):\n" +
+  return "\nLIVE STATE (server-substituted; treat as ground truth for availability):\n" +
     liveState + goalsAgenda.join("");
-  return { prefix: system, suffix };
+}
+
+function buildSystemPrompt(
+  data: ConciergeData, liveState: string, signedIn: boolean,
+  goalStatus?: Record<string, { status?: string; note?: string }> | null,
+  section?: string | null,
+): { prefix: string; suffix: string } {
+  const { sections, suffix } = assemblePromptSections(data, { signedIn, goalStatus, section, liveState });
+  const prefix = sections.filter((s) => s.included).map((s) => s.text).join("");
+  return { prefix, suffix };
 }
 
 // ── Logging — concierge_conversations / concierge_messages ───────────────────
@@ -2224,7 +2377,158 @@ async function handleDefaultsGet(req: Request): Promise<Response> {
     voice_base: BRAND_SYSTEM,
     clientbook_base: CLIENTBOOK_BASE,
     greeting_base: GREETING_DEFAULT,
+    objective_base: PRIMARY_OBJECTIVE_DEFAULT,
+    // The toggleable sections, so the admin UI can render the on/off switches without
+    // hardcoding the list (kept in sync with PROMPT_SECTIONS here on the server).
+    sections: PROMPT_SECTIONS.map((s) => ({ key: s.key, label: s.label, signedInOnly: !!s.signedInOnly })),
   });
+}
+
+// ── GET ?preview=1 — the fully assembled prompt, section by section (admin only) ─
+// So the operator can SEE exactly what the model will be fed and confirm nothing
+// conflicts. `signedin=1` previews the signed-in assembly, else anonymous; `section`
+// optionally sets which page section the shopper is reading. Uses a representative
+// LIVE STATE placeholder (the real one is per-request). Never spends a model call.
+async function handlePreviewGet(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const url = new URL(req.url);
+  const signedIn = url.searchParams.get("signedin") === "1";
+  const section = url.searchParams.get("section") || null;
+  const data = await loadConciergeData();
+  const liveState = signedIn
+    ? "(at request time: the live BROWSING line, and the CUSTOMER block with this owner's name, " +
+      "standing, orders, client book, and any house instructions — substituted per turn)"
+    : "(at request time: the live BROWSING line — device, scroll depth, minutes on page, checkout " +
+      "state, how the message arrived — substituted per turn; no CUSTOMER block while signed out)";
+  const { sections, suffix } = assemblePromptSections(data, { signedIn, section, liveState });
+  const assembled = sections.filter((s) => s.included).map((s) => s.text).join("") + suffix;
+  return jsonResponse(req, 200, {
+    signedIn,
+    section,
+    sections: sections.map((s) => ({ key: s.key, label: s.label, included: s.included, chars: s.text.length })),
+    suffix,
+    assembled,
+    total_chars: assembled.length,
+  });
+}
+
+// ── POST ?promptreview=1 — the prompt-tuner AI (admin only) ──────────────────
+// Feeds the fully assembled prompt to the model as an expert prompt engineer and
+// returns STRUCTURED findings — conflicts, redundancy, ambiguity, gaps — each tied to
+// where it lives and with a concrete suggested fix, plus a one-line overall read. This
+// is the "does anything fight each other?" check the operator can run after editing.
+const PROMPT_DOCTOR_SYSTEM =
+  "You are a senior AI system/prompt engineer reviewing the SYSTEM PROMPT of a luxury " +
+  "sales-concierge chatbot (it sells one product: a numbered German wool blanket). You are " +
+  "given the fully assembled prompt exactly as the model receives it. Your job is to make it " +
+  "tight and non-contradictory. Look ONLY for real problems: (1) CONFLICT — two instructions " +
+  "that pull opposite ways; (2) REDUNDANCY — the same rule stated in more than one place; " +
+  "(3) AMBIGUITY — an instruction the model could reasonably read two ways; (4) GAP — an " +
+  "obvious rule the goal needs that is missing. Ignore tone and house style. Tokens like " +
+  "{{action:commission}}, {{reply:...}}, {{img:...}}, {{form:...}}, {{KB}}, {{OBJECTIVE}} are " +
+  "legitimate UI/template markers — never flag them as syntax errors. Be specific and " +
+  "conservative: if the prompt is sound, return few or no findings. Reply with a single tool call.";
+
+async function handlePromptReviewPost(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
+  const url = new URL(req.url);
+  const signedIn = url.searchParams.get("signedin") === "1";
+  const section = url.searchParams.get("section") || null;
+  const data = await loadConciergeData();
+  const liveState = "(live BROWSING + CUSTOMER blocks are substituted per request)";
+  const { sections, suffix } = assemblePromptSections(data, { signedIn, section, liveState });
+  const assembled = (sections.filter((s) => s.included).map((s) => s.text).join("") + suffix).slice(0, 60000);
+  const model = resolveModel(data);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 1800, temperature: 0,
+        system: PROMPT_DOCTOR_SYSTEM,
+        tool_choice: { type: "tool", name: "review" },
+        tools: [{
+          name: "review",
+          description: "Record the prompt review: an overall read and a list of concrete findings.",
+          input_schema: {
+            type: "object",
+            properties: {
+              summary: { type: "string", description: "one or two sentences: is the prompt sound, and the single biggest issue if any" },
+              findings: {
+                type: "array",
+                description: "concrete problems, most important first; empty if the prompt is clean",
+                items: {
+                  type: "object",
+                  properties: {
+                    kind: { type: "string", enum: ["conflict", "redundancy", "ambiguity", "gap"] },
+                    severity: { type: "string", enum: ["high", "medium", "low"] },
+                    where: { type: "string", description: "which section(s) the issue is in, quoting a few words so the operator can find it" },
+                    issue: { type: "string", description: "what is wrong, in one or two sentences" },
+                    suggestion: { type: "string", description: "the concrete fix — what to change, keep, or delete" },
+                  },
+                  required: ["kind", "severity", "issue", "suggestion"],
+                },
+              },
+            },
+            required: ["summary", "findings"],
+          },
+        }],
+        messages: [{
+          role: "user",
+          content: "Review this assembled system prompt (the '" +
+            (signedIn ? "signed-in" : "anonymous") + "' assembly). Find conflicts, redundancy, " +
+            "ambiguity, and gaps.\n\n===== ASSEMBLED PROMPT =====\n" + assembled,
+        }],
+      }),
+    });
+    if (!res.ok) {
+      return jsonError(req, 502, `Prompt-review model error ${res.status}: ${(await res.text().catch(() => "")).slice(0, 160)}`);
+    }
+    // deno-lint-ignore no-explicit-any
+    const j = await res.json() as any;
+    // deno-lint-ignore no-explicit-any
+    const tool = (j.content || []).find((b: any) => b.type === "tool_use" && b.name === "review");
+    if (!tool || typeof tool.input !== "object") return jsonError(req, 502, "Reviewer returned nothing.");
+    const findings = Array.isArray(tool.input.findings) ? tool.input.findings.slice(0, 40) : [];
+    return jsonResponse(req, 200, {
+      summary: String(tool.input.summary || "").slice(0, 800),
+      findings,
+      model,
+      signedIn,
+    });
+  } catch (e) {
+    return jsonError(req, 502, "Prompt-review error: " + (e instanceof Error ? e.message : String(e)));
+  }
+}
+
+// ── GET ?models=1 — the live model catalog from Anthropic (admin only) ───────
+// Powers the admin's model-picker dropdown with the CURRENTLY available models, pulled
+// live from the API so the list is never stale or hardcoded. The key stays server-side;
+// the browser only ever sees model ids and display names.
+async function handleModelsGet(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) return jsonError(req, 500, "Server is not configured (missing API key).");
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/models?limit=100", {
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    });
+    if (!res.ok) {
+      return jsonError(req, 502, `Model list error ${res.status}: ${(await res.text().catch(() => "")).slice(0, 160)}`);
+    }
+    // deno-lint-ignore no-explicit-any
+    const j = await res.json() as any;
+    const models = (Array.isArray(j.data) ? j.data : [])
+      // deno-lint-ignore no-explicit-any
+      .filter((m: any) => m && typeof m.id === "string")
+      // deno-lint-ignore no-explicit-any
+      .map((m: any) => ({ id: m.id, name: typeof m.display_name === "string" ? m.display_name : m.id }));
+    return jsonResponse(req, 200, { models });
+  } catch (e) {
+    return jsonError(req, 502, "Model list error: " + (e instanceof Error ? e.message : String(e)));
+  }
 }
 
 // ── admin gate — verify the JWT AND that the caller is in concierge_admins ────
@@ -3458,6 +3762,15 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("defaults")) {
     return await handleDefaultsGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("preview")) {
+    return await handlePreviewGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("models")) {
+    return await handleModelsGet(req);
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("promptreview")) {
+    return await handlePromptReviewPost(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("starters")) {
     return await handleStartersGet(req);

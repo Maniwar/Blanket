@@ -48,7 +48,8 @@ noted where they exist.
 ## House instructions (directives) — follow them, then check them off
 The team can leave a standing instruction for a specific patron; it appears in the
 CUSTOMER block as **HOUSE INSTRUCTIONS FOR THIS PATRON**, each printed with a
-`(#id)`. Invariants (SOPs `house-directives` and `client-book-method`):
+`(#id)`. Invariants (SOP `client-book-method`, which now also carries the
+directive-handling detail formerly split into a separate `house-directives` SOP):
 - **Honour them before anything else.** An open instruction outranks the bot's own
   plan for the conversation. It is woven into service, never read aloud or
   attributed to "the team."
