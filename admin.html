@@ -3946,15 +3946,22 @@ function openOrderDrawer(o) {
   sub.appendChild(stBadge(o.status));
   dw.appendChild(sub);
 
-  // Buyer + destination
-  const who = drawerSection('Patron');
+  // Customer — the consolidated standing summary (name, tier, lifetime value,
+  // blankets, recency, note count). All their notes are in the client book below.
+  const who = drawerSection('Customer');
   const c = custByEmail(o.email);
-  const nameLine = el('div', null, o.name || '—'); nameLine.style.color = 'var(--wool)';
+  const nameLine = el('div', null, o.name || '—'); nameLine.style.cssText = 'color:var(--wool); font-size:15px;';
   who.appendChild(nameLine);
-  const emLine = el('div', 'micro', o.email || '—'); who.appendChild(emLine);
-  if (c) who.appendChild(el('div', 'micro', c.tier + ' · $' + c.ltv.toLocaleString('en-US') +
-    ' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets')));
-  if (o.is_gift && o.recipient_name) who.appendChild(el('div', 'micro', 'Gift → ' + o.recipient_name));
+  who.appendChild(el('div', 'micro', o.email || '—'));
+  if (c) {
+    const stand = el('div', 'micro');
+    stand.style.cssText = 'margin-top:5px; color:var(--wool-dim);';
+    stand.textContent = c.tier + ' · $' + c.ltv.toLocaleString('en-US') + ' lifetime · ' +
+      c.count + (c.count === 1 ? ' blanket' : ' blankets') + ' · last ' + fmtWhen(c.latest) +
+      (c.notes && c.notes.length ? ' · ' + c.notes.length + ' note' + (c.notes.length === 1 ? '' : 's') : '');
+    who.appendChild(stand);
+  }
+  if (o.is_gift && o.recipient_name) who.appendChild(el('div', 'micro', 'This order is a gift → ' + o.recipient_name));
   const oip = orderIp(o);
   if (oip) {
     const ipLine = el('div', 'micro', 'Ordered from IP ' + oip + ' — click to find every order from it');
@@ -3998,19 +4005,19 @@ function openOrderDrawer(o) {
     ff.appendChild(ctl);
     dw.appendChild(ff);
 
-    // Address correction — only before shipment
-    if (['placed', 'weaving', 'finishing'].indexOf(o.status) >= 0) {
-      const as = drawerSection('Shipping address');
+  }
+
+  // This order's shipping & billing — the addresses THIS order used. Shipping is
+  // editable before shipment; billing is captured at checkout and shown read-only.
+  {
+    const as = drawerSection('Shipping & billing');
+    as.appendChild(savedAddrRow(
+      (o.is_gift && o.recipient_name) ? 'ship · gift → ' + o.recipient_name : 'ship', '#3b6a7a', o));
+    if (o.serial != null && ['placed', 'weaving', 'finishing'].indexOf(o.status) >= 0) {
       const aw = el('div', 'addr-edit');
-      function addrLine(o2) {
-        const loc = [(o2.city || ''), (o2.state || '')].filter(Boolean).join(', ') + (o2.zip ? ' ' + o2.zip : '');
-        return '✎ ' + ([o2.address, o2.address2, loc.trim()].filter(Boolean).join(' · ') || 'no address on file');
-      }
       const head2 = el('div', 'addr-head');
-      const cur = el('span', 'micro', addrLine(o));
-      const toggle = el('button', 'btn ghost', 'Edit address'); toggle.type = 'button';
-      head2.appendChild(cur); head2.appendChild(toggle);
-      aw.appendChild(head2);
+      const toggle = el('button', 'btn ghost', 'Edit shipping address'); toggle.type = 'button';
+      head2.appendChild(toggle); aw.appendChild(head2);
       const form = el('div', 'addr-form'); form.style.display = 'none';
       function mk(ph, val, w) {
         const i = document.createElement('input');
@@ -4033,9 +4040,8 @@ function openOrderDrawer(o) {
           if (!r.ok) { fail('Save address', { message: r.message || 'failed' }); return; }
           o.address = r.data.address; o.address2 = r.data.address2;
           o.city = r.data.city; o.state = r.data.state; o.zip = r.data.zip;
-          cur.textContent = addrLine(o);
-          form.style.display = 'none';
           toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' address corrected');
+          renderCustomers(); openOrderDrawer(o);
         });
       });
       [iAddr, iAddr2, iCity, iState, iZip, save].forEach(function (e) { form.appendChild(e); });
@@ -4044,8 +4050,19 @@ function openOrderDrawer(o) {
       });
       aw.appendChild(form);
       as.appendChild(aw);
-      dw.appendChild(as);
     }
+    if (o.billing && o.billing.address) {
+      as.appendChild(savedAddrRow('bill', '#5a6b7a', o.billing));
+    } else {
+      const same = el('div', 'cust-order');
+      const tag = el('span', null, 'bill');
+      tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:#4a4a4a;';
+      same.appendChild(tag);
+      const t = el('span', 'micro', 'same as shipping'); t.style.cssText = 'flex:1 1 200px; opacity:.7;';
+      same.appendChild(t);
+      as.appendChild(same);
+    }
+    dw.appendChild(as);
   }
 
   // Email timeline + resend
@@ -4079,44 +4096,6 @@ function openOrderDrawer(o) {
     dw.appendChild(es);
   }
 
-  // Addresses by order — the honest pairing. Each order carries ONE shipping
-  // address and, when it differed, ONE billing address; there is no global
-  // billing↔shipping link, so we show them together, per order. (Both are
-  // projections of the order row — there is no address table.) Newest first.
-  const ordersForAddr = (c && c.orders) || [];
-  if (ordersForAddr.length) {
-    const ads = drawerSection('Addresses by order');
-    ads.appendChild(el('div', 'micro',
-      'Each order has one shipping address, and one billing address when it differed from shipping.'));
-    const CAP = 15;
-    ordersForAddr.slice(0, CAP).forEach(function (o2) {
-      const isThis = orderKey(o2) === orderKey(o);
-      const grp = el('div'); grp.style.cssText = 'padding:9px 0 3px; border-top:1px solid var(--hairline-dim);';
-      const head = el('div', 'micro');
-      if (isThis) head.style.color = 'var(--brass-soft)';
-      head.textContent = 'Nº ' + orderNo(o2).toLocaleString('en-US') + ' · ' + (o2.colorway || '—') +
-        (o2.is_gift && o2.recipient_name ? ' · gift → ' + o2.recipient_name : '') +
-        ' · ' + fmtWhen(o2.placed_at) + (isThis ? '  · this order' : '');
-      grp.appendChild(head);
-      grp.appendChild(savedAddrRow(o2.is_gift ? 'ship · gift' : 'ship', '#3b6a7a', o2));
-      if (o2.billing && o2.billing.address) {
-        grp.appendChild(savedAddrRow('bill', '#5a6b7a', o2.billing));
-      } else {
-        const same = el('div', 'cust-order');
-        const tag = el('span', null, 'bill');
-        tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:#4a4a4a;';
-        same.appendChild(tag);
-        const t = el('span', 'micro', 'same as shipping'); t.style.cssText = 'flex:1 1 200px; opacity:.7;';
-        same.appendChild(t);
-        grp.appendChild(same);
-      }
-      ads.appendChild(grp);
-    });
-    if (ordersForAddr.length > CAP) {
-      ads.appendChild(el('div', 'micro', '+ ' + (ordersForAddr.length - CAP) + ' older orders not shown'));
-    }
-    dw.appendChild(ads);
-  }
 
   // Client book & house instructions — what the concierge has learned, and the
   // standing instructions the team has left for it to follow.
