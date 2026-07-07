@@ -2794,7 +2794,7 @@ async function saveEngine() {
 async function saveVoice() {
   const rows = [
     { key: 'greeting',    value: $('cfg-greeting').value,           updated_at: nowIso() },
-    { key: 'voice_base',  value: $('cfg-voice-base').value,         updated_at: nowIso() },
+    { key: 'voice_base',  value: $('cfg-voice-base').value.trim(),  updated_at: nowIso() },
     { key: 'voice_notes', value: $('cfg-voice').value,              updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
@@ -2804,7 +2804,7 @@ async function saveVoice() {
 
 async function saveClientbook() {
   const rows = [
-    { key: 'clientbook_base',        value: $('cfg-clientbook-base').value,   updated_at: nowIso() },
+    { key: 'clientbook_base',        value: $('cfg-clientbook-base').value.trim(), updated_at: nowIso() },
     { key: 'clientbook_policy',      value: $('cfg-clientbook').value.trim(), updated_at: nowIso() },
     { key: 'clientbook_log_actions', value: $('cfg-cb-actions').checked,      updated_at: nowIso() },
     { key: 'clientbook_reflect',     value: $('cfg-cb-reflect').checked,      updated_at: nowIso() }

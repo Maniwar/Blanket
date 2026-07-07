@@ -1875,7 +1875,7 @@ function buildSystemPrompt(
     ? data.config.voice_base
     : BRAND_SYSTEM;
   let system = voiceBase.includes("{{KB}}")
-    ? voiceBase.replace("{{KB}}", () => kb)
+    ? voiceBase.replaceAll("{{KB}}", () => kb)
     : voiceBase + "\n\n" + kb;
   if (signedIn) {
     system += "\nREGISTER TOOLS\n" +
