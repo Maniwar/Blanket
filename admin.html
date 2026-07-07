@@ -714,6 +714,7 @@
     <button class="tab" data-tab="cache" role="tab">Cache</button>
     <button class="tab" data-tab="customers" role="tab">Orders &amp; Customers</button>
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
+    <button class="tab" data-tab="actions" role="tab">Actions</button>
     <button class="tab" data-tab="website" role="tab">Website</button>
     <button class="tab" data-tab="tools" role="tab">Tools</button>
     <button class="tab" data-tab="evals" role="tab">Evals</button>
@@ -1057,6 +1058,15 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         </div>
       </section>
 
+    </div>
+
+    <!-- ============ TAB 3c : ACTIONS (register-action audit log) ============ -->
+    <div id="panel-actions" class="panel">
+      <div class="panel-head">
+        <span class="micro">Audit trail</span>
+        <h2>Actions</h2>
+        <p class="note">Every register action the concierge took on a customer's behalf — status reads, address and colorway changes, cancellations, gift edits, context recalls, notes written. <strong>Click any row</strong> to jump to the conversation where it happened (scrolled to the moment); the <strong>Nº</strong> opens that order's drawer; the <strong>IP</strong> it came from is shown (click to copy) and <strong>searchable</strong>. Read-only.</p>
+      </div>
       <section class="card">
         <div class="card-head">
           <h3>Register actions by the concierge</h3>
@@ -1813,7 +1823,7 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'website', 'tools', 'evals'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'actions', 'website', 'tools', 'evals'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
   if (name === 'knowledge') autoGrowAll('#kb-list');

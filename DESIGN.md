@@ -349,8 +349,10 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   cancellations, context recalls, notes written — and to **click through to the
   chat, the order, and the IP** behind each one, so that nothing the bot did is
   invisible and I can trace it to its source. *(Register-action log:
-  `concierge_actions`, surfaced in the studio; every order change also captured in
-  `order_events`. Each row is **clickable → jumps to the conversation** where it
+  `concierge_actions`, in its **own top-level "Actions" tab** (next to
+  Conversations — it's an audit trail, no longer buried at the bottom of the
+  Procedures handbook); every order change also captured in `order_events`. Each
+  row is **clickable → jumps to the conversation** where it
   happened, scrolled to the moment (reason-tagged marker); the **Nº opens that
   order's drawer**; and the **origin IP** is shown (joined from the conversation —
   admin-only, click-to-copy). The search box also takes an **IP** (full = exact,
