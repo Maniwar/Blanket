@@ -1194,6 +1194,7 @@ const state = {
   gaps: [],
   customers: [],
   custView: 'orders',      // 'orders' (register table) | 'patrons' (client book)
+  custIpLoaded: false,     // the loaded order set came from a server-side IP filter
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
@@ -1521,7 +1522,19 @@ function wireStatic() {
   $('cust-refresh').addEventListener('click', function () {
     withBusy($('cust-refresh'), loadCustomers);
   });
-  $('cust-search').addEventListener('input', renderCustomers); // instant within-page narrowing
+  // Instant within-page narrowing for free text (name/email). But an IP is a
+  // SERVER filter — and once the loaded set came from an IP search, even clearing
+  // the box must re-fetch (client narrowing can't widen a server-narrowed set).
+  // In those cases, debounce a real reload instead of a client re-render.
+  $('cust-search').addEventListener('input', function () {
+    const v = ($('cust-search').value || '').trim();
+    if (isIpLike(v) || state.custIpLoaded) {
+      clearTimeout(state._custSearchDeb);
+      state._custSearchDeb = setTimeout(function () { loadCustomers(); }, 350);
+    } else {
+      renderCustomers();
+    }
+  });
 
   // ---- Audit filters: Search / Clear / Load more + Enter-to-search ----
   wireFilter('act', loadActions, ['act-q'], $('act-apply'), $('act-clear'), $('actions-more'));
@@ -3623,6 +3636,17 @@ async function saveEdition() {
   loadEdition();
 }
 
+/* Does this look like a full or partial IP (v4 or v6)? IP is a SERVER-side filter
+   (it joins conversations → sessions → orders), so the client-side narrowing must
+   never treat it as an order-field text match. */
+function isIpLike(s) {
+  s = (s || '').trim();
+  return !!s && (
+    /^(\d{1,3})(\.\d{1,3}){1,3}$/.test(s) ||         // full or partial IPv4
+    /^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,}$/i.test(s)   // IPv6
+  );
+}
+
 async function loadCustomers(more) {
   if (!more) { pageState.cust = 0; state.custSel = new Set(); state.custChip = ''; state._custJumpDone = false; }
   const serialQ = fkw('cust-serial'), statusQ = fval('cust-status'),
@@ -3633,10 +3657,8 @@ async function loadCustomers(more) {
   // IP search — an IP typed into the box finds the orders whose chat originated
   // there. The trail is orders.chat_session ↔ conversations.session_key ↔ ip, so
   // resolve the matching session keys first, then constrain the orders query.
-  const isIp = kw && !isSerial && (
-    /^(\d{1,3})(\.\d{1,3}){1,3}$/.test(kw) ||        // full or partial IPv4
-    /^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,}$/i.test(kw)  // IPv6
-  );
+  const isIp = !isSerial && isIpLike(kw);
+  state.custIpLoaded = !!isIp;   // remember the loaded set came from a server IP filter
   let ipSessionKeys = null;
   if (isIp) {
     const fullV4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(kw);
@@ -4190,10 +4212,13 @@ function renderCustomers() {
   const list = $('cust-list');
   list.textContent = '';
 
+  const rawSearch = ($('cust-search').value || '').trim();
   const serialActive = /^\d+$/.test(($('cust-serial').value || '').trim());
-  // When jumping to an order Nº the server already narrowed to it — don't also
-  // apply the free-text box (it's ignored on that path).
-  const q = serialActive ? '' : ($('cust-search').value || '').trim().toLowerCase();
+  // When jumping to an order Nº — or searching by IP — the SERVER already narrowed
+  // the loaded set. Don't also apply the box as an order-field text filter: a
+  // serial isn't in the fields, and an IP isn't either, so doing so would wrongly
+  // empty the table. Free-text (name/email) still narrows client-side.
+  const q = (serialActive || isIpLike(rawSearch)) ? '' : rawSearch.toLowerCase();
 
   // Register figures reflect what's loaded (paged 200 orders/page).
   let totalOrders = 0, totalActive = 0;
@@ -4224,7 +4249,10 @@ function renderCustomers() {
   list.appendChild(seg);
 
   if (!allOrders.length) {
-    list.appendChild(el('div', 'empty micro', q ? 'No order matches that.' : 'No entries in the register yet.'));
+    const msg = isIpLike(rawSearch)
+      ? 'No orders from IP ' + rawSearch + '. Only an order placed during a chat whose IP was logged can match — direct checkouts and orders from before IP logging won’t.'
+      : (q ? 'No order matches that.' : 'No entries in the register yet.');
+    list.appendChild(el('div', 'empty micro', msg));
     return;
   }
 
