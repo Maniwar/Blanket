@@ -476,8 +476,10 @@ async function customerBlock(customer: Customer): Promise<string> {
   // Open HOUSE DIRECTIVES — instructions a human admin left for this patron that
   // the concierge MUST follow. Fetched separately (and unbounded by the 14-note
   // window) so a stack of recent AI notes can never bury a standing instruction.
+  // Newest-first: a just-added instruction is the most likely to matter, and must
+  // never fall outside the window when several are open.
   const directivesP = pgSelect<{ id: number; note: string; created_at: string }>(
-    `customer_notes?select=id,note,created_at&${noteFilter}&kind=eq.directive&resolved=eq.false&order=created_at.asc&limit=8`,
+    `customer_notes?select=id,note,created_at&${noteFilter}&kind=eq.directive&resolved=eq.false&order=created_at.desc&limit=12`,
   );
   // Re-engagement: the last conversation we wrapped (snoozed or closed). If one
   // exists, THIS is a fresh visit picking the thread back up, not a first hello.

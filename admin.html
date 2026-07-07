@@ -3777,16 +3777,17 @@ async function loadCustomers(more) {
   (state.custOrders || []).forEach(function (o) {
     const key = (o.email || o.user_id || 'unknown').toLowerCase();
     if (!byKey.has(key)) {
-      byKey.set(key, { email: o.email || '—', name: o.name || '', orders: [], latest: o.placed_at });
+      byKey.set(key, { email: o.email || '—', name: o.name || '', user_id: o.user_id || null, orders: [], latest: o.placed_at });
     }
     const c = byKey.get(key);
     c.orders.push(o);
     if (!c.name && o.name) c.name = o.name;
+    if (!c.user_id && o.user_id) c.user_id = o.user_id;
   });
   state.customers = [...byKey.values()].map(function (c) {
     const active = c.orders.filter(function (o) { return o.status !== 'cancelled'; }).length;
     return {
-      email: c.email, name: c.name || '—', orders: c.orders,
+      email: c.email, name: c.name || '—', user_id: c.user_id || null, orders: c.orders,
       notes: notesByKey.get((c.email || 'unknown').toLowerCase()) || [],
       count: active, tier: tierFor(Math.max(1, active)),
       ltv: active * PRICE, latest: c.orders[0].placed_at
@@ -4289,7 +4290,7 @@ function openOrderDrawer(o) {
   }
   bs.appendChild(directiveComposer(o.email, function () {
     loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
-  }));
+  }, o.user_id));
   dw.appendChild(bs);
 
   bd.classList.add('on');
@@ -4397,7 +4398,7 @@ function savedAddrRow(tagText, color, a) {
 /* Compose box for a human directive — a standing instruction the concierge must
    follow for this patron (order exceptions, special handling). Inserts a
    kind='directive' note authored by the signed-in admin. onAdded() refreshes. */
-function directiveComposer(email, onAdded) {
+function directiveComposer(email, onAdded, userId) {
   const wrap = el('div'); wrap.style.cssText = 'margin-top:12px; display:flex; flex-direction:column; gap:8px;';
   const ta = document.createElement('textarea');
   ta.rows = 2; ta.style.cssText = 'width:100%; resize:vertical;';
@@ -4408,8 +4409,11 @@ function directiveComposer(email, onAdded) {
     if (note.length < 3) { toast('Write the instruction first', true); return; }
     withBusy(btn, async function () {
       const author = (state.session && state.session.user && state.session.user.email) || '';
-      const r = await sb.from('customer_notes')
-        .insert({ email: email, note: note.slice(0, 400), kind: 'directive', resolved: false, author: author });
+      // Key on BOTH the (lowercased) email and the user_id so the concierge's
+      // per-turn lookup matches regardless of email case.
+      const row = { email: (email || '').toLowerCase(), note: note.slice(0, 400), kind: 'directive', resolved: false, author: author };
+      if (userId) row.user_id = userId;
+      const r = await sb.from('customer_notes').insert(row);
       if (r.error) { fail('Leave instruction', r.error); return; }
       ta.value = '';
       toast('Instruction left — the concierge will follow it when this patron returns');
@@ -4536,7 +4540,7 @@ function renderPatrons(list, q) {
     } else {
       c.notes.forEach(function (n) { book.appendChild(clientBookNoteLine(n)); });
     }
-    book.appendChild(directiveComposer(c.email, function () { loadCustomers(); }));
+    book.appendChild(directiveComposer(c.email, function () { loadCustomers(); }, c.user_id));
     row.appendChild(book);
 
     list.appendChild(row);
@@ -5320,13 +5324,21 @@ async function regradeConversation(c) {
   try { res = await postRegrade({ conversation_id: c.id }); }
   catch (e) { fail('Re-grade', e); return; }
   if (!res.ok) { const t = await res.text().catch(function () { return ''; }); fail('Re-grade', { message: 'HTTP ' + res.status + ' ' + t.slice(0, 120) }); return; }
+  const j = await res.json().catch(function () { return {}; });
   const gr = await sb.from('concierge_conversations').select('goal_status,sales_stage').eq('id', c.id).single();
   if (!gr.error && gr.data) {
     c.goal_status = gr.data.goal_status; c.sales_stage = gr.data.sales_stage;
     (state.convos || []).forEach(function (x) { if (x.id === c.id) { x.goal_status = c.goal_status; x.sales_stage = c.sales_stage; } });
     if (state.activeConvoId === c.id) openConvo(c); // re-render with the new scorecard
   }
-  toast('Goals re-graded');
+  // Surface the real outcome, so a silent no-op is diagnosable.
+  if (j && j.graded === 0) {
+    toast('Nothing to grade — this conversation has no stored messages yet.', true);
+  } else if (!gr.data || !gr.data.goal_status) {
+    toast('Graded, but the judge returned no scorecard — try once more (transient model error).', true);
+  } else {
+    toast('Goals re-graded');
+  }
 }
 /* Re-grade every conversation currently shown (bounded, one model call each). */
 async function regradeShown() {
