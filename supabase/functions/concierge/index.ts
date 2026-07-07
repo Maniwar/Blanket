@@ -2474,20 +2474,23 @@ const PROMPT_DOCTOR_SYSTEM =
   "(3) AMBIGUITY — an instruction the model could reasonably read two ways; (4) GAP — an " +
   "obvious rule the goal needs that is missing. Ignore tone and house style. Tokens like " +
   "{{action:commission}}, {{reply:...}}, {{img:...}}, {{form:...}}, {{KB}}, {{OBJECTIVE}} are " +
-  "legitimate UI/template markers — never flag them as syntax errors. Be specific and " +
-  "conservative: if the prompt is sound, return few or no findings.\n" +
-  "You may ALSO propose concrete, applyable EDITS — but ONLY to the editable targets listed " +
-  "under EDITABLE TARGETS in the message. For each edit, give the exact target id, the COMPLETE " +
-  "replacement text for that target (not a diff, not a fragment — the whole new value in the " +
-  "format noted for that target), a short label, and a one-line rationale. If a problem lives in " +
-  "a part of the prompt that is NOT an editable target (the core constitution or the fixed engine " +
-  "sections), describe it as a finding only — do NOT invent an edit for it. Never change the " +
-  "template markers or the honesty/price/scope rules. Reply with a single tool call.";
+  "legitimate UI/template markers — never flag them as syntax errors. In particular, " +
+  "{{form:<slug>:<serial>}} is a real, authorized register token for signed-in owners (it opens a " +
+  "labeled form, e.g. to collect an address) — never flag it as unauthorized or invented. Be " +
+  "specific and conservative: if the prompt is sound, return few or no findings.\n" +
+  "APPLYABLE EDITS: whenever a problem CAN be fixed by editing one of the targets listed under " +
+  "EDITABLE TARGETS, you MUST emit it as an `edits` entry (not merely describe it in a finding). Give " +
+  "the exact target id, a short label, a one-line rationale, and the COMPLETE replacement value for " +
+  "that target (the whole new value in the format noted for it — not a diff or fragment). Only leave " +
+  "a problem as a finding-without-edit when its fix lives in a part that is NOT an editable target " +
+  "(the core constitution or the fixed engine sections) — say so. Never propose an edit that removes " +
+  "a safety mechanism (e.g. replacing the address-change form with the model typing the address), and " +
+  "never change the template markers or the honesty/price/scope rules. Reply with a single tool call.";
 
 // The prompt surfaces an admin can edit from the Studio, so the tuner can propose an
 // applyable replacement value for each. Everything else (the fixed engine sections) is
 // advisory-only. Kept small on purpose — these are the fields operators actually iterate.
-function editableTargets(data: ConciergeData): { id: string; purpose: string; format: string; current: string }[] {
+function editableTargets(data: ConciergeData, signedIn: boolean): { id: string; purpose: string; format: string; current: string }[] {
   const t: { id: string; purpose: string; format: string; current: string }[] = [];
   const cfg = data.config || {};
   const objective = (typeof cfg.primary_objective === "string" && cfg.primary_objective.trim())
@@ -2507,7 +2510,12 @@ function editableTargets(data: ConciergeData): { id: string; purpose: string; fo
     }).filter((s) => s.trim()).join("\n") : "";
   t.push({ id: "config:objections", purpose: "OBJECTION PLAYBOOK — how to reassure on a hesitation",
     format: "plain text, ONE per line as 'trigger | response'", current: objections || "(none)" });
+  // Only offer SOPs that are actually IN the assembly being reviewed — a signed-in SOP
+  // (e.g. address-change) reviewed against the anonymous prompt looks broken because the
+  // signed-in sections that authorize its tokens aren't present. Scope by audience.
   for (const s of data.sops) {
+    const inThisAudience = s.audience === "signed_in" ? signedIn : s.audience === "anon" ? !signedIn : true;
+    if (!inThisAudience) continue;
     t.push({ id: `sop:${s.slug}`, purpose: `SOP '${s.title}' (${s.audience})`,
       format: "markdown, the full procedure body", current: s.content_md });
   }
@@ -2530,7 +2538,7 @@ async function handlePromptReviewPost(req: Request): Promise<Response> {
   const model = (typeof data.config?.promptreview_model === "string" && data.config.promptreview_model.trim())
     ? data.config.promptreview_model.trim()
     : resolveModel(data);
-  const targets = editableTargets(data);
+  const targets = editableTargets(data, signedIn);
   const allowed = new Set(targets.map((t) => t.id));
   const targetsBlock = targets.map((t) =>
     `--- TARGET ${t.id}\npurpose: ${t.purpose}\nformat: ${t.format}\ncurrent value:\n${t.current}`,
