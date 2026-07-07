@@ -635,6 +635,22 @@
   .msg.acted-here .bubble{ border-left:3px solid var(--brass); }
   .msg.acted-here .actedtag{ display:inline; }
   .msg .actedtag{ display:none; margin-left:8px; color:var(--brass-soft); font-weight:600; }
+  /* A reply that carried out a house instruction shows WHICH note (and its text)
+     inline beneath the bubble, so a chat with several house notes makes clear
+     which message answered which. Purple to match house-note chips everywhere. */
+  .msg.house-here .bubble{ border-left:3px solid #7a5aa0; }
+  .msg .housemark{ margin-top:6px; padding:7px 10px 8px; border-left:3px solid #7a5aa0;
+    background:rgba(122,90,160,.10); border-radius:4px; }
+  .msg .housemark + .housemark{ margin-top:5px; }
+  .msg .housemark .hm-id{ display:block; font-family:'IBM Plex Mono', monospace; font-size:9.5px;
+    letter-spacing:.06em; text-transform:uppercase; color:#b096d6; }
+  .msg .housemark .hm-text{ margin-top:3px; font-size:13px; line-height:1.5; color:var(--wool);
+    font-style:italic; white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere; }
+  .msg .housemark .hm-text.muted{ color:var(--wool-faint); font-style:normal; }
+  .house-bar{ position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:8px;
+    padding:6px 9px; margin-bottom:12px; background:rgba(122,90,160,.12);
+    border:1px solid #5a4470; border-radius:3px; }
+  .house-bar .hb-lbl{ color:#b096d6; }
   @keyframes msgflash{
     0%{ box-shadow:0 0 0 3px var(--brass); background:rgba(196,155,91,.22); }
     70%{ box-shadow:0 0 0 3px var(--brass); }
@@ -6912,7 +6928,10 @@ function renderConvoList(counts) {
     const hn = state.convoHouse && state.convoHouse[c.id];
     if (hn && hn.length) {
       const tag = el('span', 'hnflag', '🏷' + (hn.length > 1 ? '×' + hn.length : ''));
-      tag.title = 'House note acted on here (#' + hn.join(', #') + ') — click to jump to the moment';
+      tag.title = hn.length > 1
+        ? hn.length + ' house instructions acted on (#' + hn.join(', #') + ') — open to see each one, ' +
+          'with its text, pinned to the reply that carried it out; step through them with the 🏷 bar'
+        : 'House instruction #' + hn[0] + ' acted on — open to see it pinned to the reply that carried it out';
       tag.addEventListener('click', function (e) {
         e.stopPropagation();
         state.jumpTo = { conv: c.id, at: (state.convoHouseAt && state.convoHouseAt[c.id]) || null, reason: 'house' };
@@ -7169,6 +7188,32 @@ async function openConvo(c) {
     else (fres.data || []).forEach(function (f) { fbMap[f.message_id] = f; });
   }
 
+  // House instructions the concierge acted on in THIS chat — EVERY resolve
+  // (not just the first), each with its note text. This is what lets the
+  // transcript mark each acted-on reply and show WHICH instruction it answered,
+  // so a chat with two house notes no longer collapses to a single unlabelled jump.
+  state.activeHouseActs = [];
+  try {
+    const hact = await sb.from('concierge_actions')
+      .select('payload,created_at')
+      .eq('action', 'resolve_admin_note')
+      .eq('conversation_id', c.id)
+      .order('created_at', { ascending: true });
+    if (!hact.error && hact.data && hact.data.length) {
+      const acts = hact.data.map(function (a) {
+        return { note_id: (a.payload && a.payload.note_id != null) ? a.payload.note_id : null, at: a.created_at };
+      });
+      const noteIds = acts.map(function (a) { return a.note_id; }).filter(function (x) { return x != null; });
+      const textMap = {};
+      if (noteIds.length) {
+        const nres = await sb.from('customer_notes').select('id,note').in('id', noteIds);
+        if (!nres.error) (nres.data || []).forEach(function (r) { textMap[r.id] = r.note; });
+      }
+      acts.forEach(function (a) { a.text = (a.note_id != null) ? (textMap[a.note_id] || null) : null; });
+      state.activeHouseActs = acts;
+    }
+  } catch (e) { /* non-fatal: the transcript still renders without house markers */ }
+
   if (state.activeConvoId !== c.id) return; // user clicked away meanwhile
   state.activeMsgs = msgs;
   state.activeFb = fbMap;   // kept for the transcript CSV export (rating + note columns)
@@ -7391,28 +7436,45 @@ function renderTranscript(msgs, fbMap) {
     return;
   }
 
-  // If we arrived here via a house-note / order jump, find the reply the action
-  // lands on: the LAST assistant message at or before the action's timestamp
-  // (that's the turn the concierge acted on). With no timestamp, the last
-  // assistant message. The matched message gets a lasting brass rail + a one-shot
-  // pulse, and we scroll to it instead of the bottom.
-  let targetIdx = -1;
-  const jump = (state.jumpTo && state.jumpTo.conv === state.activeConvoId) ? state.jumpTo : null;
-  if (jump) {
-    const at = jump.at ? new Date(jump.at).getTime() : NaN;
+  // Which reply did a given action land on? The LAST assistant message at or
+  // before the action's timestamp (that's the turn the concierge acted on); with
+  // no timestamp, the first assistant message.
+  const replyIdxFor = function (atIso) {
+    const at = atIso ? new Date(atIso).getTime() : NaN;
+    let idx = -1;
     for (let i = 0; i < msgs.length; i++) {
       if (msgs[i].role !== 'assistant') continue;
-      if (isNaN(at)) { targetIdx = i; continue; }
+      if (isNaN(at)) { idx = i; continue; }
       const mt = new Date(msgs[i].created_at).getTime();
-      if (!isNaN(mt) && mt <= at + 1500) targetIdx = i;   // small skew tolerance
+      if (!isNaN(mt) && mt <= at + 1500) idx = i;   // small skew tolerance
     }
-    if (targetIdx < 0) {                                   // action logged before any reply landed
-      for (let i = 0; i < msgs.length; i++) { if (msgs[i].role === 'assistant') { targetIdx = i; break; } }
-    }
+    if (idx < 0) { for (let i = 0; i < msgs.length; i++) { if (msgs[i].role === 'assistant') { idx = i; break; } } }
+    return idx;
+  };
+
+  // Every house instruction acted on in this chat → the reply it landed on. A chat
+  // can carry several, so this is a MAP (msg index → [acts]) — each acted-on reply
+  // is marked and labelled with its note id + text, and a jumper steps through them.
+  const houseActs = state.activeHouseActs || [];
+  const houseByIdx = {};
+  houseActs.forEach(function (act) {
+    const idx = replyIdxFor(act.at);
+    if (idx >= 0) { (houseByIdx[idx] = houseByIdx[idx] || []).push(act); }
+  });
+  const houseMode = houseActs.length > 0;
+
+  // If we arrived via an ORDER jump (or a plain jump), the single acted-on reply
+  // gets a lasting brass rail + a one-shot pulse. House jumps are handled by the
+  // per-note markers above instead, so we skip the single-target path for them.
+  let targetIdx = -1;
+  const jump = (state.jumpTo && state.jumpTo.conv === state.activeConvoId) ? state.jumpTo : null;
+  if (jump && !(jump.reason === 'house' && houseMode)) {
+    targetIdx = replyIdxFor(jump.at);
   }
 
   let targetNode = null;
   const ratedNodes = [];
+  const houseNodes = [];   // acted-on replies, in order — for the house-note jumper
   msgs.forEach(function (m, i) {
     const isUser = m.role === 'user';
     const node = el('div', 'msg ' + (isUser ? 'user' : 'assistant'));
@@ -7457,8 +7519,44 @@ function renderTranscript(msgs, fbMap) {
       targetNode = node;
     }
     node.appendChild(meta);
+    // House instruction(s) carried out on THIS reply — one labelled block each, so
+    // several notes in one chat are each readable and pinned to the right message.
+    if (houseByIdx[i]) {
+      node.classList.add('house-here');
+      houseNodes.push(node);
+      houseByIdx[i].forEach(function (act) {
+        const hm = el('div', 'housemark');
+        hm.appendChild(el('span', 'hm-id',
+          '🏷 house instruction ' + (act.note_id != null ? '#' + act.note_id : '(note)') + ' carried out here'));
+        if (act.text) hm.appendChild(el('div', 'hm-text', '“' + String(act.text) + '”'));
+        else hm.appendChild(el('div', 'hm-text muted', '(note text unavailable — it may have been deleted since)'));
+        node.appendChild(hm);
+      });
+    }
     body.appendChild(node);
   });
+
+  // House-note jumper: a sticky bar to step through the replies that carried out a
+  // house instruction — so a chat with several notes is navigable, not a single jump.
+  if (houseNodes.length) {
+    const hbar = el('div', 'house-bar');
+    hbar.appendChild(el('span', 'micro hb-lbl',
+      '🏷 ' + houseActs.length + ' house instruction' + (houseActs.length === 1 ? '' : 's') + ' acted on'));
+    let hi = -1;
+    const hgo = function (dir) {
+      hi = (hi + dir + houseNodes.length) % houseNodes.length;
+      const n = houseNodes[hi];
+      try { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      catch (e) { body.scrollTop = n.offsetTop - 40; }
+      n.classList.add('flash'); setTimeout(function () { n.classList.remove('flash'); }, 1700);
+    };
+    const hprev = el('button', 'btn ghost mini', '▲'); hprev.type = 'button'; hprev.title = 'Previous house-note moment';
+    hprev.addEventListener('click', function () { hgo(-1); });
+    const hnext = el('button', 'btn ghost mini', '▼'); hnext.type = 'button'; hnext.title = 'Next house-note moment';
+    hnext.addEventListener('click', function () { hgo(1); });
+    hbar.appendChild(hprev); hbar.appendChild(hnext);
+    body.insertBefore(hbar, body.firstChild);
+  }
 
   // Rated-message jumper: a sticky bar to step through the 👍/👎 replies.
   if (ratedNodes.length) {
@@ -7482,11 +7580,19 @@ function renderTranscript(msgs, fbMap) {
     body.insertBefore(bar, body.firstChild);
   }
 
-  if (targetNode) {
+  // Scroll priority: a house jump (or any house-note chat) centers the FIRST
+  // acted-on reply and pulses it; an order/plain jump centers its single target;
+  // otherwise land at the bottom (the latest turn).
+  const scrollTarget = (houseMode && houseNodes.length) ? houseNodes[0] : targetNode;
+  if (scrollTarget) {
+    if (scrollTarget === houseNodes[0]) {
+      scrollTarget.classList.add('flash');
+      setTimeout(function () { scrollTarget.classList.remove('flash'); }, 2600);
+    }
     // Let layout settle, then center the acted-on reply in the transcript pane.
     requestAnimationFrame(function () {
-      try { targetNode.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-      catch (e) { body.scrollTop = targetNode.offsetTop - 40; }
+      try { scrollTarget.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      catch (e) { body.scrollTop = scrollTarget.offsetTop - 40; }
     });
   } else {
     body.scrollTop = body.scrollHeight;
