@@ -494,8 +494,14 @@ rather than merely reacting:
   conversation's funnel stage — *browsing · engaged · evaluating · objection ·
   ready · won · lost* — stored on `concierge_conversations.sales_stage` and shown
   as a `stage · …` chip in the Conversations tab (the value `evaluating` displays
-  as **considering** so it can't be read as "still being graded"). The live bot
-  also reads the stage each turn to choose a stage-appropriate move. Every graded
+  as **considering** so it can't be read as "still being graded"). **This stored
+  value is analytics only — it is *not* fed back to the live bot.** The concierge
+  forms its *own* read of the funnel stage every turn, in the moment, from the
+  conversation and LIVE STATE (the NEXT-MOVE selector in `kb.ts`), and that live
+  read — not the graded `sales_stage` — is what drives its move. So the two are
+  deliberately independent: the grader's stage is an after-the-fact judgment for
+  the admin (it can even lag or disagree with the bot's live read), and the live
+  path fetches `goal_status` but not `sales_stage`. Every graded
   conversation carries a stage; short/older chats that were never graded show as
   **not yet graded**, and **Re-grade shown** (which grades any chat with messages,
   no substance gate) drives coverage to 100%. The Conversations tab adds a
