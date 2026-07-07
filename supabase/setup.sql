@@ -212,6 +212,21 @@ create table if not exists public.order_events (
   event text not null, changes jsonb, created_at timestamptz not null default now());
 create index if not exists order_events_order_idx on public.order_events (order_id, created_at desc);
 
+-- Edit history for admin-managed content (config values, SOPs, KB entries), so a
+-- change to a base prompt / policy / procedure can be reviewed and rolled back.
+-- Append-only; rows are written by the security-definer trigger below (mirrors
+-- order_events). `snapshot` is the value/content AFTER each change.
+create table if not exists public.concierge_edit_history (
+  id bigint generated always as identity primary key,
+  entity text not null,          -- 'config' | 'sop' | 'kb'
+  ref text not null,             -- config key, or SOP/KB slug
+  snapshot jsonb not null,       -- the value/content after the change
+  label text,                    -- optional human note (unused by the trigger)
+  edited_by text,                -- admin email, or '(system)' for service-role writes
+  created_at timestamptz not null default now());
+create index if not exists concierge_edit_history_idx
+  on public.concierge_edit_history (entity, ref, created_at desc);
+
 create table if not exists public.concierge_goals (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null, label text not null, description text not null,
@@ -263,7 +278,7 @@ begin
     'concierge_messages','concierge_feedback','customers','orders','allocation_counter',
     'serial_holds','concierge_sops','concierge_actions','concierge_cache','concierge_flags',
     'concierge_forms','customer_notes','customer_addresses','order_events','concierge_goals','site_content',
-    'concierge_tools','concierge_evals'
+    'concierge_tools','concierge_evals','concierge_edit_history'
   ] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
@@ -289,6 +304,8 @@ drop policy if exists "admin read" on public.concierge_actions;
 create policy "admin read" on public.concierge_actions for select to authenticated using (public.is_concierge_admin());
 drop policy if exists "admin read" on public.order_events;
 create policy "admin read" on public.order_events for select to authenticated using (public.is_concierge_admin());
+drop policy if exists "admin read" on public.concierge_edit_history;
+create policy "admin read" on public.concierge_edit_history for select to authenticated using (public.is_concierge_admin());
 
 -- concierge_admins roster, from the admin panel:
 --   • any admin may LIST the roster and ADD a (non-super) admin;
@@ -517,6 +534,51 @@ end; $$;
 drop trigger if exists orders_audit on public.orders;
 create trigger orders_audit after insert or update on public.orders
   for each row execute function public.log_order_event();
+
+-- Edit-history trigger: snapshot an admin-managed row after every real change, so
+-- it can be reviewed and rolled back. One function branches by table. Captures the
+-- editing admin from the JWT (service-role writes have none → '(system)').
+create or replace function public.log_edit_history() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare v_entity text; v_ref text; v_snap jsonb; v_changed boolean;
+begin
+  if tg_table_name = 'concierge_config' then
+    v_entity := 'config'; v_ref := new.key; v_snap := new.value;
+    v_changed := (tg_op = 'INSERT') or (old.value is distinct from new.value);
+  elsif tg_table_name = 'concierge_sops' then
+    v_entity := 'sop'; v_ref := new.slug;
+    v_snap := jsonb_build_object('title', new.title, 'content_md', new.content_md,
+      'enabled', new.enabled, 'sort_order', new.sort_order);
+    v_changed := (tg_op = 'INSERT')
+      or (old.content_md is distinct from new.content_md)
+      or (old.title is distinct from new.title)
+      or (old.enabled is distinct from new.enabled);
+  elsif tg_table_name = 'concierge_kb' then
+    v_entity := 'kb'; v_ref := new.slug;
+    v_snap := jsonb_build_object('title', new.title, 'content_md', new.content_md,
+      'enabled', new.enabled, 'sort_order', new.sort_order);
+    v_changed := (tg_op = 'INSERT')
+      or (old.content_md is distinct from new.content_md)
+      or (old.title is distinct from new.title)
+      or (old.enabled is distinct from new.enabled);
+  else
+    return new;
+  end if;
+  if v_changed then
+    insert into public.concierge_edit_history (entity, ref, snapshot, edited_by)
+    values (v_entity, v_ref, v_snap, coalesce(nullif(auth.jwt() ->> 'email', ''), '(system)'));
+  end if;
+  return new;
+end; $$;
+drop trigger if exists config_history on public.concierge_config;
+create trigger config_history after insert or update on public.concierge_config
+  for each row execute function public.log_edit_history();
+drop trigger if exists sops_history on public.concierge_sops;
+create trigger sops_history after insert or update on public.concierge_sops
+  for each row execute function public.log_edit_history();
+drop trigger if exists kb_history on public.concierge_kb;
+create trigger kb_history after insert or update on public.concierge_kb
+  for each row execute function public.log_edit_history();
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3b. AUDIT-SEARCH INDEXES — make the admin surfaces filterable at scale

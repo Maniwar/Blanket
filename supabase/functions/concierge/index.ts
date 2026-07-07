@@ -31,6 +31,29 @@
 
 import { BRAND_SYSTEM, KB_MARKDOWN } from "./kb.ts";
 
+// Editable built-in bases. The admin can override each via a concierge_config key
+// (voice_base is BRAND_SYSTEM in kb.ts); these two live here and are surfaced for
+// editing via ?defaults=1. The client-book base is the fixed "what to record"
+// instruction the summarizer runs on; clientbook_policy is layered on top of it.
+const CLIENTBOOK_BASE =
+  "You keep a luxury shop's private client book. From this conversation, write ONE line " +
+  "(max 200 chars) capturing what is NEWLY worth remembering about THIS patron for next time: " +
+  "rooms, recipients, colorways they favored or rejected, hesitations, decisions, and — always — " +
+  "SIGNIFICANT REGISTER EVENTS from this conversation (an order placed, cancelled, or its address/" +
+  "colorway changed). A cancellation or change is always worth a line even if preferences are " +
+  "unchanged. Use concrete facts from the transcript. It is an internal note the patron never " +
+  "sees — third person, no greeting, no fluff.\n" +
+  "CRITICAL — do not repeat the book. Below is what is already recorded about this patron. Only " +
+  "write a line if this conversation adds durable information or a significant event NOT already " +
+  "captured there. Do NOT restate, rephrase, or lightly re-summarize a preference the book already " +
+  "holds — if the only 'new' content is a reworded version of an existing note, respond SKIP. If " +
+  "the conversation held nothing new (small talk, a test, an unresolved hello, or only facts " +
+  "already on file), respond with exactly SKIP and nothing else.\n";
+// The greeting default lives client-side (assets/concierge.js); mirrored here so
+// ?defaults=1 can offer it as an editable starting point.
+const GREETING_DEFAULT =
+  "Good evening. I keep the register at the mill — ask me about the wool, the weave, or the number that will be yours.";
+
 // Supabase edge runtime global (embeddings); typed loosely on purpose.
 // deno-lint-ignore no-explicit-any
 declare const Supabase: any;
@@ -1845,7 +1868,15 @@ function buildSystemPrompt(
   // they never bust the cached prefix. Function replacements so "$" sequences in
   // content are never interpreted.
   const goalsAgenda: string[] = [];
-  let system = BRAND_SYSTEM.replace("{{KB}}", () => kb);
+  // Voice/brand base: the admin can edit it (config.voice_base); otherwise the
+  // built-in BRAND_SYSTEM. Guard the {{KB}} marker so an edited base that dropped
+  // it still gets the knowledge base appended rather than silently losing it.
+  const voiceBase = (typeof data.config?.voice_base === "string" && data.config.voice_base.trim())
+    ? data.config.voice_base
+    : BRAND_SYSTEM;
+  let system = voiceBase.includes("{{KB}}")
+    ? voiceBase.replace("{{KB}}", () => kb)
+    : voiceBase + "\n\n" + kb;
   if (signedIn) {
     system += "\nREGISTER TOOLS\n" +
       "- This shopper is signed in and email-verified. You hold the register desk's tools: " +
@@ -2181,6 +2212,19 @@ async function handleToolsGet(req: Request): Promise<Response> {
   if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
   const data = await loadConciergeData();
   return jsonResponse(req, 200, { tools: toolsManifest(data) });
+}
+
+// ── GET ?defaults=1 — the built-in BASE texts, for the admin Tuning "Base" boxes ─
+// So the operator can load the built-in default into the editor and tweak it (the
+// server falls back to these same texts whenever the corresponding *_base config
+// key is blank). Admin-only: this is the model-facing prompt surface.
+async function handleDefaultsGet(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  return jsonResponse(req, 200, {
+    voice_base: BRAND_SYSTEM,
+    clientbook_base: CLIENTBOOK_BASE,
+    greeting_base: GREETING_DEFAULT,
+  });
 }
 
 // ── admin gate — verify the JWT AND that the caller is in concierge_admins ────
@@ -3167,20 +3211,12 @@ async function writeClientBookNote(
     const policy = typeof data.config?.clientbook_policy === "string" && data.config.clientbook_policy.trim()
       ? data.config.clientbook_policy.trim()
       : "";
+    // Editable base ("what to record") + the admin's layered HOUSE POLICY override.
+    const cbase = (typeof data.config?.clientbook_base === "string" && data.config.clientbook_base.trim())
+      ? data.config.clientbook_base
+      : CLIENTBOOK_BASE;
     const sys =
-      "You keep a luxury shop's private client book. From this conversation, write ONE line " +
-      "(max 200 chars) capturing what is NEWLY worth remembering about THIS patron for next time: " +
-      "rooms, recipients, colorways they favored or rejected, hesitations, decisions, and — always — " +
-      "SIGNIFICANT REGISTER EVENTS from this conversation (an order placed, cancelled, or its address/" +
-      "colorway changed). A cancellation or change is always worth a line even if preferences are " +
-      "unchanged. Use concrete facts from the transcript. It is an internal note the patron never " +
-      "sees — third person, no greeting, no fluff.\n" +
-      "CRITICAL — do not repeat the book. Below is what is already recorded about this patron. Only " +
-      "write a line if this conversation adds durable information or a significant event NOT already " +
-      "captured there. Do NOT restate, rephrase, or lightly re-summarize a preference the book already " +
-      "holds — if the only 'new' content is a reworded version of an existing note, respond SKIP. If " +
-      "the conversation held nothing new (small talk, a test, an unresolved hello, or only facts " +
-      "already on file), respond with exactly SKIP and nothing else.\n" +
+      cbase +
       (policy ? "HOUSE POLICY (follow this above all):\n" + policy + "\n" : "") +
       "ALREADY IN THE BOOK:\n" + (known || "(nothing yet)") + "\n\n" +
       "Also — like a thoughtful support agent — add a brief SELF-REFLECTION: one concrete way to " +
@@ -3419,6 +3455,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("tools")) {
     return await handleToolsGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("defaults")) {
+    return await handleDefaultsGet(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("starters")) {
     return await handleStartersGet(req);
