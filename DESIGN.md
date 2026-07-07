@@ -163,16 +163,28 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   issue, so that I can open a fresh edition or frame the scarcity story without
   touching the database. *(Tuning tab: Edition card → `get_edition`/`set_edition`;
   the storefront ticker reads it live.)*
+- **As the merchant**, I want the register as a scannable table — one line per
+  order with a status badge and cloth colour dot — that I can filter by status,
+  sort by any column, and multi-select for **bulk** fulfilment, cancellation,
+  resend, or export, so that working a queue of orders isn't one accordion click
+  at a time. *(Orders & Customers tab → **Orders** view: compact order table +
+  status count chips + sortable headers + bulk action bar. See §4.11.)*
 - **As the merchant**, I want to advance an order through fulfillment
   (`placed → weaving → finishing → shipped → delivered`, or `returned`) and attach
   a tracking number, so that a real order can actually move — and the customer is
-  emailed when it ships or is returned. *(Customers tab: per-order fulfillment
-  control → commission `POST ?fulfill=1`, admin-gated, audited, sends email.)*
+  emailed when it ships or is returned. *(Order **detail drawer**: fulfilment
+  control → commission `POST ?fulfill=1`, admin-gated, audited, sends email; bulk
+  "Advance to…" / "Cancel" run the same endpoint over a selection.)*
 - **As the merchant**, I want to see which transactional emails were sent for an
   order (confirmation, shipment, return, cancellation) — including failures — and
   re-send any of them, so that a customer who lost or never got a note isn't left
-  in the dark. *(Customers tab: per-order email history from `email_log`; resend
-  via commission `POST ?resend=1`, admin-gated.)*
+  in the dark. *(Order detail drawer: per-order email timeline from `email_log`;
+  resend via commission `POST ?resend=1`, admin-gated; bulk resend too.)*
+- **As the merchant**, I want to look up every order placed from a given **IP
+  address** (and see, per order, which IP it came from), so that when I have to
+  report abuse to authorities I can pull the whole trail. *(Search box accepts an
+  IP in both views; resolved via `orders.chat_session ↔ conversations.session_key
+  ↔ conversations.ip`. The drawer shows and links the order's origin IP.)*
 - **As the merchant**, I want to see every **register action** the concierge took
   on a customer's behalf — status reads, address and colorway changes,
   cancellations, context recalls, notes written — so that nothing the bot did to
@@ -180,9 +192,10 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   surfaced in the studio; every order change also captured in `order_events`.)*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
   and what the concierge learned *and did* for them, so that I can serve them well.
-  *(Customers tab: LTV ledger + order history + the typed client book — `event`/
-  `fact`/`reflection` notes, each tagged; whose recording policy I can tune in
-  Tuning → Client book. See §4.10.)*
+  *(Orders & Customers tab → **Patrons** view: one card per buyer, sortable by
+  standing / value / recency / name / notes, with LTV, order history, and the
+  typed client book — `event`/`fact`/`reflection` notes, each tagged; recording
+  policy tunable in Tuning → Client book. See §4.10.)*
 - **As the merchant**, I want a real waitlist — captured when the edition sells
   out (a form on the sold-out state) and by the concierge in chat — that I can
   filter, mark people notified on, and export to email, so that demand past a
@@ -254,6 +267,10 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   actually took effect instead of trusting the config screen. *(Conversations tab:
   search by conversation id / session key; per-message model + "models used"
   summary; CSV transcript export. Model resolution is fully configurable — §4.7.)*
+- **As the operator**, I want to find every conversation from a given **IP
+  address**, so that I can investigate abuse and report it. *(Conversations tab:
+  an IPv4/IPv6 in the search box does an exact `ip` lookup — a partial prefix
+  matches as a substring — over the admin-only, PII-gated `ip` column.)*
 - **As the operator**, I want a complete audit trail of every order change and
   tool action, so that nothing mutates the register invisibly.
   *(`order_events` trigger records field-level `{old,new}` diffs on every update
@@ -625,8 +642,47 @@ flowchart LR
 **Tunable, nothing hard-coded:** the summarizer's policy is an admin field
 (Tuning → **Client book**, `clientbook_policy`), and event-logging and reflections
 are toggles (`clientbook_log_actions`, `clientbook_reflect`). The `remember_customer`
-tool's own instruction is editable in the Tools tab. In the admin's Customers tab
-each note shows its kind tag, and the admin can delete any line.
+tool's own instruction is editable in the Tools tab. In the admin's Orders &
+Customers tab (Patrons view, and the order detail drawer) each note shows its
+kind tag, and the admin can delete any line.
+
+### 4.11 The register admin — Orders & Customers
+**Decision:** the register is managed order-first, patron-second. One tab, two
+views over the same loaded, paginated order set:
+
+- **Orders** — a compact table, one line per order (select checkbox · Nº · cloth
+  **colour dot** · **status badge** · patron · destination · placed date). Status
+  **count chips** filter the loaded set; **column headers sort** it; a **bulk
+  action bar** (appears on selection) runs *advance status*, *cancel* (strike the
+  Nº via `?fulfill=1` → `returned`, which emails the buyer and returns the number
+  to the edition), *resend confirmation*, *export selected*, and *clear* over the
+  whole selection. This is the queue-working view.
+- **Patrons** — one card per buyer, sortable by standing / value / recency / name
+  / notes, expanding to that buyer's orders and their **client book** (§4.10).
+  This is the relationship view.
+
+Clicking any order in either view opens a single reused **detail drawer**
+(slide-in): fulfilment control (status + tracking), pre-shipment address editor,
+email timeline + resend, the buyer's client book, and the **IP** the order was
+placed from. The drawer and its backdrop are `pointer-events:none` when closed so
+they never trap clicks.
+
+**IP attribution & search.** Every conversation logs its origin `ip`
+(`x-forwarded-for`, admin-only, PII-gated — §4.5, SCHEMA). An order carries the
+`chat_session` that drove it, which equals the conversation's `session_key`, so
+`orders.chat_session ↔ conversations.session_key ↔ conversations.ip` ties an
+order to an IP. The search box accepts an IP in **both** the Conversations tab
+(matches conversations directly) and the Orders & Customers tab (resolves the
+matching session keys, then constrains the order query) — the trail an operator
+needs to report abuse to authorities. A full IPv4/IPv6 matches exactly; a partial
+prefix matches as a substring. IP appears in the drawer and the register CSV
+export (admin-only).
+
+**Why a redesign, not a tweak:** the prior accordion made bulk fulfilment
+impossible (one order at a time, controls stacked vertically per row) and had no
+IP trail. The table + drawer split gives scanning and bulk work their own
+surface while keeping the full per-order controls one click away, and the two
+views keep order-management and relationship-management from crowding each other.
 
 ---
 
@@ -647,9 +703,12 @@ each note shows its kind tag, and the admin can delete any line.
   magic-link OTP path.
 - **Admin studio** (`admin.html`) — tabs for Tuning (config, voice, starters,
   admins, **edition run**), Knowledge, Procedures (SOPs, forms, goals), Cache,
-  Customers (LTV + client book + **per-order fulfillment controls**), and
-  Conversations (transcripts + goal scorecards). All writes are governed by RLS
-  or an admin-gated endpoint.
+  **Orders & Customers** (an **Orders** view — compact order table with status
+  chips, sortable columns, bulk actions, and a per-order detail drawer — and a
+  **Patrons** view — one sortable card per buyer with LTV, order history, and the
+  typed client book; search by name / email / **IP**), and Conversations
+  (transcripts + goal scorecards; search by id / session / **IP**). All writes are
+  governed by RLS or an admin-gated endpoint. See §4.11.
 
 **Concierge content tokens.** The concierge can place special `{{…}}` markers in
 a reply, which the widget renders as UI. Admins can embed `{{reply:…}}` pills

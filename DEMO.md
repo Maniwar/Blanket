@@ -64,8 +64,12 @@ A guided path for showing the concierge live (e.g. in an interview). Each beat i
 
 12. **Conversations tab** → open your chat; see the **goal scorecard** — each goal
     met/partial/unmet **with the evidence cited**. → *The concierge is measurable.*
-13. **Customers tab** → the customer's **LTV/standing, orders, and client book**
-    (what the concierge learned). → *Clienteling memory, visible to the merchant.*
+13. **Orders & Customers tab** → **Orders** view: the register as a sortable,
+    filterable table — select a few and **bulk-advance or export**; click one for
+    the detail drawer (fulfilment, address, emails, origin **IP**). Flip to
+    **Patrons** view for the customer's **LTV/standing, orders, and client book**
+    (what the concierge learned *and did*). Search by name, email, or **IP**. →
+    *Order-management and clienteling memory, both visible to the merchant.*
 14. **Procedures tab** → edit a **goal or SOP** and save. Within ~60s the live
     concierge follows it. → *Everything tunable is data — no deploy.*
 15. **Tuning → Administrators** → add an admin; note you **can't remove yourself

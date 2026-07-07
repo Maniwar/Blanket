@@ -326,14 +326,14 @@
 
   /* detail drawer */
   .drawer-bd{ position:fixed; inset:0; z-index:40; background:rgba(12,16,13,.6);
-    backdrop-filter:blur(2px); opacity:0; transition:opacity .2s ease; }
-  .drawer-bd.on{ opacity:1; }
+    backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .2s ease; }
+  .drawer-bd.on{ opacity:1; pointer-events:auto; }
   .drawer{ position:fixed; top:0; right:0; z-index:41; width:min(560px, 94vw); height:100%;
     overflow-y:auto; background:var(--loden-deep, #1c261f);
     border-left:1px solid var(--hairline); box-shadow:-24px 0 60px rgba(0,0,0,.45);
-    transform:translateX(100%); transition:transform .24s cubic-bezier(.2,.7,.2,1);
+    transform:translateX(100%); pointer-events:none; transition:transform .24s cubic-bezier(.2,.7,.2,1);
     padding:26px 28px 40px; }
-  .drawer.on{ transform:translateX(0); }
+  .drawer.on{ transform:translateX(0); pointer-events:auto; }
   .drawer-x{ position:absolute; top:18px; right:20px; background:none; border:none; cursor:pointer;
     color:var(--wool-dim); font-size:22px; line-height:1; padding:4px 8px; }
   .drawer-x:hover{ color:var(--wool); }
@@ -355,6 +355,40 @@
     .ord-hrow, .ord-row{ grid-template-columns:30px 66px 1.1fr 104px 1.2fr 20px; }
     .ord-hrow .col-cust, .ord-row .ord-cust, .ord-hrow .col-when, .ord-row .ord-when{ display:none; }
   }
+
+  /* Orders / Patrons view toggle */
+  .cust-seg{ display:inline-flex; border:1px solid var(--hairline); border-radius:20px;
+    overflow:hidden; margin-bottom:16px; }
+  .cust-seg button{ background:none; border:none; cursor:pointer; padding:7px 18px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--wool-dim); transition:background .14s ease, color .14s ease; }
+  .cust-seg button + button{ border-left:1px solid var(--hairline); }
+  .cust-seg button:hover{ color:var(--wool); }
+  .cust-seg button.on{ background:rgba(196,155,91,.14); color:var(--wool); }
+
+  /* Patrons view — customer cards with their client book */
+  .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
+    background:rgba(38,51,43,.28); overflow:hidden; }
+  .cust-head{ display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+    padding:14px 18px; cursor:pointer; user-select:none; }
+  .cust-head:hover{ background:rgba(241,236,226,.03); }
+  .cust-name{ font-size:16px; color:var(--wool); }
+  .cust-email{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool-dim); }
+  .cust-tier{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--brass-soft); border:1px solid var(--hairline);
+    border-radius:20px; padding:3px 11px; }
+  .cust-meta{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:12px;
+    color:var(--wool-dim); white-space:nowrap; }
+  .cust-meta b{ color:var(--wool); font-weight:500; }
+  .cust-orders{ display:none; border-top:1px solid var(--hairline-dim); padding:6px 18px 12px; }
+  .cust-row.open .cust-orders{ display:block; }
+  .cust-book{ background:rgba(196,155,91,.05); }
+  .cust-porder{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; cursor:pointer;
+    padding:9px 2px; border-bottom:1px solid var(--hairline-dim); font-size:13.5px; }
+  .cust-porder:last-child{ border-bottom:none; }
+  .cust-porder:hover{ background:rgba(196,155,91,.05); }
+  .cust-porder .no{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--brass-soft); }
+  .cust-porder .place{ color:var(--wool-faint); font-size:12.5px; margin-left:auto; }
 
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
@@ -510,7 +544,7 @@
     <button class="tab" data-tab="knowledge" role="tab">Knowledge</button>
     <button class="tab" data-tab="procedures" role="tab">Procedures</button>
     <button class="tab" data-tab="cache" role="tab">Cache</button>
-    <button class="tab" data-tab="customers" role="tab">Customers</button>
+    <button class="tab" data-tab="customers" role="tab">Orders &amp; Customers</button>
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
     <button class="tab" data-tab="website" role="tab">Website</button>
     <button class="tab" data-tab="tools" role="tab">Tools</button>
@@ -898,9 +932,9 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
     <!-- ============ TAB 5 : CUSTOMERS ============ -->
     <div id="panel-customers" class="panel">
       <div class="panel-head">
-        <span class="micro">The register's patrons</span>
-        <h2>Customers</h2>
-        <p class="note">The register, one line per order. Filter with the status <strong>chips</strong>, sort by any column header, and <strong>select</strong> rows for bulk fulfilment, cancellation, resend, or export. <strong>Click any order</strong> to open its detail drawer — fulfilment, shipping address, email timeline, and the buyer's <strong>client book</strong> (what the concierge has learned and done for them). Gift orders count toward the buyer who commissioned them.</p>
+        <span class="micro">The register — orders &amp; the patrons behind them</span>
+        <h2>Orders &amp; Customers</h2>
+        <p class="note">Two views, one register. <strong>Orders</strong> is the workhorse table — one line per order, filter with the status <strong>chips</strong>, sort by any column header, and <strong>select</strong> rows for bulk fulfilment, cancellation, resend, or export. <strong>Patrons</strong> groups by buyer and shows each one's <strong>client book</strong> (what the concierge has learned and done for them), sorted however you like. <strong>Click any order</strong> in either view to open its detail drawer — fulfilment, shipping address, email timeline, that buyer's client book, and the IP the order was placed from. Search by name, email, or <strong>IP address</strong> (both views); gift orders count toward the buyer who commissioned them.</p>
       </div>
 
       <div class="metrics">
@@ -913,7 +947,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <input type="text" id="cust-serial" inputmode="numeric" placeholder="Find Nº…" title="Jump to an order number" style="max-width:110px;">
         <input type="date" id="cust-from" title="Ordered from">
         <input type="date" id="cust-to" title="Ordered to">
-        <input type="text" id="cust-search" placeholder="Search name or email…" style="max-width:220px;">
+        <input type="text" id="cust-search" placeholder="Search name, email, or IP…" style="max-width:220px;">
         <select id="cust-status" title="Order status">
           <option value="">Any status</option>
           <option value="placed">placed</option>
@@ -1159,8 +1193,10 @@ const state = {
   actions: [],
   gaps: [],
   customers: [],
+  custView: 'orders',      // 'orders' (register table) | 'patrons' (client book)
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
+  patSort: 'standing',     // patrons view: standing|value|recent|name|notes
   custChip: '',            // client-side status quick-filter chip
   waitlist: [],
   emailsBySerial: {},
@@ -3593,12 +3629,29 @@ async function loadCustomers(more) {
         cwQ = fval('cust-colorway'), giftQ = fval('cust-gift');
   const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
   const isSerial = /^\d+$/.test(serialQ);
+
+  // IP search — an IP typed into the box finds the orders whose chat originated
+  // there. The trail is orders.chat_session ↔ conversations.session_key ↔ ip, so
+  // resolve the matching session keys first, then constrain the orders query.
+  const isIp = kw && !isSerial && (
+    /^(\d{1,3})(\.\d{1,3}){1,3}$/.test(kw) ||        // full or partial IPv4
+    /^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,}$/i.test(kw)  // IPv6
+  );
+  let ipSessionKeys = null;
+  if (isIp) {
+    const fullV4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(kw);
+    let cq = sb.from('concierge_conversations').select('session_key');
+    cq = fullV4 ? cq.eq('ip', kw) : cq.ilike('ip', '%' + kw + '%');
+    const cres = await cq.limit(3000);
+    ipSessionKeys = [...new Set((cres.data || []).map(function (r) { return r.session_key; }).filter(Boolean))];
+  }
+
   // Page the underlying ORDERS (placed_at desc) and aggregate the accumulated
   // set by patron — the same incremental model the Conversations tab uses, so it
   // scales past the old hard 1000 cap. A specific order Nº bypasses paging.
   const from = pageState.cust * CUST_PAGE;
   let q = sb.from('orders')
-    .select('email,name,serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial')
+    .select('email,name,serial,status,tracking,colorway,address,address2,city,state,zip,placed_at,recipient_name,is_gift,user_id,billing,cancelled_serial,chat_session')
     .order('placed_at', { ascending: false });
   // A bare order number jumps straight to that entry (live or struck), ignoring
   // the other narrowing so the admin always finds the number they typed.
@@ -3608,7 +3661,12 @@ async function loadCustomers(more) {
     q = q.range(from, from + CUST_PAGE - 1);
     if (df) q = q.gte('placed_at', df);
     if (dt) q = q.lte('placed_at', dt);
-    if (kw) q = q.or(orIlike(['email', 'name', 'recipient_name'], kw)); // server search, not just the fetched page
+    if (isIp) {
+      // No order chatted from that IP → an impossible key, so the result is empty.
+      q = q.in('chat_session', ipSessionKeys.length ? ipSessionKeys : ['__none__']);
+    } else if (kw) {
+      q = q.or(orIlike(['email', 'name', 'recipient_name'], kw)); // server search, not just the fetched page
+    }
     if (statusQ) q = q.eq('status', statusQ);
     if (cwQ) q = q.eq('colorway', cwQ);
     if (giftQ === 'gift') q = q.eq('is_gift', true);
@@ -3620,6 +3678,16 @@ async function loadCustomers(more) {
   state.custOrders = more ? (state.custOrders || []).concat(pageOrders) : pageOrders;
   pageState.cust++;
   showMore('cust-more', !isSerial && pageOrders.length === CUST_PAGE);
+
+  // Map each loaded order's chat session to the IP it originated from, for the
+  // per-order forensics line in the drawer. One indexed lookup over the distinct
+  // sessions present in the loaded page(s).
+  if (!more) state.ipBySession = {};
+  const sess = [...new Set((state.custOrders || []).map(function (o) { return o.chat_session; }).filter(Boolean))];
+  if (sess.length) {
+    const ipr = await sb.from('concierge_conversations').select('session_key,ip').in('session_key', sess).limit(5000);
+    if (!ipr.error) (ipr.data || []).forEach(function (r) { if (r.ip) state.ipBySession[r.session_key] = r.ip; });
+  }
   let notesByKey = new Map();
   const nres = await sb.from('customer_notes')
     .select('id,email,user_id,note,created_at,kind')
@@ -3679,9 +3747,11 @@ function exportOrdersCsv(orders, filename) {
   if (!orders || !orders.length) { toast('Nothing to export', true); return; }
   const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
   const head = ['placed_at', 'serial', 'cancelled_serial', 'status', 'colorway', 'email', 'name',
-    'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking'];
+    'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking', 'ip'];
   const lines = [head.join(',')];
-  orders.forEach(function (o) { lines.push(head.map(function (k) { return esc(o[k]); }).join(',')); });
+  orders.forEach(function (o) {
+    lines.push(head.map(function (k) { return esc(k === 'ip' ? orderIp(o) : o[k]); }).join(','));
+  });
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3701,6 +3771,7 @@ const STATUS_ORDER = ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 
 
 function orderKey(o) { return String(o.serial != null ? o.serial : o.cancelled_serial); }
 function orderNo(o) { return Number(o.serial != null ? o.serial : o.cancelled_serial); }
+function orderIp(o) { return (o && o.chat_session && state.ipBySession) ? (state.ipBySession[o.chat_session] || '') : ''; }
 function clothDot(cw) {
   const d = el('span', 'cdot');
   d.style.background = CLOTH_DOT[cw] || '#6a6a6a';
@@ -3862,6 +3933,18 @@ function openOrderDrawer(o) {
   if (c) who.appendChild(el('div', 'micro', c.tier + ' · $' + c.ltv.toLocaleString('en-US') +
     ' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets')));
   if (o.is_gift && o.recipient_name) who.appendChild(el('div', 'micro', 'Gift → ' + o.recipient_name));
+  const oip = orderIp(o);
+  if (oip) {
+    const ipLine = el('div', 'micro', 'Ordered from IP ' + oip + ' — click to find every order from it');
+    ipLine.style.cssText = 'color:var(--brass-soft); cursor:pointer;';
+    ipLine.addEventListener('click', function () {
+      $('cust-search').value = oip;
+      if ($('cust-serial')) $('cust-serial').value = '';
+      closeDrawer();
+      loadCustomers();
+    });
+    who.appendChild(ipLine);
+  }
   dw.appendChild(who);
 
   // Fulfillment (advance + tracking), only for live orders
@@ -3981,33 +4064,126 @@ function openOrderDrawer(o) {
     bs.appendChild(el('div', 'empty micro',
       'Nothing recorded yet. The concierge notes what signed-in patrons share (a room, a favored cloth, a gift occasion), what it does for them, and how to serve them better next time.'));
   } else {
-    notes.forEach(function (n) {
-      const line = el('div', 'cust-order');
-      line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
-      const kind = (n.kind === 'event' || n.kind === 'reflection') ? n.kind : 'fact';
-      const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a' }[kind];
-      const tag = el('span', null, kind);
-      tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
-      line.appendChild(tag);
-      const txt = el('span', null, n.note || ''); txt.style.flex = '1 1 220px';
-      line.appendChild(txt);
-      const del = el('button', 'btn ghost danger', '×'); del.setAttribute('aria-label', 'Delete note');
-      del.addEventListener('click', function () {
-        withBusy(del, async function () {
-          const r = await sb.from('customer_notes').delete().eq('id', n.id);
-          if (r.error) { fail('Delete note', r.error); return; }
-          line.remove();
-          toast('Note removed from the client book');
-        });
-      });
-      line.appendChild(del);
-      bs.appendChild(line);
-    });
+    notes.forEach(function (n) { bs.appendChild(clientBookNoteLine(n)); });
   }
   dw.appendChild(bs);
 
   bd.classList.add('on');
   requestAnimationFrame(function () { dw.classList.add('on'); });
+}
+
+/* One line in the client book — a dated, kind-tagged note with a delete. Shared
+   by the order drawer and the Patrons view. */
+function clientBookNoteLine(n) {
+  const line = el('div', 'cust-order');
+  line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
+  const kind = (n.kind === 'event' || n.kind === 'reflection') ? n.kind : 'fact';
+  const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a' }[kind];
+  const tag = el('span', null, kind);
+  tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
+  line.appendChild(tag);
+  const txt = el('span', null, n.note || ''); txt.style.flex = '1 1 220px';
+  line.appendChild(txt);
+  const del = el('button', 'btn ghost danger', '×'); del.setAttribute('aria-label', 'Delete note');
+  del.addEventListener('click', function () {
+    withBusy(del, async function () {
+      const r = await sb.from('customer_notes').delete().eq('id', n.id);
+      if (r.error) { fail('Delete note', r.error); return; }
+      line.remove();
+      toast('Note removed from the client book');
+    });
+  });
+  line.appendChild(del);
+  return line;
+}
+
+/* Patrons view — one card per buyer with their orders and their client book.
+   The orders are click-through to the same detail drawer the register uses. */
+function renderPatrons(list, q) {
+  const rows = (state.customers || []).filter(function (c) {
+    return !q || (c.email || '').toLowerCase().indexOf(q) >= 0 || (c.name || '').toLowerCase().indexOf(q) >= 0;
+  });
+
+  // Sort control — standing / value / recency / name / notes.
+  const SORTS = [
+    ['standing', 'Standing (most blankets)'],
+    ['value', 'Lifetime value'],
+    ['recent', 'Most recent'],
+    ['name', 'Name (A→Z)'],
+    ['notes', 'Most notes']
+  ];
+  const bar = el('div', 'row-tools'); bar.style.margin = '0 0 14px';
+  bar.appendChild(el('span', 'micro', 'Sort'));
+  const selS = document.createElement('select');
+  SORTS.forEach(function (s) {
+    const op = document.createElement('option'); op.value = s[0]; op.textContent = s[1];
+    if (state.patSort === s[0]) op.selected = true;
+    selS.appendChild(op);
+  });
+  selS.addEventListener('change', function () { state.patSort = selS.value; renderCustomers(); });
+  bar.appendChild(selS);
+  list.appendChild(bar);
+
+  const ps = state.patSort;
+  rows.sort(function (a, b) {
+    if (ps === 'value') return b.ltv - a.ltv || b.count - a.count;
+    if (ps === 'recent') return new Date(b.latest) - new Date(a.latest);
+    if (ps === 'name') return (a.name || '').localeCompare(b.name || '');
+    if (ps === 'notes') return (b.notes.length - a.notes.length) || b.count - a.count;
+    return b.count - a.count || new Date(b.latest) - new Date(a.latest); // standing
+  });
+
+  if (!rows.length) {
+    list.appendChild(el('div', 'empty micro', q ? 'No patron matches that.' : 'No patrons on the register yet.'));
+    return;
+  }
+  rows.forEach(function (c) {
+    const row = el('div', 'cust-row');
+    const head = el('div', 'cust-head');
+    head.appendChild(el('span', 'cust-name', c.name));
+    head.appendChild(el('span', 'cust-email', c.email));
+    head.appendChild(el('span', 'cust-tier', c.tier));
+    if (c.notes.length) head.appendChild(el('span', 'cust-book-badge',
+      '❦ ' + c.notes.length + (c.notes.length === 1 ? ' note' : ' notes')));
+    const meta = el('span', 'cust-meta');
+    meta.appendChild(el('b', null, '$' + c.ltv.toLocaleString('en-US')));
+    meta.appendChild(document.createTextNode(' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets') +
+      ' · last ' + fmtWhen(c.latest)));
+    head.appendChild(meta);
+    head.addEventListener('click', function () { row.classList.toggle('open'); });
+    row.appendChild(head);
+
+    // Orders — each opens the full detail drawer (fulfilment / address / emails).
+    const orders = el('div', 'cust-orders');
+    orders.appendChild(el('div', 'micro', 'Orders — click one for fulfilment, address, and emails'));
+    c.orders.forEach(function (o) {
+      const line = el('div', 'cust-porder');
+      line.appendChild(el('span', 'no', 'Nº ' + orderNo(o).toLocaleString('en-US')));
+      line.appendChild(clothDot(o.colorway));
+      line.appendChild(el('span', null, o.colorway || '—'));
+      line.appendChild(stBadge(o.status));
+      const place = (o.is_gift && o.recipient_name)
+        ? ('gift → ' + o.recipient_name + ' · ' + fmtWhen(o.placed_at))
+        : (((o.city ? o.city + ', ' : '') + (o.state || '')).trim() ? (o.city ? o.city + ', ' : '') + (o.state || '') + ' · ' + fmtWhen(o.placed_at) : fmtWhen(o.placed_at));
+      line.appendChild(el('span', 'place', place));
+      line.addEventListener('click', function () { openOrderDrawer(o); });
+      orders.appendChild(line);
+    });
+    row.appendChild(orders);
+
+    // Client book — what the concierge has learned and done for this patron.
+    const book = el('div', 'cust-orders cust-book');
+    book.appendChild(el('div', 'micro', 'Client book — what the concierge has learned and done'));
+    if (!c.notes.length) {
+      book.appendChild(el('div', 'empty micro',
+        'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time.'));
+    } else {
+      c.notes.forEach(function (n) { book.appendChild(clientBookNoteLine(n)); });
+    }
+    row.appendChild(book);
+
+    list.appendChild(row);
+  });
 }
 
 function renderCustomers() {
@@ -4034,10 +4210,25 @@ function renderCustomers() {
   state.custByKey = {};
   allOrders.forEach(function (o) { state.custByKey[orderKey(o)] = o; });
 
+  // Orders / Patrons view toggle — the register table vs. the client book.
+  const seg = el('div', 'cust-seg');
+  [['orders', 'Orders'], ['patrons', 'Patrons']].forEach(function (v) {
+    const b = el('button', state.custView === v[0] ? 'on' : '', v[1]); b.type = 'button';
+    b.addEventListener('click', function () {
+      if (state.custView === v[0]) return;
+      state.custView = v[0];
+      renderCustomers();
+    });
+    seg.appendChild(b);
+  });
+  list.appendChild(seg);
+
   if (!allOrders.length) {
     list.appendChild(el('div', 'empty micro', q ? 'No order matches that.' : 'No entries in the register yet.'));
     return;
   }
+
+  if (state.custView === 'patrons') { renderPatrons(list, q); return; }
 
   // Client-side text filter (name / email / recipient) atop the server search.
   let shown = allOrders.filter(function (o) {

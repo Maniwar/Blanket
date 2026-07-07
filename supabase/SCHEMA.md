@@ -151,7 +151,7 @@ SQL, after which the roster is self-serve.
 | `goal_status` | jsonb | Per-goal scoring: `{ "<slug>": {"status":"met|partial|unmet","note":"…"} }`. |
 | `goal_status_at` | timestamptz | When goals were last judged. |
 | `sales_stage` | text | Funnel stage from the async grader: `browsing`/`engaged`/`evaluating`/`objection`/`ready`/`won`/`lost`. Written in a **separate best-effort PATCH** from `goal_status`, so a missing column can't break grading. Shown as a chip in the admin Conversations tab. |
-| `ip` | text | Latest client IP for the session (from `x-forwarded-for`), stored for **abuse/legal forensics**. Admin-only (RLS), shown in the transcript header, and included in the transcript export **only** when the PII option is on. Disclosed in the privacy notice. |
+| `ip` | text | Latest client IP for the session (from `x-forwarded-for`), stored for **abuse/legal forensics**. Admin-only (RLS), shown in the transcript header, and included in the transcript export **only** when the PII option is on. Disclosed in the privacy notice. **Searchable** in the admin: the Conversations tab matches it directly, and the Orders & Customers tab resolves it to `session_key`s and finds the orders placed from that IP (`ip ↔ session_key ↔ orders.chat_session`). A full IPv4/IPv6 matches exactly; a partial prefix, as a substring. |
 
 **Written by:** `logUserTurn` (create + identity back-fill), `handleWrapup`
 (status/ended_at), `evaluateGoals` (goal_status + sales_stage). **Read by:** `logUserTurn`
@@ -212,7 +212,7 @@ The core table. No payment or street-shipping data beyond what the demo needs.
 | `is_gift` | boolean | Gift flag. | placement |
 | `billing` | jsonb | Billing address when it differs from shipping. | placement |
 | `cancelled_serial` | int | Archives the number a cancelled order **used to** hold. | on cancel |
-| `chat_session` | text | The `session_key` of the concierge conversation that drove the sale (revenue attribution). | placement |
+| `chat_session` | text | The `session_key` of the concierge conversation that drove the sale (revenue attribution). Also the join key for **IP lookup**: `chat_session ↔ concierge_conversations.session_key ↔ .ip` lets the admin find every order placed from an IP, and show each order's origin IP in the detail drawer. | placement |
 | `placed_at` | timestamptz | Placement time (feeds LTV recency). | placement |
 
 **Written by:** `commission_order` (placement), `cancel_order_return`
@@ -278,7 +278,7 @@ holds across every edge instance.
 
 RLS on; **admin** select/manage policy (`is_concierge_admin()`). **Written by:**
 commission `POST ?waitlist=1` (sold-out form) and the concierge `join_waitlist`
-tool (both via service role). **Read/managed by:** admin (Customers tab →
+tool (both via service role). **Read/managed by:** admin (Orders & Customers tab →
 Waitlist card: filter, mark notified, export CSV).
 
 ### `email_log` — record of transactional emails
@@ -295,7 +295,7 @@ Waitlist card: filter, mark notified, export CSV).
 | `created_at` | timestamptz | When it was attempted. |
 
 RLS on; **admin** read policy. **Written by:** `sendEmail` in both functions
-(every attempt, success or fail). **Read by:** admin (Customers tab → per-order
+(every attempt, success or fail). **Read by:** admin (Orders & Customers tab → per-order
 email history). **Re-sent via:** commission `POST ?resend=1` (admin-gated).
 
 ### `concierge_sops` — the house's standard operating procedures
@@ -384,7 +384,7 @@ mutating action, via `logAction`), the `remember_customer` tool (`fact`), and th
 end-of-conversation summarizer `writeClientBookNote` (`fact` + `reflection`, both
 deduped). **Read by:** `customerBlock` and the `recall_context` tool — **grouped
 by kind** (did-for-them / know-about-them / serve-better) into the prompt — and
-the admin Customers tab (client book with a per-note kind tag). Governed by the
+the admin Orders & Customers tab (client book with a per-note kind tag). Governed by the
 `clientbook_policy` / `clientbook_log_actions` / `clientbook_reflect` config keys.
 
 ### `order_events` — full order audit trail
