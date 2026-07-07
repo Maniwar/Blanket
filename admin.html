@@ -473,6 +473,18 @@
   .cust-porder:hover{ background:rgba(196,155,91,.05); }
   .cust-porder .no{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--brass-soft); }
   .cust-porder .place{ color:var(--wool-faint); font-size:12.5px; margin-left:auto; }
+  /* status-grouped orders inside a patron expand — a compact segmented control so
+     a long tail of cancelled orders no longer buries the active ones. */
+  .cust-otabs{ display:inline-flex; gap:2px; margin:8px 0 4px; border:1px solid var(--hairline-dim);
+    border-radius:7px; padding:2px; background:rgba(38,51,43,.28); }
+  .cust-otab{ background:none; border:none; cursor:pointer; padding:5px 12px; border-radius:5px;
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--wool-faint); }
+  .cust-otab:hover{ color:var(--wool-dim); }
+  .cust-otab.on{ color:var(--wool); background:var(--ink-well); }
+  .cust-otab .n{ color:var(--wool-faint); margin-left:5px; }
+  .cust-otab.on .n{ color:var(--brass-soft); }
+  .cust-opanel{ padding-top:2px; }
 
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
@@ -4733,6 +4745,34 @@ function directiveComposer(email, onAdded, userId) {
 
 /* Patrons view — one card per buyer with their orders and their client book.
    The orders are click-through to the same detail drawer the register uses. */
+/* Order status buckets for the Patrons view — three lifecycle groups so the
+   expand leads with what's live and tucks the cancelled tail behind a tab. */
+const ORDER_BUCKETS = [
+  { key: 'active',    label: 'Active',    statuses: ['placed', 'weaving', 'finishing'] },
+  { key: 'fulfilled', label: 'Fulfilled', statuses: ['shipped', 'delivered'] },
+  { key: 'closed',    label: 'Closed',    statuses: ['cancelled', 'returned'] }
+];
+function ORDER_BUCKET_FOR(status) {
+  const b = ORDER_BUCKETS.find(function (bk) { return bk.statuses.indexOf(status) >= 0; });
+  return b ? b.key : 'active';   // unknown statuses stay visible in the lead group
+}
+
+/* One order line in a patron's expand — Nº, cloth swatch + name, status badge,
+   and a destination/gift · date tail. Opens the full order drawer on click. */
+function custOrderLine(o) {
+  const line = el('div', 'cust-porder');
+  line.appendChild(el('span', 'no', 'Nº ' + orderNo(o).toLocaleString('en-US')));
+  line.appendChild(clothDot(o.colorway));
+  line.appendChild(el('span', null, o.colorway || '—'));
+  line.appendChild(stBadge(o.status));
+  const place = (o.is_gift && o.recipient_name)
+    ? ('gift → ' + o.recipient_name + ' · ' + fmtWhen(o.placed_at))
+    : (((o.city ? o.city + ', ' : '') + (o.state || '')).trim() ? (o.city ? o.city + ', ' : '') + (o.state || '') + ' · ' + fmtWhen(o.placed_at) : fmtWhen(o.placed_at));
+  line.appendChild(el('span', 'place', place));
+  line.addEventListener('click', function () { openOrderDrawer(o); });
+  return line;
+}
+
 function renderPatrons(list, q) {
   const rows = (state.customers || []).filter(function (c) {
     return !q || (c.email || '').toLowerCase().indexOf(q) >= 0 || (c.name || '').toLowerCase().indexOf(q) >= 0;
@@ -4820,8 +4860,9 @@ function renderPatrons(list, q) {
         ' — open the row to read or resolve';
       head.appendChild(hb);
     }
-    if (c.notes.length) head.appendChild(el('span', 'cust-book-badge',
-      '❦ ' + c.notes.length + (c.notes.length === 1 ? ' note' : ' notes')));
+    const noteCount = (c.notes || []).filter(function (n) { return n.kind !== 'summary'; }).length;
+    if (noteCount) head.appendChild(el('span', 'cust-book-badge',
+      '❦ ' + noteCount + (noteCount === 1 ? ' note' : ' notes')));
     const meta = el('span', 'cust-meta');
     meta.appendChild(el('b', null, '$' + c.ltv.toLocaleString('en-US')));
     meta.appendChild(document.createTextNode(' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets') +
@@ -4830,33 +4871,66 @@ function renderPatrons(list, q) {
     head.addEventListener('click', function () { row.classList.toggle('open'); });
     row.appendChild(head);
 
-    // Orders — each opens the full detail drawer (fulfilment / address / emails).
+    // Orders — grouped into status buckets and shown one bucket at a time, so a
+    // long tail of cancelled orders no longer buries the active ones. Each line
+    // opens the full detail drawer (fulfilment / address / emails).
     const orders = el('div', 'cust-orders');
     orders.appendChild(el('div', 'micro', 'Orders — click one for fulfilment, address, and emails'));
+
+    const buckets = { active: [], fulfilled: [], closed: [] };
     c.orders.forEach(function (o) {
-      const line = el('div', 'cust-porder');
-      line.appendChild(el('span', 'no', 'Nº ' + orderNo(o).toLocaleString('en-US')));
-      line.appendChild(clothDot(o.colorway));
-      line.appendChild(el('span', null, o.colorway || '—'));
-      line.appendChild(stBadge(o.status));
-      const place = (o.is_gift && o.recipient_name)
-        ? ('gift → ' + o.recipient_name + ' · ' + fmtWhen(o.placed_at))
-        : (((o.city ? o.city + ', ' : '') + (o.state || '')).trim() ? (o.city ? o.city + ', ' : '') + (o.state || '') + ' · ' + fmtWhen(o.placed_at) : fmtWhen(o.placed_at));
-      line.appendChild(el('span', 'place', place));
-      line.addEventListener('click', function () { openOrderDrawer(o); });
-      orders.appendChild(line);
+      const k = ORDER_BUCKET_FOR(o.status);
+      buckets[k].push(o);
     });
+    const present = ORDER_BUCKETS.filter(function (b) { return buckets[b.key].length; });
+    if (present.length <= 1) {
+      // Only one kind of order — no need for a control; just list them.
+      c.orders.forEach(function (o) { orders.appendChild(custOrderLine(o)); });
+    } else {
+      const tabbar = el('div', 'cust-otabs');
+      const panels = {};
+      const defKey = present[0].key;   // Active first when present, else the earliest non-empty
+      present.forEach(function (b) {
+        const tab = el('button', 'cust-otab' + (b.key === defKey ? ' on' : ''));
+        tab.type = 'button';
+        tab.appendChild(document.createTextNode(b.label));
+        tab.appendChild(el('span', 'n', String(buckets[b.key].length)));
+        tab.addEventListener('click', function (e) {
+          e.stopPropagation();
+          tabbar.querySelectorAll('.cust-otab').forEach(function (t) { t.classList.remove('on'); });
+          tab.classList.add('on');
+          Object.keys(panels).forEach(function (k) { panels[k].style.display = k === b.key ? 'block' : 'none'; });
+        });
+        tabbar.appendChild(tab);
+      });
+      orders.appendChild(tabbar);
+      present.forEach(function (b) {
+        const panel = el('div', 'cust-opanel');
+        panel.style.display = b.key === defKey ? 'block' : 'none';
+        buckets[b.key].forEach(function (o) { panel.appendChild(custOrderLine(o)); });
+        panels[b.key] = panel;
+        orders.appendChild(panel);
+      });
+    }
     row.appendChild(orders);
 
-    // Client book & house instructions — what the concierge has learned and done,
-    // plus standing instructions the team leaves for it to follow.
+    // Client book & house instructions — the rolling summary the concierge reads
+    // each turn, then the individual notes, plus standing instructions the team
+    // leaves for it to follow.
+    const summaryNote = c.notes.find(function (n) { return n.kind === 'summary'; });
+    const bookNotes = c.notes.filter(function (n) { return n.kind !== 'summary'; });
     const book = el('div', 'cust-orders cust-book');
     book.appendChild(el('div', 'micro', 'Client book & house instructions'));
-    if (!c.notes.length) {
+
+    book.appendChild(el('div', 'dsub-lbl', 'Client summary'));
+    book.appendChild(summaryCard({ email: c.email, user_id: c.user_id }, summaryNote));
+
+    book.appendChild(el('div', 'dsub-lbl', 'Notes' + (bookNotes.length ? ' · ' + bookNotes.length : '')));
+    if (!bookNotes.length) {
       book.appendChild(el('div', 'empty micro',
         'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time — and you can leave it a house instruction below.'));
     } else {
-      c.notes.forEach(function (n) { book.appendChild(clientBookNoteLine(n)); });
+      bookNotes.forEach(function (n) { book.appendChild(clientBookNoteLine(n)); });
     }
     book.appendChild(directiveComposer(c.email, function () { loadCustomers(); }, c.user_id));
     row.appendChild(book);

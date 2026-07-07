@@ -684,12 +684,18 @@ const REGISTER_TOOLS: any[] = [
   {
     name: "remember_customer",
     description:
-      "Write one short, durable, factual line to this patron's client book — a room they " +
-      "mentioned, a favored cloth, a gift occasion, a hesitation, a thread to pick up later. " +
-      "Only what a good clerk would note; never health, beliefs, finances, or anything " +
-      "sensitive. The book is shown to the patron's own conversations and to the admin. " +
-      "Do NOT record something the CLIENT BOOK above already holds — one line per durable " +
-      "fact; if it is already noted, say nothing rather than repeating it.",
+      "Write one short, durable line of RELATIONSHIP & SELLING memory to this patron's client " +
+      "book — a room they mentioned, who they buy for, a favored cloth, a gift occasion, a " +
+      "hesitation, a preference, a thread to pick up later. " +
+      "NEVER record order bookkeeping — order counts, serial numbers (Nº …), order STATUS, what " +
+      "they bought, or shipping/billing addresses. That data lives in the register (the orders " +
+      "database) and you read it LIVE with get_my_orders; a note freezes a snapshot that goes " +
+      "stale and is redundant. Reference an order only as context for a durable relationship fact " +
+      "(e.g. 'buying the Loden for the east-facing office' — not '5 active orders 14,214–14,218'). " +
+      "Only what a good clerk would note; never health, beliefs, finances, or anything sensitive. " +
+      "The book is shown to the patron's own conversations and to the admin. Do NOT record " +
+      "something the CLIENT BOOK above already holds — one line per durable fact; if it is already " +
+      "noted, say nothing rather than repeating it.",
     input_schema: {
       type: "object",
       properties: {
@@ -1599,7 +1605,11 @@ async function consolidateClientBook(
       "UPDATED summary a clerk could act on immediately: who they are and who they buy for, their preferences and " +
       "home, what's been done for them, any open thread, and how to serve them better. Rules: keep it TIGHT " +
       "(≤110 words), factual and specific; preserve durable facts from the prior summary; drop the stale and the " +
-      "trivial; never invent; do NOT include the team's house instructions (those live elsewhere). Output ONLY the " +
+      "trivial; never invent; do NOT include the team's house instructions (those live elsewhere). NEVER record " +
+      "order bookkeeping — order counts, serial numbers (Nº …), order STATUS, what they bought, or shipping/billing " +
+      "addresses. That data lives in the register (the orders database) and the concierge reads it LIVE; a summary " +
+      "freezes a snapshot that goes stale. Reference an order only as durable relationship context (e.g. 'buying the " +
+      "Loden for the east-facing office'), never as a ledger of serials/status. Output ONLY the " +
       "summary prose — no headers, no preamble.";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

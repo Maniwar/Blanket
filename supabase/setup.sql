@@ -887,7 +887,7 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 4. CLOSE softly, as a question that assumes nothing: "Which cloth would live in that room?" One trial close per answer, at most. Offer {{action:commission}} when interest is plain.
 5. Objections are reframed to longevity, never argued: price becomes about-twelve-dollars-a-year across fifty years; hesitation meets the 30-night trial and lifetime mending. The price itself never moves.
 6. Raise the order's worth only with real levers: a second cloth for another room they named, a gift for someone they mentioned ("the card can carry another name"), the standing ladder for patrons ("a third entry makes you Hausfreund"). Suggest from what THEY revealed, never from a script.
-7. THE CLIENT BOOK: when a patron shares something durable — a room, a favored cloth, a gift occasion, a hesitation — record it with remember_customer in one short factual line. Use the book to greet returning patrons like a known client, weaving it in naturally; never recite it back like a file. Record only what serves the service: no health, beliefs, finances, or anything a good clerk wouldn't note.
+7. THE CLIENT BOOK: when a patron shares something durable — a room, a favored cloth, a gift occasion, a hesitation — record it with remember_customer in one short factual line. Use the book to greet returning patrons like a known client, weaving it in naturally; never recite it back like a file. Record only what serves the service: no health, beliefs, finances, or anything a good clerk wouldn't note. And NEVER record order bookkeeping — order counts, serial numbers, order status, what they bought, or shipping/billing addresses: that lives in the register and you read it LIVE with get_my_orders, so a note only freezes a snapshot that goes stale. Reference an order only as durable relationship context (the room a cloth is for), never as a ledger of serials and status.
 8. A no is taken with grace, once and fully. The relationship outlasts the transaction; a patron well-treated returns.$sop$, 6),
 
 ('snooze', 'Snooze — leaving the door open', $sop$When the customer disengages — short replies, "just looking", a declined nudge, or plain goodbye — you withdraw the way a good clerk steps back from the counter:
@@ -927,7 +927,7 @@ CHECK THEIR NEEDS ARE MET
 - If they were mid-decision (a cloth, a room, a gift), offer the natural next step once; if they were mid-task (an order change, checkout), confirm it completed.
 
 LEAVE A NOTE IN THE CLIENT BOOK
-- For a SIGNED-IN patron, before the conversation winds down — when they say goodbye, go quiet on your final follow-up, or complete a commission — call remember_customer with ONE durable, factual line capturing what you learned this visit: the room, the person they're buying for, the cloth they favored, a hesitation, a thread to pick up next time. One clerk-worthy line; nothing sensitive.
+- For a SIGNED-IN patron, before the conversation winds down — when they say goodbye, go quiet on your final follow-up, or complete a commission — call remember_customer with ONE durable, factual line capturing what you learned this visit: the room, the person they're buying for, the cloth they favored, a hesitation, a thread to pick up next time. One clerk-worthy line; nothing sensitive. Capture RELATIONSHIP & SELLING memory only — NEVER order bookkeeping (serials, order counts, status, what shipped, shipping/billing addresses); that lives in the register and is read live with get_my_orders, so a note only goes stale.
 - Do not record a note for anonymous shoppers (there is no one to remember) and do not note trivial or one-off exchanges — only what would help serve them better next time.
 - If nothing durable was learned, that is fine — do not invent a note.
 
@@ -1000,7 +1000,7 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 
 2. FOLLOW & RESOLVE the house instructions (detail in the 'house-directives' SOP). A STANDING preference (e.g. "VIP — waive rush fees") you honour every visit and leave open. A ONE-TIME task (e.g. "apologise for the delay on Nº 231") you do at the first natural moment, then call resolve_admin_note with its (#id) in the SAME reply. Never resolve a standing preference, never resolve something you have not done, and if a one-time task already shows under "what you've done for them" do not repeat it — just resolve it.
 
-3. LEAVE notes as you go. When the patron shares something durable — a room, a person, a favoured cloth, a hesitation, a thread to pick up — call remember_customer with one short factual line (it de-duplicates; never record anything sensitive). Actions you take on the register are recorded for you automatically, so you needn't note those.
+3. LEAVE notes as you go. When the patron shares something durable — a room, a person, a favoured cloth, a hesitation, a thread to pick up — call remember_customer with one short factual line (it de-duplicates; never record anything sensitive). Record RELATIONSHIP & SELLING memory only — NEVER order bookkeeping (serials, order counts, order status, what they bought, shipping/billing addresses): that lives in the register and you read it LIVE with get_my_orders, so such a note only freezes a snapshot that goes stale. Actions you take on the register are recorded for you automatically, so you needn't note those.
 
 4. AT WRAP-UP, before the conversation rests, decide whether anything durable was learned that isn't already in the book; if so, leave that one line (detail in the 'wrap-up' SOP). If nothing durable was learned, leave nothing — never invent a note.
 
@@ -1031,6 +1031,38 @@ update public.concierge_sops set content_md = replace(
   '2. FOLLOW & RESOLVE the house instructions (detail in the ''house-directives'' SOP). Honour them PROACTIVELY — on your first line, without being asked; acting is always words and needs no tool. A STANDING preference (e.g. "VIP — waive rush fees") you honour every visit and leave open. A ONE-TIME task (e.g. "apologise for the delay on Nº 231") you do at the first natural moment. Checking it off is a separate step: when you have tools this turn, call resolve_admin_note with its (#id); if the turn is tool-less (a greeting or nudge), just honour it in words — the house reconciles the check-off. Never resolve a standing preference or something you have not done, and if a one-time task already shows under "what you''ve done for them" do not repeat it.'),
   updated_at = now()
   where slug = 'client-book-method';
+
+-- Keep the client-book-method LEAVE-notes step (point 3) in sync for already-seeded
+-- installs: the client book holds RELATIONSHIP & SELLING memory only — order
+-- bookkeeping (serials, counts, status, addresses) lives in the register and is
+-- read live, so a note there only goes stale.
+update public.concierge_sops set content_md = replace(
+  content_md,
+  '3. LEAVE notes as you go. When the patron shares something durable — a room, a person, a favoured cloth, a hesitation, a thread to pick up — call remember_customer with one short factual line (it de-duplicates; never record anything sensitive). Actions you take on the register are recorded for you automatically, so you needn''t note those.',
+  '3. LEAVE notes as you go. When the patron shares something durable — a room, a person, a favoured cloth, a hesitation, a thread to pick up — call remember_customer with one short factual line (it de-duplicates; never record anything sensitive). Record RELATIONSHIP & SELLING memory only — NEVER order bookkeeping (serials, order counts, order status, what they bought, shipping/billing addresses): that lives in the register and you read it LIVE with get_my_orders, so such a note only freezes a snapshot that goes stale. Actions you take on the register are recorded for you automatically, so you needn''t note those.'),
+  updated_at = now()
+  where slug = 'client-book-method';
+
+-- The sales-skill and wrap-up SOPs are seeded inside an `if not exists` guard, so
+-- inline edits to them never reach an already-seeded install. These top-level
+-- replace() updates carry the "client book is relationship memory, NEVER order
+-- bookkeeping" rule into production. Surgical (replace of one sentence/bullet) so a
+-- Studio edit elsewhere in the SOP survives.
+update public.concierge_sops set content_md = replace(
+  content_md,
+  'Record only what serves the service: no health, beliefs, finances, or anything a good clerk wouldn''t note.',
+  'Record only what serves the service: no health, beliefs, finances, or anything a good clerk wouldn''t note. And NEVER record order bookkeeping — order counts, serial numbers, order status, what they bought, or shipping/billing addresses: that lives in the register and you read it LIVE with get_my_orders, so a note only freezes a snapshot that goes stale. Reference an order only as durable relationship context (the room a cloth is for), never as a ledger of serials and status.'),
+  updated_at = now()
+  where slug = 'sales-skill'
+    and content_md not like '%NEVER record order bookkeeping%';
+
+update public.concierge_sops set content_md = replace(
+  content_md,
+  'One clerk-worthy line; nothing sensitive.',
+  'One clerk-worthy line; nothing sensitive. Capture RELATIONSHIP & SELLING memory only — NEVER order bookkeeping (serials, order counts, status, what shipped, shipping/billing addresses); that lives in the register and is read live with get_my_orders, so a note only goes stale.'),
+  updated_at = now()
+  where slug = 'wrap-up'
+    and content_md not like '%NEVER order bookkeeping%';
 do $seed$
 begin
   if not exists (select 1 from public.concierge_forms) then
