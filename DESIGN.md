@@ -972,6 +972,22 @@ judgeable; if the patron had no directive, the goal is treated as met. And the
 Conversations list **tags** any chat where the concierge resolved a note with a
 `🏷 house note #N` chip (from the same `resolve_admin_note` audit action), so you
 can spot — and open — the chats that acted on notes and which note they relate to.
+**Clicking that chip** opens the transcript scrolled to the reply where it
+happened (keyed on the resolve action's timestamp), not just the chat.
+
+**Surfacing open directives elsewhere.** A patron with an unresolved directive is
+flagged where you'd notice: the **Patrons list** row carries a purple left rail
+and a `🏷 N open house note` badge (from `customer_notes` where
+`kind='directive' AND NOT resolved`), and the **order drawer** keeps the client
+book / leave-instruction box near the top with the customer block. The drawer
+reads top-to-bottom as **Customer → Client book & instructions → order detail
+(fulfilment, shipping & billing, emails) → Conversations**; the customer's email
+(like the IP line) is click-to-find-every-order.
+
+**A note on the stage chip.** The sales-funnel stage value `evaluating` is shown
+as **"considering"** in the Conversations list, so it can't be misread as
+"still being graded" (an evaluation status); the stored value and colour are
+unchanged.
 
 ---
 

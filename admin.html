@@ -359,6 +359,11 @@
   .cust-book-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--loden-deep); background:var(--brass-soft);
     border-radius:20px; padding:3px 10px; }
+  /* Open house instruction — the same purple used for house-note chips elsewhere,
+     so an unresolved directive is unmistakable on a collapsed patron row. */
+  .cust-housenote-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.05em;
+    color:#d9c6f5; background:rgba(122,90,160,.22); border:1px solid #7a5aa0;
+    border-radius:20px; padding:3px 10px; font-weight:600; }
   .cust-order{ display:flex; gap:14px; flex-wrap:wrap; align-items:baseline;
     padding:9px 2px; border-bottom:1px solid var(--hairline-dim); font-size:13.5px; }
   .cust-order:last-child{ border-bottom:none; }
@@ -381,6 +386,9 @@
   /* Patrons view — customer cards with their client book */
   .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
     background:rgba(38,51,43,.28); overflow:hidden; }
+  /* A patron with an unresolved house instruction gets a purple left rail, so
+     the row stands out in the list even before you read the badge. */
+  .cust-row.has-house-note{ border-left:3px solid #7a5aa0; }
   .cust-head{ display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
     padding:14px 18px; cursor:pointer; user-select:none; }
   .cust-head:hover{ background:rgba(241,236,226,.03); }
@@ -4101,7 +4109,20 @@ function openOrderDrawer(o) {
   const c = custByEmail(o.email);
   const nameLine = el('div', null, o.name || '—'); nameLine.style.cssText = 'color:var(--wool); font-size:15px;';
   who.appendChild(nameLine);
-  who.appendChild(el('div', 'micro', o.email || '—'));
+  if (o.email) {
+    // Click the email to pull up every order by this patron (same as the IP line).
+    const emailLine = el('div', 'micro', o.email + ' — click to find every order by this email');
+    emailLine.style.cssText = 'color:var(--brass-soft); cursor:pointer;';
+    emailLine.addEventListener('click', function () {
+      $('cust-search').value = o.email;
+      if ($('cust-serial')) $('cust-serial').value = '';
+      closeDrawer();
+      loadCustomers();
+    });
+    who.appendChild(emailLine);
+  } else {
+    who.appendChild(el('div', 'micro', '—'));
+  }
   if (c) {
     const stand = el('div', 'micro');
     stand.style.cssText = 'margin-top:5px; color:var(--wool-dim);';
@@ -4125,17 +4146,21 @@ function openOrderDrawer(o) {
   }
   dw.appendChild(who);
 
-  // Conversations — right here in the panel: the chats that TOUCHED this order
-  // (a register action logged against its Nº), then the patron's other chats.
-  // Each row opens the transcript; an order chat scrolls to the moment it was
-  // touched. Loaded async so opening the drawer stays instant.
-  if (o.email || o.user_id) {
-    const cv = drawerSection('Conversations');
-    const holder = el('div', 'micro', 'Loading conversations…');
-    cv.appendChild(holder);
-    dw.appendChild(cv);
-    loadOrderConversations(o, holder);
+  // Client book & house instructions — kept near the top, with the customer, so
+  // leaving a house instruction is right where you read who they are (what the
+  // concierge has learned, plus the standing instructions the team leaves it).
+  const bs = drawerSection('Client book & house instructions');
+  const notes = (c && c.notes) || [];
+  if (!notes.length) {
+    bs.appendChild(el('div', 'empty micro',
+      'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time — and you can leave it a house instruction below.'));
+  } else {
+    notes.forEach(function (n) { bs.appendChild(clientBookNoteLine(n)); });
   }
+  bs.appendChild(directiveComposer(o.email, function () {
+    loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
+  }, o.user_id));
+  dw.appendChild(bs);
 
   // Fulfillment (advance + tracking), only for live orders
   if (o.serial != null && o.status !== 'cancelled') {
@@ -4308,20 +4333,17 @@ function openOrderDrawer(o) {
   }
 
 
-  // Client book & house instructions — what the concierge has learned, and the
-  // standing instructions the team has left for it to follow.
-  const bs = drawerSection('Client book & house instructions');
-  const notes = (c && c.notes) || [];
-  if (!notes.length) {
-    bs.appendChild(el('div', 'empty micro',
-      'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time — and you can leave it a house instruction below.'));
-  } else {
-    notes.forEach(function (n) { bs.appendChild(clientBookNoteLine(n)); });
+  // Conversations — LAST, after the order detail: the chats that TOUCHED this
+  // order (a register action logged against its Nº), then the patron's other
+  // chats. Each row opens the transcript; an order chat scrolls to the moment it
+  // was touched. Loaded async so opening the drawer stays instant.
+  if (o.email || o.user_id) {
+    const cv = drawerSection('Conversations');
+    const holder = el('div', 'micro', 'Loading conversations…');
+    cv.appendChild(holder);
+    dw.appendChild(cv);
+    loadOrderConversations(o, holder);
   }
-  bs.appendChild(directiveComposer(o.email, function () {
-    loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
-  }, o.user_id));
-  dw.appendChild(bs);
 
   bd.classList.add('on');
   requestAnimationFrame(function () { dw.classList.add('on'); });
@@ -4520,6 +4542,10 @@ function renderPatrons(list, q) {
 
   rows.forEach(function (c) {
     const row = el('div', 'cust-row');
+    // Open house instructions for this patron — surfaced right on the collapsed
+    // row so it's obvious at a glance who has one waiting, without expanding.
+    const openDir = (c.notes || []).filter(function (n) { return n.kind === 'directive' && !n.resolved; }).length;
+    if (openDir) row.classList.add('has-house-note');
     const head = el('div', 'cust-head');
     const pchk = document.createElement('input'); pchk.type = 'checkbox'; pchk.className = 'ord-check';
     pchk.checked = state.patSel.has(c.email); pchk.style.alignSelf = 'center';
@@ -4532,6 +4558,13 @@ function renderPatrons(list, q) {
     head.appendChild(el('span', 'cust-name', c.name));
     head.appendChild(el('span', 'cust-email', c.email));
     head.appendChild(el('span', 'cust-tier', c.tier));
+    if (openDir) {
+      const hb = el('span', 'cust-housenote-badge',
+        '🏷 ' + openDir + ' open house note' + (openDir === 1 ? '' : 's'));
+      hb.title = 'This patron has ' + openDir + ' unresolved house instruction' + (openDir === 1 ? '' : 's') +
+        ' — open the row to read or resolve';
+      head.appendChild(hb);
+    }
     if (c.notes.length) head.appendChild(el('span', 'cust-book-badge',
       '❦ ' + c.notes.length + (c.notes.length === 1 ? ' note' : ' notes')));
     const meta = el('span', 'cust-meta');
@@ -5230,19 +5263,24 @@ async function loadConversations(more) {
     });
   }
 
-  // Tag chats that acted on a house note (resolve_admin_note): conv id → [note_id].
+  // Tag chats that acted on a house note (resolve_admin_note): conv id → [note_id],
+  // plus conv id → the FIRST resolve time in that chat, so clicking the tag can
+  // scroll straight to where it happened.
   state.convoHouse = {};
+  state.convoHouseAt = {};
   if (ids.length) {
     const hres = await sb.from('concierge_actions')
-      .select('conversation_id,payload')
+      .select('conversation_id,payload,created_at')
       .eq('action', 'resolve_admin_note')
       .in('conversation_id', ids)
+      .order('created_at', { ascending: true })
       .limit(5000);
     if (!hres.error) (hres.data || []).forEach(function (a) {
       if (!a.conversation_id) return;
       const nid = a.payload && a.payload.note_id != null ? a.payload.note_id : null;
       if (!state.convoHouse[a.conversation_id]) state.convoHouse[a.conversation_id] = [];
       if (nid != null && state.convoHouse[a.conversation_id].indexOf(nid) < 0) state.convoHouse[a.conversation_id].push(nid);
+      if (!state.convoHouseAt[a.conversation_id]) state.convoHouseAt[a.conversation_id] = a.created_at;
     });
   }
   renderConvoList(counts);
@@ -5323,6 +5361,13 @@ function convoGoalMatch(goalStatus, mode) {
    changes) without a server round-trip, reusing the stored message counts. */
 function renderConversations() { renderConvoList(state.convoCounts || {}); }
 
+/* Sales-funnel stage → a display label that can't be misread as a grading
+   status. "evaluating" (the funnel value) reads like "still being evaluated",
+   so it shows as "considering"; the DB value and CSS colour class are unchanged. */
+const STAGE_LABELS = {
+  browsing: 'browsing', engaged: 'engaged', evaluating: 'considering',
+  objection: 'objection', ready: 'ready', won: 'won', lost: 'lost'
+};
 function renderConvoList(counts) {
   if (counts) state.convoCounts = counts; else counts = state.convoCounts || {};
   const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
@@ -5344,12 +5389,24 @@ function renderConvoList(counts) {
     const line1 = el('div', 'line1');
     line1.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
     line1.appendChild(el('span', 'micro', c.section || '—'));
-    if (c.sales_stage) line1.appendChild(el('span', 'stage-chip stage-' + c.sales_stage, c.sales_stage));
+    if (c.sales_stage) {
+      const sc = el('span', 'stage-chip stage-' + c.sales_stage, STAGE_LABELS[c.sales_stage] || c.sales_stage);
+      sc.title = 'Sales funnel stage (from goal grading): ' + c.sales_stage;
+      line1.appendChild(sc);
+    }
     const hn = state.convoHouse && state.convoHouse[c.id];
     if (hn && hn.length) {
       const tag = el('span', 'stage-chip', '🏷 house note' + (hn.length > 1 ? ' ×' + hn.length : ' #' + hn[0]));
-      tag.style.cssText = 'border-color:#7a5aa0; color:#b79fe0;';
-      tag.title = 'The concierge resolved a house note in this chat';
+      tag.style.cssText = 'border-color:#7a5aa0; color:#b79fe0; cursor:pointer;';
+      tag.title = 'Open this chat at the moment the house note was acted on';
+      // Click the tag → open the transcript scrolled to where it happened (the
+      // resolve action's timestamp), not just the bottom. Stop propagation so the
+      // row's own open (which lands at the end) doesn't fire too.
+      tag.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.jumpTo = { conv: c.id, at: (state.convoHouseAt && state.convoHouseAt[c.id]) || null };
+        openConvo(c);
+      });
       line1.appendChild(tag);
     }
     btn.appendChild(line1);
