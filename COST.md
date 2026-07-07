@@ -11,7 +11,7 @@ makes no model calls.
 | **Signed-in chat** (agentic loop) | each message from a signed-in visitor | **up to 4 calls per message** — it loops to run tools (get_my_orders → answer, etc.). A no-tool reply is 1 round. |
 | **Anonymous chat** | each message when signed out | 1 call — **or 0** on a semantic-cache hit (see below). |
 | **Proactive nudge / opener** | an idle in-panel nudge, or the greeting spoken on panel open | 1 call each. Capped per conversation by the outreach budget. |
-| **Re-engagement line** (`?reengage`) | each time the closed-panel bubble fires | 1 call (~120 tok). Has a client-side fallback line, so it can be skipped. |
+| **Re-engagement line** (`?reengage`) | each time the closed-panel bubble fires | 1 call (`max_tokens: 90`). Has a client-side fallback line, so it can be skipped. |
 | **Goal grading** (`scheduleGoalEval`) | after a turn, sampled by `goal_sample_rate` | +1 call. Output budget **scales with goal count** (`320 + goals×160`, cap 2000) so the per-goal JSON can't truncate. `goal_sample_rate` 1.0 = every turn; lower to cut. |
 | **Directive reconciliation** (`reconcileDirectives`) | after a signed-in turn **only when the patron has an open one-time house directive** | +1 small, tool-scoped call. Background (`EdgeRuntime.waitUntil`), never on the shopper's critical path. Zero cost for the common case (no open directive). |
 | **Wrap-up note** | signed-in visitor leaves, real exchange happened | 1 small call (~90 tok) to write a client-book line. |

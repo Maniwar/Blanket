@@ -444,7 +444,11 @@ Function (service role + verified-JWT ownership). Migration `0041`. See DESIGN �
 **Written by:** admin (Procedures → Conversation goals). **Read by:**
 `buildSystemPrompt` (the bot pursues them) and `evaluateGoals` (the judge
 scores each into `concierge_conversations.goal_status`). **Seeded by:**
-`setup.sql` (six starter goals, only if the table is empty).
+`setup.sql` — **seven starter goals**: six base goals (in a `where not exists`
+block, only if the table is empty) plus `house-notes`, seeded separately with
+`on conflict do nothing` so it lands in already-seeded databases too. The judge's
+output budget scales with this count (`320 + goals×160`), so adding goals never
+truncates its per-goal JSON.
 
 ### `concierge_tools` — admin overrides for the model-callable tools
 | Column | Type | Purpose |
@@ -609,7 +613,7 @@ allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
 | `GET ?export=1` | `handleExportGet` | **admin** | **Streaming** transcript export: keyset-paginates conversations and streams a CSV (one row per message, `user` pseudonymized unless `?pii=1`; `?from`/`?to` date bounds). Bounded memory on both ends — the scalable export tier (see note below). |
 | `GET ?cachecheck=1` | inline | **admin** | Self-diagnosis of the semantic cache round-trip (writes+deletes a probe row, so admin-gated). |
 | `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
-| `POST ?regrade=1` | `handleRegradePost` | **admin** | Re-run **goal grading** on demand for `{conversation_id}` or `{ids:[…]}` (≤30) — the Conversations panel's "Re-grade goals" / "Re-grade shown" buttons, so grading isn't only the sampled async pass. |
+| `POST ?regrade=1` | `handleRegradePost` | **admin** | Re-run **goal grading** on demand for `{conversation_id}` or `{ids:[…]}` (≤30) — the Conversations panel's "Re-grade goals" / "Re-grade shown" buttons, so grading isn't only the sampled async pass. Returns `{graded, requested, empty, failed}`: `graded` counts real scorecard writes (`evaluateGoals` returns a success boolean), `empty` = chats with no messages, `failed` = judge ran but wrote nothing (transient). The per-chat button auto-retries once on `failed`. |
 
 **SSE frames** (chat): `{"t":…}` text, `{"s":…}` status, `{"m":{cid,mid}}`
 meta, `{"c":…}` cache marker, `{"hold":1}` a held nudge, then `[DONE]`.
