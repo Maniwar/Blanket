@@ -1198,6 +1198,7 @@ const state = {
   houseNotes: null,        // all directives, for the House notes management view
   houseFilter: 'open',     // open | resolved | all
   houseActedIn: {},        // note_id → conversation_id the concierge resolved it in
+  houseSel: new Set(),     // selected house-note ids for bulk resolve/reopen/delete
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
@@ -3918,6 +3919,10 @@ function renderBulkBar() {
   resendBtn.addEventListener('click', bulkResend);
   bar.appendChild(resendBtn);
 
+  const noteBtn = el('button', 'btn ghost', 'Leave note…'); noteBtn.type = 'button';
+  noteBtn.addEventListener('click', bulkLeaveNote);
+  bar.appendChild(noteBtn);
+
   bar.appendChild(el('span', 'spacer'));
   const expBtn = el('button', 'btn ghost', 'Export selected'); expBtn.type = 'button';
   expBtn.addEventListener('click', exportSelected);
@@ -3926,6 +3931,72 @@ function renderBulkBar() {
   clr.addEventListener('click', function () { state.custSel = new Set(); renderCustomers(); });
   bar.appendChild(clr);
   return bar;
+}
+
+/* A small centred modal with a textarea — reused for bulk note entry. */
+function noteModal(title, placeholder, onSubmit) {
+  const bd = el('div');
+  bd.style.cssText = 'position:fixed; inset:0; z-index:50; background:rgba(12,16,13,.62); display:flex; align-items:center; justify-content:center; padding:20px;';
+  const box = el('div');
+  box.style.cssText = 'background:var(--loden-deep,#1c261f); border:1px solid var(--hairline); border-radius:6px; padding:22px; width:min(540px,96vw); box-shadow:0 24px 60px rgba(0,0,0,.5);';
+  box.appendChild(el('div', 'micro', title));
+  const ta = document.createElement('textarea');
+  ta.rows = 3; ta.style.cssText = 'width:100%; margin:10px 0; resize:vertical;'; ta.placeholder = placeholder || '';
+  box.appendChild(ta);
+  const row = el('div'); row.style.cssText = 'display:flex; gap:8px; justify-content:flex-end;';
+  const cancel = el('button', 'btn ghost', 'Cancel'); cancel.type = 'button';
+  cancel.addEventListener('click', function () { bd.remove(); });
+  const ok = el('button', 'btn primary', 'Add'); ok.type = 'button';
+  ok.addEventListener('click', function () {
+    const v = (ta.value || '').trim();
+    if (v.length < 3) { toast('Write the note first', true); return; }
+    withBusy(ok, async function () { await onSubmit(v); bd.remove(); });
+  });
+  row.appendChild(cancel); row.appendChild(ok); box.appendChild(row);
+  bd.appendChild(box); document.body.appendChild(bd);
+  bd.addEventListener('click', function (e) { if (e.target === bd) bd.remove(); });
+  setTimeout(function () { try { ta.focus(); } catch (e) { /* ignore */ } }, 30);
+}
+
+/* Bulk-add a house directive to the distinct customers behind the selected
+   orders (deduped by email, so a customer with several selected orders gets it
+   once). */
+function bulkLeaveNote() {
+  const sel = selectedOrders();
+  if (!sel.length) { toast('No orders selected', true); return; }
+  const emails = [...new Set(sel.map(function (o) { return (o.email || '').toLowerCase(); }).filter(Boolean))];
+  if (!emails.length) { toast('No customer emails in the selection', true); return; }
+  noteModal(
+    'House instruction for ' + emails.length + ' customer' + (emails.length === 1 ? '' : 's') +
+      ' (' + sel.length + ' selected order' + (sel.length === 1 ? '' : 's') + ')',
+    'e.g. “Confirm the apartment number before shipping.” Added to each customer for the concierge to follow.',
+    async function (note) {
+      const author = (state.session && state.session.user && state.session.user.email) || '';
+      const rows = emails.map(function (em) {
+        return { email: em, note: note.slice(0, 400), kind: 'directive', resolved: false, author: author };
+      });
+      const r = await sb.from('customer_notes').insert(rows);
+      if (r.error) { fail('Bulk note', r.error); return; }
+      toast('House instruction left for ' + emails.length + ' customer' + (emails.length === 1 ? '' : 's'));
+      state.custSel = new Set(); loadCustomers();
+    });
+}
+
+/* Bulk resolve / reopen / delete over the selected house notes. */
+async function bulkHouseNotes(action) {
+  const ids = [...(state.houseSel || [])];
+  if (!ids.length) { toast('No house notes selected', true); return; }
+  if (action === 'delete' && !window.confirm('Delete ' + ids.length + ' house note' + (ids.length === 1 ? '' : 's') + '?')) return;
+  let r;
+  if (action === 'delete') r = await sb.from('customer_notes').delete().in('id', ids);
+  else r = await sb.from('customer_notes')
+    .update(action === 'resolve' ? { resolved: true, resolved_at: nowIso() } : { resolved: false, resolved_at: null })
+    .in('id', ids);
+  if (r.error) { fail('Bulk house notes', r.error); return; }
+  toast(ids.length + ' note' + (ids.length === 1 ? '' : 's') + ' ' +
+    (action === 'delete' ? 'deleted' : action === 'resolve' ? 'resolved' : 'reopened'));
+  state.houseSel = new Set();
+  await loadHouseNotes(); renderCustomers();
 }
 
 /* ---- Detail drawer (a single reused slide-in panel) ---- */
@@ -4408,6 +4479,7 @@ function renderPatrons(list, q) {
 /* Load every house directive across all patrons + the map of which conversation
    the concierge resolved each in (from the resolve_admin_note audit action). */
 async function loadHouseNotes() {
+  state.houseSel = new Set();
   const r = await sb.from('customer_notes')
     .select('id,email,user_id,note,author,created_at,resolved,resolved_at')
     .eq('kind', 'directive')
@@ -4462,10 +4534,35 @@ function renderHouseNotes(list) {
   const shown = notes.filter(function (n) { return f === 'all' || (f === 'open' ? !n.resolved : !!n.resolved); });
   if (!shown.length) { list.appendChild(el('div', 'empty micro', 'No ' + (f === 'all' ? '' : f + ' ') + 'house notes.')); return; }
 
+  // Bulk bar — resolve / reopen / delete the selected notes.
+  if (state.houseSel.size) {
+    const bbar = el('div', 'bulkbar');
+    const bs = el('span', 'bsel'); bs.appendChild(el('b', null, String(state.houseSel.size)));
+    bs.appendChild(document.createTextNode(' note' + (state.houseSel.size === 1 ? '' : 's') + ' selected'));
+    bbar.appendChild(bs);
+    [['Resolve', 'resolve'], ['Reopen', 'reopen'], ['Delete', 'delete']].forEach(function (a) {
+      const b = el('button', 'btn ghost' + (a[1] === 'delete' ? ' danger' : ''), a[0]); b.type = 'button';
+      b.addEventListener('click', function () { withBusy(b, function () { return bulkHouseNotes(a[1]); }); });
+      bbar.appendChild(b);
+    });
+    bbar.appendChild(el('span', 'spacer'));
+    const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
+    clr.addEventListener('click', function () { state.houseSel = new Set(); renderCustomers(); });
+    bbar.appendChild(clr);
+    list.appendChild(bbar);
+  }
+
   const tbl = el('div', 'ord-tbl');
   shown.forEach(function (n) {
     const row = el('div'); row.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--hairline-dim);';
     const head = el('div'); head.style.cssText = 'display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;';
+    const chk = document.createElement('input'); chk.type = 'checkbox'; chk.className = 'ord-check';
+    chk.checked = state.houseSel.has(n.id); chk.style.alignSelf = 'center';
+    chk.addEventListener('change', function () {
+      if (chk.checked) state.houseSel.add(n.id); else state.houseSel.delete(n.id);
+      renderCustomers();
+    });
+    head.appendChild(chk);
     const stag = el('span', null, n.resolved ? 'resolved' : 'open');
     stag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 7px; border-radius:4px; color:#fff; background:' + (n.resolved ? '#3b7a4b' : '#a9772a') + ';';
     head.appendChild(stag);
