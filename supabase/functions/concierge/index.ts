@@ -1707,8 +1707,11 @@ async function evaluateGoals(
       "evidence, the status is 'unmet' and the note says what is still missing. ALSO judge the " +
       "shopper's current SALES STAGE, one of: browsing (just landed, low signal), engaged (asking real " +
       "questions), evaluating (weighing it, comparing, picturing it), objection (a specific hesitation), " +
-      "ready (clear buying signals), won (they commissioned), lost (they declined and left). Respond " +
-      "ONLY with a JSON object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\"}, " +
+      "ready (clear buying signals), won (they commissioned), lost (they declined and left). For each goal " +
+      "ALSO return \"quote\": a SHORT VERBATIM excerpt (<=120 chars) copied EXACTLY, word-for-word, from the " +
+      "CONVERSATION above — the single line that best proves the status (the shopper's or concierge's actual " +
+      "words) so it can be found in the text; use \"\" when the status is unmet or nothing supports it. Respond " +
+      "ONLY with a JSON object mapping each goal slug to {\"status\":\"met|partial|unmet\",\"note\":\"...\",\"quote\":\"...\"}, " +
       "plus a key \"_stage\" set to the stage word. No prose.";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -1718,11 +1721,11 @@ async function evaluateGoals(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        // Budget scales with the number of goals: each returns {status,note} with
-        // a note up to ~160 chars, plus the _stage key. A flat cap truncated the
-        // JSON once the goal set grew (the parse then threw and NO scorecard was
-        // written), so give generous, goal-count-scaled headroom.
-        model, max_tokens: Math.min(2000, 320 + data.goals.length * 160),
+        // Budget scales with the number of goals: each returns {status,note,quote}
+        // — a note up to ~160 chars and a verbatim quote up to ~120 — plus _stage.
+        // A flat cap truncated the JSON once the goal set grew (the parse then threw
+        // and NO scorecard was written), so give generous, goal-count-scaled headroom.
+        model, max_tokens: Math.min(3200, 400 + data.goals.length * 320),
         system: judgeSystem,
         messages: [{
           role: "user",
@@ -1740,11 +1743,19 @@ async function evaluateGoals(
     if (a < 0 || z < 0) return false;
     text = text.slice(a, z + 1);
     const parsed = JSON.parse(text) as Record<string, unknown>;
-    const clean: Record<string, { status: string; note: string }> = {};
+    const clean: Record<string, { status: string; note: string; quote?: string }> = {};
     for (const g of data.goals) {
-      const v = parsed[g.slug] as { status?: string; note?: string } | undefined;
+      const v = parsed[g.slug] as { status?: string; note?: string; quote?: string } | undefined;
       const st = v && ["met", "partial", "unmet"].includes(String(v.status)) ? String(v.status) : "unmet";
-      clean[g.slug] = { status: st, note: (v && typeof v.note === "string") ? v.note.slice(0, 160) : "" };
+      const row: { status: string; note: string; quote?: string } = {
+        status: st,
+        note: (v && typeof v.note === "string") ? v.note.slice(0, 160) : "",
+      };
+      // A verbatim evidence excerpt so the admin can jump to the exact line in the
+      // transcript that earned the goal. Only kept for a scored (met/partial) goal.
+      const q = (v && typeof v.quote === "string") ? v.quote.trim().slice(0, 160) : "";
+      if (q && st !== "unmet") row.quote = q;
+      clean[g.slug] = row;
     }
     // House-notes is Not Applicable when no directive existed for this patron
     // (anonymous chats, or signed-in with none). OMIT it rather than record a

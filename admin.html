@@ -243,6 +243,12 @@
   .goal-row{ display:flex; align-items:flex-start; gap:10px; }
   .goal-row .goal-chip{ flex:0 0 auto; }
   .goal-why{ flex:1 1 auto; line-height:1.45; padding-top:2px; }
+  /* A scored goal is click-to-jump: it scrolls the transcript to the evidence. */
+  .goal-row.goal-jump{ cursor:pointer; border-radius:4px; padding:2px 5px; margin:-2px -5px; }
+  .goal-row.goal-jump:hover{ background:rgba(196,155,91,.09); }
+  .goal-jump-cue{ flex:0 0 auto; align-self:center; color:var(--brass-soft); font-size:12px; }
+  /* The transcript message(s) that earned a clicked goal. */
+  .msg.goal-hit .bubble{ box-shadow:inset 0 0 0 2px var(--brass-soft); }
   .admin-row{ display:flex; align-items:center; justify-content:space-between; gap:10px;
     padding:9px 0; border-bottom:1px solid var(--hairline-dim); }
   .admin-row:last-of-type{ border-bottom:none; }
@@ -3050,9 +3056,66 @@ function goalChips(goalStatus) {
     row.appendChild(el('span', 'goal-chip goal-' + st, (byslug[slug] || slug)));
     row.appendChild(el('span', 'goal-why micro',
       v.note ? v.note : (st === 'unmet' ? 'No evidence in this conversation.' : '—')));
+    // Click a scored goal to scroll to the line(s) in the transcript that earned it.
+    const evidence = ((v.quote || v.note) || '').trim();
+    if (st !== 'unmet' && evidence) {
+      row.classList.add('goal-jump');
+      row.title = 'Jump to the evidence in the transcript';
+      row.appendChild(el('span', 'goal-jump-cue', '↧'));
+      row.addEventListener('click', function () { jumpToGoalEvidence(v); });
+    }
     wrap.appendChild(row);
   });
   return wrap;
+}
+
+/* Scroll the open transcript to the message(s) that earned a goal. Prefers the
+   grader's verbatim `quote` (exact substring match); falls back to token overlap
+   with the human `note` so it still works on conversations graded before quotes
+   existed. Highlights every top-scoring message and scrolls to the first. */
+function jumpToGoalEvidence(v) {
+  const body = document.getElementById('transcript-body');
+  if (!body) return;
+  const nodes = [].slice.call(body.querySelectorAll('.msg'));
+  if (!nodes.length) { toast('Open the transcript first', true); return; }
+  const quote = (v && v.quote ? String(v.quote) : '').trim();
+  const note = (v && v.note ? String(v.note) : '').trim();
+  if (!quote && !note) { toast('No cited evidence for this goal', true); return; }
+
+  // Verbatim spans: the grader's quote (role prefix stripped) + any phrase the
+  // note wrapped in quotes. A verbatim hit is a near-certain anchor.
+  const spans = [];
+  if (quote) {
+    spans.push(quote.toLowerCase());
+    spans.push(quote.toLowerCase().replace(/^(shopper|concierge)\s*:\s*/, '').trim());
+  }
+  (note.match(/[“"']([^”"']{4,})[”"']/g) || []).forEach(function (s) {
+    spans.push(s.replace(/^[“"']|[”"']$/g, '').toLowerCase());
+  });
+  // Significant tokens (drop short + common words, incl. the note's paraphrase verbs).
+  const STOP = { the:1,'and':1,'for':1,was:1,that:1,this:1,they:1,them:1,their:1,with:1,you:1,your:1,but:1,are:1,have:1,has:1,had:1,will:1,would:1,shopper:1,concierge:1,said:1,named:1,chose:1,chosen:1,mentioned:1,asked:1,about:1,when:1,then:1,into:1,from:1,not:1,who:1 };
+  const evidence = (quote || note).toLowerCase();
+  const toks = (evidence.match(/[a-z0-9']{3,}/g) || []).filter(function (t) { return !STOP[t]; });
+
+  let best = 0;
+  const scored = nodes.map(function (node) {
+    const b = node.querySelector('.bubble');
+    const text = (b ? b.textContent : (node.textContent || '')).toLowerCase();
+    let score = 0;
+    spans.forEach(function (s) { if (s.length >= 4 && text.indexOf(s) >= 0) score += 10; });
+    const seen = {};
+    toks.forEach(function (t) { if (!seen[t] && text.indexOf(t) >= 0) { seen[t] = 1; score += 1; } });
+    if (score > best) best = score;
+    return { node: node, score: score };
+  });
+  if (best < 2) { toast('Could not pinpoint this goal’s evidence in the transcript', true); return; }
+  const targets = scored.filter(function (s) { return s.score === best; }).map(function (s) { return s.node; });
+
+  nodes.forEach(function (n) { n.classList.remove('goal-hit', 'flash'); });
+  targets.forEach(function (n) { n.classList.add('goal-hit', 'flash'); });
+  setTimeout(function () { targets.forEach(function (n) { n.classList.remove('flash'); }); }, 1800);
+  try { targets[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  catch (e) { body.scrollTop = targets[0].offsetTop - 40; }
 }
 
 /* ============================================================
@@ -6105,6 +6168,15 @@ function renderConvoSelbar(shown, rowRefs) {
   shown = shown || [];
   rowRefs = rowRefs || [];
   const hasSel = state.convoSel.size > 0;
+  // Keep the Re-grade button honest about what it acts on: the live selection
+  // (real count) when there is one, otherwise the shown set.
+  const rg = $('convo-regrade');
+  if (rg) {
+    rg.textContent = hasSel ? ('Re-grade selected (' + state.convoSel.size + ')') : 'Re-grade shown';
+    rg.title = hasSel
+      ? 'Re-grade the ' + state.convoSel.size + ' selected conversation' + (state.convoSel.size === 1 ? '' : 's') + ' — one model call each'
+      : 'Re-grade goals for the conversations currently shown — one model call each';
+  }
   // Hide only when there's nothing on screen AND no live selection — a selection
   // that outlived a filter change must stay reachable (its count + Clear).
   if (!shown.length && !hasSel) { bar.classList.add('hidden'); return; }
@@ -6333,23 +6405,44 @@ async function regradeConversation(c, _retried) {
     toast('Goals re-graded');
   }
 }
-/* Re-grade every conversation currently shown (bounded, one model call each). */
+/* Re-grade conversations, one model call each. With a live selection it grades
+   the SELECTED chats (the real count, not a fixed cap); otherwise the ones shown.
+   Batched, because the server grades <=30 per request, sequentially. */
 async function regradeShown() {
-  const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
-  const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
-  const shown = (state.convos || []).filter(function (c) {
-    return convoGoalMatch(c.goal_status, goalMode) && convoStageMatch(c, stageMode);
-  });
-  const ids = shown.map(function (c) { return c.id; }).slice(0, 30);
-  if (!ids.length) { toast('No conversations shown to grade', true); return; }
-  if (!window.confirm('Re-grade goals for ' + ids.length + ' conversation(s)? That is one model call each.')) return;
-  let res;
-  try { res = await postRegrade({ ids: ids }); }
-  catch (e) { fail('Re-grade', e); return; }
-  if (!res.ok) { fail('Re-grade', { message: 'HTTP ' + res.status }); return; }
-  const j = await res.json().catch(function () { return {}; });
-  toast('Re-graded ' + (j.graded || 0) + ' of ' + ids.length + ' conversation(s)');
-  loadConversations();
+  let ids, what;
+  if (state.convoSel.size) {
+    ids = [...state.convoSel];
+    what = ids.length + ' selected conversation' + (ids.length === 1 ? '' : 's');
+  } else {
+    const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
+    const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+    const rateMode = ($('convo-rating') && $('convo-rating').value) || '';
+    const shown = (state.convos || []).filter(function (c) {
+      return convoGoalMatch(c.goal_status, goalMode) && convoStageMatch(c, stageMode) && convoRatingMatch(c, rateMode);
+    });
+    ids = shown.map(function (c) { return c.id; });
+    what = ids.length + ' shown conversation' + (ids.length === 1 ? '' : 's');
+  }
+  if (!ids.length) { toast('No conversations to grade', true); return; }
+  if (!window.confirm('Re-grade goals for ' + what + '? That is one model call each' +
+      (ids.length > 20 ? ' — this may take a moment' : '') + '.')) return;
+
+  const CHUNK = 20;
+  const btn = $('convo-regrade');
+  let graded = 0, stopped = false;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    if (btn) btn.textContent = 'Re-grading ' + Math.min(i + chunk.length, ids.length) + '/' + ids.length + '…';
+    let res;
+    try { res = await postRegrade({ ids: chunk }); }
+    catch (e) { fail('Re-grade', e); stopped = true; break; }
+    if (!res.ok) { fail('Re-grade', { message: 'HTTP ' + res.status }); stopped = true; break; }
+    const j = await res.json().catch(function () { return {}; });
+    graded += (j.graded || 0);
+  }
+  toast('Re-graded ' + graded + ' of ' + ids.length + ' conversation' + (ids.length === 1 ? '' : 's') +
+    (stopped ? ' (stopped early on an error)' : ''));
+  loadConversations();   // refresh scorecards (also clears the selection)
 }
 
 /* ---- export helpers (shared) ---- */

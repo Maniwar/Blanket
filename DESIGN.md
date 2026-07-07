@@ -407,12 +407,25 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   chips, no repeated words — one status cue per row. The funnel value `evaluating`
   reads as **considering**.)*
 - **As the merchant**, I want to **re-run goal grading on demand** — one
-  conversation from its transcript, or every one currently shown — and be told
-  honestly if the judge returned nothing, so that a chat is graded when I need it,
-  not only on the sampled async pass. *(Per-chat **Re-grade goals** and
-  **Re-grade shown** → `POST ?regrade=1`; reports `{graded, empty, failed}`, the
-  per-chat button auto-retries once on a transient failure, and the list re-renders
-  in place.)*
+  conversation from its transcript, every one currently shown, or **exactly the
+  ones I've selected** — and be told honestly if the judge returned nothing, so
+  that a chat is graded when I need it, not only on the sampled async pass.
+  *(Per-chat **Re-grade goals**, and a batch button that is **selection-aware**:
+  with chats ticked it reads **"Re-grade selected (N)"** and grades that real count
+  — not a fixed cap — otherwise **"Re-grade shown"**. `POST ?regrade=1` grades ≤30
+  per request sequentially, so a larger set is **chunked** client-side (progress in
+  the button) and honoured in full; reports `{graded, empty, failed}`, the per-chat
+  button auto-retries once on a transient failure, and the list re-renders in
+  place.)*
+- **As the merchant**, when a conversation is graded, I want to **click a goal and
+  jump to the line(s) in the transcript that earned it**, so that I can verify the
+  grade against what was actually said instead of trusting the label. *(The judge
+  returns, per goal, a short **verbatim `quote`** copied from the transcript
+  alongside the human `note`; clicking a scored goal chip scrolls the transcript to
+  the message that contains it and rings it in brass. Matching prefers the exact
+  quote and falls back to token overlap with the `note`, so it still works on
+  conversations graded before quotes existed. Unmet goals aren't clickable — there's
+  nothing to point at.)*
 - **As the merchant**, I want to **filter conversations by funnel stage** and see
   a **funnel overview** — how many chats sit at browsing, engaged, considering,
   objection, ready, won, lost (and how many aren't graded yet) — so that I can see
