@@ -844,6 +844,14 @@
             <p class="micro" style="margin-top:4px;opacity:.7;">Used only if <em>Model</em> is blank. If the config itself can't be read (a rare DB blip), the server falls back to the <code>MODEL</code> env var, then a built-in default.</p>
           </div>
           <div class="field">
+            <label class="micro" for="cfg-grader-model">Grader model<span class="info-badge" title="The model that grades conversation goals — both live and when you press Re-grade. Blank = the concierge Model above. Pick a stronger model here for sharper grading without changing what answers shoppers.">i</span></label>
+            <select id="cfg-grader-model-pick" class="mono-field" style="margin-bottom:6px;">
+              <option value="">— use the concierge model —</option>
+            </select>
+            <input type="text" id="cfg-grader-model" class="mono-field" placeholder="or type a custom model id" autocomplete="off" spellcheck="false">
+            <div class="cfg-state" id="cfg-grader-model-state"></div>
+          </div>
+          <div class="field">
             <label class="micro" for="cfg-max-tokens">Max tokens<span class="info-badge" title="Ceiling on the length of each concierge reply. Blank = the built-in default (1024).">i</span></label>
             <input type="number" id="cfg-max-tokens" class="mono-field" min="1" step="1" placeholder="1024">
             <div class="cfg-state" id="cfg-max-tokens-state"></div>
@@ -2179,6 +2187,7 @@ async function adminPost(query) {
 const _MODEL_PAIRS = [
   ['cfg-model-pick', 'cfg-model', '— use fallback / default —'],
   ['cfg-model-fallback-pick', 'cfg-model-fallback', '— use fallback / default —'],
+  ['cfg-grader-model-pick', 'cfg-grader-model', '— use the concierge model —'],
   ['cfg-promptreview-model-pick', 'cfg-promptreview-model', '— use the concierge model —']
 ];
 let _modelCatalog = null;       // cached [{id,name}]
@@ -2425,9 +2434,67 @@ async function applyTunerEdit(target, newValue) {
   } catch (e) { fail('Apply edit', e); return false; }
 }
 
+/* Line-level diff (LCS) between two blocks of text → [{t:'same'|'add'|'del', text}]. */
+function diffLines(aStr, bStr) {
+  const a = String(aStr == null ? '' : aStr).split('\n');
+  const b = String(bStr == null ? '' : bStr).split('\n');
+  const n = a.length, m = b.length;
+  if (n * m > 400000) { // too large for O(nm) — just show the new version as added
+    return [{ t: 'note', text: '(large change)' }].concat(b.map(function (l) { return { t: 'add', text: l }; }));
+  }
+  const dp = []; for (let i = 0; i <= n; i++) dp.push(new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out = []; let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { out.push({ t: 'same', text: a[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: 'del', text: a[i] }); i++; }
+    else { out.push({ t: 'add', text: b[j] }); j++; }
+  }
+  while (i < n) out.push({ t: 'del', text: a[i++] });
+  while (j < m) out.push({ t: 'add', text: b[j++] });
+  return out;
+}
+/* Render a diff array into a <pre>, collapsing long runs of unchanged lines. */
+function renderDiff(diff) {
+  const pre = el('pre');
+  pre.style.cssText = 'white-space:pre-wrap; word-break:break-word; font-family:"IBM Plex Mono",monospace; font-size:11.5px; line-height:1.55; margin:6px 0 0; max-height:260px; overflow:auto;';
+  const COL = { add: '#8fbf8a', del: '#cf938e', same: 'var(--wool-faint,#7f7a6e)' };
+  let run = 0;
+  const flushRun = function () {
+    if (run > 3) {
+      const s = el('div'); s.style.cssText = 'color:var(--wool-faint,#6a655c); opacity:.7; padding:1px 0;';
+      s.textContent = '  ⋯ ' + (run - 0) + ' unchanged lines';
+      pre.appendChild(s);
+    }
+    run = 0;
+  };
+  const same = [];
+  diff.forEach(function (d) {
+    if (d.t === 'same') { same.push(d); run++; return; }
+    // On a change, show up to 2 lines of trailing context from the same-run, collapse the rest.
+    if (run > 0) {
+      const tail = same.slice(Math.max(0, same.length - (run > 5 ? 0 : run)));
+      if (run > 5) { flushRun(); } else { tail.forEach(function (s) { const ln = el('div'); ln.style.color = COL.same; ln.textContent = '  ' + s.text; pre.appendChild(ln); }); run = 0; }
+      same.length = 0;
+    }
+    const ln = el('div');
+    ln.style.cssText = 'color:' + (COL[d.t] || COL.same) + ';';
+    ln.textContent = (d.t === 'add' ? '+ ' : d.t === 'del' ? '− ' : '  ') + d.text;
+    pre.appendChild(ln);
+  });
+  if (run > 0) { flushRun(); same.length = 0; }
+  if (!pre.childNodes.length) { const s = el('div'); s.style.color = COL.same; s.textContent = '(no textual change)'; pre.appendChild(s); }
+  return pre;
+}
+
 /* Version-history modal for an edit-tracked row (concierge_edit_history). Lists
-   snapshots newest-first with a Restore action. `opts.describe(snapshot)` renders
-   a preview; `opts.restore(snapshot)` persists it and returns true on success. */
+   snapshots newest-first: each shows WHO changed it and WHEN, a +adds/−dels diff
+   against the previous version (what changed), and a Restore action. `opts.describe`
+   renders a snapshot to text; `opts.restore(snapshot)` persists it. */
 async function historyModal(entity, ref, opts) {
   opts = opts || {};
   const r = await sb.from('concierge_edit_history')
@@ -2446,12 +2513,28 @@ async function historyModal(entity, ref, opts) {
   if (!rows.length) {
     box.appendChild(el('div', 'empty micro', 'No saved versions yet — history begins at the next save.'));
   } else {
+    const desc = opts.describe || function (s) { return String(s); };
     const list = el('div'); list.style.cssText = 'margin:12px 0;';
     rows.forEach(function (row, i) {
       const item = el('div', 'hist-row');
       const head = el('div', 'hist-head');
-      head.appendChild(el('span', 'hist-when', fmtWhen(row.created_at) + (i === 0 ? '  · current' : '')));
-      head.appendChild(el('span', 'hist-who', row.edited_by || ''));
+      const curText = desc(row.snapshot);
+      const prevText = (i + 1 < rows.length) ? desc(rows[i + 1].snapshot) : null; // the version before this one
+      const diff = diffLines(prevText, curText);
+      const adds = diff.filter(function (d) { return d.t === 'add'; }).length;
+      const dels = diff.filter(function (d) { return d.t === 'del'; }).length;
+      // WHO + WHEN, prominent, plus a +adds/−dels change badge.
+      const meta = el('span', 'hist-when');
+      meta.innerHTML = '<strong>' + (row.edited_by ? String(row.edited_by).replace(/[<>&]/g, '') : 'unknown') +
+        '</strong> · ' + fmtWhen(row.created_at) + (i === 0 ? ' · current' : '');
+      head.appendChild(meta);
+      const badge = el('span', 'mono');
+      badge.style.cssText = 'font-size:11px; margin-left:auto; margin-right:10px;';
+      if (prevText === null) { badge.textContent = 'initial'; badge.style.color = 'var(--wool-faint,#7f7a6e)'; }
+      else {
+        badge.innerHTML = '<span style="color:#8fbf8a;">+' + adds + '</span> <span style="color:#cf938e;">−' + dels + '</span>';
+      }
+      head.appendChild(badge);
       const rest = el('button', 'btn ghost mini', i === 0 ? 'Current' : 'Restore'); rest.type = 'button';
       if (i === 0) rest.disabled = true;
       else rest.addEventListener('click', function () {
@@ -2463,10 +2546,23 @@ async function historyModal(entity, ref, opts) {
       });
       head.appendChild(rest);
       item.appendChild(head);
-      const body = el('div', 'hist-body clamp', (opts.describe ? opts.describe(row.snapshot) : String(row.snapshot)));
-      body.title = 'Click to expand / collapse';
-      body.addEventListener('click', function () { body.classList.toggle('clamp'); });
-      item.appendChild(body);
+      // Default view: the diff (what changed, and where). A link flips to the full text.
+      const bodyWrap = el('div'); bodyWrap.style.cssText = 'margin-top:2px;';
+      const diffView = renderDiff(diff);
+      const fullView = el('div', 'hist-body clamp', curText); fullView.style.display = 'none';
+      fullView.addEventListener('click', function () { fullView.classList.toggle('clamp'); });
+      const toggle = el('button', 'cfg-linkbtn', 'Show full version'); toggle.type = 'button';
+      let showingFull = false;
+      toggle.addEventListener('click', function () {
+        showingFull = !showingFull;
+        diffView.style.display = showingFull ? 'none' : '';
+        fullView.style.display = showingFull ? '' : 'none';
+        toggle.textContent = showingFull ? 'Show what changed' : 'Show full version';
+      });
+      bodyWrap.appendChild(diffView);
+      bodyWrap.appendChild(fullView);
+      if (prevText !== null) bodyWrap.appendChild(toggle);
+      item.appendChild(bodyWrap);
       list.appendChild(item);
     });
     box.appendChild(list);
@@ -2513,6 +2609,7 @@ async function loadConfig() {
   if ($('cfg-conn-key')) $('cfg-conn-key').value = storedConnKey();
   $('cfg-model').value = (typeof cfg.model === 'string') ? cfg.model : '';
   $('cfg-model-fallback').value = (typeof cfg.model_fallback === 'string') ? cfg.model_fallback : '';
+  if ($('cfg-grader-model')) $('cfg-grader-model').value = (typeof cfg.grader_model === 'string') ? cfg.grader_model : '';
   if ($('cfg-promptreview-model')) $('cfg-promptreview-model').value = (typeof cfg.promptreview_model === 'string') ? cfg.promptreview_model : '';
   $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
   $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
@@ -3126,6 +3223,7 @@ async function saveEngine() {
     { key: 'enabled',    value: enabled,                     updated_at: nowIso() },
     { key: 'model',      value: $('cfg-model').value.trim(), updated_at: nowIso() },
     { key: 'model_fallback', value: $('cfg-model-fallback').value.trim(), updated_at: nowIso() },
+    { key: 'grader_model', value: ($('cfg-grader-model') ? $('cfg-grader-model').value.trim() : ''), updated_at: nowIso() },
     { key: 'max_tokens', value: Math.round(mt),              updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
