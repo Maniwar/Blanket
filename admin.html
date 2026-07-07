@@ -5466,6 +5466,10 @@ async function regradeConversation(c, _retried) {
   if (!gr.error && gr.data) {
     c.goal_status = gr.data.goal_status; c.sales_stage = gr.data.sales_stage;
     (state.convos || []).forEach(function (x) { if (x.id === c.id) { x.goal_status = c.goal_status; x.sales_stage = c.sales_stage; } });
+    // Re-render the LIST too, not just the open transcript — the sales-stage and
+    // goal chips on the row read from state.convos and would otherwise stay stale
+    // (still showing the old stage, e.g. "evaluating") until a full reload.
+    renderConversations();
     if (state.activeConvoId === c.id) openConvo(c); // re-render with the new scorecard
   }
   // Surface the real outcome, so a silent no-op is diagnosable.

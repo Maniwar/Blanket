@@ -599,11 +599,14 @@ async function customerBlock(customer: Customer): Promise<string> {
   let directiveLine = "";
   if (directives && directives.length > 0) {
     const list = directives.map((n) => `(#${n.id}) ${n.note}`).join("  ·  ");
-    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — you MUST honour these before anything else). ` +
-      `Follow a STANDING preference every visit and leave it open. For a ONE-TIME task, carry it out at the first ` +
-      `natural moment, and then — in that SAME reply — you MUST call resolve_admin_note with its (#id) to check it ` +
-      `off; a one-time task you did but did not resolve will WRONGLY repeat on the next visit, so never end your ` +
-      `turn with a completed one-time instruction still open: ${list}.`;
+    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — honour these BEFORE anything else, ` +
+      `PROACTIVELY and on your very first line of the visit; do NOT wait to be asked). ACTING on an instruction is ` +
+      `ALWAYS just words woven into good service and NEVER needs a tool — so you can always do it, even on a ` +
+      `greeting or a nudge where no tools are available; never withhold it for lack of a tool. A STANDING preference ` +
+      `you follow every visit and leave open. A ONE-TIME task you carry out at the first natural moment. CHECKING a ` +
+      `completed one-time task off is a SEPARATE, later step: WHEN you have tools this turn, call resolve_admin_note ` +
+      `with its (#id); if this turn has no tools, just honour it in words — the house reconciles the check-off for ` +
+      `you afterward, so a completed task never lingers. Instructions: ${list}.`;
   }
 
   return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine}${directiveLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;
@@ -2446,8 +2449,9 @@ async function handleChatPost(req: Request): Promise<Response> {
     // beat is a natural moment to honour it (you have no tools here, so weave it
     // into your line; the house checks it off for you afterward).
     const houseNote =
-      " If the CUSTOMER block carries a HOUSE INSTRUCTION (a note the team left for this " +
-      "patron), honour it now in your line — that comes before anything else.";
+      " If the CUSTOMER block carries a HOUSE INSTRUCTION (a note the team left for this patron), LEAD with it " +
+      "— weave it into this very line, before anything else. You need no tool to do so and you do NOT resolve it " +
+      "here (the house checks it off for you); just make sure the instruction is honoured in what you say.";
     validated.messages.push({
       role: "user",
       content:
@@ -2472,8 +2476,9 @@ async function handleChatPost(req: Request): Promise<Response> {
           "Add ONE warm, specific line that opens toward a conversation goal. If CUSTOMER is present, " +
           "make it personal — greet them by first name and nod to their standing or a real order/note " +
           "(a returning patron is never a stranger), drawing on the CUSTOMER block and CLIENT BOOK " +
-          "already provided above. If that block carries a HOUSE INSTRUCTION left by the team, honour it " +
-          "in this opening line before anything else. If there is NO CUSTOMER (an anonymous visitor), open from what " +
+          "already provided above. If that block carries a HOUSE INSTRUCTION left by the team, LEAD this opening " +
+          "line with it — honour it before anything else; you need no tool and do NOT resolve it here (the house " +
+          "checks it off for you), just make sure it is honoured in words. If there is NO CUSTOMER (an anonymous visitor), open from what " +
           "they're browsing (the BROWSING section and page) — e.g. the cloth they're reading about, " +
           "gift vs. their own home — and invite them in. End with a single light question. This is a " +
           "plain spoken line: do NOT use any tools and do NOT write any tool call — just speak. Do " +
@@ -2482,7 +2487,8 @@ async function handleChatPost(req: Request): Promise<Response> {
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
           "from the conversation so far and the CUSTOMER block / CLIENT BOOK already above — never a " +
           "generic greeting, never repeating yourself. If that block carries a HOUSE INSTRUCTION left " +
-          "by the team, honour it in this line before anything else. This is a plain spoken line: do NOT use any " +
+          "by the team, LEAD this line with it — honour it before anything else; you need no tool and do NOT " +
+          "resolve it here (the house checks it off for you), just honour it in words. This is a plain spoken line: do NOT use any " +
           "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
           "mention this note. One or two sentences ending in a light question.]",
     });
@@ -3152,6 +3158,25 @@ async function handleReengage(req: Request): Promise<Response> {
     const signed = customer !== null;
     const postSale = body.post_sale === true;
 
+    // Open HOUSE INSTRUCTIONS for a signed-in patron — this outreach line is a
+    // proactive beat too, so it must honour them. Words only (this endpoint has no
+    // tools and returns a single line); the house reconciles any check-off later.
+    let houseClause = "";
+    if (customer) {
+      const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+      const nf = safeEmail
+        ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+        : `user_id=eq.${encodeURIComponent(customer.id)}`;
+      const dirs = await pgSelect<{ note: string }>(
+        `customer_notes?select=note&${nf}&kind=eq.directive&resolved=eq.false&order=created_at.desc&limit=6`,
+      );
+      if (dirs && dirs.length) {
+        houseClause = " The team left a HOUSE INSTRUCTION for this patron that you MUST honour in this very line, " +
+          "before anything else (weave it into the outreach naturally; never quote it or attribute it to 'the team'): " +
+          dirs.map((d) => `"${d.note}"`).join("; ") + ".";
+      }
+    }
+
     let sys: string;
     if (postSale) {
       // They JUST commissioned — never "still eyeing it". Congratulate lightly if
@@ -3164,7 +3189,7 @@ async function handleReengage(req: Request): Promise<Response> {
         "warmly invite a SECOND blanket: a companion cloth for another room, or one as a gift with the " +
         "register card in another name. End in one light question. " +
         (signed ? "They are a signed-in patron." : "They are an anonymous visitor.") +
-        " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line.";
+        " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line." + houseClause;
     } else {
       const open = goalStatus
         ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
@@ -3178,7 +3203,7 @@ async function handleReengage(req: Request): Promise<Response> {
         "them: " + goal.label + " — " + goal.description + ". Warm, specific, ending in one light " +
         "question. " + (signed ? "They are a signed-in patron; a small nod to that is welcome." :
         "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
-        "{{tokens}}, no greeting boilerplate. Just the line.";
+        "{{tokens}}, no greeting boilerplate. Just the line." + houseClause;
     }
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

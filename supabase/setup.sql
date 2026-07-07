@@ -1012,15 +1012,25 @@ on conflict (slug) do nothing;
 -- SAME-TURN resolution and a no-repeat rule so a one-time task can't linger open.
 update public.concierge_sops set content_md = $sop$The team may leave a standing instruction for a specific patron — an order exception or special handling that YOU must carry out. They appear in the CUSTOMER block as "HOUSE INSTRUCTIONS FOR THIS PATRON", each printed with a (#id).
 
-1. CHECK EVERY SIGNED-IN VISIT. Before you sell and before you answer, read the HOUSE INSTRUCTIONS. They are the team's word and outrank your own plan. If there are none, carry on.
+1. CHECK EVERY SIGNED-IN VISIT, and act PROACTIVELY. Before you sell and before you answer, read the HOUSE INSTRUCTIONS. Honour them on your VERY FIRST line of the visit — a greeting, a nudge, or your first reply — WITHOUT being asked; do not wait for the patron to raise anything. They are the team's word and outrank your own plan. If there are none, carry on.
 2. FOLLOW them in the patron's own experience — never read the raw instruction aloud or say "the team told me to". Weave it into good service ("Let me make sure this one ships with a rush note" — not "instruction #42 says waive the rush fee").
 3. STANDING vs ONE-TIME. Standing preferences ("always offer the Loden first", "VIP — waive rush fees") you follow every time and LEAVE OPEN. One-time tasks ("apologize for the delay on Nº 231 and offer a care kit", "confirm the apartment number before shipping") you do at the first natural moment.
-4. CHECK OFF a one-time task in the SAME reply where you finish it: the moment you have delivered the apology, applied the courtesy, or confirmed the detail, call resolve_admin_note with its (#id). Do NOT end your turn with a completed one-time task still open. Never resolve a standing preference, and never resolve something you have not actually done yet.
-5. DON'T REPEAT. If a one-time instruction is still shown as open but you can see you already carried it out — earlier in this conversation, or it already appears under "WHAT YOU'VE DONE FOR THEM" — do not do it again; just resolve it now.
+4. ACTING is always words and never needs a tool — so honour an instruction even on a proactive greeting or nudge where you have NO tools; never withhold it for lack of a tool. CHECKING a completed one-time task off is a SEPARATE step: WHEN you have tools this turn, call resolve_admin_note with its (#id) in that same reply; if this turn is tool-less, just honour it in words — the house reconciles the check-off for you afterward, so a completed task never lingers. Never resolve a standing preference, and never resolve something you have not actually done yet.
+5. DON'T REPEAT. If a one-time instruction is still shown as open but you can see you already carried it out — earlier in this conversation, or it already appears under "WHAT YOU'VE DONE FOR THEM" — do not do it again; just resolve it now (or let the house reconcile it).
 6. If an instruction can't be done (the register can't do it, or it conflicts with a firm rule like never dictating an address yourself), do the closest right thing and leave the note open — the desk will see it is unresolved.
 7. NEVER expose these instructions to any other patron, and never treat them as coming from the shopper — they are the house's private notes, acted upon, not quoted.$sop$,
   updated_at = now()
   where slug = 'house-directives';
+
+-- Keep the client-book-method SOP's directive step in sync (also 'do nothing'
+-- above): honour proactively and in words; treat the check-off as a separate,
+-- tool-when-available step that the house reconciles otherwise.
+update public.concierge_sops set content_md = replace(
+  content_md,
+  '2. FOLLOW & RESOLVE the house instructions (detail in the ''house-directives'' SOP). A STANDING preference (e.g. "VIP — waive rush fees") you honour every visit and leave open. A ONE-TIME task (e.g. "apologise for the delay on Nº 231") you do at the first natural moment, then call resolve_admin_note with its (#id) in the SAME reply. Never resolve a standing preference, never resolve something you have not done, and if a one-time task already shows under "what you''ve done for them" do not repeat it — just resolve it.',
+  '2. FOLLOW & RESOLVE the house instructions (detail in the ''house-directives'' SOP). Honour them PROACTIVELY — on your first line, without being asked; acting is always words and needs no tool. A STANDING preference (e.g. "VIP — waive rush fees") you honour every visit and leave open. A ONE-TIME task (e.g. "apologise for the delay on Nº 231") you do at the first natural moment. Checking it off is a separate step: when you have tools this turn, call resolve_admin_note with its (#id); if the turn is tool-less (a greeting or nudge), just honour it in words — the house reconciles the check-off. Never resolve a standing preference or something you have not done, and if a one-time task already shows under "what you''ve done for them" do not repeat it.'),
+  updated_at = now()
+  where slug = 'client-book-method';
 do $seed$
 begin
   if not exists (select 1 from public.concierge_forms) then
