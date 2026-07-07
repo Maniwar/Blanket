@@ -909,7 +909,7 @@
           <div class="cfg-state" id="cfg-greeting-state"></div>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-voice-base">Base voice — the brand &amp; personality prompt<span class="info-badge" title="The default voice/brand system prompt the concierge runs on. Load the built-in to tweak it. High-impact — every reply changes; use History to roll back. Keep the {{KB}} marker (that's where the knowledge base is injected); if you remove it, the KB is appended at the end. Blank = the built-in brand voice.">i</span></label>
+          <label class="micro" for="cfg-voice-base">Base voice — the brand &amp; personality prompt<span class="info-badge" title="The default voice/brand system prompt the concierge runs on. Load the built-in to tweak it. High-impact — every reply changes; use History to roll back. Keep the {{OBJECTIVE}} marker (your primary objective is injected there) and the {{KB}} marker (the knowledge base); if either is missing it's added automatically. This base is the CORE constitution only — the Selling / Recognition / Register / Engagement sections are appended after it, so don't paste those back in here or they'll appear twice. Blank = the built-in brand voice.">i</span></label>
           <textarea id="cfg-voice-base" rows="8" placeholder="Blank = the built-in brand voice. Press “Load built-in to edit”, tweak, and Save."></textarea>
           <div class="field-actions">
             <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-voice-base" data-default="voice_base">Load built-in to edit</button>

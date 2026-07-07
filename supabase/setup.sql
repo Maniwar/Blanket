@@ -1170,6 +1170,22 @@ The test: the next conversation should feel like it resumes a relationship — t
   updated_at = now()
   where slug = 'client-book-method';
 
+-- Stale voice_base guard. The built-in base (kb.ts BRAND_SYSTEM) used to be a full
+-- flat prompt containing the selling/recognition guidance that now lives in the
+-- assembled SELLING/RECOGNITION/ENGAGEMENT sections. If an operator had clicked
+-- "Load built-in to edit" and saved, config.voice_base holds that OLD base — which
+-- the server would now use as the core AND still append the new sections to,
+-- duplicating and soft-conflicting the guidance. Clear only a saved base that bears
+-- the old structure's signature and lacks the new {{OBJECTIVE}} marker, so the server
+-- falls back to the current slim constitution. Non-destructive: the prior value is
+-- preserved in concierge_edit_history (every save logged it), restorable from the
+-- admin's History ⟲. A hand-written custom base that already uses {{OBJECTIVE}} (or
+-- doesn't contain the old heading) is left untouched.
+delete from public.concierge_config
+  where key = 'voice_base'
+    and value::text like '%NEXT MOVE (the heart of feeling human%'
+    and value::text not like '%{{OBJECTIVE}}%';
+
 do $seed$
 begin
   if not exists (select 1 from public.concierge_forms) then
