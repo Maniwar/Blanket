@@ -2319,9 +2319,13 @@
     addUserTurn(text);
     history.push({ role: 'user', content: text, ts: Date.now() });
     saveHistory();
+    /* Reset the entry mode BEFORE the request: a typed reply must be sent as
+       'typed', not carrying a stale 'opener:*'/'outreach:*' from the last
+       proactive beat — otherwise the server treats mid-conversation replies as
+       fresh openers and re-greets ("what brings you back today?"). */
+    entryMode = 'typed'; /* until the next tap says otherwise */
     performRequest();
     lastSentAt = Date.now();
-    entryMode = 'typed'; /* until the next tap says otherwise */
     nudgeCount = 0;      /* they spoke — the follow-up budget resets */
     holdAttempts = 0;
     unacked = 0;         /* a reply is the clearest sign of life */

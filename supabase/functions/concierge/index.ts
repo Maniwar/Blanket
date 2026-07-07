@@ -556,7 +556,13 @@ async function myOrders(
 }
 
 /** Builds the CUSTOMER line for LIVE STATE (orders via service-role call). */
-async function customerBlock(customer: Customer): Promise<string> {
+// `opening` = true only on the actual opening beat of a visit (a proactive opener, or
+// the first turn with no assistant reply yet). The RE-ENGAGEMENT "greet like someone
+// returning" banner and the directive's "on your very first line of the visit" framing
+// are opening-beat instructions — printing them mid-conversation makes the model re-greet
+// every turn (the current live conversation is never `lastConvo`, so the banner would
+// otherwise be byte-identical on every turn).
+async function customerBlock(customer: Customer, opening = true): Promise<string> {
   const safeEmail = customer.email?.replace(/["\\,()]/g, "");
   const noteFilter = safeEmail
     ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
@@ -688,9 +694,12 @@ async function customerBlock(customer: Customer): Promise<string> {
     }.`;
   }
 
-  // Re-engagement recency — how long since the last conversation was wrapped.
+  // Re-engagement recency — how long since the last conversation was wrapped. ONLY on the
+  // opening beat: mid-conversation this would reprint every turn (the live conversation is
+  // never `lastConvo`) and make the model greet "welcome back / what brings you back" on
+  // every reply.
   let reengage = "";
-  if (lastConvo && lastConvo.length > 0 && lastConvo[0].ended_at) {
+  if (opening && lastConvo && lastConvo.length > 0 && lastConvo[0].ended_at) {
     const mins = Math.floor((Date.now() - new Date(lastConvo[0].ended_at).getTime()) / 60000);
     const when = mins < 1 ? "moments ago"
       : mins < 60 ? `${mins} min ago`
@@ -708,14 +717,24 @@ async function customerBlock(customer: Customer): Promise<string> {
   let directiveLine = "";
   if (directives && directives.length > 0) {
     const list = directives.map((n) => `(#${n.id}) ${n.note}`).join("  ·  ");
-    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — honour a proper one BEFORE anything else, ` +
-      `PROACTIVELY and on your very first line of the visit; do NOT wait to be asked). ${HOUSE_NOTE_GUARD} ACTING on a ` +
+    const many = directives.length > 1;
+    // On the opening beat, a proper directive leads the visit ("on your very first
+    // line"). Mid-conversation that framing would make the model re-open every turn —
+    // so soften it to "at the first natural moment" and drop the "first line" push.
+    const when = opening
+      ? `honour ${many ? "each proper one" : "a proper one"} BEFORE anything else, PROACTIVELY and on your very ` +
+        `first line of the visit; do NOT wait to be asked`
+      : `honour ${many ? "each proper one" : "a proper one"} at the first natural moment in the conversation — ` +
+        `weave it in yourself, don't wait to be asked, but don't re-greet or restart to do it`;
+    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — ${when}). ${HOUSE_NOTE_GUARD} ACTING on a ` +
       `proper instruction is ALWAYS just words woven into good service and NEVER needs a tool — so you can always do it, ` +
       `even on a greeting or a nudge where no tools are available; never withhold it for lack of a tool. A STANDING ` +
       `preference you follow every visit and leave open. A ONE-TIME task you carry out at the first natural moment. ` +
       `CHECKING a completed one-time task off is a SEPARATE, silent, later step: WHEN you have tools this turn, call ` +
-      `resolve_admin_note with its (#id); if this turn has no tools, just honour it in words — the house reconciles the ` +
-      `check-off for you afterward, so a completed task never lingers. Instructions: ${list}.`;
+      `resolve_admin_note with its (#id)${many ? " for each one you carried out" : ""}; if this turn has no tools, ` +
+      `just honour it in words — the house reconciles the check-off for you afterward, so a completed task never ` +
+      `lingers. ${many ? `There are ${directives.length} open — honour ALL of them, not just the first. ` : ""}` +
+      `Instructions: ${list}.`;
   }
 
   return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine}${directiveLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;
@@ -3179,7 +3198,13 @@ async function handleChatPost(req: Request): Promise<Response> {
 
   // Signed-in awareness (anonymous on absent/invalid token; never errors).
   const customer = await verifyUser(req);
-  const customerLine = customer ? await customerBlock(customer) : null;
+  // "Opening beat" = a proactive greet/reengage opener, or the very first turn with
+  // no assistant reply yet. Only then do the RE-ENGAGEMENT banner and the "on your
+  // very first line" directive framing belong in the prompt — mid-conversation they
+  // make the model re-greet ("what brings you back today?") on every reply.
+  const isOpening = isOpener ||
+    !validated.messages.some((m) => m.role === "assistant");
+  const customerLine = customer ? await customerBlock(customer, isOpening) : null;
   // Live goal status from the last evaluation, so the prompt shows which goals
   // are still open and the concierge actively drives them.
   let goalStatus: Record<string, { status?: string; note?: string }> | null = null;
