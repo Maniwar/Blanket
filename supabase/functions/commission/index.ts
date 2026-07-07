@@ -412,6 +412,7 @@ function cleanAddr(raw: Record<string, unknown>): string | {
   label: string; is_gift: boolean; recipient_name: string | null;
   address: string; address2: string; city: string; state: string; zip: string;
 } {
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   const address = str(raw.address), city = str(raw.city), state = str(raw.state).toUpperCase(), zip = str(raw.zip);
   const address2 = str(raw.address2), label = str(raw.label).slice(0, 60);
   const isGift = raw.is_gift === true;
@@ -1157,11 +1158,9 @@ Deno.serve(async (req: Request) => {
       state: validated.state, zip: validated.zip,
     });
     const p = sendEmail(validated.email, mail.subject, mail.html, { kind: "placed", serial });
-    if (typeof (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime
-      ?.waitUntil === "function") {
-      (globalThis as { EdgeRuntime: { waitUntil: (x: Promise<unknown>) => void } }).EdgeRuntime
-        .waitUntil(p);
-    } else { p.catch(() => {}); }
+    const er = (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime;
+    if (typeof er?.waitUntil === "function") er.waitUntil(p);
+    else p.catch(() => {});
   }
 
   const count = await orderCount(customer.id, customer.email);
