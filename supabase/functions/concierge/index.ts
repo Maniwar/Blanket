@@ -597,9 +597,11 @@ async function customerBlock(customer: Customer): Promise<string> {
   let directiveLine = "";
   if (directives && directives.length > 0) {
     const list = directives.map((n) => `(#${n.id}) ${n.note}`).join("  ·  ");
-    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — you MUST honour these before anything else; ` +
-      `follow a standing preference every time, and for a one-time task do it at the first natural moment, then call ` +
-      `resolve_admin_note with its id to check it off): ${list}.`;
+    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — you MUST honour these before anything else). ` +
+      `Follow a STANDING preference every visit and leave it open. For a ONE-TIME task, carry it out at the first ` +
+      `natural moment, and then — in that SAME reply — you MUST call resolve_admin_note with its (#id) to check it ` +
+      `off; a one-time task you did but did not resolve will WRONGLY repeat on the next visit, so never end your ` +
+      `turn with a completed one-time instruction still open: ${list}.`;
   }
 
   return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine}${directiveLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;

@@ -814,6 +814,45 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, { ok: true, serial, ...patch });
   }
 
+  // ── POST ?editbilling=1 — admin sets/clears an order's BILLING address ───────
+  // Billing is a record (the orders.billing jsonb), not a shipping instruction, so
+  // it's editable at any status. Passing {same_as_shipping:true} clears it.
+  if (new URL(req.url).searchParams.get("editbilling")) {
+    const admin = await verifyUser(req);
+    if (!admin || !(await isAdmin(admin.email))) {
+      return jsonError(req, 403, "Administrators only.");
+    }
+    let fb: Record<string, unknown>;
+    try { fb = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const serial = typeof fb.serial === "number" ? Math.floor(fb.serial) : NaN;
+    if (!Number.isFinite(serial)) return jsonError(req, 400, "serial (number) is required.");
+    const before = await fetchOrder(serial);
+    if (!before) return jsonError(req, 404, `No order Nº ${serial} on the register.`);
+    if (fb.same_as_shipping === true) {
+      if (!(await patchOrder(serial, { billing: null }))) {
+        return jsonError(req, 502, "The register could not be updated. Nothing was changed.");
+      }
+      return jsonResponse(req, 200, { ok: true, serial, billing: null });
+    }
+    const address = String(fb.address ?? "").trim();
+    const address2 = String(fb.address2 ?? "").trim();
+    const city = String(fb.city ?? "").trim();
+    const state = String(fb.state ?? "").trim().toUpperCase();
+    const zip = String(fb.zip ?? "").trim();
+    if (address.length < 4 || address.length > 120) return jsonError(req, 400, "Billing street address must be 4–120 characters.");
+    if (address2.length > 120) return jsonError(req, 400, "Billing address line 2 is too long.");
+    if (city.length < 1 || city.length > 80) return jsonError(req, 400, "Billing city must be 1–80 characters.");
+    if (!/^[A-Z]{2}$/.test(state)) return jsonError(req, 400, "Billing state must be a two-letter US code.");
+    if (!/^\d{5}(-\d{4})?$/.test(zip)) return jsonError(req, 400, "Billing ZIP must be 12345 or 12345-6789.");
+    const billing = { address, address2: address2 || null, city, state, zip };
+    if (!(await patchOrder(serial, { billing }))) {
+      return jsonError(req, 502, "The register could not be updated. Nothing was changed.");
+    }
+    return jsonResponse(req, 200, { ok: true, serial, billing });
+  }
+
   // ── POST ?custresend=1 — SERVICE-ONLY re-send, called by the concierge ──────
   // The concierge's resend_confirmation tool calls this AFTER it has verified the
   // signed-in owner actually owns the order. Auth here is the service key (bearer),

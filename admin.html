@@ -1193,8 +1193,11 @@ const state = {
   actions: [],
   gaps: [],
   customers: [],
-  custView: 'orders',      // 'orders' (register table) | 'patrons' (client book)
+  custView: 'orders',      // 'orders' (register table) | 'patrons' | 'housenotes'
   custIpLoaded: false,     // the loaded order set came from a server-side IP filter
+  houseNotes: null,        // all directives, for the House notes management view
+  houseFilter: 'open',     // open | resolved | all
+  houseActedIn: {},        // note_id → conversation_id the concierge resolved it in
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
@@ -3589,6 +3592,27 @@ async function saveAddress(serial, addr) {
   } catch (e) { return { ok: false, message: String(e) }; }
 }
 
+/* Set or clear an order's BILLING address. payload = {address,...} or {same_as_shipping:true}. */
+async function saveBilling(serial, payload) {
+  try {
+    const token = state.session && state.session.access_token;
+    if (!token) return { ok: false, message: 'not signed in' };
+    const res = await fetch(SUPABASE_URL + '/functions/v1/commission?editbilling=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify(Object.assign({ serial: serial }, payload))
+    });
+    let j = {};
+    try { j = await res.json(); } catch (e) { /* ignore */ }
+    if (!res.ok) return { ok: false, message: j.error || ('HTTP ' + res.status) };
+    return { ok: true, data: j };
+  } catch (e) { return { ok: false, message: String(e) }; }
+}
+
 async function resendEmail(serial, kind) {
   try {
     const token = state.session && state.session.access_token;
@@ -4062,6 +4086,56 @@ function openOrderDrawer(o) {
       same.appendChild(t);
       as.appendChild(same);
     }
+    // Edit billing — a record correction (any live order), including setting it
+    // back to "same as shipping".
+    if (o.serial != null) {
+      const bw = el('div', 'addr-edit');
+      const bhead = el('div', 'addr-head');
+      const btoggle = el('button', 'btn ghost', 'Edit billing address'); btoggle.type = 'button';
+      bhead.appendChild(btoggle); bw.appendChild(bhead);
+      const bform = el('div', 'addr-form'); bform.style.display = 'none';
+      function bmk(ph, val, w) {
+        const i = document.createElement('input');
+        i.type = 'text'; i.placeholder = ph; i.value = val || ''; i.className = 'addr-in';
+        if (w) i.style.maxWidth = w;
+        return i;
+      }
+      const bg = o.billing || {};
+      const bAddr = bmk('Billing street address', bg.address);
+      const bAddr2 = bmk('Apt, suite (optional)', bg.address2);
+      const bCity = bmk('Billing city', bg.city);
+      const bState = bmk('State', bg.state, '64px');
+      const bZip = bmk('ZIP', bg.zip, '104px');
+      const bSave = el('button', 'btn primary', 'Save billing'); bSave.type = 'button';
+      bSave.addEventListener('click', function () {
+        withBusy(bSave, async function () {
+          const r = await saveBilling(o.serial, {
+            address: bAddr.value.trim(), address2: bAddr2.value.trim(),
+            city: bCity.value.trim(), state: bState.value.trim(), zip: bZip.value.trim()
+          });
+          if (!r.ok) { fail('Save billing', { message: r.message || 'failed' }); return; }
+          o.billing = r.data.billing;
+          toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' billing updated');
+          renderCustomers(); openOrderDrawer(o);
+        });
+      });
+      const bSame = el('button', 'btn ghost', 'Set same as shipping'); bSame.type = 'button';
+      bSame.addEventListener('click', function () {
+        withBusy(bSame, async function () {
+          const r = await saveBilling(o.serial, { same_as_shipping: true });
+          if (!r.ok) { fail('Save billing', { message: r.message || 'failed' }); return; }
+          o.billing = null;
+          toast('Billing set to same as shipping');
+          renderCustomers(); openOrderDrawer(o);
+        });
+      });
+      [bAddr, bAddr2, bCity, bState, bZip, bSave, bSame].forEach(function (e) { bform.appendChild(e); });
+      btoggle.addEventListener('click', function () {
+        bform.style.display = bform.style.display === 'none' ? 'flex' : 'none';
+      });
+      bw.appendChild(bform);
+      as.appendChild(bw);
+    }
     dw.appendChild(as);
   }
 
@@ -4331,6 +4405,127 @@ function renderPatrons(list, q) {
   });
 }
 
+/* Load every house directive across all patrons + the map of which conversation
+   the concierge resolved each in (from the resolve_admin_note audit action). */
+async function loadHouseNotes() {
+  const r = await sb.from('customer_notes')
+    .select('id,email,user_id,note,author,created_at,resolved,resolved_at')
+    .eq('kind', 'directive')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  state.houseNotes = r.error ? [] : (r.data || []);
+  state.houseActedIn = {};
+  const ar = await sb.from('concierge_actions')
+    .select('conversation_id,payload,created_at')
+    .eq('action', 'resolve_admin_note')
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if (!ar.error) {
+    (ar.data || []).forEach(function (a) {
+      const nid = (a.payload && a.payload.note_id != null) ? String(a.payload.note_id) : null;
+      if (nid && a.conversation_id && !state.houseActedIn[nid]) state.houseActedIn[nid] = a.conversation_id;
+    });
+  }
+}
+
+/* House notes — the management view over every directive: status, follow-up,
+   and a jump to the chat the concierge acted on it in. */
+function renderHouseNotes(list) {
+  list.appendChild(el('p', 'note', 'Every house instruction left for the concierge, across all patrons. ' +
+    'Standing preferences stay open; one-time tasks are checked off (by the concierge when it acts, or by you). ' +
+    'When the concierge resolved one in a chat, jump straight to that conversation.'));
+
+  if (state.houseNotes === null) {
+    list.appendChild(el('div', 'empty micro', 'Loading house notes…'));
+    loadHouseNotes().then(function () { renderCustomers(); });
+    return;
+  }
+  const notes = state.houseNotes || [];
+  const f = state.houseFilter || 'open';
+  let open = 0, resolved = 0;
+  notes.forEach(function (n) { if (n.resolved) resolved++; else open++; });
+
+  const chips = el('div', 'ord-chips');
+  [['open', 'Open', open], ['resolved', 'Resolved', resolved], ['all', 'All', notes.length]].forEach(function (c) {
+    const chip = el('div', 'ord-chip' + (f === c[0] ? ' on' : ''));
+    chip.appendChild(document.createTextNode(c[1] + ' '));
+    chip.appendChild(el('span', 'n', String(c[2])));
+    chip.addEventListener('click', function () { state.houseFilter = c[0]; renderCustomers(); });
+    chips.appendChild(chip);
+  });
+  const refresh = el('button', 'btn ghost', 'Refresh'); refresh.type = 'button';
+  refresh.style.marginLeft = 'auto';
+  refresh.addEventListener('click', function () { withBusy(refresh, async function () { await loadHouseNotes(); renderCustomers(); }); });
+  chips.appendChild(refresh);
+  list.appendChild(chips);
+
+  const shown = notes.filter(function (n) { return f === 'all' || (f === 'open' ? !n.resolved : !!n.resolved); });
+  if (!shown.length) { list.appendChild(el('div', 'empty micro', 'No ' + (f === 'all' ? '' : f + ' ') + 'house notes.')); return; }
+
+  const tbl = el('div', 'ord-tbl');
+  shown.forEach(function (n) {
+    const row = el('div'); row.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--hairline-dim);';
+    const head = el('div'); head.style.cssText = 'display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;';
+    const stag = el('span', null, n.resolved ? 'resolved' : 'open');
+    stag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 7px; border-radius:4px; color:#fff; background:' + (n.resolved ? '#3b7a4b' : '#a9772a') + ';';
+    head.appendChild(stag);
+    head.appendChild(el('span', 'cust-email', n.email || '—'));
+    head.appendChild(el('span', 'micro', (n.author ? 'by ' + n.author + ' · ' : '') + 'left ' + fmtWhen(n.created_at) +
+      (n.resolved && n.resolved_at ? ' · resolved ' + fmtWhen(n.resolved_at) : '')));
+    row.appendChild(head);
+
+    const txt = el('div', null, n.note || ''); txt.style.cssText = 'margin:7px 0; color:var(--wool);';
+    row.appendChild(txt);
+
+    const acts = el('div'); acts.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap;';
+    const tgl = el('button', 'btn ghost', n.resolved ? 'Reopen' : 'Resolve'); tgl.type = 'button';
+    tgl.addEventListener('click', function () {
+      withBusy(tgl, async function () {
+        const patch = n.resolved ? { resolved: false, resolved_at: null } : { resolved: true, resolved_at: nowIso() };
+        const r = await sb.from('customer_notes').update(patch).eq('id', n.id);
+        if (r.error) { fail('Update note', r.error); return; }
+        n.resolved = !n.resolved; n.resolved_at = patch.resolved_at;
+        toast(n.resolved ? 'Marked resolved' : 'Reopened'); renderCustomers();
+      });
+    });
+    acts.appendChild(tgl);
+
+    const vc = el('button', 'btn ghost', 'View customer'); vc.type = 'button';
+    vc.addEventListener('click', function () {
+      state.custView = 'patrons';
+      $('cust-search').value = n.email || '';
+      if ($('cust-serial')) $('cust-serial').value = '';
+      renderCustomers();
+    });
+    acts.appendChild(vc);
+
+    const conv = state.houseActedIn && state.houseActedIn[String(n.id)];
+    if (conv) {
+      const fc = el('button', 'btn ghost', 'Find the chat'); fc.type = 'button';
+      fc.addEventListener('click', function () {
+        activateTab('conversations');
+        const q = $('convo-q'); if (q) q.value = conv;
+        loadConversations();
+      });
+      acts.appendChild(fc);
+    }
+
+    const del = el('button', 'btn ghost danger', 'Delete'); del.type = 'button';
+    del.addEventListener('click', function () {
+      withBusy(del, async function () {
+        const r = await sb.from('customer_notes').delete().eq('id', n.id);
+        if (r.error) { fail('Delete note', r.error); return; }
+        state.houseNotes = (state.houseNotes || []).filter(function (x) { return x.id !== n.id; });
+        toast('House note deleted'); renderCustomers();
+      });
+    });
+    acts.appendChild(del);
+    row.appendChild(acts);
+    tbl.appendChild(row);
+  });
+  list.appendChild(tbl);
+}
+
 function renderCustomers() {
   const list = $('cust-list');
   list.textContent = '';
@@ -4358,18 +4553,23 @@ function renderCustomers() {
   state.custByKey = {};
   allOrders.forEach(function (o) { state.custByKey[orderKey(o)] = o; });
 
-  // Orders / Patrons view toggle — the register table vs. the client book.
+  // Orders / Patrons / House notes toggle.
   const seg = el('div', 'cust-seg');
-  [['orders', 'Orders'], ['patrons', 'Patrons']].forEach(function (v) {
+  [['orders', 'Orders'], ['patrons', 'Patrons'], ['housenotes', 'House notes']].forEach(function (v) {
     const b = el('button', state.custView === v[0] ? 'on' : '', v[1]); b.type = 'button';
     b.addEventListener('click', function () {
       if (state.custView === v[0]) return;
       state.custView = v[0];
-      renderCustomers();
+      if (v[0] === 'housenotes') { loadHouseNotes().then(function () { renderCustomers(); }); }
+      else renderCustomers();
     });
     seg.appendChild(b);
   });
   list.appendChild(seg);
+
+  // House notes — the management view over every directive; independent of the
+  // loaded order set, so it's handled before the empty-orders guard.
+  if (state.custView === 'housenotes') { renderHouseNotes(list); return; }
 
   if (!allOrders.length) {
     const msg = isIpLike(rawSearch)
