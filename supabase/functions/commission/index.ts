@@ -292,7 +292,34 @@ function deriveAddressBook(rows: Array<Record<string, unknown>>): AddressEntry[]
       state: String(r.state ?? "").trim(),
       zip,
     });
-    if (out.length >= 6) break;
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+// Distinct BILLING addresses from history (orders.billing jsonb), for the "billing
+// differs" picker. Same shape as the ship-to book so the client reuses one renderer.
+function deriveBillingBook(rows: Array<Record<string, unknown>>): AddressEntry[] {
+  const seen = new Set<string>();
+  const out: AddressEntry[] = [];
+  for (const r of rows) {
+    const b = r.billing;
+    if (!b || typeof b !== "object") continue;
+    const bb = b as Record<string, unknown>;
+    const address = String(bb.address ?? "").trim();
+    const city = String(bb.city ?? "").trim();
+    if (!address || !city) continue;
+    const zip = String(bb.zip ?? "").trim();
+    const key = [address.toLowerCase(), city.toLowerCase(), zip.toLowerCase()].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      key, label: "Billing", is_gift: false, recipient_name: null,
+      name: String(r.name ?? "").trim(),
+      address, address2: String(bb.address2 ?? "").trim(), city,
+      state: String(bb.state ?? "").trim(), zip,
+    });
+    if (out.length >= 8) break;
   }
   return out;
 }
@@ -628,6 +655,7 @@ Deno.serve(async (req: Request) => {
     if (count === null) return jsonError(req, 502, "Register unavailable.");
     let latest: unknown = null;
     let addresses: AddressEntry[] = [];
+    let billingAddresses: AddressEntry[] = [];
     try {
       const safeEmail = me.email?.replace(/["\\,()]/g, "");
       const filter = safeEmail
@@ -637,15 +665,16 @@ Deno.serve(async (req: Request) => {
       // just the single latest ship-to (which bleeds a gift recipient's address
       // into a returning buyer's personal order).
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/orders?select=serial,status,colorway,name,recipient_name,is_gift,email,address,address2,city,state,zip,placed_at&${filter}&status=neq.cancelled&order=placed_at.desc&limit=30`,
+        `${SUPABASE_URL}/rest/v1/orders?select=serial,status,colorway,name,recipient_name,is_gift,email,address,address2,city,state,zip,billing,placed_at&${filter}&status=neq.cancelled&order=placed_at.desc&limit=30`,
         { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
       );
       const rows = res.ok ? await res.json() as Array<Record<string, unknown>> : [];
       latest = rows.length > 0 ? rows[0] : null;
       addresses = deriveAddressBook(rows);
-    } catch { /* latest stays null, addresses empty */ }
+      billingAddresses = deriveBillingBook(rows);
+    } catch { /* latest stays null, books empty */ }
     const res = jsonResponse(req, 200, {
-      count, tier: standingTier(count), latest, addresses,
+      count, tier: standingTier(count), latest, addresses, billing_addresses: billingAddresses,
     });
     // Personal payload: nothing between the browser and this function caches it.
     res.headers.set("Cache-Control", "no-store");

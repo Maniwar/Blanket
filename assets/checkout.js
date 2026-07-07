@@ -566,7 +566,9 @@
   var commissioned = null;           /* { serial, dateLine } once entered */
   var sending = false;
   var patronAddresses = [];          /* saved ship-to addresses from ?me=1 (returning patron) */
-  var pickedAddrKey = null;          /* which saved address the patron tapped, for highlight */
+  var pickedAddrKey = null;          /* which saved ship-to is selected */
+  var patronBillingAddresses = [];   /* saved billing addresses from ?me=1 */
+  var pickedBillKey = null;          /* which saved billing address is selected */
 
   /* ----------------------------------------------------------
      4. Swatch imagery — borrowed from the page's colorway chips
@@ -874,32 +876,81 @@
     showAct(2, 0);                      /* re-render the act with the chosen address */
   }
 
-  /* The saved-address book — chips the returning patron can tap instead of
-     re-typing. Personal doors and past gift recipients, plus a "New" escape. */
+  /* A one-line summary + a distinguishing label for a saved address — so two
+     "Home" addresses (or several gift recipients) never read alike in the list. */
+  function addrSummary(a) {
+    return [a.address, a.city, a.state].filter(function (x) { return x; }).join(', ');
+  }
+  function shipOptionLabel(a) {
+    var who = a.is_gift ? ('Gift → ' + (a.recipient_name || 'recipient')) : 'Home';
+    return who + ' — ' + addrSummary(a);
+  }
+
+  /* The saved-address book — a compact SELECT (scales to any number of addresses,
+     unlike a wrapping chip row). Personal doors + past gift recipients + a "new"
+     escape. Picking a gift address re-addresses the order to that recipient. */
   function buildAddressBook() {
     if (!patronAddresses.length) { return null; }
     var wrap = el('div', 'ck-book');
     wrap.appendChild(el('div', 'ck-book-lbl', 'Ship to a saved address'));
-    var row = el('div', 'ck-book-row');
-    var i;
+    var sel = document.createElement('select');
+    sel.className = 'ck-select';
+    var i, cur = -1;
     for (i = 0; i < patronAddresses.length; i++) {
-      (function (a) {
-        var chip = el('button', 'ck-book-chip' + (pickedAddrKey === a.key ? ' ck-on' : ''));
-        chip.type = 'button';
-        chip.appendChild(el('div', 'ck-book-tag', a.label || (a.is_gift ? 'Gift' : 'Home')));
-        var line = [a.address, a.city, a.state].filter(function (x) { return x; }).join(', ');
-        chip.appendChild(el('div', 'ck-book-line', line || '—'));
-        chip.addEventListener('click', function () { applyAddress(a); });
-        row.appendChild(chip);
-      })(patronAddresses[i]);
+      var a = patronAddresses[i];
+      var op = document.createElement('option');
+      op.value = String(i); op.textContent = shipOptionLabel(a);
+      sel.appendChild(op);
+      if (pickedAddrKey === a.key) { cur = i; }
     }
-    var neu = el('button', 'ck-book-chip ck-book-new' + (pickedAddrKey === 'new' ? ' ck-on' : ''));
-    neu.type = 'button';
-    neu.appendChild(el('div', 'ck-book-tag', 'New'));
-    neu.appendChild(el('div', 'ck-book-line', 'A different address'));
-    neu.addEventListener('click', function () { applyAddress(null); });
-    row.appendChild(neu);
-    wrap.appendChild(row);
+    var opNew = document.createElement('option');
+    opNew.value = 'new'; opNew.textContent = '＋ Enter a new address';
+    sel.appendChild(opNew);
+    sel.value = (pickedAddrKey === 'new') ? 'new' : (cur >= 0 ? String(cur) : '0');
+    sel.addEventListener('change', function () {
+      if (sel.value === 'new') { applyAddress(null); }
+      else { applyAddress(patronAddresses[parseInt(sel.value, 10)]); }
+    });
+    wrap.appendChild(sel);
+    return wrap;
+  }
+
+  /* Apply a saved BILLING address (explicit pick overrides typed billing fields). */
+  function applyBillingAddress(entry) {
+    if (!entry) {
+      order.bill_address = ''; order.bill_address2 = ''; order.bill_city = '';
+      order.bill_state = ''; order.bill_zip = ''; pickedBillKey = 'new';
+    } else {
+      order.bill_address = entry.address || ''; order.bill_address2 = entry.address2 || '';
+      order.bill_city = entry.city || ''; order.bill_state = entry.state || '';
+      order.bill_zip = entry.zip || ''; pickedBillKey = entry.key;
+    }
+    saveDraft();
+    showAct(2, 0);
+  }
+  function buildBillingBook() {
+    if (!patronBillingAddresses.length) { return null; }
+    var wrap = el('div', 'ck-book'); wrap.style.marginTop = '.4rem';
+    wrap.appendChild(el('div', 'ck-book-lbl', 'Use a saved billing address'));
+    var sel = document.createElement('select');
+    sel.className = 'ck-select';
+    var i, cur = -1;
+    for (i = 0; i < patronBillingAddresses.length; i++) {
+      var a = patronBillingAddresses[i];
+      var op = document.createElement('option');
+      op.value = String(i); op.textContent = addrSummary(a);
+      sel.appendChild(op);
+      if (pickedBillKey === a.key) { cur = i; }
+    }
+    var opNew = document.createElement('option');
+    opNew.value = 'new'; opNew.textContent = '＋ Enter a new billing address';
+    sel.appendChild(opNew);
+    sel.value = (pickedBillKey === 'new') ? 'new' : (cur >= 0 ? String(cur) : 'new');
+    sel.addEventListener('change', function () {
+      if (sel.value === 'new') { applyBillingAddress(null); }
+      else { applyBillingAddress(patronBillingAddresses[parseInt(sel.value, 10)]); }
+    });
+    wrap.appendChild(sel);
     return wrap;
   }
 
@@ -1041,6 +1092,9 @@
 
     var billWrap = el('div');
     billWrap.style.display = order.bill_differs ? '' : 'none';
+
+    var billBook = buildBillingBook();
+    if (billBook) { billWrap.appendChild(billBook); }
 
     var bAddrInput = document.createElement('input');
     bAddrInput.className = 'ck-input';
@@ -1922,6 +1976,7 @@
       }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
         if (!j) { return; }
         patronAddresses = Array.isArray(j.addresses) ? j.addresses : [];
+        patronBillingAddresses = Array.isArray(j.billing_addresses) ? j.billing_addresses : [];
         /* Identity from the latest entry; the DEFAULT ship-to prefill is the most
            recent PERSONAL address, so a returning buyer whose last order was a
            gift doesn't inherit the recipient's door. Saved gift addresses stay
