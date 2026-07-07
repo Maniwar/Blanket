@@ -885,6 +885,26 @@ work isn't one checkbox at a time. **Bulk:** the Orders bulk bar can write one
 directive to all distinct customers behind the selected orders; the House notes
 view multi-selects for bulk Resolve/Reopen/Delete.
 
+**Self-resolve backstop (reconciliation).** Acting on a one-time directive and
+remembering to *check it off* are two steps: the model reliably does the first
+and occasionally drops the second, which leaves a completed task open (it then
+wrongly repeats next visit) **and tags no chat** — because the `🏷 house note`
+tag is derived from the `resolve_admin_note` action, a missed resolve is also a
+missed tag. So after **every** signed-in turn where a one-time directive was
+open, `reconcileDirectives` runs a small, tool-scoped background pass: it re-reads
+what was actually said (the transcript plus the reply just sent) and calls
+`resolve_admin_note` for any instruction now clearly carried out — never touching
+a standing preference, never speaking to the shopper. It runs via
+`EdgeRuntime.waitUntil` (no added latency), fires on **both** the tool-enabled
+path *and* the tool-less proactive beat (a nudge/opener has no tools, so a
+directive honoured there could not self-resolve — the backstop closes it on the
+same or the very next turn), and because it resolves through the same
+`runRegisterTool` → `logAction` path, resolution and the chat **tag** land
+together. A false negative is safe: the note simply stays open for next time.
+The proactive **nudge and opener** instructions now also explicitly tell the bot
+to honour an open HOUSE INSTRUCTION in its self-started line, so directives are
+acted on even when the patron never types.
+
 **Graded & tagged.** House-note handling is a scored **goal** (`house-notes`): the
 per-conversation goal grader marks whether the concierge followed the team's
 instruction and resolved one-time ones. Because the grader can't see the system

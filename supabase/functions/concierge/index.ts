@@ -1421,6 +1421,113 @@ function scheduleGoalEval(
   } catch { p.catch(() => {}); }
 }
 
+// ── House-directive reconciliation ────────────────────────────────────────────
+// Acting on a one-time house instruction and remembering to check it off are two
+// steps: the model reliably does the first and sometimes drops the second, which
+// leaves a completed task open (it then wrongly repeats next visit) and tags no
+// chat. After any signed-in turn where a one-time directive was open, this runs a
+// small, tool-scoped pass that re-reads what was actually said and calls
+// resolve_admin_note for any instruction now carried out. It runs in the
+// background (no added latency), only ever RESOLVES (never speaks to the shopper),
+// and catches directives acted on in a tool-less proactive beat too — so a missed
+// self-resolve is corrected on the same or the very next turn. A false negative
+// just leaves the note open for next time; it can never produce a wrong reply.
+const RESOLVE_TOOL = REGISTER_TOOLS.find((t) => t.name === "resolve_admin_note");
+
+async function reconcileDirectives(
+  cid: string | null,
+  customer: Customer,
+  // deno-lint-ignore no-explicit-any
+  convo: any[],
+  finalText: string,
+  apiKey: string,
+  model: string,
+): Promise<void> {
+  try {
+    if (!RESOLVE_TOOL) return;
+    const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+    const nf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    const open = await pgSelect<{ id: number; note: string }>(
+      `customer_notes?select=id,note&${nf}&kind=eq.directive&resolved=eq.false&order=created_at.desc&limit=12`,
+    );
+    if (!open || open.length === 0) return;
+    const list = open.map((n) => `(#${n.id}) ${n.note}`).join("\n");
+    // Flatten the turns we have plus the reply just sent into a plain transcript.
+    const transcript = [...convo, { role: "assistant", content: finalText }]
+      .map((m) => {
+        const who = m.role === "assistant" ? "CONCIERGE" : "SHOPPER";
+        const body = typeof m.content === "string"
+          ? m.content
+          // deno-lint-ignore no-explicit-any
+          : Array.isArray(m.content)
+            // deno-lint-ignore no-explicit-any
+            ? m.content.filter((b: any) => b?.type === "text").map((b: any) => b.text).join(" ")
+            : "";
+        return body.trim() ? `${who}: ${body.trim()}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+    if (!transcript) return;
+    const sys =
+      "You reconcile the house's standing instructions after a concierge turn. Below are the " +
+      "OPEN house instructions for this patron and the conversation so far. For EACH instruction " +
+      "that has now CLEARLY been carried out in the conversation (the concierge actually said or " +
+      "did the thing the note asked), call resolve_admin_note with its (#id). A STANDING preference " +
+      "(\"always…\", \"every visit…\", an ongoing courtesy) is NOT a one-time task — leave those open. " +
+      "If a one-time task has not yet been done, do nothing for it. Only resolve; never write a reply.\n\n" +
+      "OPEN HOUSE INSTRUCTIONS:\n" + list;
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 256,
+        system: sys,
+        tools: [RESOLVE_TOOL],
+        messages: [{ role: "user", content: `CONVERSATION:\n${transcript}` }],
+      }),
+    });
+    if (!res.ok) return;
+    // deno-lint-ignore no-explicit-any
+    const msg = await res.json() as any;
+    const blocks = Array.isArray(msg.content) ? msg.content : [];
+    const openIds = new Set(open.map((n) => n.id));
+    for (const b of blocks) {
+      if (b?.type === "tool_use" && b.name === "resolve_admin_note") {
+        const nid = typeof b.input?.note_id === "number" ? Math.floor(b.input.note_id) : NaN;
+        if (!openIds.has(nid)) continue; // only the notes we surfaced this pass
+        await runRegisterTool("resolve_admin_note", b.input ?? {}, customer, cid);
+      }
+    }
+  } catch { /* best-effort: a missed resolve just surfaces again next turn */ }
+}
+
+function scheduleDirectiveReconcile(
+  cid: string | null,
+  customer: Customer | null,
+  // deno-lint-ignore no-explicit-any
+  convo: any[],
+  finalText: string,
+  apiKey: string,
+  model: string,
+): void {
+  if (!cid || !customer || !finalText || !finalText.trim()) return;
+  const p = reconcileDirectives(cid, customer, convo, finalText, apiKey, model);
+  try {
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(p);
+    } else {
+      p.catch(() => {});
+    }
+  } catch { p.catch(() => {}); }
+}
+
 
 async function evaluateGoals(
   cid: string, data: ConciergeData, transcript: ChatMessage[],
@@ -2322,11 +2429,17 @@ async function handleChatPost(req: Request): Promise<Response> {
         "house remembers them next time — put {{action:signin}} on its own line. Frame it as being " +
         "known and welcomed back, never as a form to fill."
       : "";
+    // If the team left a one-time HOUSE INSTRUCTION for this patron, a proactive
+    // beat is a natural moment to honour it (you have no tools here, so weave it
+    // into your line; the house checks it off for you afterward).
+    const houseNote =
+      " If the CUSTOMER block carries a HOUSE INSTRUCTION (a note the team left for this " +
+      "patron), honour it now in your line — that comes before anything else.";
     validated.messages.push({
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure. ${decision}${emailNote} ` +
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure. ${decision}${houseNote}${emailNote} ` +
         `Do not greet them again as if they just arrived.]`,
     });
   }
@@ -2346,7 +2459,8 @@ async function handleChatPost(req: Request): Promise<Response> {
           "Add ONE warm, specific line that opens toward a conversation goal. If CUSTOMER is present, " +
           "make it personal — greet them by first name and nod to their standing or a real order/note " +
           "(a returning patron is never a stranger), drawing on the CUSTOMER block and CLIENT BOOK " +
-          "already provided above. If there is NO CUSTOMER (an anonymous visitor), open from what " +
+          "already provided above. If that block carries a HOUSE INSTRUCTION left by the team, honour it " +
+          "in this opening line before anything else. If there is NO CUSTOMER (an anonymous visitor), open from what " +
           "they're browsing (the BROWSING section and page) — e.g. the cloth they're reading about, " +
           "gift vs. their own home — and invite them in. End with a single light question. This is a " +
           "plain spoken line: do NOT use any tools and do NOT write any tool call — just speak. Do " +
@@ -2354,7 +2468,8 @@ async function handleChatPost(req: Request): Promise<Response> {
         : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
           "from the conversation so far and the CUSTOMER block / CLIENT BOOK already above — never a " +
-          "generic greeting, never repeating yourself. This is a plain spoken line: do NOT use any " +
+          "generic greeting, never repeating yourself. If that block carries a HOUSE INSTRUCTION left " +
+          "by the team, honour it in this line before anything else. This is a plain spoken line: do NOT use any " +
           "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
           "mention this note. One or two sentences ending in a light question.]",
     });
@@ -2497,6 +2612,9 @@ async function handleChatPost(req: Request): Promise<Response> {
             const cid = await conversationPromise;
             const meta = await logAssistantTurn(cid, text, model, Date.now() - startedAt);
             if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
+            // A proactive beat has no tools, so if it honoured a one-time house
+            // instruction it could not resolve it here — reconcile in the background.
+            scheduleDirectiveReconcile(cid, customer, validated.messages, text, apiKey, model);
           } catch { /* skip meta */ }
         }
         try {
@@ -2606,6 +2724,9 @@ async function handleChatPost(req: Request): Promise<Response> {
             if (!isNudge) {
               scheduleGoalEval(cid, data, [...validated.messages, { role: "assistant", content: finalText }], apiKey, model);
             }
+            // Check off any one-time house instruction the model carried out but
+            // forgot to resolve — background pass, tool-scoped to resolve_admin_note.
+            scheduleDirectiveReconcile(cid, customer, convo, finalText, apiKey, model);
             const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
             if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
           }
