@@ -12,7 +12,8 @@ makes no model calls.
 | **Anonymous chat** | each message when signed out | 1 call — **or 0** on a semantic-cache hit (see below). |
 | **Proactive nudge / opener** | an idle in-panel nudge, or the greeting spoken on panel open | 1 call each. Capped per conversation by the outreach budget. |
 | **Re-engagement line** (`?reengage`) | each time the closed-panel bubble fires | 1 call (~120 tok). Has a client-side fallback line, so it can be skipped. |
-| **Goal grading** (`scheduleGoalEval`) | after a turn, sampled by `goal_sample_rate` | +1 call (~500 tok). `goal_sample_rate` 1.0 = every turn; lower to cut. |
+| **Goal grading** (`scheduleGoalEval`) | after a turn, sampled by `goal_sample_rate` | +1 call. Output budget **scales with goal count** (`320 + goals×160`, cap 2000) so the per-goal JSON can't truncate. `goal_sample_rate` 1.0 = every turn; lower to cut. |
+| **Directive reconciliation** (`reconcileDirectives`) | after a signed-in turn **only when the patron has an open one-time house directive** | +1 small, tool-scoped call. Background (`EdgeRuntime.waitUntil`), never on the shopper's critical path. Zero cost for the common case (no open directive). |
 | **Wrap-up note** | signed-in visitor leaves, real exchange happened | 1 small call (~90 tok) to write a client-book line. |
 
 ## The levers (in place)
@@ -39,6 +40,40 @@ instead of 100%. Realistically a 70–90% cut on input tokens.
 Implementation notes: live state was moved out of `BRAND_SYSTEM` (kb.ts) to the
 dynamic tail so the prefix is stable; the three chat call sites send `system` as a
 two-block array and carry the `anthropic-beta: prompt-caching-2024-07-31` header.
+
+#### How Claude's prompt cache actually works (the mechanism)
+
+This is Anthropic's server-side **prompt caching**, not something we store. What we
+control is *where the cache breakpoint sits* and *whether the cached bytes stay
+identical*. The rules that matter for us:
+
+- **A breakpoint marks a reusable prefix.** Adding `cache_control:{type:"ephemeral"}`
+  to a content block tells Claude: "hash everything up to and including this block;
+  if a later request repeats that exact prefix, reuse the computed state." We put
+  the breakpoint on the static `prefix` block only.
+- **Cache order is `tools` → `system` → `messages`.** Everything *before* the
+  breakpoint is part of the cached prefix. That's why the signed-in tool array
+  (sent as `tools`, ahead of `system`) rides the same cache entry for free — and
+  why the dynamic `suffix` (a *second, un-marked* system block) and the per-turn
+  `messages` sit **after** the breakpoint and never invalidate it.
+- **Byte-identical or miss.** The cached prefix must match to the character. A
+  single changed token anywhere in it — a KB edit, a new SOP, a tuning tweak —
+  produces a new hash and a fresh **cache write**. This is why config/KB/SOPs are
+  held in module memory for 60 s (lever 5): so the assembled prefix is stable
+  across the burst of calls in one conversation.
+- **Write vs. read pricing.** The first call that establishes a prefix pays a
+  **cache-write** (~1.25× normal input for those tokens); every later call that
+  hits it pays a **cache-read** (~0.1×). So the economics only win when a prefix is
+  *reused* — which our traffic does constantly (agentic rounds, nudges, and any two
+  turns within the TTL all share one prefix).
+- **5-minute sliding TTL.** Each hit **refreshes** the 5-minute window, so an
+  active conversation keeps the prefix warm indefinitely; only a >5-min lull lets
+  it lapse, and the next call simply re-writes it. There is no eviction we manage
+  and no correctness risk if it lapses — a miss just costs one more write.
+- **What is *never* cached:** the reconciliation and grader calls are one-shot
+  background calls with their own small system prompts and no breakpoint — they
+  don't reuse the chat prefix, so they pay plain input each time (kept tiny on
+  purpose).
 
 ### 2. Semantic answer cache (anonymous)
 Anonymous, single-turn questions are embedded (gte-small, local — **not** a Claude

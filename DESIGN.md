@@ -540,16 +540,48 @@ approach collides under concurrency and can't reclaim. `SKIP LOCKED` gives us
 lock-free-feeling allocation with correctness. (See migrations `0006`, `0010`,
 `0011`.)
 
-### 4.3 Semantic cache for anonymous questions
+### 4.3 Two caches, and why they don't overlap
+
+The concierge uses **two independent caches**. They're easy to conflate, so the
+distinction up front:
+
+| | **Semantic answer cache** (ours) | **Prompt cache** (Anthropic's) |
+| --- | --- | --- |
+| What it stores | a whole finished **answer**, keyed by the question's meaning | the model's computed state for a repeated **prompt prefix** |
+| Where it lives | our Postgres (`concierge_cache`, pgvector) | Anthropic's servers; we only set a breakpoint |
+| Saves | the **entire** model call (0 calls on a hit) | ~90% of the **input** tokens on a call that still happens |
+| Applies to | anonymous, single-turn, state-free questions | every chat call (anon, signed-in, nudge, opener) |
+| Lifetime | until an admin clears it (manual) | 5-minute sliding TTL, self-refreshing |
+
+The prompt cache is documented mechanism-and-all in [`COST.md`](COST.md) (lever 1);
+the semantic cache is below.
+
+**Semantic answer cache.**
 **Decision:** cache answers to common, single-turn, anonymous questions using
 pgvector embeddings; serve a hit instantly without calling the model.
 **Why:** most first questions are the same handful ("how much?", "what's it made
 of?", "is it soft?"). Caching them cuts cost and latency to near zero.
+**How it runs, end to end:**
+1. On an eligible turn (anonymous, exactly one user turn, ≤300 chars, and not
+   matching `CACHE_SKIP` — the regex that catches live/personal asks like *stock,
+   remaining, my order, status, track*), the question is embedded locally with
+   **gte-small** (384-dim, `Supabase.ai.Session` — **not** a Claude call).
+2. `match_cached_answer` (pgvector `<#>`) returns the nearest stored answer above a
+   **0.90** cosine threshold. A hit streams straight back with **zero** model calls.
+3. On a **miss**, the model answers normally, and on the way out — only if the
+   answer is state-free (`cacheableAnswer`: it rejects serial-style comma-thousands
+   like *Nº 14,215*, while keeping static truth like *15,000* editions and *$589*)
+   — the `{question, answer_md, embedding, model}` row is written back to
+   `concierge_cache` so the next asker hits it.
 **Guardrails:** only anonymous, single-turn, short questions are cacheable —
 signed-in answers depend on private register state and multi-turn answers on
 context, so neither is ever cached or served from cache. The `match_cached_answer`
 RPC qualifies the pgvector operator explicitly (`operator(extensions.<#>)`)
 because the function's `search_path` is pinned empty for safety.
+**Operate it:** the admin **Cache** tab lists entries and clears stale ones (a
+changed policy shouldn't be served from an old answer — invalidation is manual by
+design), and `?cachecheck=1` exercises the whole write → match → delete round-trip
+so an embedding-runtime outage is visible.
 **Trade-off:** a background embedding call and a similarity threshold to tune; in
 exchange, the cheapest possible path for the most common traffic.
 
