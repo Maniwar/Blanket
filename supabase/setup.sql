@@ -172,6 +172,10 @@ create table if not exists public.customer_notes (
   id bigint generated always as identity primary key,
   user_id uuid, email text, note text not null,
   created_at timestamptz not null default now());
+-- Typed client book (like a support agent's notes the AI uses to talk to the
+-- patron): 'fact' = a durable preference, 'event' = something the concierge did
+-- (deterministic, guaranteed), 'reflection' = how to serve better next time.
+alter table public.customer_notes add column if not exists kind text not null default 'fact';
 create index if not exists customer_notes_email_idx on public.customer_notes (email, created_at desc);
 create index if not exists customer_notes_user_idx on public.customer_notes (user_id, created_at desc);
 

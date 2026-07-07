@@ -553,6 +553,25 @@
 
       <section class="card">
         <div class="card-head">
+          <h3>Client book (memory)</h3>
+          <span class="micro">what the concierge records &amp; reuses about a patron</span>
+        </div>
+        <p class="note" style="margin-bottom:16px;">Like a support agent's notes, the concierge keeps a typed client book it reads back when talking to a patron: <strong>events</strong> (what it did — cancellations, address/cloth changes; written automatically), <strong>facts</strong> (durable preferences), and <strong>reflections</strong> (private "serve them better next time" reminders). Tune what the end-of-conversation summarizer records here.</p>
+        <div class="field">
+          <label class="micro" for="cfg-clientbook">Client book policy — extra rules for what to record and what to skip (blank = built-in policy).</label>
+          <textarea id="cfg-clientbook" rows="4" placeholder="e.g. Always note cancellations and address changes. Never re-record a preference already on file. Keep reflections to one concrete, actionable line."></textarea>
+        </div>
+        <div class="grid-2">
+          <label class="checkline"><input type="checkbox" id="cfg-cb-actions"><span class="micro">Log every action as an event note (recommended)</span></label>
+          <label class="checkline"><input type="checkbox" id="cfg-cb-reflect"><span class="micro">Write a self-reflection each conversation</span></label>
+        </div>
+        <div class="card-foot">
+          <button id="save-clientbook" class="btn primary">Save client book</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Concierge tokens</h3>
           <span class="micro">special {{…}} markers that render as UI</span>
         </div>
@@ -1341,6 +1360,9 @@ function wireStatic() {
   $('save-voice').addEventListener('click', function () {
     withBusy($('save-voice'), saveVoice);
   });
+  $('save-clientbook').addEventListener('click', function () {
+    withBusy($('save-clientbook'), saveClientbook);
+  });
   $('save-starters').addEventListener('click', function () {
     withBusy($('save-starters'), saveStarters);
   });
@@ -1496,6 +1518,11 @@ async function loadConfig() {
   $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
   $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
   $('cfg-voice').value = (typeof cfg.voice_notes === 'string') ? cfg.voice_notes : '';
+  if ($('cfg-clientbook')) {
+    $('cfg-clientbook').value = (typeof cfg.clientbook_policy === 'string') ? cfg.clientbook_policy : '';
+    $('cfg-cb-actions').checked = cfg.clientbook_log_actions !== false;
+    $('cfg-cb-reflect').checked = cfg.clientbook_reflect !== false;
+  }
   renderStarters((cfg.starters && typeof cfg.starters === 'object') ? cfg.starters : {});
 
   const o = (cfg.outreach && typeof cfg.outreach === 'object') ? cfg.outreach : {};
@@ -2106,6 +2133,17 @@ async function saveVoice() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save voice', res.error); return; }
   toast('Voice saved');
+}
+
+async function saveClientbook() {
+  const rows = [
+    { key: 'clientbook_policy',      value: $('cfg-clientbook').value.trim(), updated_at: nowIso() },
+    { key: 'clientbook_log_actions', value: $('cfg-cb-actions').checked,      updated_at: nowIso() },
+    { key: 'clientbook_reflect',     value: $('cfg-cb-reflect').checked,      updated_at: nowIso() }
+  ];
+  const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
+  if (res.error) { fail('Save client book', res.error); return; }
+  toast('Client book settings saved');
 }
 
 async function saveStarters() {
@@ -3522,7 +3560,7 @@ async function loadCustomers(more) {
   showMore('cust-more', !isSerial && pageOrders.length === CUST_PAGE);
   let notesByKey = new Map();
   const nres = await sb.from('customer_notes')
-    .select('id,email,user_id,note,created_at')
+    .select('id,email,user_id,note,created_at,kind')
     .order('created_at', { ascending: false })
     .limit(500);
   if (!nres.error) {
@@ -3779,6 +3817,11 @@ function renderCustomers() {
       c.notes.forEach(function (n) {
         const line = el('div', 'cust-order');
         line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
+        const kind = (n.kind === 'event' || n.kind === 'reflection') ? n.kind : 'fact';
+        const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a' }[kind];
+        const tag = el('span', null, kind);
+        tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
+        line.appendChild(tag);
         const txt = el('span', null, n.note || '');
         txt.style.flex = '1 1 240px';
         line.appendChild(txt);

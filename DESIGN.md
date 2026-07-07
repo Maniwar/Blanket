@@ -579,6 +579,51 @@ binary judge server-side. Signed-in scenarios use the admin's own session, so
 they read a real register. The CLI and the panel share one source of truth: the
 runner can pull the same deck from the admin-gated `GET ?evals=1`.
 
+### 4.10 The client book — memory the concierge *uses*
+**Decision:** the concierge keeps a **typed client book** (`customer_notes.kind`),
+like a good support agent's CRM notes — and, crucially, reads it back into the
+prompt so it talks to the patron with that memory, rather than merely storing it.
+Three kinds, each written and read differently:
+
+- **`event`** — *what the concierge did*: a cancellation, an address or cloth
+  change, a re-sent email, a mending request. Written **deterministically** the
+  moment a mutating tool runs (`bookEvent` inside `logAction`), so an action can
+  **never** be missing from the book — it doesn't depend on a model choosing to
+  note it.
+- **`fact`** — *a durable preference*: a room, a favored cloth, a gift occasion.
+  Written by the `remember_customer` tool mid-chat and by the end-of-conversation
+  summarizer, both **deduped** so return visits don't refill the book with the
+  same line.
+- **`reflection`** — *how to serve them better next time*: a self-critique the
+  summarizer writes ("lead with Loden; confirm the shipping city before bulk
+  orders"). **Private** — the concierge acts on it but never quotes it back.
+
+**Why typed, not a knowledge graph:** this is *per-patron* memory a clerk would
+keep, not cross-entity reasoning. A graph would add a graph store and traversal
+for value that a labelled, retrievable note gives directly. If cross-customer
+analytics is ever wanted, it's a layer *over* this data, not a replacement.
+
+**The loop** — write on every turn/action, read on every signed-in turn:
+
+```mermaid
+flowchart LR
+  A["Mutating tool runs<br/>(cancel, address, cloth, resend, mending)"] -->|deterministic| EV[["customer_notes<br/>kind=event"]]
+  T["remember_customer tool<br/>(mid-chat)"] -->|deduped| FA[["kind=fact"]]
+  S["End-of-conversation<br/>summarizer (LLM)"] -->|fact + reflection| FA
+  S --> RE[["kind=reflection"]]
+  EV --> CB{{"CUSTOMER block /<br/>recall_context — grouped by kind"}}
+  FA --> CB
+  RE --> CB
+  CB -->|"did for them · know about them · serve better"| P["system prompt"]
+  P --> BOT["Concierge talks to the patron<br/>using its memory"]
+```
+
+**Tunable, nothing hard-coded:** the summarizer's policy is an admin field
+(Tuning → **Client book**, `clientbook_policy`), and event-logging and reflections
+are toggles (`clientbook_log_actions`, `clientbook_reflect`). The `remember_customer`
+tool's own instruction is editable in the Tools tab. In the admin's Customers tab
+each note shows its kind tag, and the admin can delete any line.
+
 ---
 
 ## 5. Subsystems

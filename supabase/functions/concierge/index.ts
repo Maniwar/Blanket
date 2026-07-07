@@ -44,7 +44,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Feierabend <concierge@feier-abend.co>";
 
 // Bump when deploying so ?selftest=1 confirms which build is actually live.
-const BUILD_TAG = "2026-07-06-ip-and-regrade";
+const BUILD_TAG = "2026-07-06-typed-client-book";
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -470,8 +470,8 @@ async function customerBlock(customer: Customer): Promise<string> {
   const noteFilter = safeEmail
     ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
     : `user_id=eq.${encodeURIComponent(customer.id)}`;
-  const notesP = pgSelect<{ note: string; created_at: string }>(
-    `customer_notes?select=note,created_at&${noteFilter}&order=created_at.desc&limit=8`,
+  const notesP = pgSelect<{ note: string; created_at: string; kind: string | null }>(
+    `customer_notes?select=note,created_at,kind&${noteFilter}&order=created_at.desc&limit=14`,
   );
   // Re-engagement: the last conversation we wrapped (snoozed or closed). If one
   // exists, THIS is a fresh visit picking the thread back up, not a first hello.
@@ -531,10 +531,21 @@ async function customerBlock(customer: Customer): Promise<string> {
     standing = ` STANDING: ${tier} (${active} on the register).`;
   }
   const archive = struck > 0 ? ` ARCHIVE: ${struck} struck (cancelled) — mention only if asked.` : "";
-  const book = notes && notes.length > 0
-    ? ` CLIENT BOOK (weave in naturally, never recite): ${
-      notes.map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`).join(" | ")}`
-    : "";
+  // Typed client book — grouped so the concierge USES each kind well: what it did
+  // for them (events), what it knows (facts), and private reminders on how to
+  // serve them better (reflections — act on these, never quote them).
+  let book = "";
+  if (notes && notes.length > 0) {
+    const d = (n: { created_at: string; note: string }) => `${String(n.created_at).slice(0, 10)}: ${n.note}`;
+    const events = notes.filter((n) => n.kind === "event").slice(0, 5);
+    const reflections = notes.filter((n) => n.kind === "reflection").slice(0, 3);
+    const facts = notes.filter((n) => n.kind !== "event" && n.kind !== "reflection").slice(0, 6);
+    const parts: string[] = [];
+    if (events.length) parts.push(`WHAT YOU'VE DONE FOR THEM (reference naturally if relevant): ${events.map(d).join(" | ")}`);
+    if (facts.length) parts.push(`WHAT YOU KNOW ABOUT THEM (weave in, never recite): ${facts.map(d).join(" | ")}`);
+    if (reflections.length) parts.push(`TO SERVE THEM BETTER (private — act on these, do NOT quote them back): ${reflections.map((n) => n.note).join(" | ")}`);
+    if (parts.length) book = " CLIENT BOOK — " + parts.join("  ·  ");
+  }
 
   // First name (from their most recent order) — for warm, natural address.
   let firstName = "";
@@ -826,7 +837,45 @@ function toolsManifest(data: ConciergeData): Array<{
   });
 }
 
-/** Writes one row to the concierge_actions audit log. Never throws. */
+// ── Client book: deterministic EVENT notes ───────────────────────────────────
+// A good support agent writes down what they DID for you, not just what they
+// learned. These compose a one-line client-book note for each MUTATING action, so
+// an action can never be missing from the book (the summarizer is model-judged;
+// this is guaranteed). Read-only lookups (get_my_orders, track_shipment, …) are
+// intentionally absent — they aren't "things done." Toggle with the config key
+// `clientbook_log_actions` (default on).
+const fmtNo = (s: number | null) =>
+  s != null ? `Nº ${Number(s).toLocaleString("en-US")}` : "an order";
+const BOOK_EVENTS: Record<string, (serial: number | null, result: string, payload: unknown) => string> = {
+  cancel_order: (s) => `Cancelled ${fmtNo(s)} at the patron's request — the number returned to the edition.`,
+  update_shipping_address: (s) => `Updated the shipping address on ${fmtNo(s)}.`,
+  update_colorway: (s, _r, p) => {
+    const cw = p && typeof (p as Record<string, unknown>).colorway === "string"
+      ? (EMAIL_COLORWAY[(p as Record<string, string>).colorway] || (p as Record<string, string>).colorway) : "";
+    return `Changed the cloth on ${fmtNo(s)}${cw ? " to " + cw : ""}.`;
+  },
+  update_gift_details: (s) => `Updated the gift-card name on ${fmtNo(s)}.`,
+  request_mending: (s) => `Logged a mending request for ${fmtNo(s)}.`,
+  resend_confirmation: (s, r) => `Re-sent an order email for ${fmtNo(s)}${r ? " (" + r + ")" : ""}.`,
+  join_waitlist: () => `Added to the waitlist for the next edition.`,
+};
+async function bookEvent(
+  customer: Customer, action: string, serial: number | null, result: string, payload: unknown,
+): Promise<void> {
+  const composer = BOOK_EVENTS[action];
+  if (!composer) return;
+  try {
+    const data = await loadConciergeData();
+    if (data.config?.clientbook_log_actions === false) return; // admin opt-out
+    await pgInsert("customer_notes", {
+      user_id: customer.id, email: customer.email, kind: "event",
+      note: composer(serial, result, payload).slice(0, 220),
+    });
+  } catch { /* best-effort — never breaks the chat */ }
+}
+
+/** Writes one row to the concierge_actions audit log, and — for mutating actions —
+ * a guaranteed 'event' line to the client book. Never throws. */
 async function logAction(
   cid: string | null, customer: Customer, action: string,
   serial: number | null, payload: unknown, result: string,
@@ -837,6 +886,7 @@ async function logAction(
       action, serial, payload: payload ?? null, result: result.slice(0, 500),
     });
   } catch { /* audit failures never break the chat */ }
+  await bookEvent(customer, action, serial, result, payload);
 }
 
 /** Executes one register tool; returns the tool_result content string. */
@@ -865,8 +915,8 @@ async function runRegisterTool(
     const nf = safeEmail
       ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
       : `user_id=eq.${encodeURIComponent(customer.id)}`;
-    const notes = await pgSelect<{ note: string; created_at: string }>(
-      `customer_notes?select=note,created_at&${nf}&order=created_at.desc&limit=20`,
+    const notes = await pgSelect<{ note: string; created_at: string; kind: string | null }>(
+      `customer_notes?select=note,created_at,kind&${nf}&order=created_at.desc&limit=20`,
     );
     const cf = safeEmail
       ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},user_email.eq."${safeEmail}")`)}`
@@ -892,8 +942,14 @@ async function runRegisterTool(
     }
     await logAction(cid, customer, "recall_context", null, null,
       `${notes?.length ?? 0} notes, ${prior.length} prior conversations`);
+    const tagged = (k: string) => (notes ?? []).filter((n) => (n.kind || "fact") === k)
+      .map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`);
     return JSON.stringify({
-      client_book: (notes ?? []).map((n) => `${String(n.created_at).slice(0, 10)}: ${n.note}`),
+      client_book: {
+        did_for_them: tagged("event"),
+        know_about_them: tagged("fact"),
+        serve_better_next_time: tagged("reflection"), // private — act on, don't quote
+      },
       prior_conversations: prior,
     });
   }
@@ -933,10 +989,14 @@ async function runRegisterTool(
       return "Already in the client book — nothing new to add.";
     }
     const row = await pgInsert("customer_notes", {
-      user_id: customer.id, email: customer.email, note,
+      user_id: customer.id, email: customer.email, note, kind: "fact",
     });
     if (!row) return "ERROR: the client book is unreachable right now.";
-    await logAction(cid, customer, "remember_customer", null, { note }, "noted");
+    // remember_customer writes its own note; don't let logAction double-book it.
+    await pgInsert("concierge_actions", {
+      conversation_id: cid, user_id: customer.id, email: customer.email,
+      action: "remember_customer", serial: null, payload: { note }, result: "noted",
+    });
     return "Noted in the client book.";
   }
 
@@ -1108,6 +1168,7 @@ async function runRegisterTool(
       result: "mending requested",
     });
     if (!row) return "ERROR: the workshop log is unreachable right now — ask them to try again shortly.";
+    await bookEvent(customer, "request_mending", serial, "mending requested", { note });
     return `Noted — a mending request for Nº ${serial} is logged with the workshop: "${note}". ` +
       "Someone will follow up by email. Wool is meant to be mended, not discarded — this is exactly what the mill is for.";
   }
@@ -2684,24 +2745,41 @@ async function writeClientBookNote(
       `customer_notes?select=note&${nf}&order=created_at.desc&limit=12`,
     );
     const known = (prior ?? []).map((n) => `- ${n.note}`).join("\n");
+    // The house policy for what the client book records is admin-editable
+    // (Tuning → Client book policy) so it can be fine-tuned without a deploy.
+    const data = await loadConciergeData();
+    const policy = typeof data.config?.clientbook_policy === "string" && data.config.clientbook_policy.trim()
+      ? data.config.clientbook_policy.trim()
+      : "";
     const sys =
       "You keep a luxury shop's private client book. From this conversation, write ONE line " +
       "(max 200 chars) capturing what is NEWLY worth remembering about THIS patron for next time: " +
-      "rooms, recipients, colorways they favored or rejected, hesitations, decisions, commissions " +
-      "placed or changed. Use concrete facts from the transcript. It is an internal note the patron " +
-      "never sees — third person, no greeting, no fluff.\n" +
-      "CRITICAL — do not repeat the book. Below is what is already recorded about this patron. " +
-      "Only write a line if this conversation adds durable information NOT already captured there. " +
-      "Do not restate, rephrase, or lightly update a fact the book already holds. If the " +
-      "conversation held nothing new and durable (small talk, a test, an unresolved hello, or only " +
-      "facts already on file), respond with exactly SKIP and nothing else.\n" +
-      "ALREADY IN THE BOOK:\n" + (known || "(nothing yet)");
+      "rooms, recipients, colorways they favored or rejected, hesitations, decisions, and — always — " +
+      "SIGNIFICANT REGISTER EVENTS from this conversation (an order placed, cancelled, or its address/" +
+      "colorway changed). A cancellation or change is always worth a line even if preferences are " +
+      "unchanged. Use concrete facts from the transcript. It is an internal note the patron never " +
+      "sees — third person, no greeting, no fluff.\n" +
+      "CRITICAL — do not repeat the book. Below is what is already recorded about this patron. Only " +
+      "write a line if this conversation adds durable information or a significant event NOT already " +
+      "captured there. Do NOT restate, rephrase, or lightly re-summarize a preference the book already " +
+      "holds — if the only 'new' content is a reworded version of an existing note, respond SKIP. If " +
+      "the conversation held nothing new (small talk, a test, an unresolved hello, or only facts " +
+      "already on file), respond with exactly SKIP and nothing else.\n" +
+      (policy ? "HOUSE POLICY (follow this above all):\n" + policy + "\n" : "") +
+      "ALREADY IN THE BOOK:\n" + (known || "(nothing yet)") + "\n\n" +
+      "Also — like a thoughtful support agent — add a brief SELF-REFLECTION: one concrete way to " +
+      "serve THIS patron better next time (a preference to lead with, a friction to avoid, a follow-up " +
+      "to offer). Skip it only if nothing useful comes to mind.\n" +
+      "Respond in EXACTLY this shape and nothing else:\n" +
+      "FACT: <the durable fact or event to remember, or SKIP>\n" +
+      "REFLECTION: <how to serve them better next time, or SKIP>";
+    const reflectOn = data.config?.clientbook_reflect !== false; // admin opt-out
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model, max_tokens: 120, system: sys,
-        messages: [{ role: "user", content: `CONVERSATION:\n${convo}\n\nWrite the NEW client-book line, or SKIP.` }],
+        model, max_tokens: 220, system: sys,
+        messages: [{ role: "user", content: `CONVERSATION:\n${convo}\n\nReply with the FACT and REFLECTION lines.` }],
       }),
     });
     if (!res.ok) return;
@@ -2709,15 +2787,22 @@ async function writeClientBookNote(
     const msg = await res.json() as any;
     const blocks = Array.isArray(msg.content) ? msg.content : [];
     // deno-lint-ignore no-explicit-any
-    let note = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
-    if (!note || note.toUpperCase() === "SKIP" || note.length < 8) return;
-    note = note.slice(0, 220);
-    // Belt-and-braces: if the model still echoed an existing line near-verbatim,
-    // drop it. Cheap normalized comparison against what the book already holds.
-    if (isRedundantNote(note, prior ?? [])) return;
-    await pgInsert("customer_notes", {
-      user_id: customer.id, email: customer.email, note,
-    });
+    const text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    const pick = (label: string) => {
+      const m = new RegExp(label + ":\\s*([\\s\\S]*?)(?:\\n[A-Z]+:|$)", "i").exec(text);
+      const v = m ? m[1].trim() : "";
+      return (!v || v.toUpperCase() === "SKIP" || v.length < 8) ? "" : v.slice(0, 220);
+    };
+    const fact = pick("FACT");
+    const reflection = reflectOn ? pick("REFLECTION") : "";
+    // Fact: skip if it just echoes the book. Reflection: keep (it's advisory, not
+    // a repeated preference), but still drop a near-verbatim repeat.
+    if (fact && !isRedundantNote(fact, prior ?? [])) {
+      await pgInsert("customer_notes", { user_id: customer.id, email: customer.email, note: fact, kind: "fact" });
+    }
+    if (reflection && !isRedundantNote(reflection, prior ?? [])) {
+      await pgInsert("customer_notes", { user_id: customer.id, email: customer.email, note: reflection, kind: "reflection" });
+    }
   } catch { /* best-effort — a missing note never breaks a wrap-up */ }
 }
 

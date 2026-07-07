@@ -82,6 +82,14 @@ suggested questions), `images` (admin-added `{{img:token}}` sources, merged
 client-side and injected into the prompt), `goal_sample_rate` (0–1 — fraction of
 turns the async goal grader runs).
 
+*Client-book (memory) keys:* `clientbook_policy` (extra house rules injected into
+the end-of-conversation summarizer — what to record vs. skip), `clientbook_log_actions`
+(bool, default true — write a guaranteed `event` note on every mutating action),
+`clientbook_reflect` (bool, default true — write a `reflection` line each
+conversation). See DESIGN §4.10.
+
+*Model keys:* `model`, `model_fallback` (§ Config table above).
+
 *Selling engine keys:* `assertiveness` (1–5, default 3 = warm consultant — how
 hard to sell; scales the prompt guidance and the client nudge/outreach budget),
 `hooks` (array of true "selling angles" the bot weaves in to build desire),
@@ -367,13 +375,17 @@ widget), `handleFormPost` (`POST ?form=1`).
 | `id` | bigint identity PK | Row id. |
 | `user_id`,`email` | — | The patron. |
 | `note` | text | One durable observation (≤240 chars). |
+| `kind` | text | Note type — **`event`** (something the concierge did — written deterministically by `bookEvent`), **`fact`** (a durable preference), or **`reflection`** (private "serve better next time"). Default `fact`. |
 | `created_at` | timestamptz | When learned. |
 
-Clienteling memory that travels with the customer. **Written by:** the
-`remember_customer` tool (what the bot learned) and `handleWrapup` (a terse
-line recording the wind-down: quiet mode / closed / wound down). **Read by:**
-`customerBlock` (last 8 notes feed the CLIENT BOOK line in the prompt), admin
-(Customers → client book, ❦ badge).
+Typed clienteling memory the concierge **reads back to talk to the patron** (see
+DESIGN §4.10). **Written by:** `bookEvent` (guaranteed `event` note on every
+mutating action, via `logAction`), the `remember_customer` tool (`fact`), and the
+end-of-conversation summarizer `writeClientBookNote` (`fact` + `reflection`, both
+deduped). **Read by:** `customerBlock` and the `recall_context` tool — **grouped
+by kind** (did-for-them / know-about-them / serve-better) into the prompt — and
+the admin Customers tab (client book with a per-note kind tag). Governed by the
+`clientbook_policy` / `clientbook_log_actions` / `clientbook_reflect` config keys.
 
 ### `order_events` — full order audit trail
 | Column | Type | Purpose |
