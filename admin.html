@@ -97,6 +97,18 @@
   .hist-body{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--wool-dim);
     white-space:pre-wrap; word-break:break-word; cursor:pointer; line-height:1.4; }
   .hist-body.clamp{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  /* Tuning sub-tabs — group the many config cards into a few navigable sections. */
+  .tsubs{ display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid var(--hairline); margin:0 0 22px; }
+  .tsub-tab{ background:none; border:none; cursor:pointer; padding:10px 16px; margin-bottom:-1px;
+    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.06em; color:var(--wool-faint);
+    border-bottom:2px solid transparent; }
+  .tsub-tab:hover{ color:var(--wool-dim); }
+  .tsub-tab.on{ color:var(--wool); border-bottom-color:var(--brass); }
+  .tsub{ display:none; }
+  .tsub.on{ display:block; }
+  /* Two-column grid used by Engagement/Edition number fields (was undefined). */
+  .ed-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px 20px; margin:8px 0; }
+  @media (max-width:640px){ .ed-grid{ grid-template-columns:1fr; } }
 
   .btn{
     font-family:'IBM Plex Mono', monospace;
@@ -783,6 +795,15 @@
         <h2>Tuning</h2>
       </div>
 
+      <div class="tsubs" role="tablist">
+        <button class="tsub-tab on" type="button" data-tsub="voice">Voice &amp; memory</button>
+        <button class="tsub-tab" type="button" data-tsub="selling">Selling</button>
+        <button class="tsub-tab" type="button" data-tsub="engagement">Engagement</button>
+        <button class="tsub-tab" type="button" data-tsub="engine">Engine &amp; keys</button>
+        <button class="tsub-tab" type="button" data-tsub="edition">Edition &amp; access</button>
+      </div>
+
+      <div class="tsub" data-tsub="engine">
       <section class="card">
         <div class="card-head">
           <h3>Engine</h3>
@@ -850,7 +871,9 @@
           <span class="micro" id="secrets-status" style="color:var(--wool-faint);"></span>
         </div>
       </section>
+      </div>
 
+      <div class="tsub on" data-tsub="voice">
       <section class="card">
         <div class="card-head">
           <h3>Voice</h3>
@@ -958,7 +981,9 @@
           <button id="save-starters" class="btn primary">Save starters</button>
         </div>
       </section>
+      </div>
 
+      <div class="tsub" data-tsub="engagement">
       <section class="card">
         <div class="card-head">
           <h3>Engagement pace</h3>
@@ -1028,7 +1053,9 @@
           <button id="save-engagement" class="btn primary">Save engagement</button>
         </div>
       </section>
+      </div>
 
+      <div class="tsub" data-tsub="selling">
       <section class="card">
         <div class="card-head">
           <h3>Selling style</h3>
@@ -1062,7 +1089,9 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
           <button id="save-selling" class="btn primary">Save selling style</button>
         </div>
       </section>
+      </div>
 
+      <div class="tsub" data-tsub="edition">
       <section class="card">
         <div class="card-head">
           <h3>Edition run</h3>
@@ -1100,6 +1129,8 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         </form>
         <div id="admin-add-note" class="micro"></div>
       </section>
+      </div>
+
     </div>
 
     <!-- ============ TAB 2 : KNOWLEDGE ============ -->
@@ -1763,6 +1794,10 @@ function wireStatic() {
   document.querySelectorAll('nav.tabs .tab').forEach(function (btn) {
     btn.addEventListener('click', function () { activateTab(btn.dataset.tab); });
   });
+  // Tuning inner sub-tabs.
+  document.querySelectorAll('#panel-tuning .tsub-tab').forEach(function (b) {
+    b.addEventListener('click', function () { setTuningTab(b.dataset.tsub); });
+  });
 
   $('save-engine').addEventListener('click', function () {
     withBusy($('save-engine'), saveEngine);
@@ -1935,12 +1970,26 @@ function activateTab(name) {
   ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'actions', 'website', 'tools', 'evals'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
+  if (name === 'tuning') autoGrowAll('#panel-tuning .tsub.on');
   if (name === 'knowledge') autoGrowAll('#kb-list');
   if (name === 'procedures') autoGrowAll('#sop-list');
   if (name === 'cache') autoGrowAll('#cache-list');
   if (name === 'website') autoGrowAll('#site-list');
   if (name === 'tools') { autoGrowAll('#tools-list'); autoGrowAll('#forms-list'); }
   if (name === 'evals') autoGrowAll('#evals-list');
+}
+
+/* Tuning inner sub-tabs (Voice & memory / Selling / Engagement / Engine & keys /
+   Edition & access). Textareas in a hidden sub-panel can't be auto-sized until
+   shown, so grow them when their panel becomes visible. */
+function setTuningTab(key) {
+  document.querySelectorAll('#panel-tuning .tsub-tab').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.tsub === key);
+  });
+  document.querySelectorAll('#panel-tuning .tsub').forEach(function (p) {
+    p.classList.toggle('on', p.dataset.tsub === key);
+  });
+  autoGrowAll('#panel-tuning .tsub.on');
 }
 
 /* ---------------- header pill ---------------- */
@@ -2172,6 +2221,8 @@ async function loadConfig() {
   renderImageRows();
 
   setPill(cfg.enabled === true);
+  // Size the textareas in the visible Tuning sub-panel now that values are loaded.
+  autoGrowAll('#panel-tuning .tsub.on');
 }
 
 const ASSERT_LABELS = {
