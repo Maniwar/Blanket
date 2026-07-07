@@ -2492,7 +2492,9 @@ async function handlePromptReviewPost(req: Request): Promise<Response> {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model, max_tokens: 3200, temperature: 0,
+        // No `temperature`: newer models (Opus 4.8 / Sonnet 5 / Fable 5) reject the
+        // sampling params with a 400, and the admin can point the tuner at one.
+        model, max_tokens: 3200,
         system: PROMPT_DOCTOR_SYSTEM,
         tool_choice: { type: "tool", name: "review" },
         tools: [{
@@ -2648,8 +2650,8 @@ async function handleEvalsGet(req: Request): Promise<Response> {
 // ── POST ?judge=1 — the pinned binary LLM judge (admin only) ─────────────────
 // The eval runner (browser or CLI) sends ONE concrete criterion + a transcript;
 // we return a binary {pass, reason}. Kept server-side because the Anthropic key
-// must never reach the browser. Mirrors evals/judge.mjs: temperature 0, a fixed
-// contract, a forced `verdict` tool, told to ignore tone/length. Cheap model.
+// must never reach the browser. Mirrors evals/judge.mjs: a fixed contract, a
+// forced `verdict` tool, told to ignore tone/length. Cheap model.
 const JUDGE_SYSTEM =
   "You are a strict, literal evaluator of a sales-concierge chatbot. You are given " +
   "ONE criterion and a chat transcript. Decide ONLY whether the ASSISTANT's LAST " +
@@ -2674,7 +2676,8 @@ async function handleJudgePost(req: Request): Promise<Response> {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model, max_tokens: 200, temperature: 0,
+        // No `temperature`: a newer EVAL_JUDGE_MODEL would 400 on the sampling param.
+        model, max_tokens: 200,
         system: JUDGE_SYSTEM,
         tool_choice: { type: "tool", name: "verdict" },
         tools: [{
