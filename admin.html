@@ -506,6 +506,15 @@
   .who2 .rmeta{ color:var(--wool-faint); }
   .who2 .hnflag{ margin-left:8px; cursor:pointer; font-size:12px; }
   .who2 .hnflag:hover{ filter:brightness(1.35); }
+  .who2 .rateflag{ margin-left:8px; display:inline-flex; gap:5px; font-size:11px; }
+  .who2 .rateflag .r-up{ color:#7fb069; }
+  .who2 .rateflag .r-down{ color:#c98a6b; }
+  /* Rated-message jumper + subtle rails on the rated replies */
+  .rated-bar{ position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:8px;
+    padding:6px 9px; margin-bottom:12px; background:var(--ink-well);
+    border:1px solid var(--hairline-dim); border-radius:3px; }
+  .msg.rated-up .bubble{ box-shadow:inset 3px 0 0 #7fb069; }
+  .msg.rated-down .bubble{ box-shadow:inset 3px 0 0 #c98a6b; }
   .transcript{
     border:1px solid var(--hairline-dim); border-radius:3px; min-height:64vh; max-height:78vh;
     display:flex; flex-direction:column; background:rgba(38,51,43,.28);
@@ -546,6 +555,22 @@
   .filters{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
   .filters input[type="date"]{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
   .filters select{ font-family:'IBM Plex Mono', monospace; font-size:12px; padding:5px 8px; }
+  /* Conversations toolbar — two labelled zones: FILTER (what to show) + ACTIONS. */
+  .conv-toolbar{ margin-bottom:14px; border:1px solid var(--hairline-dim); border-radius:5px; overflow:hidden; }
+  .ct-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 12px; }
+  .ct-row input[type="text"], .ct-row input[type="date"], .ct-row select{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:6px 9px; }
+  .ct-actions-row{ background:rgba(0,0,0,.16); border-top:1px solid var(--hairline-dim); }
+  .ct-tag{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--wool-faint); border:1px solid var(--hairline);
+    border-radius:3px; padding:3px 8px; }
+  .ct-search{ flex:1 1 240px; min-width:180px; max-width:360px; }
+  .ct-date{ max-width:150px; }
+  .ct-check{ display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--wool-dim); }
+  .ct-check input{ accent-color:var(--brass); }
+  .ct-count{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--wool-faint); }
+  .ct-spacer{ flex:1 1 auto; }
   .stage-chip{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:1px 6px; border-radius:2px; border:1px solid var(--wool-faint); color:var(--wool-dim); }
   .stage-ready, .stage-won{ color:#7fb069; border-color:#7fb069; }
   .stage-objection{ color:#c98a4b; border-color:#c98a4b; }
@@ -1135,42 +1160,56 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <div class="stat"><span class="micro">👍 rate</span><div class="val" id="m-rate">—</div></div>
       </div>
 
-      <div class="row-tools filters">
-        <input type="date" id="convo-from" title="From date">
-        <input type="date" id="convo-to" title="To date">
-        <input type="text" id="convo-q" placeholder="email, a word in the chat, a conversation id, or an IP…" style="max-width:320px;">
-        <select id="convo-goal" title="Goal outcome (filters loaded conversations)">
-          <option value="">Any outcome</option>
-          <option value="met">Any goal met</option>
-          <option value="partial">Any goal partial</option>
-          <option value="unmet">All unmet / none</option>
-          <option value="graded">Graded only</option>
-          <option value="ungraded">Not yet graded</option>
-        </select>
-        <select id="convo-stage" title="Funnel stage (filters loaded conversations)">
-          <option value="">Any stage</option>
-          <option value="browsing">browsing</option>
-          <option value="engaged">engaged</option>
-          <option value="evaluating">considering</option>
-          <option value="objection">objection</option>
-          <option value="ready">ready</option>
-          <option value="won">won</option>
-          <option value="lost">lost</option>
-          <option value="none">not yet graded</option>
-        </select>
-        <label class="micro" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;" title="Only chats where the concierge acted on a house note">
-          <input type="checkbox" id="convo-house" style="accent-color:var(--brass);"> 🏷 House-note chats
-        </label>
-        <button id="convo-apply" class="btn">Search</button>
-        <button id="convo-clear" class="btn ghost">Clear</button>
-        <button id="convo-more" class="btn ghost" style="display:none;">Load more</button>
-        <button id="convo-export-all" class="btn ghost" title="Export every conversation matching the current filters as one CSV">Export all</button>
-        <button id="convo-regrade" class="btn ghost" title="Re-run goal grading for the conversations currently shown (one model call each)">Re-grade shown</button>
-        <label class="checkline" style="gap:6px;" title="Off = the user column is pseudonymized (a stable hash). On = real email.">
-          <input type="checkbox" id="convo-pii"><span class="micro">Include PII</span>
-        </label>
-        <button id="convo-refresh" class="btn">Refresh</button>
-        <span class="micro" id="convo-count" style="color:var(--wool-faint);"></span>
+      <div class="conv-toolbar">
+        <!-- FILTER zone — what to show. Text/date need Apply; the selects filter live. -->
+        <div class="ct-row">
+          <span class="ct-tag">Filter</span>
+          <input type="text" id="convo-q" class="ct-search" placeholder="Search email · a word · conversation id · IP">
+          <input type="date" id="convo-from" title="From date" class="ct-date">
+          <input type="date" id="convo-to" title="To date" class="ct-date">
+          <select id="convo-goal" title="Goal outcome">
+            <option value="">Goals: any</option>
+            <option value="met">Any goal met</option>
+            <option value="partial">Any goal partial</option>
+            <option value="unmet">All unmet / none</option>
+            <option value="graded">Graded only</option>
+            <option value="ungraded">Not yet graded</option>
+          </select>
+          <select id="convo-stage" title="Funnel stage">
+            <option value="">Stage: any</option>
+            <option value="browsing">browsing</option>
+            <option value="engaged">engaged</option>
+            <option value="evaluating">considering</option>
+            <option value="objection">objection</option>
+            <option value="ready">ready</option>
+            <option value="won">won</option>
+            <option value="lost">lost</option>
+            <option value="none">not yet graded</option>
+          </select>
+          <select id="convo-rating" title="Thumbs feedback">
+            <option value="">Feedback: any</option>
+            <option value="up">👍 thumbs-up</option>
+            <option value="down">👎 thumbs-down</option>
+            <option value="any">Any rating</option>
+          </select>
+          <label class="ct-check" title="Only chats where the concierge acted on a house note">
+            <input type="checkbox" id="convo-house"> 🏷 house-note chats
+          </label>
+          <button id="convo-apply" class="btn">Apply</button>
+          <button id="convo-clear" class="btn ghost">Clear</button>
+        </div>
+        <!-- ACTION zone — what to do with the results. -->
+        <div class="ct-row ct-actions-row">
+          <span class="ct-count" id="convo-count"></span>
+          <button id="convo-more" class="btn ghost" style="display:none;">Load more</button>
+          <span class="ct-spacer"></span>
+          <button id="convo-regrade" class="btn ghost" title="Re-grade goals for the conversations currently shown — one model call each">Re-grade shown</button>
+          <button id="convo-export-all" class="btn ghost" title="Download the shown date range as a CSV (message rows with goals, stage, and ratings)">Export CSV</button>
+          <label class="ct-check" title="Include real emails and IPs in the CSV export (off = pseudonymized). Affects the export only.">
+            <input type="checkbox" id="convo-pii"> PII in export
+          </label>
+          <button id="convo-refresh" class="btn">Refresh</button>
+        </div>
       </div>
 
       <div id="convo-funnel" class="convo-funnel"></div>
@@ -1694,6 +1733,8 @@ function wireStatic() {
   $('convo-goal').addEventListener('change', renderConversations);
   // Funnel-stage filter re-filters the loaded conversations client-side, like goals.
   $('convo-stage').addEventListener('change', renderConversations);
+  // Feedback filter (👍/👎) — also client-side over the loaded set.
+  $('convo-rating').addEventListener('change', renderConversations);
   // House-note-chats filter needs a server round-trip (it constrains by id set).
   $('convo-house').addEventListener('change', function () { loadConversations(); });
   // Clear also unchecks it — capture phase, so it's off before wireFilter reloads.
@@ -5497,6 +5538,24 @@ async function loadConversations(more) {
       if (!state.convoHouseAt[a.conversation_id]) state.convoHouseAt[a.conversation_id] = a.created_at;
     });
   }
+
+  // Thumbs on the loaded chats: conv id → {up, down}. Feedback keys on message_id,
+  // so we embed the message's conversation_id (FK) and filter to the loaded ids —
+  // one query, and only the (sparse) rated rows come back.
+  state.convoRatings = {};
+  if (ids.length) {
+    const fres = await sb.from('concierge_feedback')
+      .select('rating, concierge_messages!inner(conversation_id)')
+      .in('concierge_messages.conversation_id', ids)
+      .limit(20000);
+    if (!fres.error) (fres.data || []).forEach(function (r) {
+      const cid = r.concierge_messages && r.concierge_messages.conversation_id;
+      if (!cid) return;
+      if (!state.convoRatings[cid]) state.convoRatings[cid] = { up: 0, down: 0 };
+      if (r.rating === 1) state.convoRatings[cid].up++;
+      else if (r.rating === -1) state.convoRatings[cid].down++;
+    });
+  }
   renderConvoList(counts);
 }
 
@@ -5600,6 +5659,14 @@ function convoStageMatch(c, mode) {
   if (mode === 'none') return !s;               // "not yet graded" / no stage
   return s === mode;
 }
+function convoRatingMatch(c, mode) {
+  if (!mode) return true;
+  const r = (state.convoRatings && state.convoRatings[c.id]) || null;
+  if (mode === 'up') return !!r && r.up > 0;
+  if (mode === 'down') return !!r && r.down > 0;
+  if (mode === 'any') return !!r && (r.up > 0 || r.down > 0);
+  return true;
+}
 
 /* The funnel overview: how the LOADED conversations distribute across stages, so
    you can see where shoppers pile up or drop off and tune the pitch. Each cell is
@@ -5642,9 +5709,10 @@ function renderConvoList(counts) {
   if (counts) state.convoCounts = counts; else counts = state.convoCounts || {};
   const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
   const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+  const rateMode = ($('convo-rating') && $('convo-rating').value) || '';
   renderFunnelBar(stageMode);
   const shown = state.convos.filter(function (c) {
-    return convoGoalMatch(c.goal_status, goalMode) && convoStageMatch(c, stageMode);
+    return convoGoalMatch(c.goal_status, goalMode) && convoStageMatch(c, stageMode) && convoRatingMatch(c, rateMode);
   });
   const list = $('convo-list');
   list.textContent = '';
@@ -5700,6 +5768,14 @@ function renderConvoList(counts) {
       const g = el('span', 'rmeta', ' · ' + met + '/' + keys.length + ' goals');
       g.title = met + ' of ' + keys.length + ' goals met — open for the scorecard.';
       who.appendChild(g);
+    }
+    const rt = state.convoRatings && state.convoRatings[c.id];
+    if (rt && (rt.up || rt.down)) {
+      const rc = el('span', 'rateflag');
+      if (rt.up) rc.appendChild(el('span', 'r-up', '👍' + (rt.up > 1 ? rt.up : '')));
+      if (rt.down) rc.appendChild(el('span', 'r-down', '👎' + (rt.down > 1 ? rt.down : '')));
+      rc.title = 'Open — jump to the rated messages inside';
+      who.appendChild(rc);
     }
     const hn = state.convoHouse && state.convoHouse[c.id];
     if (hn && hn.length) {
@@ -5796,6 +5872,7 @@ async function openConvo(c) {
 
   if (state.activeConvoId !== c.id) return; // user clicked away meanwhile
   state.activeMsgs = msgs;
+  state.activeFb = fbMap;   // kept for the transcript CSV export (rating + note columns)
   renderTranscript(msgs, fbMap);
 }
 
@@ -5894,13 +5971,17 @@ function exportTranscriptCsv(c) {
   const gMet = gsObj ? gKeys.filter(function (k) { return gsObj[k] && gsObj[k].status === 'met'; }).length : '';
   const gTot = gsObj ? gKeys.length : '';
   const gJson = gsObj ? JSON.stringify(gsObj) : '';
+  const fb = state.activeFb || {};
   const head = ['conversation_id', 'user', 'ip', 'section', 'sales_stage', 'goals_met', 'goals_total',
-    'goal_status', 'created_at', 'role', 'model', 'latency_ms', 'content'];
+    'goal_status', 'created_at', 'role', 'model', 'latency_ms', 'rating', 'rating_note', 'content'];
   const lines = [head.join(',')];
   msgs.forEach(function (m) {
+    const f = fb[m.id];
+    const rating = f ? (f.rating === 1 ? 'up' : f.rating === -1 ? 'down' : '') : '';
     lines.push([csvEsc(c.id), csvEsc(u), csvEsc(ipCell), csvEsc(c.section), csvEsc(c.sales_stage),
       csvEsc(gMet), csvEsc(gTot), csvEsc(gJson), csvEsc(m.created_at), csvEsc(m.role),
-      csvEsc(m.model), csvEsc(m.latency_ms), csvEsc(m.content)].join(','));
+      csvEsc(m.model), csvEsc(m.latency_ms), csvEsc(rating), csvEsc(f ? (f.note || '') : ''),
+      csvEsc(m.content)].join(','));
   });
   downloadCsv('conversation-' + String(c.id).slice(0, 8) + (piiOn() ? '-pii' : '') + '.csv', lines.join('\n'));
 }
@@ -6011,6 +6092,7 @@ function renderTranscript(msgs, fbMap) {
   }
 
   let targetNode = null;
+  const ratedNodes = [];
   msgs.forEach(function (m, i) {
     const isUser = m.role === 'user';
     const node = el('div', 'msg ' + (isUser ? 'user' : 'assistant'));
@@ -6031,6 +6113,8 @@ function renderTranscript(msgs, fbMap) {
 
     const fb = fbMap[m.id];
     if (fb && (fb.rating === 1 || fb.rating === -1)) {
+      node.classList.add('rated', fb.rating === 1 ? 'rated-up' : 'rated-down');
+      ratedNodes.push(node);
       const emo = el('span', 'fb', '  ' + (fb.rating === 1 ? '👍' : '👎'));
       meta.appendChild(emo);
       if (fb.note) meta.appendChild(el('em', 'fbnote', '“' + String(fb.note) + '”'));
@@ -6043,6 +6127,28 @@ function renderTranscript(msgs, fbMap) {
     node.appendChild(meta);
     body.appendChild(node);
   });
+
+  // Rated-message jumper: a sticky bar to step through the 👍/👎 replies.
+  if (ratedNodes.length) {
+    const up = ratedNodes.filter(function (n) { return n.classList.contains('rated-up'); }).length;
+    const down = ratedNodes.length - up;
+    const bar = el('div', 'rated-bar');
+    bar.appendChild(el('span', 'micro', 'Rated ' + (up ? '👍' + up + ' ' : '') + (down ? '👎' + down : '')));
+    let ri = -1;
+    const go = function (dir) {
+      ri = (ri + dir + ratedNodes.length) % ratedNodes.length;
+      const n = ratedNodes[ri];
+      try { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      catch (e) { body.scrollTop = n.offsetTop - 40; }
+      n.classList.add('flash'); setTimeout(function () { n.classList.remove('flash'); }, 1700);
+    };
+    const prev = el('button', 'btn ghost mini', '▲'); prev.type = 'button'; prev.title = 'Previous rated reply';
+    prev.addEventListener('click', function () { go(-1); });
+    const next = el('button', 'btn ghost mini', '▼'); next.type = 'button'; next.title = 'Next rated reply';
+    next.addEventListener('click', function () { go(1); });
+    bar.appendChild(prev); bar.appendChild(next);
+    body.insertBefore(bar, body.firstChild);
+  }
 
   if (targetNode) {
     // Let layout settle, then center the acted-on reply in the transcript pane.

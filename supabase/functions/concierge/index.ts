@@ -2310,7 +2310,7 @@ async function handleExportGet(req: Request): Promise<Response> {
   const enc = new TextEncoder();
   const HEAD = ["conversation_id", "user", "ip", "section", "sales_stage",
     "goals_met", "goals_total", "goal_status", "conversation_created_at",
-    "message_created_at", "role", "model", "latency_ms", "content"];
+    "message_created_at", "role", "model", "latency_ms", "rating", "rating_note", "content"];
   const CONVO_BATCH = 300, ID_CHUNK = 50;
 
   const stream = new ReadableStream({
@@ -2338,10 +2338,19 @@ async function handleExportGet(req: Request): Promise<Response> {
           const ids = convos.map((c) => c.id);
           for (let i = 0; i < ids.length; i += ID_CHUNK) {
             const chunk = ids.slice(i, i + ID_CHUNK);
-            const msgs = await pgSelect<{ conversation_id: string; created_at: string; role: string; model: string | null; latency_ms: number | null; content: string | null }>(
-              "concierge_messages?select=conversation_id,created_at,role,model,latency_ms,content" +
+            const msgs = await pgSelect<{ id: number; conversation_id: string; created_at: string; role: string; model: string | null; latency_ms: number | null; content: string | null }>(
+              "concierge_messages?select=id,conversation_id,created_at,role,model,latency_ms,content" +
               `&conversation_id=in.(${chunk.join(",")})&order=conversation_id.asc,created_at.asc&limit=100000`,
             );
+            // Thumbs on those messages (sparse), so the export carries ratings too.
+            const fbMap: Record<string, { rating: number; note: string | null }> = {};
+            const mids = (msgs || []).map((m) => m.id).filter((x) => x != null);
+            for (let j = 0; j < mids.length; j += 200) {
+              const fb = await pgSelect<{ message_id: number; rating: number; note: string | null }>(
+                `concierge_feedback?select=message_id,rating,note&message_id=in.(${mids.slice(j, j + 200).join(",")})`,
+              );
+              (fb || []).forEach((f) => { fbMap[String(f.message_id)] = { rating: f.rating, note: f.note }; });
+            }
             let buf = "";
             for (const m of (msgs || [])) {
               const c = byId[m.conversation_id] || {} as typeof convos[number];
@@ -2354,10 +2363,12 @@ async function handleExportGet(req: Request): Promise<Response> {
               const gMet = gsObj ? gKeys.filter((k) => gsObj[k]?.status === "met").length : "";
               const gTot = gsObj ? gKeys.length : "";
               const gJson = gsObj ? JSON.stringify(gsObj) : "";
+              const f = fbMap[String(m.id)];
+              const rating = f ? (f.rating === 1 ? "up" : f.rating === -1 ? "down" : "") : "";
               buf += [csvCell(m.conversation_id), csvCell(user), csvCell(ipCell), csvCell(c.section), csvCell(c.sales_stage),
                 csvCell(gMet), csvCell(gTot), csvCell(gJson),
                 csvCell(c.created_at), csvCell(m.created_at), csvCell(m.role), csvCell(m.model),
-                csvCell(m.latency_ms), csvCell(m.content)].join(",") + "\n";
+                csvCell(m.latency_ms), csvCell(rating), csvCell(f ? (f.note ?? "") : ""), csvCell(m.content)].join(",") + "\n";
             }
             if (buf) controller.enqueue(enc.encode(buf));
           }

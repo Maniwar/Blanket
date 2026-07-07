@@ -335,6 +335,20 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, I want to browse conversations and feedback and see where
   the concierge lacked an answer, so that I can improve the knowledge base.
   *(Conversations tab + feedback + knowledge-gap flags.)*
+- **As the merchant**, I want to **filter chats by 👍/👎**, **jump straight to the
+  rated replies** inside one, and **export the ratings**, so that I can act on the
+  concierge's best and worst answers. *(A **Feedback** filter (thumbs-up /
+  thumbs-down / any) over the loaded set, backed by a per-conversation ratings
+  map — `concierge_feedback` embedded on its message's `conversation_id`; a `👍n
+  👎n` chip on rated rows; inside a transcript, rated replies get a colored rail
+  and a **sticky ▲/▼ jumper** steps through them; and both CSV exports carry
+  `rating` + `rating_note` columns.)*
+- **As the merchant**, I want the Conversations toolbar to be **obvious** — filters
+  in one place, actions in another, and no mystery checkboxes. *(Two labelled
+  zones: a **Filter** row (search · dates · goals · stage · feedback · house-note)
+  and an **Actions** row (Load more · Re-grade shown · Export CSV · Refresh). The
+  old "Include PII" — which governs the **export**, not the view — is relabelled
+  **"PII in export"** and sits beside Export.)*
 - **As the merchant**, I want each conversation in the list to tell me plainly
   **whether it's been graded** — and, if so, the outcome — separate from where the
   shopper sits in the funnel, so that I don't mistake a funnel *stage* for a
@@ -398,8 +412,9 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   the register, a transcript, and the waitlist; stage chips; goal-outcome filter.
   Both conversation exports — one transcript and the streamed **Export all** —
   carry the conversation's `section`, `sales_stage`, `goals_met`, `goals_total`,
-  and the full `goal_status` JSON on every row, so the funnel and grades are in
-  the spreadsheet, not just on screen.)*
+  the full `goal_status` JSON, and each message's `rating`/`rating_note` on every
+  row, so the funnel, grades, and thumbs are in the spreadsheet, not just on
+  screen.)*
 - **As the operator**, I want to change what the concierge says and shows without a
   deploy — copy, tuning notes, starters, **selling angles**, **objection playbook**,
   **assertiveness**, engagement pacing, in-chat **forms**, and the **images** the
