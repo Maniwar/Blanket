@@ -1200,6 +1200,7 @@ const state = {
   houseQ: '',              // House notes text filter (customer email / note text)
   houseActedIn: {},        // note_id → conversation_id the concierge resolved it in
   houseSel: new Set(),     // selected house-note ids for bulk resolve/reopen/delete
+  convoHouse: {},          // conversation_id → [note_id] acted on in that chat
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
@@ -5007,6 +5008,22 @@ async function loadConversations(more) {
       counts[r.conversation_id] = (counts[r.conversation_id] || 0) + 1;
     });
   }
+
+  // Tag chats that acted on a house note (resolve_admin_note): conv id → [note_id].
+  state.convoHouse = {};
+  if (ids.length) {
+    const hres = await sb.from('concierge_actions')
+      .select('conversation_id,payload')
+      .eq('action', 'resolve_admin_note')
+      .in('conversation_id', ids)
+      .limit(5000);
+    if (!hres.error) (hres.data || []).forEach(function (a) {
+      if (!a.conversation_id) return;
+      const nid = a.payload && a.payload.note_id != null ? a.payload.note_id : null;
+      if (!state.convoHouse[a.conversation_id]) state.convoHouse[a.conversation_id] = [];
+      if (nid != null && state.convoHouse[a.conversation_id].indexOf(nid) < 0) state.convoHouse[a.conversation_id].push(nid);
+    });
+  }
   renderConvoList(counts);
 }
 
@@ -5107,6 +5124,13 @@ function renderConvoList(counts) {
     line1.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
     line1.appendChild(el('span', 'micro', c.section || '—'));
     if (c.sales_stage) line1.appendChild(el('span', 'stage-chip stage-' + c.sales_stage, c.sales_stage));
+    const hn = state.convoHouse && state.convoHouse[c.id];
+    if (hn && hn.length) {
+      const tag = el('span', 'stage-chip', '🏷 house note' + (hn.length > 1 ? ' ×' + hn.length : ' #' + hn[0]));
+      tag.style.cssText = 'border-color:#7a5aa0; color:#b79fe0;';
+      tag.title = 'The concierge resolved a house note in this chat';
+      line1.appendChild(tag);
+    }
     btn.appendChild(line1);
 
     const n = counts[c.id] || 0;

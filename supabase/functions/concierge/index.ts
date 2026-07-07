@@ -1432,6 +1432,29 @@ async function evaluateGoals(
       .map((m) => `${m.role === "user" ? "Shopper" : "Concierge"}: ${m.content}`)
       .join("\n");
     const goalList = data.goals.map((g) => `${g.slug}: ${g.label} — ${g.description}`).join("\n");
+    // If the patron had house instructions, hand the judge their text — it can't
+    // see the system prompt, so without this the 'house-notes' goal is unjudgeable.
+    let houseBlock = "";
+    try {
+      const crow = await pgSelect<{ user_email: string | null; user_id: string | null }>(
+        `concierge_conversations?select=user_email,user_id&id=eq.${cid}&limit=1`);
+      const c0 = crow && crow[0];
+      if (c0 && (c0.user_email || c0.user_id)) {
+        const safe = c0.user_email?.replace(/["\\,()]/g, "");
+        const parts: string[] = [];
+        if (c0.user_id) parts.push(`user_id.eq.${c0.user_id}`);
+        if (safe) parts.push(`email.eq."${safe}"`);
+        if (parts.length) {
+          const dirs = await pgSelect<{ note: string; resolved: boolean }>(
+            `customer_notes?select=note,resolved&or=${encodeURIComponent(`(${parts.join(",")})`)}&kind=eq.directive&order=created_at.desc&limit=8`);
+          if (dirs && dirs.length) {
+            houseBlock = "\n\nHOUSE INSTRUCTIONS the team left for this patron (the concierge was told to follow " +
+              "these, and to mark a one-time task resolved once carried out):\n" +
+              dirs.map((d) => `- [${d.resolved ? "resolved" : "open"}] ${d.note}`).join("\n");
+          }
+        }
+      }
+    } catch { /* no house block — the goal just grades from the transcript */ }
     const judgeSystem =
       "You evaluate a sales conversation against goals, strictly and evidence-based. For EACH " +
       "goal, judge 'met', 'partial', or 'unmet' SO FAR. Be conservative: mark 'met' ONLY when the " +
@@ -1458,7 +1481,7 @@ async function evaluateGoals(
         system: judgeSystem,
         messages: [{
           role: "user",
-          content: `GOALS:\n${goalList}\n\nCONVERSATION:\n${convo}\n\nReturn the JSON now.`,
+          content: `GOALS:\n${goalList}\n\nCONVERSATION:\n${convo}${houseBlock}\n\nReturn the JSON now.`,
         }],
       }),
     });

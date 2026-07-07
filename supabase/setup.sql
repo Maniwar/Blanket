@@ -713,6 +713,14 @@ select * from (values
 ) as v(slug,label,description,sort_order,section)
 where not exists (select 1 from public.concierge_goals);
 
+-- House-instruction handling as a graded goal (lands in an already-seeded DB too).
+-- The goal grader is given the patron's directive text so it can judge this.
+insert into public.concierge_goals (slug, label, description, sort_order, section) values
+('house-notes','Handle house instructions',
+ 'If the team left a HOUSE INSTRUCTION for this patron, follow it faithfully in the conversation; carry out a one-time task and mark it resolved (resolve_admin_note). If none was present, this goal does not apply — treat as met.',
+ 7, null)
+on conflict (slug) do nothing;
+
 -- Backfill the journey mapping on existing installs (only where unset, so admin
 -- edits are preserved).
 update public.concierge_goals set section = 'why'     where slug = 'discover'     and section is null;
