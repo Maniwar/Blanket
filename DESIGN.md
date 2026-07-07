@@ -157,6 +157,32 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   using <the built-in default>` when empty. These fields are **additive** — blank
   means the base behavior applies with nothing overlaid — so reverting is simply
   clearing the field; there is no separate default text to load.)*
+- **As the merchant**, I want to **edit the built-in defaults themselves** — the
+  brand/voice prompt and the client-book recording policy — not just overlay them,
+  so that I own the base behavior. *(The Voice card has a **"Base voice — brand &
+  personality prompt"** box and the Client-book card a **"Base policy — what to
+  record"** box, backed by new config keys `voice_base` / `clientbook_base` the
+  server reads with a fallback to the compiled-in default (`BRAND_SYSTEM` / an
+  inline prompt). **Load built-in to edit** fetches the current default via the
+  admin-only `?defaults=1` endpoint and fills the box to tweak; the tuning-notes /
+  policy-notes boxes remain as quick overrides layered on top. The voice base
+  guards the `{{KB}}` marker so an edit that drops it still appends the knowledge
+  base. Selling angles/objections have no hidden default text — their base is the
+  salescraft inside the voice base + SOPs — so they stay plain editable lists.)*
+- **As the merchant**, editing a base prompt is high-impact, so I want **version
+  history and one-click rollback** on anything I can change. *(Append-only
+  `concierge_edit_history`, written by a security-definer trigger on
+  `concierge_config`, `concierge_sops`, and `concierge_kb` that snapshots a row
+  after every real change and records the editing admin. A **"History ⟲"** link on
+  each versioned Tuning field — and on each SOP and Knowledge section — opens a
+  modal listing snapshots (time · editor · preview) with **Restore** (which
+  re-saves the chosen snapshot, itself recorded as a new version, so a rollback is
+  itself undoable).)*
+- **As the merchant**, I want the Tuning page to be **navigable, not an
+  11-card scroll**, so that I can find a setting fast. *(The cards are grouped into
+  five inner sub-tabs — **Voice & memory · Selling · Engagement · Engine & keys ·
+  Edition & access** — reusing the drawer-tab pattern; `setTuningTab()` toggles the
+  active sub-panel and sizes its textareas.)*
 - **As the merchant**, I want to control how quickly and eagerly the concierge
   reaches out — the in-chat follow-up delays, the idle reach-out when the widget
   is closed, and whether it engages a visitor who hasn't scrolled — so that I can
