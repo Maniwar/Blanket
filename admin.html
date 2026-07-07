@@ -83,6 +83,20 @@
   .cfg-state .cfg-revert{ margin-left:10px; background:none; border:none; padding:0; cursor:pointer;
     font:inherit; color:var(--brass-soft); text-decoration:underline; text-underline-offset:2px; }
   .cfg-state .cfg-revert:hover{ color:var(--brass); }
+  /* Per-field action links (Load built-in · History) under a base/override box. */
+  .field-actions{ display:flex; gap:16px; margin-top:6px; flex-wrap:wrap; }
+  .cfg-linkbtn{ background:none; border:none; padding:0; cursor:pointer; font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.04em; color:var(--brass-soft); text-decoration:underline; text-underline-offset:2px; }
+  .cfg-linkbtn:hover{ color:var(--brass); }
+  /* Version-history modal rows. */
+  .hist-row{ border:1px solid var(--hairline-dim); border-radius:5px; padding:9px 11px; margin-bottom:8px; }
+  .hist-head{ display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+  .hist-head .hist-when{ color:var(--wool); font-family:'IBM Plex Mono', monospace; font-size:11.5px; }
+  .hist-head .hist-who{ color:var(--wool-faint); font-family:'IBM Plex Mono', monospace; font-size:10.5px; }
+  .hist-head .btn{ margin-left:auto; }
+  .hist-body{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--wool-dim);
+    white-space:pre-wrap; word-break:break-word; cursor:pointer; line-height:1.4; }
+  .hist-body.clamp{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 
   .btn{
     font-family:'IBM Plex Mono', monospace;
@@ -845,11 +859,27 @@
         <div class="field">
           <label class="micro" for="cfg-greeting">Greeting<span class="info-badge" title="The first line the concierge speaks when a chat opens. You can drop {{reply:…}} pills in here. Blank = the built-in opening line is used.">i</span></label>
           <textarea id="cfg-greeting" rows="3" placeholder="The first line the concierge speaks."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-greeting" data-default="greeting_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="greeting">History ⟲</button>
+          </div>
           <div class="cfg-state" id="cfg-greeting-state"></div>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-voice">Tuning notes<span class="info-badge" title="Appended to the system prompt to steer tone, emphasis, and do/don'ts. This ADDS to the built-in voice — it does not replace it. Blank = the built-in voice is used unchanged.">i</span></label>
-          <textarea id="cfg-voice" rows="5" placeholder="e.g. Never oversell. Speak of the wool with restraint."></textarea>
+          <label class="micro" for="cfg-voice-base">Base voice — the brand &amp; personality prompt<span class="info-badge" title="The default voice/brand system prompt the concierge runs on. Load the built-in to tweak it. High-impact — every reply changes; use History to roll back. Keep the {{KB}} marker (that's where the knowledge base is injected); if you remove it, the KB is appended at the end. Blank = the built-in brand voice.">i</span></label>
+          <textarea id="cfg-voice-base" rows="8" placeholder="Blank = the built-in brand voice. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-voice-base" data-default="voice_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="voice_base">History ⟲</button>
+          </div>
+          <div class="cfg-state" id="cfg-voice-base-state"></div>
+        </div>
+        <div class="field">
+          <label class="micro" for="cfg-voice">Tuning notes (quick override)<span class="info-badge" title="Appended AFTER the base voice to steer tone, emphasis, and do/don'ts without editing the whole prompt. Blank = base voice only.">i</span></label>
+          <textarea id="cfg-voice" rows="4" placeholder="e.g. Never oversell. Speak of the wool with restraint."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="voice_notes">History ⟲</button>
+          </div>
           <div class="cfg-state" id="cfg-voice-state"></div>
         </div>
         <div class="card-foot">
@@ -864,8 +894,20 @@
         </div>
         <p class="note" style="margin-bottom:16px;">Like a support agent's notes, the concierge keeps a typed client book it reads back when talking to a patron: <strong>events</strong> (what it did — cancellations, address/cloth changes; written automatically), <strong>facts</strong> (durable preferences), and <strong>reflections</strong> (private "serve them better next time" reminders). Tune what the end-of-conversation summarizer records here.</p>
         <div class="field">
-          <label class="micro" for="cfg-clientbook">Client-book policy<span class="info-badge" title="Extra rules layered on top of the built-in policy for what the end-of-conversation summarizer records and what it skips. Blank = the built-in policy only.">i</span></label>
+          <label class="micro" for="cfg-clientbook-base">Base policy — what to record<span class="info-badge" title="The default instruction the end-of-conversation summarizer follows for what to capture. Load the built-in to tweak it; roll back via History. Blank = the built-in instruction.">i</span></label>
+          <textarea id="cfg-clientbook-base" rows="6" placeholder="Blank = the built-in “what to record” instruction. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-clientbook-base" data-default="clientbook_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="clientbook_base">History ⟲</button>
+          </div>
+          <div class="cfg-state" id="cfg-clientbook-base-state"></div>
+        </div>
+        <div class="field">
+          <label class="micro" for="cfg-clientbook">Policy notes (quick override)<span class="info-badge" title="Extra rules layered on top of the base policy (inserted as “HOUSE POLICY (follow this above all)”). Blank = base policy only.">i</span></label>
           <textarea id="cfg-clientbook" rows="4" placeholder="e.g. Always note cancellations and address changes. Never re-record a preference already on file. Keep reflections to one concrete, actionable line."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="clientbook_policy">History ⟲</button>
+          </div>
           <div class="cfg-state" id="cfg-clientbook-state"></div>
         </div>
         <div class="grid-2">
@@ -999,15 +1041,21 @@
           <div class="micro" id="cfg-assert-label" style="color:var(--brass-soft);"></div>
         </div>
         <div class="field" style="margin-bottom:16px;">
-          <label class="micro" for="cfg-hooks">Selling angles<span class="info-badge" title="One per line — true, house-approved lines the concierge can weave in to build desire. Blank = the built-in selling angles.">i</span></label>
+          <label class="micro" for="cfg-hooks">Selling angles<span class="info-badge" title="One per line — true, house-approved lines the concierge can weave in to build desire. Blank = none of these; selling still runs on the base voice's salescraft. To change the default selling behavior, edit the Base voice or the SOPs.">i</span></label>
           <textarea id="cfg-hooks" rows="4" placeholder="Woven to order at four yards an hour — 15,000 a year, never more.
 About twelve dollars a year across the fifty it takes to be inherited."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="hooks">History ⟲</button>
+          </div>
           <div class="cfg-state" id="cfg-hooks-state"></div>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-objections">Objection playbook<span class="info-badge" title="One per line as “trigger | response” — the concierge meets the hesitation, then re-opens the door. Blank = the built-in objection playbook.">i</span></label>
+          <label class="micro" for="cfg-objections">Objection playbook<span class="info-badge" title="One per line as “trigger | response” — the concierge meets the hesitation, then re-opens the door. Blank = none of these; the base voice still handles hesitations. To change the default, edit the Base voice or the SOPs.">i</span></label>
           <textarea id="cfg-objections" rows="4" placeholder="price | About twelve dollars a year, and mended for life — the cost is the last time you buy one.
 care | Wool self-cleans; airing handles most days. Wash it less than you think."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="objections">History ⟲</button>
+          </div>
           <div class="cfg-state" id="cfg-objections-state"></div>
         </div>
         <div class="card-foot">
@@ -1728,6 +1776,13 @@ function wireStatic() {
   $('save-clientbook').addEventListener('click', function () {
     withBusy($('save-clientbook'), saveClientbook);
   });
+  // "Load built-in to edit" + "History ⟲" links on the base/override config fields.
+  document.querySelectorAll('.cfg-loaddefault').forEach(function (b) {
+    b.addEventListener('click', function () { loadBuiltinInto(b.dataset.target, b.dataset.default); });
+  });
+  document.querySelectorAll('.cfg-history').forEach(function (b) {
+    b.addEventListener('click', function () { openConfigHistory(b.dataset.ref); });
+  });
   $('save-starters').addEventListener('click', function () {
     withBusy($('save-starters'), saveStarters);
   });
@@ -1908,11 +1963,17 @@ const CFG_FIELDS = [
   { id: 'cfg-greeting', state: 'cfg-greeting-state',
     dflt: 'the built-in opening line',
     custom: function () { return 'a custom greeting'; } },
+  { id: 'cfg-voice-base', state: 'cfg-voice-base-state',
+    dflt: 'the built-in brand voice prompt',
+    custom: function (v) { return 'custom base voice — ' + v.length + ' chars (replaces the built-in prompt)'; } },
   { id: 'cfg-voice', state: 'cfg-voice-state',
-    dflt: 'the built-in voice, unchanged (nothing appended)',
+    dflt: 'the base voice, unchanged (nothing appended)',
     custom: function (v) { return 'custom tuning notes — ' + v.length + ' chars appended to the base voice'; } },
+  { id: 'cfg-clientbook-base', state: 'cfg-clientbook-base-state',
+    dflt: 'the built-in “what to record” instruction',
+    custom: function (v) { return 'custom base policy — ' + v.length + ' chars (replaces the built-in)'; } },
   { id: 'cfg-clientbook', state: 'cfg-clientbook-state',
-    dflt: 'the built-in client-book policy',
+    dflt: 'the base policy, unchanged (nothing added)',
     custom: function (v) { return 'custom rules — ' + v.length + ' chars added on top'; } },
   { id: 'cfg-model', state: 'cfg-model-state',
     dflt: 'the fallback model, then a built-in default',
@@ -1952,6 +2013,108 @@ function refreshCfgState(f) {
 }
 function refreshAllCfgStates() { CFG_FIELDS.forEach(refreshCfgState); }
 
+/* Built-in base texts (?defaults=1, admin-gated) — fetched once and cached so
+   "Load built-in to edit" can fill a base box with the current default. */
+let _builtinDefaults = null;
+async function fetchBuiltinDefaults() {
+  if (_builtinDefaults) return _builtinDefaults;
+  const token = state.session && state.session.access_token;
+  const res = await fetch(SUPABASE_URL + '/functions/v1/concierge?defaults=1', {
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) }
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  _builtinDefaults = await res.json();
+  return _builtinDefaults;
+}
+async function loadBuiltinInto(targetId, key) {
+  const inp = $(targetId);
+  if (!inp) return;
+  try {
+    const d = await fetchBuiltinDefaults();
+    inp.value = (d && typeof d[key] === 'string') ? d[key] : '';
+    try { autoGrow(inp); } catch (e) { /* ignore */ }
+    const f = CFG_FIELDS.find(function (x) { return x.id === targetId; });
+    if (f) refreshCfgState(f);
+    toast('Loaded the built-in default — edit, then Save to apply');
+  } catch (e) { fail('Load built-in', e); }
+}
+
+/* Version-history modal for an edit-tracked row (concierge_edit_history). Lists
+   snapshots newest-first with a Restore action. `opts.describe(snapshot)` renders
+   a preview; `opts.restore(snapshot)` persists it and returns true on success. */
+async function historyModal(entity, ref, opts) {
+  opts = opts || {};
+  const r = await sb.from('concierge_edit_history')
+    .select('id, snapshot, edited_by, created_at')
+    .eq('entity', entity).eq('ref', ref)
+    .order('created_at', { ascending: false }).limit(50);
+  if (r.error) { fail('Load history', r.error); return; }
+  const rows = r.data || [];
+
+  const bd = el('div');
+  bd.style.cssText = 'position:fixed; inset:0; z-index:60; background:rgba(12,16,13,.62); display:flex; align-items:center; justify-content:center; padding:20px;';
+  const box = el('div');
+  box.style.cssText = 'background:var(--loden-deep,#1c261f); border:1px solid var(--hairline); border-radius:6px; padding:22px; width:min(680px,96vw); max-height:88vh; overflow:auto; box-shadow:0 24px 60px rgba(0,0,0,.5);';
+  box.appendChild(el('div', 'micro', opts.title || ('Version history — ' + entity + ' · ' + ref)));
+
+  if (!rows.length) {
+    box.appendChild(el('div', 'empty micro', 'No saved versions yet — history begins at the next save.'));
+  } else {
+    const list = el('div'); list.style.cssText = 'margin:12px 0;';
+    rows.forEach(function (row, i) {
+      const item = el('div', 'hist-row');
+      const head = el('div', 'hist-head');
+      head.appendChild(el('span', 'hist-when', fmtWhen(row.created_at) + (i === 0 ? '  · current' : '')));
+      head.appendChild(el('span', 'hist-who', row.edited_by || ''));
+      const rest = el('button', 'btn ghost mini', i === 0 ? 'Current' : 'Restore'); rest.type = 'button';
+      if (i === 0) rest.disabled = true;
+      else rest.addEventListener('click', function () {
+        if (!window.confirm('Restore this version? The current value is saved in history, so you can undo.')) return;
+        withBusy(rest, async function () {
+          const ok = await opts.restore(row.snapshot);
+          if (ok) { toast('Restored'); bd.remove(); }
+        });
+      });
+      head.appendChild(rest);
+      item.appendChild(head);
+      const body = el('div', 'hist-body clamp', (opts.describe ? opts.describe(row.snapshot) : String(row.snapshot)));
+      body.title = 'Click to expand / collapse';
+      body.addEventListener('click', function () { body.classList.toggle('clamp'); });
+      item.appendChild(body);
+      list.appendChild(item);
+    });
+    box.appendChild(list);
+  }
+  const close = el('button', 'btn ghost', 'Close'); close.type = 'button';
+  close.addEventListener('click', function () { bd.remove(); });
+  box.appendChild(close);
+  bd.appendChild(box); document.body.appendChild(bd);
+  bd.addEventListener('click', function (e) { if (e.target === bd) bd.remove(); });
+}
+
+/* Human-readable preview of a config snapshot (string values, or arrays like
+   hooks/objections). */
+function describeConfigSnapshot(snap) {
+  if (snap == null) return '(empty)';
+  if (typeof snap === 'string') return snap || '(blank — built-in default)';
+  try { return JSON.stringify(snap, null, 2); } catch (e) { return String(snap); }
+}
+
+/* Open history for a concierge_config key; Restore upserts the snapshot back
+   (which records a new version) and reloads the Tuning fields. */
+function openConfigHistory(ref) {
+  historyModal('config', ref, {
+    title: 'Version history — ' + ref,
+    describe: describeConfigSnapshot,
+    restore: async function (snap) {
+      const res = await sb.from('concierge_config').upsert([{ key: ref, value: snap, updated_at: nowIso() }], { onConflict: 'key' });
+      if (res.error) { fail('Restore', res.error); return false; }
+      await loadConfig();
+      return true;
+    }
+  });
+}
+
 async function loadConfig() {
   const res = await sb.from('concierge_config').select('key,value');
   if (res.error) { fail('Load config', res.error); return; }
@@ -1966,8 +2129,10 @@ async function loadConfig() {
   $('cfg-model-fallback').value = (typeof cfg.model_fallback === 'string') ? cfg.model_fallback : '';
   $('cfg-max-tokens').value = (typeof cfg.max_tokens === 'number') ? cfg.max_tokens : '';
   $('cfg-greeting').value = (typeof cfg.greeting === 'string') ? cfg.greeting : '';
+  if ($('cfg-voice-base')) $('cfg-voice-base').value = (typeof cfg.voice_base === 'string') ? cfg.voice_base : '';
   $('cfg-voice').value = (typeof cfg.voice_notes === 'string') ? cfg.voice_notes : '';
   if ($('cfg-clientbook')) {
+    if ($('cfg-clientbook-base')) $('cfg-clientbook-base').value = (typeof cfg.clientbook_base === 'string') ? cfg.clientbook_base : '';
     $('cfg-clientbook').value = (typeof cfg.clientbook_policy === 'string') ? cfg.clientbook_policy : '';
     $('cfg-cb-actions').checked = cfg.clientbook_log_actions !== false;
     $('cfg-cb-reflect').checked = cfg.clientbook_reflect !== false;
@@ -2577,8 +2742,9 @@ async function saveEngine() {
 
 async function saveVoice() {
   const rows = [
-    { key: 'greeting',    value: $('cfg-greeting').value, updated_at: nowIso() },
-    { key: 'voice_notes', value: $('cfg-voice').value,    updated_at: nowIso() }
+    { key: 'greeting',    value: $('cfg-greeting').value,           updated_at: nowIso() },
+    { key: 'voice_base',  value: $('cfg-voice-base').value,         updated_at: nowIso() },
+    { key: 'voice_notes', value: $('cfg-voice').value,              updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save voice', res.error); return; }
@@ -2587,6 +2753,7 @@ async function saveVoice() {
 
 async function saveClientbook() {
   const rows = [
+    { key: 'clientbook_base',        value: $('cfg-clientbook-base').value,   updated_at: nowIso() },
     { key: 'clientbook_policy',      value: $('cfg-clientbook').value.trim(), updated_at: nowIso() },
     { key: 'clientbook_log_actions', value: $('cfg-cb-actions').checked,      updated_at: nowIso() },
     { key: 'clientbook_reflect',     value: $('cfg-cb-reflect').checked,      updated_at: nowIso() }
@@ -2641,6 +2808,35 @@ async function loadSections(spec) {
   if (res.error) { fail('Load ' + spec.noun + 's', res.error); return; }
   state[spec.stateKey] = res.data || [];
   renderSections(spec);
+}
+
+/* Version history + rollback for one SOP / KB section (concierge_edit_history). */
+function openContentHistory(spec, row) {
+  const entity = spec.table === 'concierge_sops' ? 'sop' : 'kb';
+  const ref = row.slug;
+  if (!ref) { toast('Save the ' + spec.noun + ' first — history starts at the first save', true); return; }
+  historyModal(entity, ref, {
+    title: 'Version history — ' + spec.noun + ' · ' + ref,
+    describe: function (snap) {
+      if (snap && typeof snap === 'object') {
+        return (snap.title ? snap.title + '\n\n' : '') + (snap.content_md || '') +
+          (snap.enabled === false ? '\n\n(disabled)' : '');
+      }
+      return String(snap);
+    },
+    restore: async function (snap) {
+      const patch = {
+        title: (snap && snap.title) || row.title || '',
+        content_md: (snap && typeof snap.content_md === 'string') ? snap.content_md : '',
+        enabled: (snap && typeof snap.enabled === 'boolean') ? snap.enabled : true,
+        updated_at: nowIso()
+      };
+      const res = await sb.from(spec.table).update(patch).eq('slug', ref);
+      if (res.error) { fail('Restore', res.error); return false; }
+      await loadSections(spec);
+      return true;
+    }
+  });
 }
 
 function renderSections(spec) {
@@ -2725,6 +2921,12 @@ function kbEditor(row, spec) {
   const btnDel = el('button', 'btn danger', 'Delete');
   const btnSave = el('button', 'btn primary', 'Save');
   actions.appendChild(btnDel);
+  if (row.id && row.slug) {
+    const btnHist = el('button', 'btn ghost', 'History ⟲'); btnHist.type = 'button';
+    btnHist.title = 'View and roll back past versions of this ' + spec.noun;
+    btnHist.addEventListener('click', function () { openContentHistory(spec, row); });
+    actions.appendChild(btnHist);
+  }
   actions.appendChild(btnSave);
   wrap.appendChild(actions);
 
