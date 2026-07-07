@@ -19,6 +19,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Type-check the edge functions BEFORE anything else. `supabase functions
+      # deploy` bundles but does not fully validate, so a boot-breaking error
+      # (e.g. a redeclared variable) could otherwise ship green and 503 at
+      # runtime. `deno check` catches syntax/redeclaration/reference errors.
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check edge functions
+        run: |
+          deno check supabase/functions/concierge/index.ts
+          deno check supabase/functions/commission/index.ts
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
