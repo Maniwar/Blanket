@@ -1087,7 +1087,16 @@ acted on even when the patron never types.
 per-conversation goal grader marks whether the concierge followed the team's
 instruction and resolved one-time ones. Because the grader can't see the system
 prompt, `evaluateGoals` hands it the patron's directive text so the goal is
-judgeable; if the patron had no directive, the goal is treated as met. And the
+judgeable. **When no directive existed for the patron** (an anonymous chat, or a
+signed-in one with none) the goal is **Not Applicable** — `evaluateGoals` *omits*
+it from `goal_status` entirely (rather than recording a misleading "met"), so it
+doesn't inflate metrics and the chat isn't falsely tagged. Its **presence** in
+`goal_status` therefore means a directive actually applied — which is exactly what
+the **House-note chats** filter keys on (union of `resolve_admin_note` actions and
+conversations whose `goal_status` contains `house-notes`, any status — an `unmet`
+there is a genuine miss worth surfacing). *(Reminder: directives are tied to a
+signed-in identity; an **anonymous** session — even from the same device — never
+loads the CUSTOMER block, so there is no instruction to act on or grade.)* And the
 Conversations list **tags** any chat where the concierge resolved a note with a
 `🏷 house note #N` chip (from the same `resolve_admin_note` audit action), so you
 can spot — and open — the chats that acted on notes and which note they relate to.

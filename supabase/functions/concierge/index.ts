@@ -1660,7 +1660,11 @@ async function evaluateGoals(
     const goalList = data.goals.map((g) => `${g.slug}: ${g.label} — ${g.description}`).join("\n");
     // If the patron had house instructions, hand the judge their text — it can't
     // see the system prompt, so without this the 'house-notes' goal is unjudgeable.
+    // `hadDirective` also gates whether we score the goal at all: with NO directive
+    // (an anonymous chat, or a signed-in patron who has none) the goal is Not
+    // Applicable — scoring it "met" would inflate metrics and falsely tag the chat.
     let houseBlock = "";
+    let hadDirective = false;
     try {
       const crow = await pgSelect<{ user_email: string | null; user_id: string | null }>(
         `concierge_conversations?select=user_email,user_id&id=eq.${cid}&limit=1`);
@@ -1674,6 +1678,7 @@ async function evaluateGoals(
           const dirs = await pgSelect<{ note: string; resolved: boolean }>(
             `customer_notes?select=note,resolved&or=${encodeURIComponent(`(${parts.join(",")})`)}&kind=eq.directive&order=created_at.desc&limit=8`);
           if (dirs && dirs.length) {
+            hadDirective = true;
             houseBlock = "\n\nHOUSE INSTRUCTIONS the team left for this patron (the concierge was told to follow " +
               "these, and to mark a one-time task resolved once carried out):\n" +
               dirs.map((d) => `- [${d.resolved ? "resolved" : "open"}] ${d.note}`).join("\n");
@@ -1731,6 +1736,12 @@ async function evaluateGoals(
       const st = v && ["met", "partial", "unmet"].includes(String(v.status)) ? String(v.status) : "unmet";
       clean[g.slug] = { status: st, note: (v && typeof v.note === "string") ? v.note.slice(0, 160) : "" };
     }
+    // House-notes is Not Applicable when no directive existed for this patron
+    // (anonymous chats, or signed-in with none). OMIT it rather than record a
+    // misleading "met": the goal chip then shows "n/a", metrics don't count it,
+    // and the house-note-chats filter (which keys on this goal's PRESENCE) won't
+    // falsely include the chat. Its presence in goal_status ⟺ a directive existed.
+    if (!hadDirective) delete clean["house-notes"];
     const STAGES = ["browsing", "engaged", "evaluating", "objection", "ready", "won", "lost"];
     const stageRaw = String(parsed._stage ?? "").toLowerCase().trim();
     const stage = STAGES.includes(stageRaw) ? stageRaw : null;

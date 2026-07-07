@@ -5459,10 +5459,12 @@ async function loadConversations(more) {
     }
   }
 
-  // House-note chats — chats the concierge ACTED on a directive in, whether or not
-  // it formally resolved it. Two signals, unioned: a resolve_admin_note audit
-  // action (resolved), and the house-notes GOAL graded met/partial (acted). This
-  // is why the goal exists — it's the only signal for "addressed but not resolved".
+  // House-note chats — chats where a real directive was involved. Two signals,
+  // unioned: a resolve_admin_note audit action (bot resolved one), and the
+  // house-notes GOAL being PRESENT in goal_status. The grader now omits that goal
+  // entirely when no directive existed (anonymous / no-directive chats), so its
+  // presence alone means a directive applied — regardless of met/partial/unmet
+  // (an 'unmet' here is a genuine miss worth seeing, not a false positive).
   const houseOnly = $('convo-house') && $('convo-house').checked;
   let houseIds = null;
   if (houseOnly) {
@@ -5473,8 +5475,7 @@ async function loadConversations(more) {
     const gr = await sb.from('concierge_conversations').select('id,goal_status')
       .not('goal_status', 'is', null).order('created_at', { ascending: false }).limit(3000);
     if (!gr.error) (gr.data || []).forEach(function (r) {
-      const s = r.goal_status && r.goal_status['house-notes'] && r.goal_status['house-notes'].status;
-      if (s === 'met' || s === 'partial') acted.add(r.id);
+      if (r.goal_status && r.goal_status['house-notes']) acted.add(r.id);
     });
     houseIds = [...acted];
   }
