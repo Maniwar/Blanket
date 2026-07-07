@@ -928,19 +928,39 @@
     saveDraft();
     showAct(2, 0);
   }
+  /* Billing options = prior billing addresses + the patron's own (non-gift)
+     shipping addresses, deduped. So "bill to my home" is one pick even if they've
+     never entered a separate billing address (gift recipients are excluded — you
+     don't bill to the person you're gifting). */
+  function billingOptions() {
+    var seen = {}, out = [];
+    function add(a, origin) {
+      if (!a || !a.address || !a.city) { return; }
+      var k = [a.address, a.city, a.zip].join('|').toLowerCase();
+      if (seen[k]) { return; } seen[k] = 1;
+      out.push({ key: a.key || k, origin: origin, address: a.address, address2: a.address2 || '',
+        city: a.city, state: a.state || '', zip: a.zip || '' });
+    }
+    patronBillingAddresses.forEach(function (a) { add(a, 'billing'); });
+    patronAddresses.forEach(function (a) { if (!a.is_gift) { add(a, 'home'); } });
+    return out;
+  }
+  function billOptionLabel(a) {
+    return (a.origin === 'home' ? 'Home — ' : 'Billed before — ') + addrSummary(a);
+  }
   function buildBillingBook() {
-    if (!patronBillingAddresses.length) { return null; }
+    var opts = billingOptions();
+    if (!opts.length) { return null; }
     var wrap = el('div', 'ck-book'); wrap.style.marginTop = '.4rem';
     wrap.appendChild(el('div', 'ck-book-lbl', 'Use a saved billing address'));
     var sel = document.createElement('select');
     sel.className = 'ck-select';
     var i, cur = -1;
-    for (i = 0; i < patronBillingAddresses.length; i++) {
-      var a = patronBillingAddresses[i];
+    for (i = 0; i < opts.length; i++) {
       var op = document.createElement('option');
-      op.value = String(i); op.textContent = addrSummary(a);
+      op.value = String(i); op.textContent = billOptionLabel(opts[i]);
       sel.appendChild(op);
-      if (pickedBillKey === a.key) { cur = i; }
+      if (pickedBillKey === opts[i].key) { cur = i; }
     }
     var opNew = document.createElement('option');
     opNew.value = 'new'; opNew.textContent = '＋ Enter a new billing address';
@@ -948,7 +968,7 @@
     sel.value = (pickedBillKey === 'new') ? 'new' : (cur >= 0 ? String(cur) : 'new');
     sel.addEventListener('change', function () {
       if (sel.value === 'new') { applyBillingAddress(null); }
-      else { applyBillingAddress(patronBillingAddresses[parseInt(sel.value, 10)]); }
+      else { applyBillingAddress(opts[parseInt(sel.value, 10)]); }
     });
     wrap.appendChild(sel);
     return wrap;

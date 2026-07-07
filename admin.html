@@ -4079,27 +4079,41 @@ function openOrderDrawer(o) {
     dw.appendChild(es);
   }
 
-  // Saved addresses — the patron's distinct SHIPPING and BILLING addresses,
-  // derived from their order history (there is no address table; both are
-  // projections of the orders' address fields + billing jsonb). Grouped and
-  // tagged so it's always clear which is which.
-  const shipAddrs = deriveAddressesFromOrders((c && c.orders) || []);
-  const billAddrs = deriveBillingFromOrders((c && c.orders) || []);
-  if (shipAddrs.length || billAddrs.length) {
-    const ads = drawerSection('Saved addresses');
-    if (shipAddrs.length) {
-      const h = el('div', 'micro', 'Shipping'); h.style.marginBottom = '2px';
-      ads.appendChild(h);
-      shipAddrs.forEach(function (a) {
-        ads.appendChild(savedAddrRow(
-          a.is_gift ? ('ship · gift → ' + (a.recipient_name || 'recipient')) : 'ship · home',
-          a.is_gift ? '#8a6d3b' : '#3b6a7a', a));
-      });
-    }
-    if (billAddrs.length) {
-      const h = el('div', 'micro', 'Billing'); h.style.cssText = 'margin:10px 0 2px;';
-      ads.appendChild(h);
-      billAddrs.forEach(function (a) { ads.appendChild(savedAddrRow('bill', '#5a6b7a', a)); });
+  // Addresses by order — the honest pairing. Each order carries ONE shipping
+  // address and, when it differed, ONE billing address; there is no global
+  // billing↔shipping link, so we show them together, per order. (Both are
+  // projections of the order row — there is no address table.) Newest first.
+  const ordersForAddr = (c && c.orders) || [];
+  if (ordersForAddr.length) {
+    const ads = drawerSection('Addresses by order');
+    ads.appendChild(el('div', 'micro',
+      'Each order has one shipping address, and one billing address when it differed from shipping.'));
+    const CAP = 15;
+    ordersForAddr.slice(0, CAP).forEach(function (o2) {
+      const isThis = orderKey(o2) === orderKey(o);
+      const grp = el('div'); grp.style.cssText = 'padding:9px 0 3px; border-top:1px solid var(--hairline-dim);';
+      const head = el('div', 'micro');
+      if (isThis) head.style.color = 'var(--brass-soft)';
+      head.textContent = 'Nº ' + orderNo(o2).toLocaleString('en-US') + ' · ' + (o2.colorway || '—') +
+        (o2.is_gift && o2.recipient_name ? ' · gift → ' + o2.recipient_name : '') +
+        ' · ' + fmtWhen(o2.placed_at) + (isThis ? '  · this order' : '');
+      grp.appendChild(head);
+      grp.appendChild(savedAddrRow(o2.is_gift ? 'ship · gift' : 'ship', '#3b6a7a', o2));
+      if (o2.billing && o2.billing.address) {
+        grp.appendChild(savedAddrRow('bill', '#5a6b7a', o2.billing));
+      } else {
+        const same = el('div', 'cust-order');
+        const tag = el('span', null, 'bill');
+        tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:#4a4a4a;';
+        same.appendChild(tag);
+        const t = el('span', 'micro', 'same as shipping'); t.style.cssText = 'flex:1 1 200px; opacity:.7;';
+        same.appendChild(t);
+        grp.appendChild(same);
+      }
+      ads.appendChild(grp);
+    });
+    if (ordersForAddr.length > CAP) {
+      ads.appendChild(el('div', 'micro', '+ ' + (ordersForAddr.length - CAP) + ' older orders not shown'));
     }
     dw.appendChild(ads);
   }
