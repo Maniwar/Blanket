@@ -311,7 +311,7 @@ post-purchase behavior. **Written by:** admin (Procedures tab). **Read by:**
 | `id` | bigint identity PK | Row id. |
 | `conversation_id` | uuid → conversations | Where it happened. |
 | `user_id`,`email` | — | Who. |
-| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …). |
+| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resolve_admin_note`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …). |
 | `serial` | int | Affected order, if any. |
 | `payload` | jsonb | The tool input. |
 | `result` | text | Outcome summary. |
@@ -374,18 +374,28 @@ widget), `handleFormPost` (`POST ?form=1`).
 | --- | --- | --- |
 | `id` | bigint identity PK | Row id. |
 | `user_id`,`email` | — | The patron. |
-| `note` | text | One durable observation (≤240 chars). |
-| `kind` | text | Note type — **`event`** (something the concierge did — written deterministically by `bookEvent`), **`fact`** (a durable preference), or **`reflection`** (private "serve better next time"). Default `fact`. |
+| `note` | text | One durable observation (≤240 chars; directives ≤400). |
+| `kind` | text | Note type — **`event`** (something the concierge did — written deterministically by `bookEvent`), **`fact`** (a durable preference), **`reflection`** (private "serve better next time"), or **`directive`** (a HUMAN admin's standing instruction the concierge must follow — see DESIGN §4.13). Default `fact`. |
+| `resolved` | boolean | Directives only: a one-time instruction that's been carried out is `true`. Standing ones stay `false`. Default `false`. |
+| `resolved_at` | timestamptz | When a directive was checked off. |
+| `author` | text | Directives only: the admin email who left it. |
 | `created_at` | timestamptz | When learned. |
 
 Typed clienteling memory the concierge **reads back to talk to the patron** (see
 DESIGN §4.10). **Written by:** `bookEvent` (guaranteed `event` note on every
-mutating action, via `logAction`), the `remember_customer` tool (`fact`), and the
+mutating action, via `logAction`), the `remember_customer` tool (`fact`), the
 end-of-conversation summarizer `writeClientBookNote` (`fact` + `reflection`, both
-deduped). **Read by:** `customerBlock` and the `recall_context` tool — **grouped
-by kind** (did-for-them / know-about-them / serve-better) into the prompt — and
-the admin Orders & Customers tab (client book with a per-note kind tag). Governed by the
-`clientbook_policy` / `clientbook_log_actions` / `clientbook_reflect` config keys.
+deduped), and the **admin** (`directive`, from the Orders & Customers tab).
+**Read by:** `customerBlock` and the `recall_context` tool — **grouped by kind**
+(house-instructions / did-for-them / know-about-them / serve-better) into the
+prompt — and the admin Orders & Customers tab (client book with a per-note kind
+tag, plus Resolve/Reopen on directives). Open **directives** are queried
+separately (unbounded by the 14-note window) and printed first in the CUSTOMER
+block, which is rebuilt per turn in the **uncached** prompt tail — so an
+instruction is picked up on the patron's next message, mid-session. The concierge
+checks a one-time directive off with the `resolve_admin_note` tool (ownership-
+scoped). Governed by the `clientbook_policy` / `clientbook_log_actions` /
+`clientbook_reflect` config keys.
 
 ### `order_events` — full order audit trail
 | Column | Type | Purpose |

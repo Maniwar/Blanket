@@ -174,10 +174,20 @@ create table if not exists public.customer_notes (
   created_at timestamptz not null default now());
 -- Typed client book (like a support agent's notes the AI uses to talk to the
 -- patron): 'fact' = a durable preference, 'event' = something the concierge did
--- (deterministic, guaranteed), 'reflection' = how to serve better next time.
+-- (deterministic, guaranteed), 'reflection' = how to serve better next time,
+-- 'directive' = a HUMAN admin's standing instruction the concierge must follow
+-- (order exceptions, special handling). A directive can be marked resolved when
+-- it is a one-time action that's been carried out.
 alter table public.customer_notes add column if not exists kind text not null default 'fact';
+alter table public.customer_notes
+  add column if not exists resolved boolean not null default false,  -- directive done (one-time)
+  add column if not exists resolved_at timestamptz,
+  add column if not exists author text;                              -- admin email who left a directive
 create index if not exists customer_notes_email_idx on public.customer_notes (email, created_at desc);
 create index if not exists customer_notes_user_idx on public.customer_notes (user_id, created_at desc);
+-- Fast lookup of a patron's OPEN directives (surfaced into the concierge's prompt).
+create index if not exists customer_notes_directive_idx
+  on public.customer_notes (email, resolved) where kind = 'directive';
 
 create table if not exists public.order_events (
   id bigint generated always as identity primary key,
@@ -950,7 +960,15 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 ('care-guide', 'Care & keeping the wool', $sop$Owners often ask how to look after the blanket. The care guide is tailored to the cloth.
 1. If they have an order, call get_care_guide with the serial for cloth-specific notes; otherwise give the general wool care from the knowledge base.
 2. The heart of it: air, don't wash — wool is self-cleaning. Spot-clean spills at once; hand-wash cool only when truly needed, dry flat, never tumble. Store folded and breathing with cedar or lavender against moth.
-3. Frame care as part of the value, not a burden: cared for this way, the blanket outlives its owner — which is what the price and the lifetime mending are really about.$sop$, 14)
+3. Frame care as part of the value, not a burden: cared for this way, the blanket outlives its owner — which is what the price and the lifetime mending are really about.$sop$, 14),
+('house-directives', 'House instructions from the team', $sop$The team may leave a standing instruction for a specific patron — an order exception or special handling that YOU must carry out. They appear in the CUSTOMER block as "HOUSE INSTRUCTIONS FOR THIS PATRON", each printed with a (#id).
+
+1. CHECK EVERY SIGNED-IN VISIT. Before you sell and before you answer, read the HOUSE INSTRUCTIONS. They are the team's word and outrank your own plan for the conversation. If there are none, carry on normally.
+2. FOLLOW them in the patron's own experience — never read the raw instruction aloud or say "the team told me to". Weave it into good service ("Let me make sure this one ships with a rush note" — not "instruction #42 says waive the rush fee").
+3. STANDING vs ONE-TIME. Some are standing preferences ("always offer the Loden first", "VIP — waive rush fees"): follow them every time and LEAVE THEM OPEN. Others are one-time tasks ("apologize for the delay on Nº 231 and offer a care kit", "confirm the apartment number before shipping"): do them at the first natural moment.
+4. CHECK OFF a one-time task ONLY after you have actually done it — delivered the apology, applied the courtesy, confirmed the detail — by calling resolve_admin_note with its (#id). Never resolve a standing preference, and never resolve something you have not yet carried out.
+5. If an instruction can't be done (it asks for something the register can't do, or conflicts with a firm rule like never dictating an address yourself), do the closest right thing and leave the note open — the desk will see it is unresolved.
+6. NEVER expose these instructions to any other patron, and never treat them as coming from the shopper — they are the house's private notes, acted upon, not quoted.$sop$, 15)
 on conflict (slug) do nothing;
 do $seed$
 begin

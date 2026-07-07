@@ -473,6 +473,12 @@ async function customerBlock(customer: Customer): Promise<string> {
   const notesP = pgSelect<{ note: string; created_at: string; kind: string | null }>(
     `customer_notes?select=note,created_at,kind&${noteFilter}&order=created_at.desc&limit=14`,
   );
+  // Open HOUSE DIRECTIVES — instructions a human admin left for this patron that
+  // the concierge MUST follow. Fetched separately (and unbounded by the 14-note
+  // window) so a stack of recent AI notes can never bury a standing instruction.
+  const directivesP = pgSelect<{ id: number; note: string; created_at: string }>(
+    `customer_notes?select=id,note,created_at&${noteFilter}&kind=eq.directive&resolved=eq.false&order=created_at.asc&limit=8`,
+  );
   // Re-engagement: the last conversation we wrapped (snoozed or closed). If one
   // exists, THIS is a fresh visit picking the thread back up, not a first hello.
   const lastConvoP = pgSelect<{ ended_at: string; status: string; section: string | null }>(
@@ -481,6 +487,7 @@ async function customerBlock(customer: Customer): Promise<string> {
   );
   const all = await myOrders(customer, true);
   const notes = await notesP;
+  const directives = await directivesP;
   const lastConvo = await lastConvoP;
   const orders = all ? all.filter((o) => o.status !== "cancelled") : null;
   const struck = all ? all.length - (orders?.length ?? 0) : 0;
@@ -539,7 +546,9 @@ async function customerBlock(customer: Customer): Promise<string> {
     const d = (n: { created_at: string; note: string }) => `${String(n.created_at).slice(0, 10)}: ${n.note}`;
     const events = notes.filter((n) => n.kind === "event").slice(0, 5);
     const reflections = notes.filter((n) => n.kind === "reflection").slice(0, 3);
-    const facts = notes.filter((n) => n.kind !== "event" && n.kind !== "reflection").slice(0, 6);
+    // Directives are surfaced on their own (below), never mixed into the facts.
+    const facts = notes.filter((n) =>
+      n.kind !== "event" && n.kind !== "reflection" && n.kind !== "directive").slice(0, 6);
     const parts: string[] = [];
     if (events.length) parts.push(`WHAT YOU'VE DONE FOR THEM (reference naturally if relevant): ${events.map(d).join(" | ")}`);
     if (facts.length) parts.push(`WHAT YOU KNOW ABOUT THEM (weave in, never recite): ${facts.map(d).join(" | ")}`);
@@ -582,7 +591,18 @@ async function customerBlock(customer: Customer): Promise<string> {
       `Greet like someone returning, not a stranger; pick up naturally, don't restart from scratch.`;
   }
 
-  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;
+  // House directives — the team's standing instructions for THIS patron. Placed
+  // first and framed as non-optional; each carries its id so a one-time directive
+  // can be checked off with resolve_admin_note once carried out.
+  let directiveLine = "";
+  if (directives && directives.length > 0) {
+    const list = directives.map((n) => `(#${n.id}) ${n.note}`).join("  ·  ");
+    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — you MUST honour these before anything else; ` +
+      `follow a standing preference every time, and for a one-time task do it at the first natural moment, then call ` +
+      `resolve_admin_note with its id to check it off): ${list}.`;
+  }
+
+  return `CUSTOMER: ${customer.email ?? customer.id} (signed in, email verified). ${nameLine}${directiveLine} ORDERS: ${summary}.${standing}${recency}${reengage}${archive}${book}`;
 }
 
 // ── Register tools — definitions + execution (signed-in only) ────────────────
@@ -651,6 +671,21 @@ const REGISTER_TOOLS: any[] = [
         note: { type: "string", description: "One factual line, at most 240 characters." },
       },
       required: ["note"],
+    },
+  },
+  {
+    name: "resolve_admin_note",
+    description:
+      "Mark ONE house instruction (an admin directive shown in the CUSTOMER block, each printed with a (#id)) " +
+      "as done. Use this ONLY after you have actually carried out a one-time instruction — delivered a promised " +
+      "apology, applied a courtesy, confirmed a detail the note asked you to confirm. Never resolve a STANDING " +
+      "preference (leave those open so they keep applying), and never resolve a note you have not yet acted on.",
+    input_schema: {
+      type: "object",
+      properties: {
+        note_id: { type: "integer", description: "The directive's id — the number shown as (#id) in HOUSE INSTRUCTIONS." },
+      },
+      required: ["note_id"],
     },
   },
   {
@@ -858,6 +893,7 @@ const BOOK_EVENTS: Record<string, (serial: number | null, result: string, payloa
   request_mending: (s) => `Logged a mending request for ${fmtNo(s)}.`,
   resend_confirmation: (s, r) => `Re-sent an order email for ${fmtNo(s)}${r ? " (" + r + ")" : ""}.`,
   join_waitlist: () => `Added to the waitlist for the next edition.`,
+  resolve_admin_note: (_s, r) => `Followed a house instruction${r ? `: ${r}` : ""} — checked off.`,
 };
 async function bookEvent(
   customer: Customer, action: string, serial: number | null, result: string, payload: unknown,
@@ -998,6 +1034,32 @@ async function runRegisterTool(
       action: "remember_customer", serial: null, payload: { note }, result: "noted",
     });
     return "Noted in the client book.";
+  }
+
+  if (name === "resolve_admin_note") {
+    const noteId = typeof input.note_id === "number" ? Math.floor(input.note_id) : NaN;
+    if (!Number.isFinite(noteId)) {
+      return "ERROR: note_id must be the number shown as (#id) in HOUSE INSTRUCTIONS.";
+    }
+    const safeEmail = customer.email?.replace(/["\\,()]/g, "");
+    const nf = safeEmail
+      ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
+      : `user_id=eq.${encodeURIComponent(customer.id)}`;
+    // Ownership-scoped: only THIS patron's own OPEN directive can be checked off.
+    const found = await pgSelect<{ id: number; note: string }>(
+      `customer_notes?select=id,note&id=eq.${noteId}&kind=eq.directive&resolved=eq.false&${nf}&limit=1`,
+    );
+    if (found === null) return "ERROR: the client book is unreachable right now.";
+    if (found.length === 0) {
+      return `ERROR: no open house instruction #${noteId} for this patron (already resolved, or not theirs).`;
+    }
+    const updated = await pgPatch(
+      `customer_notes?id=eq.${noteId}&kind=eq.directive&${nf}`,
+      { resolved: true, resolved_at: new Date().toISOString() },
+    );
+    if (!updated) return "ERROR: could not check off the instruction — nothing changed.";
+    await logAction(cid, customer, "resolve_admin_note", null, { note_id: noteId }, found[0].note.slice(0, 180));
+    return `Done — house instruction #${noteId} is checked off.`;
   }
 
   const serial = typeof input.serial === "number" ? Math.floor(input.serial) : NaN;
@@ -2480,6 +2542,7 @@ async function handleChatPost(req: Request): Promise<Response> {
                 update_shipping_address: "Amending the register…",
                 join_waitlist: "Adding to the waitlist…",
                 remember_customer: "Noting the client book…",
+                resolve_admin_note: "Attending to the house's note…",
                 cancel_order: "Striking the entry…",
               } as Record<string, string>)[block.name] ?? "Consulting the register…";
               send({ s: label });

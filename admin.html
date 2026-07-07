@@ -3712,7 +3712,7 @@ async function loadCustomers(more) {
   }
   let notesByKey = new Map();
   const nres = await sb.from('customer_notes')
-    .select('id,email,user_id,note,created_at,kind')
+    .select('id,email,user_id,note,created_at,kind,resolved,resolved_at,author')
     .order('created_at', { ascending: false })
     .limit(500);
   if (!nres.error) {
@@ -4079,33 +4079,78 @@ function openOrderDrawer(o) {
     dw.appendChild(es);
   }
 
-  // Client book — what the concierge has learned about this patron
-  const bs = drawerSection('Client book — what the concierge has learned');
+  // Saved addresses — the patron's distinct ship-to addresses (the admin mirror
+  // of the checkout address book), derived from their order history.
+  const addrs = deriveAddressesFromOrders((c && c.orders) || []);
+  if (addrs.length) {
+    const ads = drawerSection('Saved addresses (' + addrs.length + ')');
+    addrs.forEach(function (a) {
+      const row = el('div', 'cust-order');
+      const tag = el('span', null, a.label);
+      tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + (a.is_gift ? '#8a6d3b' : '#3b6a7a') + ';';
+      row.appendChild(tag);
+      const line = [a.address, a.address2, [a.city, a.state].filter(Boolean).join(', '), a.zip].filter(Boolean).join(' · ');
+      const t = el('span', null, line); t.style.flex = '1 1 220px';
+      row.appendChild(t);
+      ads.appendChild(row);
+    });
+    dw.appendChild(ads);
+  }
+
+  // Client book & house instructions — what the concierge has learned, and the
+  // standing instructions the team has left for it to follow.
+  const bs = drawerSection('Client book & house instructions');
   const notes = (c && c.notes) || [];
   if (!notes.length) {
     bs.appendChild(el('div', 'empty micro',
-      'Nothing recorded yet. The concierge notes what signed-in patrons share (a room, a favored cloth, a gift occasion), what it does for them, and how to serve them better next time.'));
+      'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time — and you can leave it a house instruction below.'));
   } else {
     notes.forEach(function (n) { bs.appendChild(clientBookNoteLine(n)); });
   }
+  bs.appendChild(directiveComposer(o.email, function () {
+    loadCustomers().then(function () { if (state.custDrawerKey === orderKey(o)) openOrderDrawer(o); });
+  }));
   dw.appendChild(bs);
 
   bd.classList.add('on');
   requestAnimationFrame(function () { dw.classList.add('on'); });
 }
 
-/* One line in the client book — a dated, kind-tagged note with a delete. Shared
-   by the order drawer and the Patrons view. */
+/* One line in the client book — a dated, kind-tagged note. The AI's own kinds
+   (fact/event/reflection) get a delete; a 'directive' (a human instruction the
+   concierge must follow) also gets a Resolve/Reopen toggle and shows its author
+   and open/resolved state. Shared by the order drawer and the Patrons view. */
 function clientBookNoteLine(n) {
   const line = el('div', 'cust-order');
   line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
-  const kind = (n.kind === 'event' || n.kind === 'reflection') ? n.kind : 'fact';
-  const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a' }[kind];
-  const tag = el('span', null, kind);
+  const kind = (['event', 'reflection', 'directive'].indexOf(n.kind) >= 0) ? n.kind : 'fact';
+  const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a', directive: '#7a5aa0' }[kind];
+  const tag = el('span', null, kind === 'directive' ? 'house' : kind);
   tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
   line.appendChild(tag);
-  const txt = el('span', null, n.note || ''); txt.style.flex = '1 1 220px';
+
+  const txt = el('span', null, n.note || ''); txt.style.flex = '1 1 200px';
+  if (kind === 'directive' && n.resolved) { txt.style.opacity = '.5'; txt.style.textDecoration = 'line-through'; }
   line.appendChild(txt);
+
+  if (kind === 'directive') {
+    const meta = el('span', 'place', (n.author ? 'by ' + n.author : 'house') + (n.resolved ? ' · resolved' : ' · open'));
+    meta.style.flex = '0 0 auto';
+    line.appendChild(meta);
+    const tgl = el('button', 'btn ghost', n.resolved ? 'Reopen' : 'Resolve'); tgl.type = 'button';
+    tgl.addEventListener('click', function () {
+      withBusy(tgl, async function () {
+        const patch = n.resolved ? { resolved: false, resolved_at: null } : { resolved: true, resolved_at: nowIso() };
+        const r = await sb.from('customer_notes').update(patch).eq('id', n.id);
+        if (r.error) { fail('Update instruction', r.error); return; }
+        n.resolved = !n.resolved; n.resolved_at = patch.resolved_at;
+        line.replaceWith(clientBookNoteLine(n));   /* re-render in place */
+        toast(n.resolved ? 'Instruction marked resolved' : 'Instruction reopened');
+      });
+    });
+    line.appendChild(tgl);
+  }
+
   const del = el('button', 'btn ghost danger', '×'); del.setAttribute('aria-label', 'Delete note');
   del.addEventListener('click', function () {
     withBusy(del, async function () {
@@ -4117,6 +4162,51 @@ function clientBookNoteLine(n) {
   });
   line.appendChild(del);
   return line;
+}
+
+/* Distinct ship-to addresses from a patron's orders (the admin-side mirror of the
+   checkout address book) — deduped on address+city+zip+recipient, newest-first. */
+function deriveAddressesFromOrders(orders) {
+  const seen = {}, out = [];
+  (orders || []).forEach(function (o) {
+    const address = (o.address || '').trim(), city = (o.city || '').trim();
+    if (!address || !city) return;
+    const isGift = !!o.is_gift, recip = isGift ? (o.recipient_name || '').trim() : '';
+    const key = [address.toLowerCase(), city.toLowerCase(), (o.zip || '').trim().toLowerCase(), recip.toLowerCase()].join('|');
+    if (seen[key]) return; seen[key] = 1;
+    out.push({
+      label: isGift ? (recip || 'A gift') : 'Home', is_gift: isGift, recipient_name: recip,
+      address: address, address2: (o.address2 || '').trim(), city: city,
+      state: (o.state || '').trim(), zip: (o.zip || '').trim()
+    });
+  });
+  return out;
+}
+
+/* Compose box for a human directive — a standing instruction the concierge must
+   follow for this patron (order exceptions, special handling). Inserts a
+   kind='directive' note authored by the signed-in admin. onAdded() refreshes. */
+function directiveComposer(email, onAdded) {
+  const wrap = el('div'); wrap.style.cssText = 'margin-top:12px; display:flex; flex-direction:column; gap:8px;';
+  const ta = document.createElement('textarea');
+  ta.rows = 2; ta.style.cssText = 'width:100%; resize:vertical;';
+  ta.placeholder = 'Instruction for the concierge to follow next time this patron is in touch — e.g. “Waive the rush note on their next order” or “Confirm the apartment number before shipping; last parcel bounced.”';
+  const btn = el('button', 'btn primary', 'Leave instruction'); btn.type = 'button';
+  btn.addEventListener('click', function () {
+    const note = (ta.value || '').trim();
+    if (note.length < 3) { toast('Write the instruction first', true); return; }
+    withBusy(btn, async function () {
+      const author = (state.session && state.session.user && state.session.user.email) || '';
+      const r = await sb.from('customer_notes')
+        .insert({ email: email, note: note.slice(0, 400), kind: 'directive', resolved: false, author: author });
+      if (r.error) { fail('Leave instruction', r.error); return; }
+      ta.value = '';
+      toast('Instruction left — the concierge will follow it when this patron returns');
+      if (onAdded) onAdded();
+    });
+  });
+  wrap.appendChild(ta); wrap.appendChild(btn);
+  return wrap;
 }
 
 /* Patrons view — one card per buyer with their orders and their client book.
@@ -4193,15 +4283,17 @@ function renderPatrons(list, q) {
     });
     row.appendChild(orders);
 
-    // Client book — what the concierge has learned and done for this patron.
+    // Client book & house instructions — what the concierge has learned and done,
+    // plus standing instructions the team leaves for it to follow.
     const book = el('div', 'cust-orders cust-book');
-    book.appendChild(el('div', 'micro', 'Client book — what the concierge has learned and done'));
+    book.appendChild(el('div', 'micro', 'Client book & house instructions'));
     if (!c.notes.length) {
       book.appendChild(el('div', 'empty micro',
-        'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time.'));
+        'Nothing recorded yet. The concierge notes what signed-in patrons share, what it does for them, and how to serve them better next time — and you can leave it a house instruction below.'));
     } else {
       c.notes.forEach(function (n) { book.appendChild(clientBookNoteLine(n)); });
     }
+    book.appendChild(directiveComposer(c.email, function () { loadCustomers(); }));
     row.appendChild(book);
 
     list.appendChild(row);

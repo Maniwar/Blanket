@@ -101,6 +101,12 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   cancellation, an address change), so that each visit builds on the last and I
   never have to re-explain. *(Typed client book — `fact`/`event`/`reflection`
   notes read back grouped into the prompt; `recall_context`; see §4.10.)*
+- **As a patron with a special arrangement**, I want a promise the team made me
+  (a waived rush fee, an apology for a delay, an address quirk they'll double-check)
+  to actually be honoured next time — without my having to re-explain or prove it —
+  so that the house feels like it keeps its word. *(House directives: a human's
+  `kind='directive'` note the concierge is instructed to follow on my next visit,
+  woven into service rather than quoted back. See §4.13.)*
 - **As someone who's done for now**, I want to say "that's all" or "don't message
   me until I write back" and have it respected, so that I'm in control.
   *(Customer-signalled close / quiet mode + auto wind-down.)*
@@ -191,6 +197,24 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   report abuse to authorities I can pull the whole trail. *(Search box accepts an
   IP in both views; resolved via `orders.chat_session ↔ conversations.session_key
   ↔ conversations.ip`. The drawer shows and links the order's origin IP.)*
+- **As the merchant**, I want to leave the concierge a **standing instruction for
+  a specific patron** — an order exception or special handling — so that when they
+  return, the bot follows my note without me having to be there. *(House directive:
+  a `kind='directive'` client-book note I write in the Patrons view or the order
+  drawer; surfaced at the top of that patron's CUSTOMER block on their very next
+  message, since the customer block is rebuilt per turn in the uncached prompt
+  tail. See §4.13.)*
+- **As the merchant**, I want a **one-time** instruction (apologise for a delay,
+  confirm a detail before shipping) to be checked off once the concierge has
+  actually carried it out — while a **standing** preference keeps applying — so
+  that the list reflects what's still outstanding. *(Directives carry a `resolved`
+  flag: the concierge calls `resolve_admin_note` after doing a one-time task; I
+  can also Resolve/Reopen any directive by hand. An SOP tells the bot to check for
+  these every signed-in visit, follow them, and resolve only what it has done.)*
+- **As the merchant**, I want to see a patron's **saved addresses** at a glance
+  (their own door and past gift recipients), so that I understand their history
+  when handling an order. *(Order drawer + Patrons view: distinct ship-tos derived
+  from their orders — the admin mirror of the checkout address book, §4.12.)*
 - **As the merchant**, I want to see every **register action** the concierge took
   on a customer's behalf — status reads, address and colorway changes,
   cancellations, context recalls, notes written — so that nothing the bot did to
@@ -713,6 +737,43 @@ reason, so even the offline prefill won't leak a recipient's door.
 read — no address table, no new write path, no extra PII at rest. Only fields
 that already exist on `orders` are returned, and only to the signed-in owner
 (`?me=1` is JWT-gated, `Cache-Control: no-store`).
+
+### 4.13 House directives — the team instructs the concierge, per patron
+**Decision:** the team can leave a **standing instruction for a specific patron**
+that the concierge must follow — an order exception, a special courtesy, a detail
+to double-check. This is a fourth client-book kind, `directive`, authored by a
+**human admin** (never the AI), reusing `customer_notes` rather than a new table:
+the retrieval and admin surfaces already exist, and a directive *is* a note the
+concierge reads to serve the patron — it just outranks the rest.
+
+**How it reaches the bot — and why "the patron is already on the site" is fine.**
+The `CUSTOMER` block is **rebuilt on every request** and lives in the **uncached
+suffix** of the system prompt (the cached prefix is brand + KB + tools + SOPs).
+`customerBlock` runs a fresh, unbounded query for the patron's *open* directives
+on each turn and prints them first, framed as non-optional, each with its `(#id)`.
+So a directive added while the patron is mid-conversation is picked up on their
+**very next message** — the only latency is one turn (a reply already streaming
+can't be interrupted). No cache to bust, no new session required.
+
+**Standing vs. one-time — and checking off.** A directive has a `resolved` flag.
+A **standing** preference ("always offer the Loden first", "VIP — waive rush
+fees") is followed every visit and left open. A **one-time** task ("apologise for
+the delay on Nº 231", "confirm the apartment number before shipping") is done at
+the first natural moment, then checked off — either by the concierge calling
+**`resolve_admin_note`** (a new tool, ownership-scoped: it can only resolve *this*
+patron's own open directive) or by an admin's Resolve/Reopen button. Resolving
+books an `event` note ("Followed a house instruction…") so the audit trail shows
+the loop closed. An SOP (`house-directives`) governs the behaviour: check every
+signed-in visit, weave the instruction into service (never quote it or attribute
+it to "the team"), resolve only what was actually done, and never expose one
+patron's directives to another.
+
+**Order exceptions & special cases this covers.** A bounced parcel → "confirm the
+unit number before you let this ship again." A goodwill promise → "their last
+order was late; offer a care kit, once." A VIP rule → "always propose priority
+handling." A do-not → "do not ship to the old Berlin address; it's stale." Each is
+a plain sentence a clerk would understand, and the concierge treats it as the
+house's word.
 
 ---
 
