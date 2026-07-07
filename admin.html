@@ -509,13 +509,19 @@
     border:1px solid var(--hairline-dim); border-radius:3px; overflow-y:auto; max-height:64vh;
     background:rgba(38,51,43,.28);
   }
+  /* Each list entry is a row = a selection checkbox + the clickable item button
+     (the checkbox is a sibling, never nested inside the <button>). */
+  .convo-row{ display:flex; align-items:stretch; border-bottom:1px solid var(--hairline-dim); }
+  .convo-row:last-child{ border-bottom:none; }
+  .convo-row.sel{ background:rgba(196,155,91,.11); box-shadow:inset 2px 0 0 var(--brass-soft); }
+  .convo-chk{ flex:0 0 auto; display:flex; align-items:flex-start; padding:15px 2px 0 12px; }
+  .convo-chk input{ cursor:pointer; }
   .convo-item{
-    display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer;
-    border-bottom:1px solid var(--hairline-dim); padding:13px 16px; color:var(--wool);
+    display:block; width:auto; flex:1 1 auto; min-width:0; text-align:left; background:none;
+    border:none; cursor:pointer; padding:13px 16px 13px 10px; color:var(--wool);
     font-family:'Hanken Grotesk', system-ui, sans-serif; font-weight:300; font-size:14px;
     transition:background .12s ease;
   }
-  .convo-item:last-child{ border-bottom:none; }
   .convo-item:hover{ background:rgba(196,155,91,.06); }
   .convo-item.on{ background:rgba(196,155,91,.1); box-shadow:inset 2px 0 0 var(--brass); }
   .convo-item .line1{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:3px; }
@@ -604,6 +610,16 @@
   /* Funnel overview — one cell per stage, count + share of graded chats, click to
      filter. A subtle top rail in the stage's tone reads as a little funnel. */
   .convo-funnel{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  /* Selection / bulk-action bar above the conversation list. */
+  .convo-selbar{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:0 0 14px;
+    padding:9px 13px; border:1px solid var(--hairline-dim); border-radius:6px;
+    background:rgba(38,51,43,.35); font-size:12.5px; color:var(--wool-dim); }
+  .convo-selbar.hidden{ display:none; }
+  .convo-selbar .csb-all{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+  .convo-selbar .csb-all input{ cursor:pointer; }
+  .convo-selbar .csb-count{ color:var(--wool); }
+  .convo-selbar .csb-anon{ color:var(--wool-faint); }
+  .convo-selbar .csb-spacer{ flex:1 1 auto; }
   .funnel-cell{ --fc:var(--wool-faint); display:flex; flex-direction:column; align-items:flex-start;
     gap:2px; min-width:74px; padding:8px 11px 9px; cursor:pointer; text-align:left;
     background:var(--ink-well); border:1px solid var(--hairline-dim);
@@ -1248,6 +1264,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       </div>
 
       <div id="convo-funnel" class="convo-funnel"></div>
+      <div id="convo-selbar" class="convo-selbar"></div>
       <div class="convo-wrap">
         <div id="convo-list" class="convo-list">
           <div class="empty micro">Loading…</div>
@@ -1409,6 +1426,7 @@ const state = {
   houseSel: new Set(),     // selected house-note ids for bulk resolve/reopen/delete
   convoHouse: {},          // conversation_id → [note_id] acted on in that chat
   convoIdentity: null,     // when set, Conversations shows ONE patron's own chats (exact user_email), not a fuzzy search
+  convoSel: new Set(),     // selected conversation ids, for bulk house-note to the segment
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
@@ -4236,12 +4254,14 @@ function renderBulkBar() {
 }
 
 /* A small centred modal with a textarea — reused for bulk note entry. */
-function noteModal(title, placeholder, onSubmit) {
+function noteModal(title, placeholder, onSubmit, detail) {
   const bd = el('div');
   bd.style.cssText = 'position:fixed; inset:0; z-index:50; background:rgba(12,16,13,.62); display:flex; align-items:center; justify-content:center; padding:20px;';
   const box = el('div');
   box.style.cssText = 'background:var(--loden-deep,#1c261f); border:1px solid var(--hairline); border-radius:6px; padding:22px; width:min(540px,96vw); box-shadow:0 24px 60px rgba(0,0,0,.5);';
   box.appendChild(el('div', 'micro', title));
+  // Optional detail block (e.g. a recipient preview) shown between title and input.
+  if (detail) { box.appendChild(typeof detail === 'string' ? el('div', 'micro', detail) : detail); }
   const ta = document.createElement('textarea');
   ta.rows = 3; ta.style.cssText = 'width:100%; margin:10px 0; resize:vertical;'; ta.placeholder = placeholder || '';
   box.appendChild(ta);
@@ -5638,7 +5658,7 @@ function exportWaitlistCsv() {
 
 async function loadConversations(more) {
   loadMetrics();
-  if (!more) pageState.convo = 0;
+  if (!more) { pageState.convo = 0; state.convoSel = new Set(); }   // fresh load drops any bulk selection
   const df = fFrom('convo-from'), dt = fTo('convo-to'), kw = fkw('convo-q');
 
   // A bare conversation UUID (or session key) is looked up DIRECTLY — this is how
@@ -5940,9 +5960,25 @@ function renderConvoList(counts) {
   if (!shown.length) {
     list.appendChild(el('div', 'empty micro',
       state.convos.length ? 'No conversation in this page matches that outcome.' : 'No conversations yet.'));
+    renderConvoSelbar([]);
     return;
   }
   shown.forEach(function (c) {
+    const row = el('div', 'convo-row');
+    if (state.convoSel.has(c.id)) row.classList.add('sel');
+    // Selection checkbox — a sibling of the item button (never nested in it).
+    const chkWrap = el('div', 'convo-chk');
+    const chk = document.createElement('input'); chk.type = 'checkbox';
+    chk.checked = state.convoSel.has(c.id);
+    chk.title = 'Select this chat for a bulk house note';
+    chk.setAttribute('aria-label', 'Select this conversation');
+    chk.addEventListener('click', function (e) { e.stopPropagation(); });
+    chk.addEventListener('change', function () {
+      if (chk.checked) state.convoSel.add(c.id); else state.convoSel.delete(c.id);
+      renderConvoList();
+    });
+    chkWrap.appendChild(chk); row.appendChild(chkWrap);
+
     const btn = el('button', 'convo-item');
     if (c.id === state.activeConvoId) btn.classList.add('on');
 
@@ -6013,8 +6049,127 @@ function renderConvoList(counts) {
       btn.classList.add('on');
       openConvo(c);
     });
-    list.appendChild(btn);
+    row.appendChild(btn);
+    list.appendChild(row);
   });
+  renderConvoSelbar(shown);
+}
+
+/* Distinct patrons behind the currently-selected conversations, deduped by
+   identity (lowercased email, else user_id), plus a count of anonymous chats
+   that can't receive a note. This is the audience for a bulk house note. */
+function convoSelSegment() {
+  const byId = {};
+  (state.convos || []).forEach(function (c) { byId[c.id] = c; });
+  const byKey = new Map();
+  let anon = 0;
+  state.convoSel.forEach(function (id) {
+    const c = byId[id];
+    if (!c) return;   // no longer in the loaded set
+    const email = (c.user_email || '').trim().toLowerCase();
+    const uid = c.user_id || '';
+    if (!email && !uid) { anon++; return; }
+    const key = email || uid;
+    if (!byKey.has(key)) byKey.set(key, { email: email || null, user_id: uid || null, count: 0 });
+    byKey.get(key).count++;
+  });
+  return { patrons: [...byKey.values()], anon: anon };
+}
+
+/* The selection / bulk-action bar above the conversation list: a segment-aware
+   "select all shown", the distinct-patron + anonymous breakdown of the current
+   selection, and the "Add house note" action. */
+function renderConvoSelbar(shown) {
+  const bar = $('convo-selbar');
+  if (!bar) return;
+  bar.textContent = '';
+  if (!shown || !shown.length) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+
+  const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+  const shownIds = shown.map(function (c) { return c.id; });
+  const allSel = shownIds.every(function (id) { return state.convoSel.has(id); });
+  const segName = (stageMode && STAGE_LABELS[stageMode]) ? STAGE_LABELS[stageMode]
+    : (stageMode === 'none' ? 'ungraded' : '');
+
+  const lbl = el('label', 'csb-all');
+  const all = document.createElement('input'); all.type = 'checkbox'; all.checked = allSel;
+  all.addEventListener('change', function () {
+    if (all.checked) shownIds.forEach(function (id) { state.convoSel.add(id); });
+    else shownIds.forEach(function (id) { state.convoSel.delete(id); });
+    renderConvoList();
+  });
+  lbl.appendChild(all);
+  lbl.appendChild(document.createTextNode('Select all ' + shownIds.length + (segName ? ' ' + segName : ' shown')));
+  bar.appendChild(lbl);
+
+  if (state.convoSel.size) {
+    const seg = convoSelSegment();
+    const info = el('span', 'csb-count', state.convoSel.size + ' selected');
+    bar.appendChild(info);
+    const d = el('span', null, ' · ' + seg.patrons.length + ' patron' + (seg.patrons.length === 1 ? '' : 's'));
+    bar.appendChild(d);
+    if (seg.anon) bar.appendChild(el('span', 'csb-anon', ' · ' + seg.anon + ' anonymous (no note)'));
+
+    bar.appendChild(el('span', 'csb-spacer'));
+
+    const addBtn = el('button', 'btn primary', 'Add house note'); addBtn.type = 'button';
+    addBtn.disabled = seg.patrons.length === 0;
+    addBtn.title = seg.patrons.length
+      ? 'Leave one house instruction for the ' + seg.patrons.length + ' distinct patron' + (seg.patrons.length === 1 ? '' : 's') + ' behind the selected chats'
+      : 'No signed-in patrons in the selection — a house note needs an account';
+    addBtn.addEventListener('click', bulkConvoNote);
+    bar.appendChild(addBtn);
+
+    const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
+    clr.addEventListener('click', function () { state.convoSel = new Set(); renderConvoList(); });
+    bar.appendChild(clr);
+  } else {
+    bar.appendChild(el('span', 'csb-anon',
+      '— tick chats (or filter to a funnel stage and “select all”) to leave one house note for all their patrons'));
+  }
+}
+
+/* Bulk-add a house directive to the distinct patrons behind the selected
+   conversations — the funnel-segment feature. Anonymous chats have no account,
+   so they're skipped and reported. */
+function bulkConvoNote() {
+  const seg = convoSelSegment();
+  if (!seg.patrons.length) {
+    toast('No signed-in patrons in the selection — a house note needs an account', true); return;
+  }
+  const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
+  const segName = (stageMode && STAGE_LABELS[stageMode]) ? STAGE_LABELS[stageMode]
+    : (stageMode === 'none' ? 'ungraded' : '');
+
+  // Recipient preview — the admin sees exactly who receives this before writing.
+  const preview = el('div');
+  preview.style.cssText = 'margin:8px 0 2px; max-height:132px; overflow-y:auto; font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--wool-dim); border:1px solid var(--hairline-dim); border-radius:4px; padding:8px 10px;';
+  seg.patrons.slice(0, 300).forEach(function (p) {
+    preview.appendChild(el('div', null, (p.email || p.user_id) + (p.count > 1 ? '   ·   ' + p.count + ' chats' : '')));
+  });
+  if (seg.patrons.length > 300) preview.appendChild(el('div', 'csb-anon', '…and ' + (seg.patrons.length - 300) + ' more'));
+
+  const title = 'House instruction for ' + seg.patrons.length + ' patron' + (seg.patrons.length === 1 ? '' : 's') +
+    (segName ? ' in “' + segName + '”' : '') +
+    (seg.anon ? '   (' + seg.anon + ' anonymous chat' + (seg.anon === 1 ? '' : 's') + ' skipped)' : '');
+
+  noteModal(title,
+    'e.g. “Offer a complimentary rush upgrade on their next order.” Added to each patron for the concierge to follow when they return.',
+    async function (note) {
+      const author = (state.session && state.session.user && state.session.user.email) || '';
+      const rows = seg.patrons.map(function (p) {
+        const row = { email: p.email || null, note: note.slice(0, 400), kind: 'directive', resolved: false, author: author };
+        if (p.user_id) row.user_id = p.user_id;
+        return row;
+      });
+      const r = await sb.from('customer_notes').insert(rows);
+      if (r.error) { fail('Bulk house note', r.error); return; }
+      toast('House instruction left for ' + seg.patrons.length + ' patron' + (seg.patrons.length === 1 ? '' : 's'));
+      state.convoSel = new Set();
+      renderConvoList();
+      if (typeof loadHouseNotes === 'function') loadHouseNotes();
+    }, preview);
 }
 
 async function openConvo(c) {

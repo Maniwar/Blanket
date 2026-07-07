@@ -424,6 +424,20 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   Working the loop — filter to `objection`, read those chats, then tune the
   **objection playbook** / **assertiveness** in Tuning — is how the funnel gets
   optimized. See §2.8, §4.7.)*
+- **As the merchant**, I want to **select a segment of conversations and leave one
+  house note for every patron behind them** — e.g. tick everyone at `considering`
+  and drop a targeted instruction on all of them at once — so that I can act on a
+  whole funnel stage, not one chat at a time. *(Conversations tab: each chat row
+  has a **selection checkbox**; a **selection bar** above the list offers a
+  segment-aware **"Select all N [stage]"** (filter to a funnel stage first, then
+  select-all = the segment) and shows the selection's **distinct-patron count** and
+  how many **anonymous chats are skipped** (a house note needs an account).
+  **Add house note** opens a composer that **lists the exact recipients** before
+  writing, then inserts one `kind='directive'` note per **distinct** patron —
+  deduped by identity (lowercased `user_email`, else `user_id`), so a patron with
+  several selected chats gets it once. Each patron's concierge honours it on their
+  next visit like any house instruction (§2.6). Selection survives client-side
+  stage/goal/rating filtering and is dropped on a fresh server load.)*
 - **As the merchant**, I want to inspect the semantic answer cache and clear stale
   entries, so that a changed policy isn't served from an old answer. *(Cache tab:
   view entries + hit counts, evict on demand.)*
