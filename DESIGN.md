@@ -244,12 +244,16 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   lists all `kind='directive'` notes; filter open/resolved/all; Resolve/Reopen,
   Delete, View customer, and "Find the chat" via the `resolve_admin_note` audit
   action → `conversation_id`. See §4.13.)*
-- **As the merchant**, when I follow a note to its chat, I want to land on the
-  **exact reply where it was acted on**, not just the top of the transcript, so
-  that I can see what the concierge actually said. *("Go to where it was acted on"
-  and the Conversations-list `🏷 house note` chip both open the transcript
-  scrolled to the acted-on reply — keyed on the resolve action's timestamp — and
-  pulse it with a brass `↳ acted on here` rail.)*
+- **As the merchant**, when I follow a note (or an order) to its chat, I want to
+  land on the **exact reply where it was acted on**, not just the top of the
+  transcript, and know **which kind** of action it was, so that the marker is
+  never an unexplained "acted on here". *("Go to where it was acted on" and the
+  Conversations-list `🏷 house note` chip open the transcript scrolled to the
+  acted-on reply — keyed on the action's timestamp — and pulse it with a brass
+  rail. The marker is **reason-tagged**: `jumpToConversation(conv, at, reason)`
+  renders `↳ house instruction acted on here` for a note resolve vs `↳ this order
+  acted on here` for an order-touch jump, each with a tooltip spelling out what
+  the concierge did — so the two jumps are never confused.)*
 - **As the merchant**, I want to see **at a glance in the Patrons list** which
   patrons have an open house note waiting, so that I don't have to open each card
   to find outstanding work. *(A patron with an unresolved directive gets a purple
@@ -294,17 +298,47 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   summary is admin-editable). The bot's CUSTOMER block then injects **open
   directives + the summary + the 2 newest notes** instead of ~14 — cutting the
   per-turn uncached tail and keeping directives unmissable. See [`COST.md`](COST.md).)*
+- **As the merchant**, I want the client book to hold **relationship & selling
+  memory only** — not a frozen copy of order state — so that notes never go stale
+  or duplicate the register's ledger. *(Order bookkeeping — serial numbers, order
+  counts, status, what was bought, shipping/billing addresses — lives in the
+  **register** and the concierge reads it **live** with `get_my_orders`; a note
+  would only freeze a snapshot that rots. The rule is enforced everywhere a note is
+  written: the `remember_customer` tool description, the `consolidateClientBook`
+  roll-up prompt, and the `sales-skill` / `wrap-up` / `client-book-method` SOPs
+  (with top-level `replace()` updates so already-seeded installs pick it up). A
+  note may still reference an order as **durable context** — "the Loden for the
+  east-facing office" — never as a list of serials/status. Deterministic
+  `order_events` still record register actions separately for the audit trail.)*
 - **As the merchant**, I want the order drawer to show, in the same panel, **the
-  chats tied to this order and the patron's other chats**, so that I can see the
-  conversation behind an order without leaving it. *(Drawer **Conversations**
-  section: chats that touched this Nº — a `concierge_actions` row against its
-  serial, badged `◆ touched this order` — first, then the patron's other chats;
-  clicking one opens the transcript, an order chat scrolled to the moment it was
-  touched.)*
+  chats tied to this order and the patron's other chats** — and to never be fooled
+  into opening a *different* account's chat as if it were this patron's — so that I
+  can see the conversation behind an order without leaving it. *(Drawer
+  **Conversations** section: chats that touched this Nº — a `concierge_actions` row
+  against its serial, badged `◆ touched this order` — first, then the patron's
+  other chats; clicking one opens the transcript, an order chat scrolled to the
+  moment it was touched. **Serial numbers are recycled** — `cancel_order` returns a
+  Nº to the edition and a later order can take it — so the serial join is **bounded
+  to this order's own lifetime** (`created_at >= placed_at`) to keep a *previous*
+  holder's chats off it, and every row prints **whose chat it actually is**
+  (`user_email`), badged **`⚠ other account`** with a tooltip when it differs from
+  the order's patron. See §4.13.)*
 - **As the merchant**, I want to click a customer's **email** (like the IP line)
   to pull up every order by that patron, so that jumping from one order to their
   whole history is one click. *(Drawer Customer block: the email is
   click-to-search the register/patrons by that address.)*
+- **As the merchant**, when I open **"Customer's chats"** I want *only that
+  patron's own* conversations — not every chat that merely *mentions* their email
+  — yet I still want the search box to find a mention when I ask for one, so that
+  navigation is trustworthy without losing forensic search. *(Two distinct paths:
+  the **navigation** (`openCustomerChats`) sets `state.convoIdentity` and matches
+  the conversation's **own `user_email`** exactly — never transcript content — so a
+  foreign chat that typed or echoed the address is never presented as theirs. The
+  **search box** stays fuzzy with its input-type dispatch — conversation id /
+  session key → exact lookup, IPv4/IPv6 → exact (prefix = substring), free text
+  *including an email* → `user_email` substring **OR transcript-content** match —
+  so typing an email there still surfaces chats that mention it. Any manual edit /
+  Apply / Clear drops the exact scope. See §4.13.)*
 - **As the merchant**, I want to correct an order's **billing** address (or set it
   back to "same as shipping"), not just shipping, so that a mis-entered billing
   record can be fixed. *(Drawer "Shipping & billing" → Edit billing address →
@@ -316,11 +350,17 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   the register is invisible to me. *(Register-action log: `concierge_actions`,
   surfaced in the studio; every order change also captured in `order_events`.)*
 - **As the merchant**, I want to see each customer's lifetime value, their orders,
-  and what the concierge learned *and did* for them, so that I can serve them well.
-  *(Orders & Customers tab → **Patrons** view: one card per buyer, sortable by
-  standing / value / recency / name / notes, with LTV, order history, and the
-  typed client book — `event`/`fact`/`reflection` notes, each tagged; recording
-  policy tunable in Tuning → Client book. See §4.10.)*
+  and what the concierge learned *and did* for them, so that I can serve them well
+  — with the same **client summary** the bot reads and **without a long tail of
+  cancelled orders burying the live ones**. *(Orders & Customers tab → **Patrons**
+  view: one card per buyer, sortable by standing / value / recency / name / notes,
+  with LTV, order history, and the typed client book — `event`/`fact`/`reflection`
+  notes, each tagged. The expand leads with the rolling **Client summary** card
+  (the `kind='summary'` digest, with Regenerate/Edit — the same one in the order
+  drawer), and the orders are grouped into a compact **Active / Fulfilled / Closed**
+  segmented control that defaults to the first non-empty group, so cancelled orders
+  sit one click away instead of dominating. Recording policy tunable in Tuning →
+  Client book. See §4.10.)*
 - **As the merchant**, I want a real waitlist — captured when the edition sells
   out (a form on the sold-out state) and by the concierge in chat — that I can
   filter, mark people notified on, and export to email, so that demand past a
