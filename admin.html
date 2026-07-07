@@ -1207,6 +1207,7 @@ const state = {
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
+  patSel: new Set(),       // selected patron emails for bulk house-note add
   custChip: '',            // client-side status quick-filter chip
   waitlist: [],
   emailsBySerial: {},
@@ -3682,7 +3683,7 @@ function isIpLike(s) {
 }
 
 async function loadCustomers(more) {
-  if (!more) { pageState.cust = 0; state.custSel = new Set(); state.custChip = ''; state._custJumpDone = false; }
+  if (!more) { pageState.cust = 0; state.custSel = new Set(); state.patSel = new Set(); state.custChip = ''; state._custJumpDone = false; }
   const serialQ = fkw('cust-serial'), statusQ = fval('cust-status'),
         cwQ = fval('cust-colorway'), giftQ = fval('cust-gift');
   const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
@@ -3988,6 +3989,25 @@ function bulkLeaveNote() {
       if (r.error) { fail('Bulk note', r.error); return; }
       toast('House instruction left for ' + emails.length + ' customer' + (emails.length === 1 ? '' : 's'));
       state.custSel = new Set(); loadCustomers();
+    });
+}
+
+/* Bulk-add a house directive to the selected PATRONS (Patrons view multi-select). */
+function bulkLeavePatronNote() {
+  const emails = [...(state.patSel || [])].filter(Boolean);
+  if (!emails.length) { toast('No patrons selected', true); return; }
+  noteModal(
+    'House instruction for ' + emails.length + ' selected patron' + (emails.length === 1 ? '' : 's'),
+    'e.g. “Offer priority handling on their next order.” Added to each selected patron for the concierge to follow.',
+    async function (note) {
+      const author = (state.session && state.session.user && state.session.user.email) || '';
+      const rows = emails.map(function (em) {
+        return { email: em, note: note.slice(0, 400), kind: 'directive', resolved: false, author: author };
+      });
+      const r = await sb.from('customer_notes').insert(rows);
+      if (r.error) { fail('Bulk note', r.error); return; }
+      toast('House instruction left for ' + emails.length + ' patron' + (emails.length === 1 ? '' : 's'));
+      state.patSel = new Set(); loadCustomers();
     });
 }
 
@@ -4440,9 +4460,41 @@ function renderPatrons(list, q) {
     list.appendChild(el('div', 'empty micro', q ? 'No patron matches that.' : 'No patrons on the register yet.'));
     return;
   }
+
+  // Select-all + bulk "Leave note to selected patrons".
+  const shownEmails = rows.map(function (c) { return c.email; }).filter(Boolean);
+  const selRow = el('div'); selRow.style.cssText = 'display:flex; align-items:center; gap:14px; margin-bottom:12px; flex-wrap:wrap;';
+  const selLbl = el('label'); selLbl.style.cssText = 'display:inline-flex; align-items:center; gap:7px; cursor:pointer; color:var(--wool-dim); font-size:12px;';
+  const selAll = document.createElement('input'); selAll.type = 'checkbox'; selAll.className = 'ord-check';
+  selAll.checked = shownEmails.length > 0 && shownEmails.every(function (e) { return state.patSel.has(e); });
+  selAll.addEventListener('change', function () {
+    if (selAll.checked) shownEmails.forEach(function (e) { state.patSel.add(e); });
+    else shownEmails.forEach(function (e) { state.patSel.delete(e); });
+    renderCustomers();
+  });
+  selLbl.appendChild(selAll); selLbl.appendChild(document.createTextNode('Select all ' + shownEmails.length + ' shown'));
+  selRow.appendChild(selLbl);
+  if (state.patSel.size) {
+    const noteBtn = el('button', 'btn primary', 'Leave note to ' + state.patSel.size + ' selected'); noteBtn.type = 'button';
+    noteBtn.addEventListener('click', bulkLeavePatronNote);
+    selRow.appendChild(noteBtn);
+    const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
+    clr.addEventListener('click', function () { state.patSel = new Set(); renderCustomers(); });
+    selRow.appendChild(clr);
+  }
+  list.appendChild(selRow);
+
   rows.forEach(function (c) {
     const row = el('div', 'cust-row');
     const head = el('div', 'cust-head');
+    const pchk = document.createElement('input'); pchk.type = 'checkbox'; pchk.className = 'ord-check';
+    pchk.checked = state.patSel.has(c.email); pchk.style.alignSelf = 'center';
+    pchk.addEventListener('click', function (e) { e.stopPropagation(); });
+    pchk.addEventListener('change', function () {
+      if (pchk.checked) state.patSel.add(c.email); else state.patSel.delete(c.email);
+      renderCustomers();
+    });
+    head.appendChild(pchk);
     head.appendChild(el('span', 'cust-name', c.name));
     head.appendChild(el('span', 'cust-email', c.email));
     head.appendChild(el('span', 'cust-tier', c.tier));
@@ -4681,7 +4733,10 @@ function renderHouseNotes(list) {
         withBusy(del, async function () {
           const r = await sb.from('customer_notes').delete().eq('id', n.id);
           if (r.error) { fail('Delete note', r.error); return; }
-          state.houseNotes = (state.houseNotes || []).filter(function (x) { return x.id !== n.id; });
+          // Mutate in place — renderTable() reads the captured `notes` array, which
+          // is this same reference; reassigning state.houseNotes would leave it stale.
+          const idx = (state.houseNotes || []).findIndex(function (x) { return x.id === n.id; });
+          if (idx >= 0) state.houseNotes.splice(idx, 1);
           state.houseSel.delete(n.id);
           toast('House note deleted'); renderTable();
         });
