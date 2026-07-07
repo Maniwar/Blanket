@@ -1264,7 +1264,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       </div>
 
       <div id="convo-funnel" class="convo-funnel"></div>
-      <div id="convo-selbar" class="convo-selbar"></div>
+      <div id="convo-selbar" class="convo-selbar" aria-live="polite"></div>
       <div class="convo-wrap">
         <div id="convo-list" class="convo-list">
           <div class="empty micro">Loading…</div>
@@ -5960,9 +5960,11 @@ function renderConvoList(counts) {
   if (!shown.length) {
     list.appendChild(el('div', 'empty micro',
       state.convos.length ? 'No conversation in this page matches that outcome.' : 'No conversations yet.'));
-    renderConvoSelbar([]);
+    state.convoShownIds = [];
+    renderConvoSelbar([], []);   // still shows a live selection's summary + Clear
     return;
   }
+  const rowRefs = [];
   shown.forEach(function (c) {
     const row = el('div', 'convo-row');
     if (state.convoSel.has(c.id)) row.classList.add('sel');
@@ -5973,11 +5975,15 @@ function renderConvoList(counts) {
     chk.title = 'Select this chat for a bulk house note';
     chk.setAttribute('aria-label', 'Select this conversation');
     chk.addEventListener('click', function (e) { e.stopPropagation(); });
+    // Toggle in place — never rebuild the list, which would reset the scroll and
+    // throw the operator back to the top mid-selection. Flip this row + the bar.
     chk.addEventListener('change', function () {
       if (chk.checked) state.convoSel.add(c.id); else state.convoSel.delete(c.id);
-      renderConvoList();
+      row.classList.toggle('sel', chk.checked);
+      renderConvoSelbar(shown, rowRefs);
     });
     chkWrap.appendChild(chk); row.appendChild(chkWrap);
+    rowRefs.push({ id: c.id, row: row, chk: chk });
 
     const btn = el('button', 'convo-item');
     if (c.id === state.activeConvoId) btn.classList.add('on');
@@ -6052,7 +6058,8 @@ function renderConvoList(counts) {
     row.appendChild(btn);
     list.appendChild(row);
   });
-  renderConvoSelbar(shown);
+  state.convoShownIds = shown.map(function (c) { return c.id; });
+  renderConvoSelbar(shown, rowRefs);
 }
 
 /* Distinct patrons behind the currently-selected conversations, deduped by
@@ -6061,17 +6068,29 @@ function renderConvoList(counts) {
 function convoSelSegment() {
   const byId = {};
   (state.convos || []).forEach(function (c) { byId[c.id] = c; });
+  // Pass 1: learn each user_id's email from any selected chat that carries both,
+  // so a uid-only chat for the same person collapses into their email entry —
+  // otherwise one patron could split into two keys and get two identical notes.
+  const uidToEmail = {};
+  state.convoSel.forEach(function (id) {
+    const c = byId[id]; if (!c) return;
+    const email = (c.user_email || '').trim().toLowerCase();
+    const uid = c.user_id || '';
+    if (uid && email && !uidToEmail[uid]) uidToEmail[uid] = email;
+  });
   const byKey = new Map();
   let anon = 0;
   state.convoSel.forEach(function (id) {
     const c = byId[id];
     if (!c) return;   // no longer in the loaded set
-    const email = (c.user_email || '').trim().toLowerCase();
     const uid = c.user_id || '';
+    const email = (c.user_email || '').trim().toLowerCase() || (uid && uidToEmail[uid]) || '';
     if (!email && !uid) { anon++; return; }
     const key = email || uid;
     if (!byKey.has(key)) byKey.set(key, { email: email || null, user_id: uid || null, count: 0 });
-    byKey.get(key).count++;
+    const entry = byKey.get(key);
+    if (!entry.user_id && uid) entry.user_id = uid;   // fill uid if a later chat carries it
+    entry.count++;
   });
   return { patrons: [...byKey.values()], anon: anon };
 }
@@ -6079,41 +6098,54 @@ function convoSelSegment() {
 /* The selection / bulk-action bar above the conversation list: a segment-aware
    "select all shown", the distinct-patron + anonymous breakdown of the current
    selection, and the "Add house note" action. */
-function renderConvoSelbar(shown) {
+function renderConvoSelbar(shown, rowRefs) {
   const bar = $('convo-selbar');
   if (!bar) return;
   bar.textContent = '';
-  if (!shown || !shown.length) { bar.classList.add('hidden'); return; }
+  shown = shown || [];
+  rowRefs = rowRefs || [];
+  const hasSel = state.convoSel.size > 0;
+  // Hide only when there's nothing on screen AND no live selection — a selection
+  // that outlived a filter change must stay reachable (its count + Clear).
+  if (!shown.length && !hasSel) { bar.classList.add('hidden'); return; }
   bar.classList.remove('hidden');
 
   const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
   const shownIds = shown.map(function (c) { return c.id; });
-  const allSel = shownIds.every(function (id) { return state.convoSel.has(id); });
+  const shownSet = {}; shownIds.forEach(function (id) { shownSet[id] = 1; });
   const segName = (stageMode && STAGE_LABELS[stageMode]) ? STAGE_LABELS[stageMode]
     : (stageMode === 'none' ? 'ungraded' : '');
 
-  const lbl = el('label', 'csb-all');
-  const all = document.createElement('input'); all.type = 'checkbox'; all.checked = allSel;
-  all.addEventListener('change', function () {
-    if (all.checked) shownIds.forEach(function (id) { state.convoSel.add(id); });
-    else shownIds.forEach(function (id) { state.convoSel.delete(id); });
-    renderConvoList();
-  });
-  lbl.appendChild(all);
-  lbl.appendChild(document.createTextNode('Select all ' + shownIds.length + (segName ? ' ' + segName : ' shown')));
-  bar.appendChild(lbl);
+  // Select-all is only meaningful when rows are on screen.
+  if (shown.length) {
+    const allSel = shownIds.every(function (id) { return state.convoSel.has(id); });
+    const lbl = el('label', 'csb-all');
+    const all = document.createElement('input'); all.type = 'checkbox'; all.checked = allSel;
+    all.addEventListener('change', function () {
+      shownIds.forEach(function (id) { if (all.checked) state.convoSel.add(id); else state.convoSel.delete(id); });
+      rowRefs.forEach(function (r) {   // update rows in place — no list rebuild, no scroll jump
+        const on = state.convoSel.has(r.id);
+        r.chk.checked = on; r.row.classList.toggle('sel', on);
+      });
+      renderConvoSelbar(shown, rowRefs);
+    });
+    lbl.appendChild(all);
+    lbl.appendChild(document.createTextNode('Select all ' + shownIds.length + (segName ? ' ' + segName : ' shown')));
+    bar.appendChild(lbl);
+  }
 
-  if (state.convoSel.size) {
+  if (hasSel) {
     const seg = convoSelSegment();
-    const info = el('span', 'csb-count', state.convoSel.size + ' selected');
-    bar.appendChild(info);
-    const d = el('span', null, ' · ' + seg.patrons.length + ' patron' + (seg.patrons.length === 1 ? '' : 's'));
-    bar.appendChild(d);
-    if (seg.anon) bar.appendChild(el('span', 'csb-anon', ' · ' + seg.anon + ' anonymous (no note)'));
+    const size = state.convoSel.size;
+    const hidden = [...state.convoSel].filter(function (id) { return !shownSet[id]; }).length;
+    bar.appendChild(el('span', 'csb-count', size + ' chat' + (size === 1 ? '' : 's') + ' selected'));
+    bar.appendChild(el('span', null, ' · ' + seg.patrons.length + ' patron' + (seg.patrons.length === 1 ? '' : 's')));
+    if (seg.anon) bar.appendChild(el('span', 'csb-anon', ' · ' + seg.anon + ' anonymous chat' + (seg.anon === 1 ? '' : 's') + ' (no account)'));
+    if (hidden) bar.appendChild(el('span', 'csb-anon', ' · ' + hidden + ' not in this view'));
 
     bar.appendChild(el('span', 'csb-spacer'));
 
-    const addBtn = el('button', 'btn primary', 'Add house note'); addBtn.type = 'button';
+    const addBtn = el('button', 'btn primary', 'Leave house note…'); addBtn.type = 'button';
     addBtn.disabled = seg.patrons.length === 0;
     addBtn.title = seg.patrons.length
       ? 'Leave one house instruction for the ' + seg.patrons.length + ' distinct patron' + (seg.patrons.length === 1 ? '' : 's') + ' behind the selected chats'
@@ -6122,11 +6154,15 @@ function renderConvoSelbar(shown) {
     bar.appendChild(addBtn);
 
     const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
-    clr.addEventListener('click', function () { state.convoSel = new Set(); renderConvoList(); });
+    clr.addEventListener('click', function () {
+      state.convoSel = new Set();
+      rowRefs.forEach(function (r) { r.chk.checked = false; r.row.classList.remove('sel'); });
+      renderConvoSelbar(shown, rowRefs);
+    });
     bar.appendChild(clr);
   } else {
-    bar.appendChild(el('span', 'csb-anon',
-      '— tick chats (or filter to a funnel stage and “select all”) to leave one house note for all their patrons'));
+    bar.appendChild(el('span', 'csb-count',
+      'Tick chats — or filter to a funnel stage and “select all” — to leave one house note for all their patrons'));
   }
 }
 
@@ -6139,8 +6175,17 @@ function bulkConvoNote() {
     toast('No signed-in patrons in the selection — a house note needs an account', true); return;
   }
   const stageMode = ($('convo-stage') && $('convo-stage').value) || '';
-  const segName = (stageMode && STAGE_LABELS[stageMode]) ? STAGE_LABELS[stageMode]
-    : (stageMode === 'none' ? 'ungraded' : '');
+  const goalMode = ($('convo-goal') && $('convo-goal').value) || '';
+  const rateMode = ($('convo-rating') && $('convo-rating').value) || '';
+  const shownSet = {}; (state.convoShownIds || []).forEach(function (id) { shownSet[id] = 1; });
+  const hidden = [...state.convoSel].filter(function (id) { return !shownSet[id]; }).length;
+  // Only name the funnel stage when the ENTIRE selection is exactly the shown
+  // segment (nothing picked from another view) and only a stage filter is active —
+  // otherwise the name would misdescribe the audience. The recipient preview below
+  // is always the source of truth.
+  const pureSegment = hidden === 0 && !goalMode && !rateMode;
+  const segName = pureSegment && stageMode && STAGE_LABELS[stageMode] ? STAGE_LABELS[stageMode]
+    : (pureSegment && stageMode === 'none' ? 'ungraded' : '');
 
   // Recipient preview — the admin sees exactly who receives this before writing.
   const preview = el('div');
@@ -6167,7 +6212,7 @@ function bulkConvoNote() {
       if (r.error) { fail('Bulk house note', r.error); return; }
       toast('House instruction left for ' + seg.patrons.length + ' patron' + (seg.patrons.length === 1 ? '' : 's'));
       state.convoSel = new Set();
-      renderConvoList();
+      renderConvoList();   // full rebuild is fine here — the selection is gone
       if (typeof loadHouseNotes === 'function') loadHouseNotes();
     }, preview);
 }
