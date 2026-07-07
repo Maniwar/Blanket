@@ -397,6 +397,25 @@ checks a one-time directive off with the `resolve_admin_note` tool (ownership-
 scoped). Governed by the `clientbook_policy` / `clientbook_log_actions` /
 `clientbook_reflect` config keys.
 
+### `customer_addresses` — the managed address book
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | uuid PK | Row id (also the client-side key for edit/remove). |
+| `user_id`,`email` | — | The owner. |
+| `label` | text | "Home", "Work", a gift recipient's name, "Billing"… |
+| `is_gift` | boolean | A gift recipient's address (excluded from billing options). |
+| `recipient_name` | text | For gift entries. |
+| `address`,`address2`,`city`,`state`,`zip` | — | The address. |
+| `created_at`,`updated_at` | timestamptz | Timestamps. |
+
+Real, **editable/removable** addresses — distinct from the read-only view derived
+from order history. **Written by:** the commission function on the patron's behalf
+(`POST ?address_save` / auto-save on order placement / backfill from history on
+first `?me`/`?addresses`), and admins via the "admin all" RLS policy. **Read by:**
+`?me=1` (`saved_addresses`) and `?addresses=1`, both used by the checkout books.
+RLS is enabled with no anon/self policy — patron access is brokered by the Edge
+Function (service role + verified-JWT ownership). Migration `0041`. See DESIGN §4.12.
+
 ### `order_events` — full order audit trail
 | Column | Type | Purpose |
 | --- | --- | --- |
@@ -608,7 +627,10 @@ wall-clock limit.
 | --- | --- | --- |
 | `GET ?recent=1` | public | Recent real orders (serial + city/state only — no name/email) for the site ticker. |
 | `GET ?next=1` | public | The live edition figures: `{next_serial, run_size, remaining}` (drives the ticker). |
-| `GET ?me=1` | signed-in | Signed-in patron's standing + latest entry + **`addresses[]`** (deduped **ship-to** book) + **`billing_addresses[]`** (deduped from `orders.billing`) for checkout prefill (`Cache-Control: no-store`). Each entry: `{key, label, is_gift, recipient_name, name, address, address2, city, state, zip}`, newest-first, ≤8. `addresses` labels personal doors (`Home`) + past gift recipients; `billing_addresses` are prior differing billing addresses. Built by `deriveAddressBook` / `deriveBillingBook` on read — no address table. See DESIGN §4.12. |
+| `GET ?me=1` | signed-in | Signed-in patron's standing + latest entry + **`saved_addresses[]`** (the managed `customer_addresses` book, backfilled from history if empty) + derived fallbacks **`addresses[]`** / **`billing_addresses[]`** for checkout prefill (`Cache-Control: no-store`). Address entry: `{id?, key?, label, is_gift, recipient_name, name?, address, address2, city, state, zip}`. See DESIGN §4.12. |
+| `GET ?addresses=1` | signed-in | The patron's managed address book (`customer_addresses`), backfilled from history on first read. For a refresh after add/remove. `no-store`. |
+| `POST ?address_save=1` | signed-in | Add or edit one saved address: `{id?, label, is_gift, recipient_name?, address, address2?, city, state, zip}`, validated. Update is ownership-scoped. Returns the refreshed `addresses[]`. |
+| `POST ?address_delete=1` | signed-in | Remove one saved address: `{id}`, ownership-scoped. Returns the refreshed `addresses[]`. |
 | `POST ?hold=1` | public (rate-limited) | Reserve the visit's serial (`hold_serial`). |
 | `POST` | signed-in (rate-limited) | Place the order (`commission_order`) with the **verified** email; emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
 | `POST ?waitlist=1` | public (rate-limited) | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (links `user_id` if signed in). |

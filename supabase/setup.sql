@@ -189,6 +189,23 @@ create index if not exists customer_notes_user_idx on public.customer_notes (use
 create index if not exists customer_notes_directive_idx
   on public.customer_notes (email, resolved) where kind = 'directive';
 
+-- Managed address book — real, editable ship-to / billing addresses a patron (or
+-- an admin on their behalf) can add, rename, and remove. Distinct from the derived
+-- view built from order history: these persist and can be deleted. Auto-populated
+-- from an order's ship-to + billing on placement, and backfilled from history the
+-- first time a signed-in patron opens the checkout.
+create table if not exists public.customer_addresses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid, email text,
+  label text,                                    -- e.g. "Home", "Work", or a gift recipient's name
+  is_gift boolean not null default false,        -- a gift recipient's address (not billable)
+  recipient_name text,
+  address text not null, address2 text, city text not null, state text not null, zip text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now());
+create index if not exists customer_addresses_email_idx on public.customer_addresses (email, created_at desc);
+create index if not exists customer_addresses_user_idx on public.customer_addresses (user_id, created_at desc);
+
 create table if not exists public.order_events (
   id bigint generated always as identity primary key,
   order_id uuid not null references public.orders(id) on delete cascade,
@@ -245,7 +262,7 @@ begin
     'concierge_config','concierge_kb','concierge_admins','concierge_conversations',
     'concierge_messages','concierge_feedback','customers','orders','allocation_counter',
     'serial_holds','concierge_sops','concierge_actions','concierge_cache','concierge_flags',
-    'concierge_forms','customer_notes','order_events','concierge_goals','site_content',
+    'concierge_forms','customer_notes','customer_addresses','order_events','concierge_goals','site_content',
     'concierge_tools','concierge_evals'
   ] loop
     execute format('alter table public.%I enable row level security', t);
@@ -258,7 +275,7 @@ declare t text;
 begin
   foreach t in array array[
     'concierge_config','concierge_kb','concierge_conversations','concierge_messages',
-    'concierge_sops','concierge_cache','concierge_forms','customer_notes',
+    'concierge_sops','concierge_cache','concierge_forms','customer_notes','customer_addresses',
     'concierge_goals','concierge_flags','site_content','concierge_tools','concierge_evals'
   ] loop
     execute format('drop policy if exists "admin all" on public.%I', t);

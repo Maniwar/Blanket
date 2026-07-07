@@ -78,9 +78,15 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 - **As a returning patron placing another order**, I want my saved addresses
   offered so I don't re-type them — my own door *and* the people I've shipped
   gifts to — so that a re-order (or "send Oma another") is a tap, not a form.
-  *(Checkout Act II address book: `GET ?me=1` returns a deduped `addresses[]` from
-  order history — personal + past gift recipients; tapping a gift address
-  re-addresses the order to that recipient. See §4.12.)*
+  *(Checkout Act II address book: `GET ?me=1` returns the managed `saved_addresses`
+  (or a derived fallback) — personal + past gift recipients; picking a gift
+  address re-addresses the order to that recipient. See §4.12.)*
+- **As a patron managing my details**, I want to **remove** (or edit) a saved
+  address I no longer use, so that my address book stays mine — not just a
+  read-only echo of every place I've ever shipped. *(Managed `customer_addresses`
+  table: a "Remove this saved address" link at checkout → commission
+  `POST ?address_delete`; add/edit via `POST ?address_save`. Backfilled from
+  history and auto-saved on each order. See §4.12.)*
 - **As a customer with an order**, I want to check status, change the shipping
   address or colorway, or cancel — in chat, myself — so that I'm not emailing
   support. *(Register tools, gated to still-mutable orders, fully audited.)*
@@ -767,10 +773,19 @@ order to that recipient (sets `is_gift` + `recipient`), so "send Oma another" is
 one selection. The `feier-patron` local cache carries an `is_gift` flag for the
 same reason, so even the offline prefill won't leak a recipient's door.
 
-**Nothing new stored.** Both books are *derived* from existing order rows on read
-— no address table, no new write path, no extra PII at rest. Only fields that
-already exist on `orders` (including the `billing` jsonb) are returned, and only
-to the signed-in owner (`?me=1` is JWT-gated, `Cache-Control: no-store`).
+**The managed book — add / edit / remove.** The derived view can't be *removed*
+from (it just reflects history), so there is also a real **`customer_addresses`**
+table: rows a patron owns and can add, rename, and **delete**. `?me=1` returns a
+`saved_addresses[]` from it; the checkout prefers that over the derived list (and
+falls back to derived if it's empty). It is **backfilled** from order history the
+first time a signed-in patron opens the checkout, and **auto-saved** to on every
+order placement, so it fills naturally without a manual "add address" step. The
+checkout shows a **"Remove this saved address"** link under the ship-to select for
+any managed entry; billing options combine the managed personal addresses with
+prior billing addresses so "bill to my home" is one pick. All patron access is
+brokered by the commission function (service role + verified-JWT ownership) — no
+anon RLS path — via `?addresses` (list), `POST ?address_save`, `POST
+?address_delete`. Admins get full CRUD through the "admin all" RLS policy.
 
 ```mermaid
 flowchart LR

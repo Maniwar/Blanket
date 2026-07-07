@@ -375,6 +375,10 @@
       '.ck-book-line{font-size:.78rem;line-height:1.35;color:rgba(241,236,226,.82);',
       'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;}',
       '.ck-book-new .ck-book-tag{color:rgba(241,236,226,.5);}',
+      '.ck-book-rm{margin-top:.5rem;background:none;border:none;cursor:pointer;padding:0;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;',
+      'color:rgba(180,86,74,.85);border-bottom:1px solid transparent;}',
+      '.ck-book-rm:hover{border-bottom-color:rgba(180,86,74,.85);}',
 
       /* notice-at-collection + demo line */
       '.ck-notice{margin:.2rem 0 0;font-family:"IBM Plex Mono",monospace;font-size:.62rem;',
@@ -870,10 +874,31 @@
         order.is_gift = false; order.recipient = '';
       }
       if (entry.name && !order.name) { order.name = entry.name; }
-      pickedAddrKey = entry.key;
+      pickedAddrKey = entryKey(entry);
     }
     saveDraft();
     showAct(2, 0);                      /* re-render the act with the chosen address */
+  }
+
+  /* A saved address is identified by its managed-book id when it has one, else by
+     the derived-book key. */
+  function entryKey(a) { return (a && (a.id || a.key)) || ''; }
+
+  /* Remove a saved address from the patron's managed book (the real delete). */
+  function removeSavedAddress(id) {
+    if (!id || isDemo()) { return; }
+    getFreshToken().then(function (token) {
+      if (!token) { return; }
+      return fetch(commissionEndpoint() + '?address_delete=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ id: id })
+      }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (j && Array.isArray(j.addresses)) { patronAddresses = j.addresses; }
+        if (pickedAddrKey === id) { pickedAddrKey = 'new'; }
+        showAct(2, 0);
+      });
+    })['catch'](function () { /* leave the book as-is */ });
   }
 
   /* A one-line summary + a distinguishing label for a saved address — so two
@@ -901,7 +926,7 @@
       var op = document.createElement('option');
       op.value = String(i); op.textContent = shipOptionLabel(a);
       sel.appendChild(op);
-      if (pickedAddrKey === a.key) { cur = i; }
+      if (pickedAddrKey === entryKey(a)) { cur = i; }
     }
     var opNew = document.createElement('option');
     opNew.value = 'new'; opNew.textContent = '＋ Enter a new address';
@@ -912,6 +937,13 @@
       else { applyAddress(patronAddresses[parseInt(sel.value, 10)]); }
     });
     wrap.appendChild(sel);
+    /* Remove — only for a real saved (managed) address that's currently selected. */
+    var chosen = (cur >= 0) ? patronAddresses[cur] : null;
+    if (chosen && chosen.id) {
+      var rm = el('button', 'ck-book-rm', 'Remove this saved address'); rm.type = 'button';
+      rm.addEventListener('click', function () { removeSavedAddress(chosen.id); });
+      wrap.appendChild(rm);
+    }
     return wrap;
   }
 
@@ -1995,7 +2027,11 @@
         headers: { 'Authorization': 'Bearer ' + token }
       }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
         if (!j) { return; }
-        patronAddresses = Array.isArray(j.addresses) ? j.addresses : [];
+        /* Prefer the MANAGED book (real, removable rows with ids); fall back to
+           the derived view if it's empty (e.g. server not yet deployed). */
+        patronAddresses = (Array.isArray(j.saved_addresses) && j.saved_addresses.length)
+          ? j.saved_addresses
+          : (Array.isArray(j.addresses) ? j.addresses : []);
         patronBillingAddresses = Array.isArray(j.billing_addresses) ? j.billing_addresses : [];
         /* Identity from the latest entry; the DEFAULT ship-to prefill is the most
            recent PERSONAL address, so a returning buyer whose last order was a
@@ -2006,7 +2042,7 @@
         for (i = 0; i < patronAddresses.length; i++) {
           if (!patronAddresses[i].is_gift) { home = patronAddresses[i]; break; }
         }
-        if (home) { prefillFrom(home); pickedAddrKey = home.key; }
+        if (home) { prefillFrom(home); pickedAddrKey = entryKey(home); }
         else if (j.latest && !j.latest.is_gift) { prefillFrom(j.latest); }
         if (panelOpen && act === 2) { showAct(2, 0); } /* re-render with the prefill */
       });

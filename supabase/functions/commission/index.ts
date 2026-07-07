@@ -324,6 +324,106 @@ function deriveBillingBook(rows: Array<Record<string, unknown>>): AddressEntry[]
   return out;
 }
 
+// ── Managed address book (customer_addresses) ────────────────────────────────
+// Real, editable/removable addresses (distinct from the derived view). Patron
+// access is brokered here with the service role + verified-JWT ownership checks.
+type SavedAddress = {
+  id: string; label: string; is_gift: boolean; recipient_name: string | null;
+  address: string; address2: string; city: string; state: string; zip: string;
+};
+function ownFilter(userId: string, email: string | null): string {
+  const safeEmail = email?.replace(/["\\,()]/g, "");
+  return safeEmail
+    ? `or=${encodeURIComponent(`(user_id.eq.${userId},email.eq."${safeEmail}")`)}`
+    : `user_id=eq.${encodeURIComponent(userId)}`;
+}
+function savedKey(a: { address: string; city: string; zip: string; recipient_name?: string | null; is_gift?: boolean }): string {
+  return [a.address.toLowerCase(), a.city.toLowerCase(), a.zip.toLowerCase(),
+    (a.is_gift ? (a.recipient_name ?? "") : "").toLowerCase()].join("|");
+}
+async function fetchSaved(userId: string, email: string | null): Promise<SavedAddress[]> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return [];
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/customer_addresses?select=id,label,is_gift,recipient_name,address,address2,city,state,zip&${ownFilter(userId, email)}&order=created_at.desc&limit=60`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    );
+    if (!res.ok) return [];
+    const rows = await res.json() as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: String(r.id), label: String(r.label ?? ""), is_gift: r.is_gift === true,
+      recipient_name: r.recipient_name ? String(r.recipient_name) : null,
+      address: String(r.address ?? ""), address2: String(r.address2 ?? ""),
+      city: String(r.city ?? ""), state: String(r.state ?? ""), zip: String(r.zip ?? ""),
+    }));
+  } catch { return []; }
+}
+/** Insert one address unless the patron already has that (address+city+zip+recipient). */
+async function insertSaved(userId: string | null, email: string | null, a: {
+  label?: string; is_gift?: boolean; recipient_name?: string | null;
+  address: string; address2?: string; city: string; state: string; zip: string;
+}, existing: SavedAddress[]): Promise<void> {
+  if (!SUPABASE_URL || !SERVICE_KEY || !a.address || !a.city) return;
+  const key = savedKey({ address: a.address, city: a.city, zip: a.zip, recipient_name: a.recipient_name ?? null, is_gift: !!a.is_gift });
+  if (existing.some((e) => savedKey(e) === key)) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/customer_addresses`, {
+      method: "POST",
+      headers: { ...RPC_HEADERS, Prefer: "return=minimal" },
+      body: JSON.stringify({
+        user_id: userId, email,
+        label: (a.label && a.label.trim()) || (a.is_gift ? (a.recipient_name ?? "Gift") : "Home"),
+        is_gift: !!a.is_gift, recipient_name: a.is_gift ? (a.recipient_name ?? null) : null,
+        address: a.address, address2: a.address2 ?? null, city: a.city, state: a.state, zip: a.zip,
+      }),
+    });
+    existing.push({ id: "", label: a.label ?? "", is_gift: !!a.is_gift, recipient_name: a.recipient_name ?? null, address: a.address, address2: a.address2 ?? "", city: a.city, state: a.state, zip: a.zip });
+  } catch { /* best-effort */ }
+}
+/** The patron's book, backfilled from order history the first time it's empty. */
+async function savedBook(userId: string, email: string | null): Promise<SavedAddress[]> {
+  let list = await fetchSaved(userId, email);
+  if (list.length > 0) return list;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/orders?select=name,recipient_name,is_gift,address,address2,city,state,zip,billing,placed_at&${ownFilter(userId, email)}&status=neq.cancelled&order=placed_at.desc&limit=30`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    );
+    const rows = res.ok ? await res.json() as Array<Record<string, unknown>> : [];
+    const acc: SavedAddress[] = [];
+    for (const a of deriveAddressBook(rows)) {
+      await insertSaved(userId, email, {
+        label: a.label, is_gift: a.is_gift, recipient_name: a.recipient_name,
+        address: a.address, address2: a.address2, city: a.city, state: a.state, zip: a.zip,
+      }, acc);
+    }
+    for (const a of deriveBillingBook(rows)) {
+      await insertSaved(userId, email, {
+        label: "Billing", is_gift: false, recipient_name: null,
+        address: a.address, address2: a.address2, city: a.city, state: a.state, zip: a.zip,
+      }, acc);
+    }
+  } catch { /* leave empty on failure */ }
+  list = await fetchSaved(userId, email);
+  return list;
+}
+/** Validate address fields for a save; a clean object or an error string. */
+function cleanAddr(raw: Record<string, unknown>): string | {
+  label: string; is_gift: boolean; recipient_name: string | null;
+  address: string; address2: string; city: string; state: string; zip: string;
+} {
+  const address = str(raw.address), city = str(raw.city), state = str(raw.state).toUpperCase(), zip = str(raw.zip);
+  const address2 = str(raw.address2), label = str(raw.label).slice(0, 60);
+  const isGift = raw.is_gift === true;
+  const recipient = isGift ? str(raw.recipient_name).slice(0, 80) : "";
+  if (address.length < 4 || address.length > 120) return "Street address must be 4 to 120 characters.";
+  if (address2.length > 120) return "Apt/suite must be at most 120 characters.";
+  if (city.length < 1 || city.length > 80) return "City must be 1 to 80 characters.";
+  if (!/^[A-Z]{2}$/.test(state) || !US_STATES.has(state)) return "State must be a two-letter US state code.";
+  if (!/^\d{5}(-\d{4})?$/.test(zip)) return "ZIP must be a 5-digit US ZIP code.";
+  return { label, is_gift: isGift, recipient_name: recipient || null, address, address2, city, state, zip };
+}
+
 /** Orders on the register for this buyer (id OR verified email), sans cancelled. */
 async function orderCount(userId: string, email: string | null): Promise<number | null> {
   if (!SUPABASE_URL || !SERVICE_KEY) return null;
@@ -673,10 +773,23 @@ Deno.serve(async (req: Request) => {
       addresses = deriveAddressBook(rows);
       billingAddresses = deriveBillingBook(rows);
     } catch { /* latest stays null, books empty */ }
+    // The managed address book (real, removable). Backfilled from history on first
+    // read; the derived `addresses`/`billing_addresses` stay as a fallback.
+    const saved = await savedBook(me.id, me.email);
     const res = jsonResponse(req, 200, {
       count, tier: standingTier(count), latest, addresses, billing_addresses: billingAddresses,
+      saved_addresses: saved,
     });
     // Personal payload: nothing between the browser and this function caches it.
+    res.headers.set("Cache-Control", "no-store");
+    return res;
+  }
+  // ── GET ?addresses=1 — the patron's managed address book (for a refresh after
+  // an add/remove). Backfills from history the first time it's empty. ──────────
+  if (req.method === "GET" && new URL(req.url).searchParams.get("addresses")) {
+    const me = await verifyUser(req);
+    if (!me) return jsonError(req, 401, "The register takes signed entries.");
+    const res = jsonResponse(req, 200, { addresses: await savedBook(me.id, me.email) });
     res.headers.set("Cache-Control", "no-store");
     return res;
   }
@@ -853,6 +966,55 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, { ok: true, serial, billing });
   }
 
+  // ── POST ?address_save=1 — signed-in patron adds/edits one saved address ─────
+  if (new URL(req.url).searchParams.get("address_save")) {
+    const me = await verifyUser(req);
+    if (!me) return jsonError(req, 401, "The register takes signed entries.");
+    let ab: Record<string, unknown>;
+    try { ab = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const clean = cleanAddr(ab);
+    if (typeof clean === "string") return jsonError(req, 400, clean);
+    const id = typeof ab.id === "string" && /^[0-9a-f-]{36}$/i.test(ab.id) ? ab.id : null;
+    const body = {
+      label: clean.label || (clean.is_gift ? (clean.recipient_name ?? "Gift") : "Home"),
+      is_gift: clean.is_gift, recipient_name: clean.recipient_name,
+      address: clean.address, address2: clean.address2 || null,
+      city: clean.city, state: clean.state, zip: clean.zip, updated_at: new Date().toISOString(),
+    };
+    if (id) {
+      // Update, scoped to the owner so a patron can only edit their own row.
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/customer_addresses?id=eq.${id}&${ownFilter(me.id, me.email)}`,
+        { method: "PATCH", headers: { ...RPC_HEADERS, Prefer: "return=representation" }, body: JSON.stringify(body) },
+      );
+      const rows = res.ok ? await res.json() as unknown[] : [];
+      if (!res.ok || rows.length === 0) return jsonError(req, 404, "That saved address isn't yours to edit.");
+      return jsonResponse(req, 200, { ok: true, addresses: await fetchSaved(me.id, me.email) });
+    }
+    await insertSaved(me.id, me.email, clean, await fetchSaved(me.id, me.email));
+    return jsonResponse(req, 200, { ok: true, addresses: await fetchSaved(me.id, me.email) });
+  }
+
+  // ── POST ?address_delete=1 — signed-in patron removes one saved address ──────
+  if (new URL(req.url).searchParams.get("address_delete")) {
+    const me = await verifyUser(req);
+    if (!me) return jsonError(req, 401, "The register takes signed entries.");
+    let db: Record<string, unknown>;
+    try { db = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const id = typeof db.id === "string" && /^[0-9a-f-]{36}$/i.test(db.id) ? db.id : null;
+    if (!id) return jsonError(req, 400, "A valid address id is required.");
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/customer_addresses?id=eq.${id}&${ownFilter(me.id, me.email)}`,
+      { method: "DELETE", headers: RPC_HEADERS },
+    );
+    if (!res.ok) return jsonError(req, 502, "Could not remove that address.");
+    return jsonResponse(req, 200, { ok: true, addresses: await fetchSaved(me.id, me.email) });
+  }
+
   // ── POST ?custresend=1 — SERVICE-ONLY re-send, called by the concierge ──────
   // The concierge's resend_confirmation tool calls this AFTER it has verified the
   // signed-in owner actually owns the order. Auth here is the service key (bearer),
@@ -959,6 +1121,31 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({ chat_session: chatSession }),
       });
     } catch { /* the order stands either way */ }
+  }
+
+  // Save the used ship-to (and any distinct billing) into the patron's managed
+  // address book, so it's there to reuse or remove next time (best-effort, off
+  // the response path).
+  if (customer.id) {
+    const saveP = (async () => {
+      try {
+        const acc = await fetchSaved(customer.id, customer.email);
+        await insertSaved(customer.id, customer.email, {
+          is_gift: !!validated.isGift, recipient_name: validated.recipient || null,
+          address: validated.address, address2: validated.address2,
+          city: validated.city, state: validated.state, zip: validated.zip,
+        }, acc);
+        if (validated.billing) {
+          await insertSaved(customer.id, customer.email, {
+            label: "Billing", is_gift: false, recipient_name: null,
+            address: validated.billing.address, address2: validated.billing.address2,
+            city: validated.billing.city, state: validated.billing.state, zip: validated.billing.zip,
+          }, acc);
+        }
+      } catch { /* best-effort */ }
+    })();
+    const er = (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime;
+    if (typeof er?.waitUntil === "function") er.waitUntil(saveP); else saveP.catch(() => {});
   }
 
   // Order-confirmation email (best-effort; never blocks the response).
