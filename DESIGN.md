@@ -318,10 +318,12 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, I want each conversation in the list to tell me plainly
   **whether it's been graded** — and, if so, the outcome — separate from where the
   shopper sits in the funnel, so that I don't mistake a funnel *stage* for a
-  grading *status*. *(Conversations row: a green `✓ graded · N/M goals` chip when
-  the evaluator has run, `not yet graded` otherwise, and a distinct `stage · …`
-  chip — the funnel value `evaluating` shows as **considering** so it can't be
-  read as "still evaluating".)*
+  grading *status*. *(Quiet, chip-free row: the right of the top line shows a
+  single **colored stage dot + word** in the stage's tone (or a **hollow dot +
+  "ungraded"** when the evaluator hasn't run); the who-line carries a muted
+  `N/M goals` fraction and a small clickable `🏷` house-note flag. No bordered
+  chips, no repeated words — one status cue per row. The funnel value `evaluating`
+  reads as **considering**.)*
 - **As the merchant**, I want to **re-run goal grading on demand** — one
   conversation from its transcript, or every one currently shown — and be told
   honestly if the judge returned nothing, so that a chat is graded when I need it,
@@ -373,7 +375,11 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   of hitting a hard cap, and **export** what I'm looking at to CSV — so that
   nothing is buried once volume grows. *(Server-side trigram filters; order-number
   and conversation-id lookup; range-paged lists with "Load more"; CSV export of
-  the register, a transcript, and the waitlist; stage chips; goal-outcome filter.)*
+  the register, a transcript, and the waitlist; stage chips; goal-outcome filter.
+  Both conversation exports — one transcript and the streamed **Export all** —
+  carry the conversation's `section`, `sales_stage`, `goals_met`, `goals_total`,
+  and the full `goal_status` JSON on every row, so the funnel and grades are in
+  the spreadsheet, not just on screen.)*
 - **As the operator**, I want to change what the concierge says and shows without a
   deploy — copy, tuning notes, starters, **selling angles**, **objection playbook**,
   **assertiveness**, engagement pacing, in-chat **forms**, and the **images** the

@@ -2197,7 +2197,8 @@ async function handleExportGet(req: Request): Promise<Response> {
   const to = url.searchParams.get("to") || "";
   const pii = url.searchParams.get("pii") === "1";
   const enc = new TextEncoder();
-  const HEAD = ["conversation_id", "user", "ip", "section", "sales_stage", "conversation_created_at",
+  const HEAD = ["conversation_id", "user", "ip", "section", "sales_stage",
+    "goals_met", "goals_total", "goal_status", "conversation_created_at",
     "message_created_at", "role", "model", "latency_ms", "content"];
   const CONVO_BATCH = 300, ID_CHUNK = 50;
 
@@ -2207,7 +2208,7 @@ async function handleExportGet(req: Request): Promise<Response> {
         controller.enqueue(enc.encode(HEAD.join(",") + "\n"));
         let cursorTs: string | null = null, cursorId: string | null = null;
         for (;;) {
-          let q = "concierge_conversations?select=id,created_at,user_email,section,sales_stage,ip" +
+          let q = "concierge_conversations?select=id,created_at,user_email,section,sales_stage,goal_status,ip" +
             `&order=created_at.desc,id.desc&limit=${CONVO_BATCH}`;
           if (from) q += `&created_at=gte.${encodeURIComponent(from)}`;
           if (to) q += `&created_at=lte.${encodeURIComponent(to)}`;
@@ -2216,7 +2217,7 @@ async function handleExportGet(req: Request): Promise<Response> {
             q += `&or=(created_at.lt.${encodeURIComponent(cursorTs)},` +
               `and(created_at.eq.${encodeURIComponent(cursorTs)},id.lt.${encodeURIComponent(cursorId)}))`;
           }
-          const convos = await pgSelect<{ id: string; created_at: string; user_email: string | null; section: string | null; sales_stage: string | null; ip: string | null }>(q);
+          const convos = await pgSelect<{ id: string; created_at: string; user_email: string | null; section: string | null; sales_stage: string | null; goal_status: Record<string, { status?: string }> | null; ip: string | null }>(q);
           if (!convos || convos.length === 0) break;
           const last = convos[convos.length - 1];
           cursorTs = last.created_at; cursorId = last.id;
@@ -2235,7 +2236,15 @@ async function handleExportGet(req: Request): Promise<Response> {
               const c = byId[m.conversation_id] || {} as typeof convos[number];
               const user = pii ? (c.user_email || "") : pseudoEmail(c.user_email);
               const ipCell = pii ? (c.ip || "") : ""; // IP is real PII — only in a PII export
+              // Goal grades: the outcome (met/total) plus the full per-goal JSON,
+              // so a spreadsheet has both a summary and every goal's status+note.
+              const gsObj = (c.goal_status && typeof c.goal_status === "object") ? c.goal_status : null;
+              const gKeys = gsObj ? Object.keys(gsObj) : [];
+              const gMet = gsObj ? gKeys.filter((k) => gsObj[k]?.status === "met").length : "";
+              const gTot = gsObj ? gKeys.length : "";
+              const gJson = gsObj ? JSON.stringify(gsObj) : "";
               buf += [csvCell(m.conversation_id), csvCell(user), csvCell(ipCell), csvCell(c.section), csvCell(c.sales_stage),
+                csvCell(gMet), csvCell(gTot), csvCell(gJson),
                 csvCell(c.created_at), csvCell(m.created_at), csvCell(m.role), csvCell(m.model),
                 csvCell(m.latency_ms), csvCell(m.content)].join(",") + "\n";
             }

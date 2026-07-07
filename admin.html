@@ -429,8 +429,19 @@
   .convo-item:last-child{ border-bottom:none; }
   .convo-item:hover{ background:rgba(196,155,91,.06); }
   .convo-item.on{ background:rgba(196,155,91,.1); box-shadow:inset 2px 0 0 var(--brass); }
-  .convo-item .line1{ display:flex; justify-content:space-between; gap:10px; margin-bottom:3px; }
+  .convo-item .line1{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:3px; }
+  .convo-item .l1left{ display:inline-flex; gap:10px; align-items:baseline; min-width:0; overflow:hidden; }
   .convo-item .who2{ color:var(--wool-dim); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* Quiet per-row status: a colored stage dot + word, or a hollow dot + "ungraded". */
+  .cstat{ display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }
+  .cstat .sdot{ width:7px; height:7px; border-radius:50%; background:var(--wool-faint); flex:0 0 auto; }
+  .cstat .sdot.hollow{ background:transparent; border:1.5px solid var(--wool-faint); }
+  .cstat .sword{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--wool-dim); }
+  .cstat .sword.muted{ color:var(--wool-faint); }
+  .who2 .rmeta{ color:var(--wool-faint); }
+  .who2 .hnflag{ margin-left:8px; cursor:pointer; font-size:12px; }
+  .who2 .hnflag:hover{ filter:brightness(1.35); }
   .transcript{
     border:1px solid var(--hairline-dim); border-radius:3px; min-height:64vh; max-height:78vh;
     display:flex; flex-direction:column; background:rgba(38,51,43,.28);
@@ -5396,6 +5407,12 @@ const STAGE_LABELS = {
 };
 // The funnel, earliest → latest. won/lost are terminal outcomes shown apart.
 const STAGE_ORDER = ['browsing', 'engaged', 'evaluating', 'objection', 'ready', 'won', 'lost'];
+// One tone per stage — cool at the top of the funnel, brass mid, green at the
+// close, red for objection/lost. Shared by the funnel bar and the row stage dot.
+const STAGE_TONE = {
+  browsing: '#7a8a9a', engaged: '#c49b5b', evaluating: '#c49b5b',
+  objection: '#b5713b', ready: '#3b7a4b', won: '#3b7a4b', lost: '#8a4a4a'
+};
 function convoStageValue(c) {
   const s = c && c.sales_stage;
   return (s && STAGE_LABELS[s]) ? s : null;   // a valid funnel stage, or null (ungraded/unknown)
@@ -5438,10 +5455,8 @@ function renderFunnelBar(activeStage) {
     c.addEventListener('click', function () { setStage(stageVal); });
     return c;
   };
-  const TONE = { browsing: '#7a8a9a', engaged: '#c49b5b', evaluating: '#c49b5b',
-    objection: '#b5713b', ready: '#3b7a4b', won: '#3b7a4b', lost: '#8a4a4a' };
   STAGE_ORDER.forEach(function (s) {
-    box.appendChild(cell(STAGE_LABELS[s], counts[s] || 0, s, TONE[s]));
+    box.appendChild(cell(STAGE_LABELS[s], counts[s] || 0, s, STAGE_TONE[s]));
   });
   if (ungraded) box.appendChild(cell('not yet graded', ungraded, 'none', '#555'));
 }
@@ -5468,51 +5483,58 @@ function renderConvoList(counts) {
     const btn = el('button', 'convo-item');
     if (c.id === state.activeConvoId) btn.classList.add('on');
 
+    // Top line: time · section on the left; a single, quiet status cue on the
+    // right — one colored dot + the funnel stage word (in the stage's tone), or a
+    // hollow dot + "ungraded" when the evaluator hasn't run. No bordered chips.
     const line1 = el('div', 'line1');
-    line1.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
-    line1.appendChild(el('span', 'micro', c.section || '—'));
-    // Grading status FIRST, and explicit: a green "✓ graded · N/M goals" chip
-    // means the evaluator ran and this is the outcome; its absence means the chat
-    // hasn't been graded yet. This is what tells you it's evaluated — the stage
-    // chip beside it is only WHERE the shopper sits in the funnel, not a status.
+    const l1left = el('span', 'l1left');
+    l1left.appendChild(el('span', 'micro', fmtWhen(c.created_at)));
+    l1left.appendChild(el('span', 'micro', c.section || '—'));
+    line1.appendChild(l1left);
+
+    const stage = convoStageValue(c);
+    const cstat = el('span', 'cstat');
+    const dot = el('span', 'sdot');
+    if (stage) {
+      dot.style.background = STAGE_TONE[stage] || 'var(--wool-faint)';
+      const w = el('span', 'sword', STAGE_LABELS[stage]);
+      w.style.color = STAGE_TONE[stage] || 'var(--wool-dim)';
+      cstat.appendChild(dot); cstat.appendChild(w);
+      cstat.title = 'Funnel stage: ' + STAGE_LABELS[stage] + ' (graded). Open for the scorecard.';
+    } else {
+      dot.classList.add('hollow');
+      const w = el('span', 'sword muted', 'ungraded');
+      cstat.appendChild(dot); cstat.appendChild(w);
+      cstat.title = 'Not yet graded by the goal evaluator.';
+    }
+    line1.appendChild(cstat);
+    btn.appendChild(line1);
+
+    // Who-line: identity · N messages, then a muted goals fraction (only when
+    // graded — no "graded" word, the stage dot already carries that), then a
+    // small clickable house-note flag.
+    const n = counts[c.id] || 0;
+    const who = el('div', 'who2');
+    who.appendChild(document.createTextNode((c.user_email || 'anonymous') + ' · ' + n + (n === 1 ? ' message' : ' messages')));
     const gs = (c.goal_status && typeof c.goal_status === 'object') ? c.goal_status : null;
     if (gs) {
       const keys = Object.keys(gs);
       const met = keys.filter(function (k) { return gs[k] && gs[k].status === 'met'; }).length;
-      const gchip = el('span', 'stage-chip', '✓ graded · ' + met + '/' + keys.length + ' goals');
-      gchip.style.cssText = 'border-color:#3b7a4b; color:#8fd0a0;';
-      gchip.title = 'Goals evaluated — ' + met + ' of ' + keys.length + ' met. Open the chat for the scorecard.';
-      line1.appendChild(gchip);
-    } else {
-      const uchip = el('span', 'stage-chip', 'not yet graded');
-      uchip.style.cssText = 'border-color:var(--hairline); color:var(--wool-faint);';
-      uchip.title = 'The goal evaluator has not scored this conversation yet.';
-      line1.appendChild(uchip);
-    }
-    if (c.sales_stage) {
-      const sc = el('span', 'stage-chip stage-' + c.sales_stage, 'stage · ' + (STAGE_LABELS[c.sales_stage] || c.sales_stage));
-      sc.title = 'Where this shopper sits in the sales funnel (a by-product of grading) — not an evaluation status.';
-      line1.appendChild(sc);
+      const g = el('span', 'rmeta', ' · ' + met + '/' + keys.length + ' goals');
+      g.title = met + ' of ' + keys.length + ' goals met — open for the scorecard.';
+      who.appendChild(g);
     }
     const hn = state.convoHouse && state.convoHouse[c.id];
     if (hn && hn.length) {
-      const tag = el('span', 'stage-chip', '🏷 house note' + (hn.length > 1 ? ' ×' + hn.length : ' #' + hn[0]));
-      tag.style.cssText = 'border-color:#7a5aa0; color:#b79fe0; cursor:pointer;';
-      tag.title = 'Open this chat at the moment the house note was acted on';
-      // Click the tag → open the transcript scrolled to where it happened (the
-      // resolve action's timestamp), not just the bottom. Stop propagation so the
-      // row's own open (which lands at the end) doesn't fire too.
+      const tag = el('span', 'hnflag', '🏷' + (hn.length > 1 ? '×' + hn.length : ''));
+      tag.title = 'House note acted on here (#' + hn.join(', #') + ') — click to jump to the moment';
       tag.addEventListener('click', function (e) {
         e.stopPropagation();
         state.jumpTo = { conv: c.id, at: (state.convoHouseAt && state.convoHouseAt[c.id]) || null };
         openConvo(c);
       });
-      line1.appendChild(tag);
+      who.appendChild(tag);
     }
-    btn.appendChild(line1);
-
-    const n = counts[c.id] || 0;
-    const who = el('div', 'who2', (c.user_email || 'anonymous') + '  ·  ' + n + (n === 1 ? ' message' : ' messages'));
     btn.appendChild(who);
 
     btn.addEventListener('click', function () {
@@ -5689,10 +5711,18 @@ function exportTranscriptCsv(c) {
   if (!msgs.length) { toast('No transcript to export', true); return; }
   const u = userCell(c.user_email);
   const ipCell = piiOn() ? (c.ip || '') : ''; // IP is real PII — only in a PII export
-  const head = ['conversation_id', 'user', 'ip', 'created_at', 'role', 'model', 'latency_ms', 'content'];
+  // Conversation-level grading, repeated on each row (matches the streamed export).
+  const gsObj = (c.goal_status && typeof c.goal_status === 'object') ? c.goal_status : null;
+  const gKeys = gsObj ? Object.keys(gsObj) : [];
+  const gMet = gsObj ? gKeys.filter(function (k) { return gsObj[k] && gsObj[k].status === 'met'; }).length : '';
+  const gTot = gsObj ? gKeys.length : '';
+  const gJson = gsObj ? JSON.stringify(gsObj) : '';
+  const head = ['conversation_id', 'user', 'ip', 'section', 'sales_stage', 'goals_met', 'goals_total',
+    'goal_status', 'created_at', 'role', 'model', 'latency_ms', 'content'];
   const lines = [head.join(',')];
   msgs.forEach(function (m) {
-    lines.push([csvEsc(c.id), csvEsc(u), csvEsc(ipCell), csvEsc(m.created_at), csvEsc(m.role),
+    lines.push([csvEsc(c.id), csvEsc(u), csvEsc(ipCell), csvEsc(c.section), csvEsc(c.sales_stage),
+      csvEsc(gMet), csvEsc(gTot), csvEsc(gJson), csvEsc(m.created_at), csvEsc(m.role),
       csvEsc(m.model), csvEsc(m.latency_ms), csvEsc(m.content)].join(','));
   });
   downloadCsv('conversation-' + String(c.id).slice(0, 8) + (piiOn() ? '-pii' : '') + '.csv', lines.join('\n'));
