@@ -58,9 +58,21 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   on Nº 231") is done at the first natural moment, then checked off by calling
   **`resolve_admin_note`** with its `(#id)` **in the same reply** — the CUSTOMER-block
   line warns that a completed one-time task left open will wrongly repeat next visit.
-- **Proactive beats honour them too.** The idle-nudge and opener lines are told to
-  act on an open instruction even when the patron hasn't typed (those beats run
-  tool-less, so they can't self-resolve — the backstop below closes them).
+- **Proactive beats honour them too.** The idle-nudge, opener, and closed-panel
+  re-engagement lines are told to act on an open instruction even when the patron
+  hasn't typed (those beats run tool-less, so they can't self-resolve — the
+  backstop below closes them). Every one of these lines is **recorded to
+  `concierge_messages`** — including the closed-panel `?reengage=1` bubble, which
+  formerly returned its text without logging it, so a note delivered there vanished
+  from the transcript. The transcript is now complete: every customer-visible line
+  the concierge produces is written.
+- **Greet on the opening beat only.** The RE-ENGAGEMENT banner ("new visit — greet
+  like someone returning") and the "on your very first line of the visit" directive
+  framing render only when `customerBlock(customer, opening)` is called with
+  `opening = true` (a proactive greet/reengage, or the first turn with no assistant
+  reply yet). Mid-conversation they are dropped so the bot never re-greets ("what
+  brings you back today?") on every reply — the live conversation is never the
+  "last" one, so the banner would otherwise repeat verbatim each turn.
 - **Self-resolve backstop.** Because a model sometimes acts but forgets to resolve,
   `reconcileDirectives` runs after any signed-in turn with an open one-time
   directive: a small, tool-scoped background pass re-reads what was said and calls

@@ -266,7 +266,10 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   arrive. *(The directive is honoured in words on every proactive beat — opener,
   nudge, and the closed-panel re-engagement line — with no tool required;
   "acting" is decoupled from "checking off" so a tool-less beat never blocks it.
-  See §4.13.)*
+  The closed-panel re-engagement line (`?reengage=1`) also **records what it
+  said to `concierge_messages`** and runs `scheduleDirectiveReconcile`, so a
+  note delivered in the launcher bubble is never invisible in the transcript and
+  its `🏷` marker lands on the real delivery. See §4.13.)*
 - **As the merchant**, I want a one-time note the bot **acted on but forgot to
   formally close** to be checked off (and the chat tagged) anyway, so that a
   completed courtesy never wrongly repeats and I still see which chat handled it.
@@ -284,13 +287,21 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, when I follow a note (or an order) to its chat, I want to
   land on the **exact reply where it was acted on**, not just the top of the
   transcript, and know **which kind** of action it was, so that the marker is
-  never an unexplained "acted on here". *("Go to where it was acted on" and the
-  Conversations-list `🏷 house note` chip open the transcript scrolled to the
-  acted-on reply — keyed on the action's timestamp — and pulse it with a brass
-  rail. The marker is **reason-tagged**: `jumpToConversation(conv, at, reason)`
-  renders `↳ house instruction acted on here` for a note resolve vs `↳ this order
-  acted on here` for an order-touch jump, each with a tooltip spelling out what
-  the concierge did — so the two jumps are never confused.)*
+  never an unexplained "acted on here". *(An order/plain jump opens the transcript
+  scrolled to the acted-on reply — keyed on the action's timestamp — and pulses it
+  with a brass rail, **reason-tagged** via `jumpToConversation(conv, at, reason)`:
+  `↳ this order acted on here` for an order-touch jump, with a tooltip spelling out
+  what the concierge did.)*
+- **As the merchant**, when a chat carried out **several** house instructions, I
+  want to see **each** one — its text, pinned to the exact reply that delivered
+  it — not a single unlabelled jump, so that I can tell which message answered
+  which note. *(`openConvo` loads **every** `resolve_admin_note` action for the
+  chat, each with its note text; `renderTranscript` maps each to the reply it
+  landed on and renders a purple `🏷 house instruction #id carried out here`
+  marker with the full note text beneath that bubble. A sticky
+  `🏷 N house instructions acted on` jumper steps through them; the first is
+  centered and pulsed on open. Replaces the earlier single-timestamp jump that
+  collapsed a multi-note chat to one marker.)*
 - **As the merchant**, I want to see **at a glance in the Patrons list** which
   patrons have an open house note waiting, so that I don't have to open each card
   to find outstanding work. *(A patron with an unresolved directive gets a purple
