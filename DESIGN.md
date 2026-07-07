@@ -75,6 +75,12 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   *(Customer block: name, standing, orders, client book, re-engagement recency.)*
 - **As a patron mid-conversation**, I want to sign in and keep the same thread, so
   that signing in is continuity, not a reset. *(Anonymous → signed-in adoption.)*
+- **As a returning patron placing another order**, I want my saved addresses
+  offered so I don't re-type them — my own door *and* the people I've shipped
+  gifts to — so that a re-order (or "send Oma another") is a tap, not a form.
+  *(Checkout Act II address book: `GET ?me=1` returns a deduped `addresses[]` from
+  order history — personal + past gift recipients; tapping a gift address
+  re-addresses the order to that recipient. See §4.12.)*
 - **As a customer with an order**, I want to check status, change the shipping
   address or colorway, or cancel — in chat, myself — so that I'm not emailing
   support. *(Register tools, gated to still-mutable orders, fully audited.)*
@@ -684,6 +690,30 @@ IP trail. The table + drawer split gives scanning and bulk work their own
 surface while keeping the full per-order controls one click away, and the two
 views keep order-management and relationship-management from crowding each other.
 
+### 4.12 The checkout address book — re-order without re-typing
+**Decision:** a returning signed-in patron shouldn't retype an address the house
+already has. `GET ?me=1` returns, alongside standing and the latest entry, an
+**`addresses[]`** derived from the buyer's recent order history — one entry per
+distinct ship-to `(address · city · zip · recipient)`, newest-first, capped at
+six. Each entry is labelled: a **personal** door (`Home`) or a **past gift
+recipient** (their name). The checkout's Act II renders these as tap-to-fill
+chips, plus a **"New"** chip to clear and type a fresh one.
+
+**The gift sharp-edge, fixed.** An order's single `address` is the *ship-to* — for
+a gift, that's the **recipient's** address. The old prefill blindly reused the
+latest order's ship-to, so a patron whose last order was a gift saw the
+recipient's address in their own next order. Now the **default** prefill is the
+most recent *non-gift* address (their own door); gift addresses never auto-fill —
+they're only there as explicit taps. Tapping a gift chip re-addresses the order
+to that recipient (sets `is_gift` + `recipient`), so "send Oma another" is one
+tap. The `feier-patron` local cache carries an `is_gift` flag for the same
+reason, so even the offline prefill won't leak a recipient's door.
+
+**Nothing new stored.** The address book is *derived* from existing order rows on
+read — no address table, no new write path, no extra PII at rest. Only fields
+that already exist on `orders` are returned, and only to the signed-in owner
+(`?me=1` is JWT-gated, `Cache-Control: no-store`).
+
 ---
 
 ## 5. Subsystems
@@ -695,8 +725,9 @@ views keep order-management and relationship-management from crowding each other
   `?selftest=1` (what does it know about me / is the schema applied),
   `?cachecheck=1` (cache round-trip health).
 - **Checkout / commission** (`functions/commission/`) — hold a number
-  (`?hold=1`), place an order (POST) and email a confirmation, read your orders
-  for prefill (`?me=1`), the live edition counter for the ticker (`?next=1`),
+  (`?hold=1`), place an order (POST) and email a confirmation, read your standing
+  + latest entry + **saved address book** for prefill (`?me=1`; see §4.12), the
+  live edition counter for the ticker (`?next=1`),
   recent orders for the ticker (`?recent=1`), and an admin-gated fulfillment
   endpoint (`POST ?fulfill=1`) that advances status / attaches tracking and emails
   the customer on shipment or return. Guest checkout verifies email via the same

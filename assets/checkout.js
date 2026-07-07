@@ -359,6 +359,23 @@
       '.ck-field.ck-invalid .ck-input,.ck-field.ck-invalid .ck-select{',
       'border-bottom-color:rgba(180,86,74,.55);}',
 
+      /* saved-address book (returning patron) */
+      '.ck-book{margin:0 0 1.5rem;}',
+      '.ck-book-lbl{font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.22em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.55);margin-bottom:.6rem;}',
+      '.ck-book-row{display:flex;flex-wrap:wrap;gap:.5rem;}',
+      '.ck-book-chip{display:flex;flex-direction:column;gap:3px;text-align:left;cursor:pointer;',
+      'background:rgba(196,155,91,.06);border:1px solid var(--ck-hair-soft);border-radius:11px;',
+      'padding:.55rem .75rem;min-width:130px;max-width:210px;color:var(--ck-ink);',
+      'font-family:"Hanken Grotesk",sans-serif;transition:border-color .25s ease,background .25s ease;}',
+      '.ck-book-chip:hover{border-color:var(--ck-hair);background:rgba(196,155,91,.12);}',
+      '.ck-book-chip.ck-on{border-color:var(--ck-brass,#A67C3D);background:rgba(196,155,91,.17);}',
+      '.ck-book-tag{font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.14em;',
+      'text-transform:uppercase;color:var(--ck-brass-soft);}',
+      '.ck-book-line{font-size:.78rem;line-height:1.35;color:rgba(241,236,226,.82);',
+      'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;}',
+      '.ck-book-new .ck-book-tag{color:rgba(241,236,226,.5);}',
+
       /* notice-at-collection + demo line */
       '.ck-notice{margin:.2rem 0 0;font-family:"IBM Plex Mono",monospace;font-size:.62rem;',
       'letter-spacing:.08em;line-height:1.8;color:var(--ck-ink);opacity:.55;}',
@@ -548,6 +565,8 @@
   };
   var commissioned = null;           /* { serial, dateLine } once entered */
   var sending = false;
+  var patronAddresses = [];          /* saved ship-to addresses from ?me=1 (returning patron) */
+  var pickedAddrKey = null;          /* which saved address the patron tapped, for highlight */
 
   /* ----------------------------------------------------------
      4. Swatch imagery — borrowed from the page's colorway chips
@@ -830,12 +849,69 @@
     }
   }
 
+  /* Apply a saved address to the order (an explicit tap overrides typed fields).
+     A gift entry re-addresses to that recipient; a personal one clears the gift. */
+  function applyAddress(entry) {
+    if (!entry) {                       /* "New address" — clear ship-to + gift */
+      order.address = ''; order.address2 = ''; order.city = ''; order.state = ''; order.zip = '';
+      order.is_gift = false; order.recipient = '';
+      pickedAddrKey = 'new';
+    } else {
+      order.address = entry.address || '';
+      order.address2 = entry.address2 || '';
+      order.city = entry.city || '';
+      order.state = entry.state || '';
+      order.zip = entry.zip || '';
+      if (entry.is_gift && entry.recipient_name) {
+        order.is_gift = true; order.recipient = entry.recipient_name;
+      } else {
+        order.is_gift = false; order.recipient = '';
+      }
+      if (entry.name && !order.name) { order.name = entry.name; }
+      pickedAddrKey = entry.key;
+    }
+    saveDraft();
+    showAct(2, 0);                      /* re-render the act with the chosen address */
+  }
+
+  /* The saved-address book — chips the returning patron can tap instead of
+     re-typing. Personal doors and past gift recipients, plus a "New" escape. */
+  function buildAddressBook() {
+    if (!patronAddresses.length) { return null; }
+    var wrap = el('div', 'ck-book');
+    wrap.appendChild(el('div', 'ck-book-lbl', 'Ship to a saved address'));
+    var row = el('div', 'ck-book-row');
+    var i;
+    for (i = 0; i < patronAddresses.length; i++) {
+      (function (a) {
+        var chip = el('button', 'ck-book-chip' + (pickedAddrKey === a.key ? ' ck-on' : ''));
+        chip.type = 'button';
+        chip.appendChild(el('div', 'ck-book-tag', a.label || (a.is_gift ? 'Gift' : 'Home')));
+        var line = [a.address, a.city, a.state].filter(function (x) { return x; }).join(', ');
+        chip.appendChild(el('div', 'ck-book-line', line || '—'));
+        chip.addEventListener('click', function () { applyAddress(a); });
+        row.appendChild(chip);
+      })(patronAddresses[i]);
+    }
+    var neu = el('button', 'ck-book-chip ck-book-new' + (pickedAddrKey === 'new' ? ' ck-on' : ''));
+    neu.type = 'button';
+    neu.appendChild(el('div', 'ck-book-tag', 'New'));
+    neu.appendChild(el('div', 'ck-book-line', 'A different address'));
+    neu.addEventListener('click', function () { applyAddress(null); });
+    row.appendChild(neu);
+    wrap.appendChild(row);
+    return wrap;
+  }
+
   function buildAct2() {
     var box = el('section', 'ck-act');
     box.setAttribute('aria-label', 'Act two — the register entry');
 
     box.appendChild(el('div', 'ck-kicker', 'Act II — The Register Entry'));
     box.appendChild(el('p', 'ck-lede', 'A few lines for the mill’s Webbuch. Nothing more is asked.'));
+
+    var book = buildAddressBook();
+    if (book) { box.appendChild(book); }
 
     var form = document.createElement('form');
     form.noValidate = true;
@@ -1320,7 +1396,10 @@
           count: st.count, tier: st.tier, serial: serial,
           name: order.name, colorway: order.colorway, at: Date.now(),
           email: order.email, address: order.address, address2: order.address2,
-          city: order.city, state: order.state, zip: order.zip
+          city: order.city, state: order.state, zip: order.zip,
+          /* remember whether this ship-to was a gift, so the next visit doesn't
+             prefill a returning buyer's personal order with a recipient's door */
+          is_gift: !!order.is_gift, recipient: (order.is_gift && order.recipient) || ''
         }));
       } catch (eS) { /* storage blocked */ }
       try {
@@ -1828,7 +1907,11 @@
   var meFetched = false;
   function prefillReturning() {
     try {
-      prefillFrom(JSON.parse(window.localStorage.getItem('feier-patron') || 'null'));
+      var lp = JSON.parse(window.localStorage.getItem('feier-patron') || 'null');
+      if (lp) {
+        prefillFrom({ name: lp.name, email: lp.email });   /* identity always */
+        if (!lp.is_gift) { prefillFrom(lp); }              /* but a personal ship-to only */
+      }
     } catch (eP) { /* fresh visitor */ }
     if (meFetched || isDemo() || !hasSb()) { return; }
     meFetched = true;
@@ -1837,10 +1920,20 @@
       return fetch(commissionEndpoint() + '?me=1', {
         headers: { 'Authorization': 'Bearer ' + token }
       }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-        if (j && j.latest) {
-          prefillFrom(j.latest);
-          if (panelOpen && act === 2) { showAct(2, 0); } /* re-render with the prefill */
+        if (!j) { return; }
+        patronAddresses = Array.isArray(j.addresses) ? j.addresses : [];
+        /* Identity from the latest entry; the DEFAULT ship-to prefill is the most
+           recent PERSONAL address, so a returning buyer whose last order was a
+           gift doesn't inherit the recipient's door. Saved gift addresses stay
+           available as taps in the book. */
+        if (j.latest) { prefillFrom({ name: j.latest.name, email: j.latest.email }); }
+        var home = null, i;
+        for (i = 0; i < patronAddresses.length; i++) {
+          if (!patronAddresses[i].is_gift) { home = patronAddresses[i]; break; }
         }
+        if (home) { prefillFrom(home); pickedAddrKey = home.key; }
+        else if (j.latest && !j.latest.is_gift) { prefillFrom(j.latest); }
+        if (panelOpen && act === 2) { showAct(2, 0); } /* re-render with the prefill */
       });
     })['catch'](function () { /* the form is still a form */ });
   }
