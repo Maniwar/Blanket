@@ -268,34 +268,93 @@
   .imgrow .imgalt{ flex:1 1 130px; min-width:0; }
   .imgrow .imgdesc{ flex:2 1 180px; min-width:0; }
 
-  /* customers */
-  .cust-row{ border:1px solid var(--hairline-dim); border-radius:3px; margin-bottom:14px;
-    background:rgba(38,51,43,.28); overflow:hidden; }
-  .cust-head{ display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
-    padding:14px 18px; cursor:pointer; user-select:none; }
-  .cust-head:hover{ background:rgba(241,236,226,.03); }
-  .cust-name{ font-size:16px; color:var(--wool); }
-  .cust-email{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool-dim); }
-  .cust-tier{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--brass-soft); border:1px solid var(--hairline);
-    border-radius:20px; padding:3px 11px; }
+  /* customers — order register (compact table + detail drawer) */
+  .ord-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .ord-chip{ display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--wool-dim); background:rgba(38,51,43,.34); border:1px solid var(--hairline-dim);
+    border-radius:20px; padding:5px 13px; transition:border-color .14s ease, color .14s ease; }
+  .ord-chip:hover{ border-color:var(--hairline); color:var(--wool); }
+  .ord-chip.on{ color:var(--wool); border-color:var(--brass); background:rgba(196,155,91,.1); }
+  .ord-chip .n{ font-size:12px; color:var(--wool); }
+  .ord-chip .swatch{ width:8px; height:8px; border-radius:50%; }
+
+  .ord-tbl{ border:1px solid var(--hairline-dim); border-radius:3px; overflow:hidden;
+    background:rgba(38,51,43,.28); }
+  .ord-hrow, .ord-row{ display:grid;
+    grid-template-columns:34px 82px 1.2fr 118px 1.4fr 1.3fr 96px 22px;
+    gap:12px; align-items:center; padding:10px 16px; }
+  .ord-hrow{ border-bottom:1px solid var(--hairline); background:rgba(38,51,43,.4);
+    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--wool-faint); }
+  .ord-hrow .sortable{ cursor:pointer; user-select:none; }
+  .ord-hrow .sortable:hover{ color:var(--wool); }
+  .ord-hrow .arr{ color:var(--brass); }
+  .ord-row{ border-bottom:1px solid var(--hairline-dim); cursor:pointer; font-size:13.5px;
+    transition:background .12s ease; }
+  .ord-row:last-child{ border-bottom:none; }
+  .ord-row:hover{ background:rgba(196,155,91,.05); }
+  .ord-row.sel{ background:rgba(196,155,91,.09); box-shadow:inset 2px 0 0 var(--brass); }
+  .ord-row .no{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--brass-soft); }
+  .ord-cloth{ display:inline-flex; align-items:center; gap:8px; color:var(--wool); min-width:0; }
+  .ord-cloth .nm{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cdot{ width:11px; height:11px; border-radius:50%; flex:0 0 auto;
+    box-shadow:0 0 0 1px rgba(0,0,0,.35) inset; }
+  .ord-cust{ min-width:0; }
+  .ord-cust .cn{ color:var(--wool); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ord-cust .ce{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--wool-faint);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ord-dest{ color:var(--wool-dim); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ord-dest .gift{ color:var(--brass-soft); }
+  .ord-when{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--wool-faint); white-space:nowrap; }
+  .ord-chev{ color:var(--wool-faint); text-align:center; }
+  .ord-check{ width:15px; height:15px; accent-color:var(--brass); cursor:pointer; }
+
+  .st-badge{ display:inline-block; font-family:'IBM Plex Mono', monospace; font-size:10px;
+    letter-spacing:.1em; text-transform:uppercase; padding:3px 9px; border-radius:20px;
+    color:#f1ece2; white-space:nowrap; }
+
+  /* bulk action bar */
+  .bulkbar{ position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:12px;
+    flex-wrap:wrap; margin-bottom:14px; padding:11px 16px; border:1px solid var(--brass);
+    border-radius:3px; background:linear-gradient(180deg, rgba(196,155,91,.16), rgba(38,51,43,.5)); }
+  .bulkbar .bsel{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool);
+    letter-spacing:.04em; }
+  .bulkbar .bsel b{ color:var(--brass-soft); }
+  .bulkbar .spacer{ margin-left:auto; }
+  .bulkbar select{ max-width:150px; }
+
+  /* detail drawer */
+  .drawer-bd{ position:fixed; inset:0; z-index:40; background:rgba(12,16,13,.6);
+    backdrop-filter:blur(2px); opacity:0; transition:opacity .2s ease; }
+  .drawer-bd.on{ opacity:1; }
+  .drawer{ position:fixed; top:0; right:0; z-index:41; width:min(560px, 94vw); height:100%;
+    overflow-y:auto; background:var(--loden-deep, #1c261f);
+    border-left:1px solid var(--hairline); box-shadow:-24px 0 60px rgba(0,0,0,.45);
+    transform:translateX(100%); transition:transform .24s cubic-bezier(.2,.7,.2,1);
+    padding:26px 28px 40px; }
+  .drawer.on{ transform:translateX(0); }
+  .drawer-x{ position:absolute; top:18px; right:20px; background:none; border:none; cursor:pointer;
+    color:var(--wool-dim); font-size:22px; line-height:1; padding:4px 8px; }
+  .drawer-x:hover{ color:var(--wool); }
+  .drawer h3{ font-family:'Gloock', Georgia, serif; font-weight:400; font-size:22px;
+    color:var(--wool); margin:0 0 4px; }
+  .drawer .dsub{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool-dim);
+    margin-bottom:20px; }
+  .dsec{ border-top:1px solid var(--hairline-dim); padding:16px 0 4px; }
+  .dsec > .lbl{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--wool-faint); margin-bottom:10px; }
   .cust-book-badge{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.1em;
     text-transform:uppercase; color:var(--loden-deep); background:var(--brass-soft);
     border-radius:20px; padding:3px 10px; }
-  .cust-book{ background:rgba(196,155,91,.05); }
-  .cust-meta{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:12px;
-    color:var(--wool-dim); white-space:nowrap; }
-  .cust-meta b{ color:var(--wool); font-weight:500; }
-  .cust-orders{ display:none; border-top:1px solid var(--hairline-dim); padding:6px 18px 12px; }
-  .cust-row.open .cust-orders{ display:block; }
   .cust-order{ display:flex; gap:14px; flex-wrap:wrap; align-items:baseline;
     padding:9px 2px; border-bottom:1px solid var(--hairline-dim); font-size:13.5px; }
   .cust-order:last-child{ border-bottom:none; }
-  .cust-order .serial{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--brass-soft); }
-  .cust-order .st{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--wool-dim); }
-  .cust-order .gift{ color:var(--brass-soft); font-size:12.5px; }
   .cust-order .place{ color:var(--wool-faint); font-size:12.5px; }
+  @media (max-width:820px){
+    .ord-hrow, .ord-row{ grid-template-columns:30px 66px 1.1fr 104px 1.2fr 20px; }
+    .ord-hrow .col-cust, .ord-row .ord-cust, .ord-hrow .col-when, .ord-row .ord-when{ display:none; }
+  }
 
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
@@ -841,7 +900,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <div class="panel-head">
         <span class="micro">The register's patrons</span>
         <h2>Customers</h2>
-        <p class="note">Every buyer on the register — their standing, lifetime value at $589 a blanket, and each entry under their name. <strong>Click any customer</strong> to expand their orders and their <strong>client book</strong> — what the concierge has learned about them. Gift orders count toward the buyer who commissioned them.</p>
+        <p class="note">The register, one line per order. Filter with the status <strong>chips</strong>, sort by any column header, and <strong>select</strong> rows for bulk fulfilment, cancellation, resend, or export. <strong>Click any order</strong> to open its detail drawer — fulfilment, shipping address, email timeline, and the buyer's <strong>client book</strong> (what the concierge has learned and done for them). Gift orders count toward the buyer who commissioned them.</p>
       </div>
 
       <div class="metrics">
@@ -927,7 +986,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <div class="row-tools filters">
         <input type="date" id="convo-from" title="From date">
         <input type="date" id="convo-to" title="To date">
-        <input type="text" id="convo-q" placeholder="email, a word in the chat, or a conversation id…" style="max-width:300px;">
+        <input type="text" id="convo-q" placeholder="email, a word in the chat, a conversation id, or an IP…" style="max-width:320px;">
         <select id="convo-goal" title="Goal outcome (filters loaded conversations)">
           <option value="">Any outcome</option>
           <option value="met">Any goal met</option>
@@ -1100,6 +1159,9 @@ const state = {
   actions: [],
   gaps: [],
   customers: [],
+  custSel: new Set(),      // selected order keys (Nº) for bulk actions
+  custSort: { key: 'placed_at', dir: -1 },
+  custChip: '',            // client-side status quick-filter chip
   waitlist: [],
   emailsBySerial: {},
   images: [],
@@ -3526,7 +3588,7 @@ async function saveEdition() {
 }
 
 async function loadCustomers(more) {
-  if (!more) pageState.cust = 0;
+  if (!more) { pageState.cust = 0; state.custSel = new Set(); state.custChip = ''; state._custJumpDone = false; }
   const serialQ = fkw('cust-serial'), statusQ = fval('cust-status'),
         cwQ = fval('cust-colorway'), giftQ = fval('cust-gift');
   const df = fFrom('cust-from'), dt = fTo('cust-to'), kw = fkw('cust-search');
@@ -3613,9 +3675,8 @@ async function loadCustomers(more) {
 /* Export the loaded register as CSV — one row per ORDER (the natural grain for
    the register). Reflects what's currently loaded; Load more first for the full
    history. */
-function exportCustomersCsv() {
-  const orders = state.custOrders || [];
-  if (!orders.length) { toast('Nothing loaded to export', true); return; }
+function exportOrdersCsv(orders, filename) {
+  if (!orders || !orders.length) { toast('Nothing to export', true); return; }
   const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
   const head = ['placed_at', 'serial', 'cancelled_serial', 'status', 'colorway', 'email', 'name',
     'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking'];
@@ -3624,9 +3685,329 @@ function exportCustomersCsv() {
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'register-orders.csv';
+  a.download = filename || 'register-orders.csv';
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(a.href);
+}
+function exportCustomersCsv() { exportOrdersCsv(state.custOrders || [], 'register-orders.csv'); }
+
+/* ---- Register redesign: compact order table + detail drawer + bulk bar ---- */
+const CLOTH_DOT = { ungefaerbt: '#d8cdb8', loden: '#4a5d3f', graphit: '#3a3f44' };
+const STATUS_COLOR = {
+  placed: '#5a6b7a', weaving: '#a9772a', finishing: '#8a6d3b',
+  shipped: '#3b7a4b', delivered: '#2f6b3f', returned: '#8a5a3b', cancelled: '#7a3b3b'
+};
+const STATUS_ORDER = ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 'returned', 'cancelled'];
+
+function orderKey(o) { return String(o.serial != null ? o.serial : o.cancelled_serial); }
+function orderNo(o) { return Number(o.serial != null ? o.serial : o.cancelled_serial); }
+function clothDot(cw) {
+  const d = el('span', 'cdot');
+  d.style.background = CLOTH_DOT[cw] || '#6a6a6a';
+  d.title = cw || 'cloth';
+  return d;
+}
+function stBadge(status) {
+  const s = status || '—';
+  const b = el('span', 'st-badge', s);
+  b.style.background = STATUS_COLOR[s] || '#4a4a4a';
+  return b;
+}
+function custByEmail(email) {
+  const key = (email || 'unknown').toLowerCase();
+  return (state.customers || []).find(function (c) {
+    return (c.email || 'unknown').toLowerCase() === key;
+  }) || null;
+}
+
+/* ---- Bulk actions over the current selection ---- */
+function selectedOrders() {
+  const m = state.custByKey || {};
+  const out = [];
+  state.custSel.forEach(function (k) { if (m[k]) out.push(m[k]); });
+  return out;
+}
+async function bulkRunOn(list, label, fn, confirmIt) {
+  if (!list.length) { toast('No eligible orders in the selection', true); return; }
+  if (confirmIt && !window.confirm(label + ' — ' + list.length + ' order' +
+      (list.length === 1 ? '' : 's') + '. Continue?')) return;
+  let ok = 0, bad = 0;
+  for (let i = 0; i < list.length; i++) {
+    try { const r = await fn(list[i]); if (r && r.ok === false) bad++; else ok++; }
+    catch (e) { bad++; }
+  }
+  toast(label + ': ' + ok + ' done' + (bad ? (', ' + bad + ' failed') : ''), !!bad);
+  state.custSel = new Set();
+  loadCustomers();
+}
+function bulkAdvance(target) {
+  const sel = selectedOrders().filter(function (o) { return o.serial != null && o.status !== 'cancelled'; });
+  bulkRunOn(sel, 'Advance → ' + target, function (o) {
+    return fulfillOrder(o.serial, target, o.tracking || '');
+  }, true);
+}
+function bulkStrike() {
+  // "returned" is how the register strikes a live order — it emails the buyer a
+  // cancellation and returns the number to the edition.
+  const sel = selectedOrders().filter(function (o) {
+    return o.serial != null && o.status !== 'cancelled' && o.status !== 'returned';
+  });
+  bulkRunOn(sel, 'Cancel (strike Nº)', function (o) {
+    return fulfillOrder(o.serial, 'returned', o.tracking || '');
+  }, true);
+}
+function bulkResend() {
+  const sel = selectedOrders().filter(function (o) { return orderNo(o); });
+  bulkRunOn(sel, 'Resend confirmation', function (o) {
+    return resendEmail(o.serial != null ? o.serial : o.cancelled_serial, 'placed');
+  }, false);
+}
+function exportSelected() {
+  const sel = selectedOrders();
+  if (!sel.length) { toast('Nothing selected', true); return; }
+  exportOrdersCsv(sel, 'selected-orders.csv');
+}
+function refreshBulkBar() {
+  const bar = $('cust-bulkbar');
+  if (bar) bar.replaceWith(renderBulkBar());
+}
+function renderBulkBar() {
+  const n = state.custSel.size;
+  if (!n) { const ph = el('span'); ph.id = 'cust-bulkbar'; ph.style.display = 'none'; return ph; }
+  const bar = el('div', 'bulkbar'); bar.id = 'cust-bulkbar';
+  const sel = el('span', 'bsel');
+  sel.appendChild(el('b', null, String(n)));
+  sel.appendChild(document.createTextNode(' order' + (n === 1 ? '' : 's') + ' selected'));
+  bar.appendChild(sel);
+
+  const advSel = document.createElement('select');
+  const ph0 = document.createElement('option'); ph0.value = ''; ph0.textContent = 'Advance to…';
+  advSel.appendChild(ph0);
+  ['weaving', 'finishing', 'shipped', 'delivered'].forEach(function (s) {
+    const op = document.createElement('option'); op.value = s; op.textContent = s; advSel.appendChild(op);
+  });
+  const advBtn = el('button', 'btn ghost', 'Apply'); advBtn.type = 'button';
+  advBtn.addEventListener('click', function () {
+    if (!advSel.value) { toast('Pick a status first', true); return; }
+    bulkAdvance(advSel.value);
+  });
+  bar.appendChild(advSel); bar.appendChild(advBtn);
+
+  const strikeBtn = el('button', 'btn ghost danger', 'Cancel'); strikeBtn.type = 'button';
+  strikeBtn.addEventListener('click', bulkStrike);
+  bar.appendChild(strikeBtn);
+
+  const resendBtn = el('button', 'btn ghost', 'Resend confirmation'); resendBtn.type = 'button';
+  resendBtn.addEventListener('click', bulkResend);
+  bar.appendChild(resendBtn);
+
+  bar.appendChild(el('span', 'spacer'));
+  const expBtn = el('button', 'btn ghost', 'Export selected'); expBtn.type = 'button';
+  expBtn.addEventListener('click', exportSelected);
+  bar.appendChild(expBtn);
+  const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
+  clr.addEventListener('click', function () { state.custSel = new Set(); renderCustomers(); });
+  bar.appendChild(clr);
+  return bar;
+}
+
+/* ---- Detail drawer (a single reused slide-in panel) ---- */
+function ensureDrawer() {
+  let dw = $('drawer');
+  if (!dw) {
+    const bd = el('div', 'drawer-bd'); bd.id = 'drawer-bd';
+    bd.addEventListener('click', closeDrawer);
+    dw = el('div', 'drawer'); dw.id = 'drawer';
+    document.body.appendChild(bd); document.body.appendChild(dw);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && dw.classList.contains('on')) closeDrawer();
+    });
+  }
+  return dw;
+}
+function closeDrawer() {
+  const dw = $('drawer'), bd = $('drawer-bd');
+  if (dw) dw.classList.remove('on');
+  if (bd) bd.classList.remove('on');
+  state.custDrawerKey = null;
+}
+function drawerSection(label) {
+  const s = el('div', 'dsec');
+  s.appendChild(el('div', 'lbl', label));
+  return s;
+}
+function openOrderDrawer(o) {
+  const dw = ensureDrawer(), bd = $('drawer-bd');
+  state.custDrawerKey = orderKey(o);
+  dw.textContent = '';
+
+  const x = el('button', 'drawer-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Close');
+  x.addEventListener('click', closeDrawer);
+  dw.appendChild(x);
+
+  const title = el('h3'); title.appendChild(document.createTextNode('Nº ' + orderNo(o).toLocaleString('en-US')));
+  dw.appendChild(title);
+  const sub = el('div', 'dsub');
+  sub.appendChild(clothDot(o.colorway));
+  sub.appendChild(document.createTextNode(' ' + (o.colorway || '—') + '  ·  '));
+  sub.appendChild(stBadge(o.status));
+  dw.appendChild(sub);
+
+  // Buyer + destination
+  const who = drawerSection('Patron');
+  const c = custByEmail(o.email);
+  const nameLine = el('div', null, o.name || '—'); nameLine.style.color = 'var(--wool)';
+  who.appendChild(nameLine);
+  const emLine = el('div', 'micro', o.email || '—'); who.appendChild(emLine);
+  if (c) who.appendChild(el('div', 'micro', c.tier + ' · $' + c.ltv.toLocaleString('en-US') +
+    ' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets')));
+  if (o.is_gift && o.recipient_name) who.appendChild(el('div', 'micro', 'Gift → ' + o.recipient_name));
+  dw.appendChild(who);
+
+  // Fulfillment (advance + tracking), only for live orders
+  if (o.serial != null && o.status !== 'cancelled') {
+    const ff = drawerSection('Fulfillment');
+    const ctl = el('div', 'fulfill');
+    const sel = document.createElement('select'); sel.className = 'ffsel';
+    ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 'returned'].forEach(function (s) {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      if (s === o.status) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    const trk = document.createElement('input');
+    trk.type = 'text'; trk.className = 'fftrk'; trk.placeholder = 'tracking #'; trk.value = o.tracking || '';
+    const btn = el('button', 'btn ghost', 'Update'); btn.type = 'button';
+    btn.addEventListener('click', function () {
+      withBusy(btn, async function () {
+        const r = await fulfillOrder(o.serial, sel.value, trk.value.trim());
+        if (!r.ok) { fail('Update order', { message: r.message || 'failed' }); return; }
+        o.status = sel.value; o.tracking = trk.value.trim();
+        toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' → ' + sel.value +
+          (sel.value === 'shipped' || sel.value === 'returned' ? ' (buyer emailed)' : ''));
+        renderCustomers();
+        openOrderDrawer(o);   // rebuild with fresh state
+      });
+    });
+    ctl.appendChild(sel); ctl.appendChild(trk); ctl.appendChild(btn);
+    ff.appendChild(ctl);
+    dw.appendChild(ff);
+
+    // Address correction — only before shipment
+    if (['placed', 'weaving', 'finishing'].indexOf(o.status) >= 0) {
+      const as = drawerSection('Shipping address');
+      const aw = el('div', 'addr-edit');
+      function addrLine(o2) {
+        const loc = [(o2.city || ''), (o2.state || '')].filter(Boolean).join(', ') + (o2.zip ? ' ' + o2.zip : '');
+        return '✎ ' + ([o2.address, o2.address2, loc.trim()].filter(Boolean).join(' · ') || 'no address on file');
+      }
+      const head2 = el('div', 'addr-head');
+      const cur = el('span', 'micro', addrLine(o));
+      const toggle = el('button', 'btn ghost', 'Edit address'); toggle.type = 'button';
+      head2.appendChild(cur); head2.appendChild(toggle);
+      aw.appendChild(head2);
+      const form = el('div', 'addr-form'); form.style.display = 'none';
+      function mk(ph, val, w) {
+        const i = document.createElement('input');
+        i.type = 'text'; i.placeholder = ph; i.value = val || ''; i.className = 'addr-in';
+        if (w) i.style.maxWidth = w;
+        return i;
+      }
+      const iAddr = mk('Street address', o.address);
+      const iAddr2 = mk('Apt, suite (optional)', o.address2);
+      const iCity = mk('City', o.city);
+      const iState = mk('State', o.state, '64px');
+      const iZip = mk('ZIP', o.zip, '104px');
+      const save = el('button', 'btn primary', 'Save address'); save.type = 'button';
+      save.addEventListener('click', function () {
+        withBusy(save, async function () {
+          const r = await saveAddress(o.serial, {
+            address: iAddr.value.trim(), address2: iAddr2.value.trim(),
+            city: iCity.value.trim(), state: iState.value.trim(), zip: iZip.value.trim()
+          });
+          if (!r.ok) { fail('Save address', { message: r.message || 'failed' }); return; }
+          o.address = r.data.address; o.address2 = r.data.address2;
+          o.city = r.data.city; o.state = r.data.state; o.zip = r.data.zip;
+          cur.textContent = addrLine(o);
+          form.style.display = 'none';
+          toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' address corrected');
+        });
+      });
+      [iAddr, iAddr2, iCity, iState, iZip, save].forEach(function (e) { form.appendChild(e); });
+      toggle.addEventListener('click', function () {
+        form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+      });
+      aw.appendChild(form);
+      as.appendChild(aw);
+      dw.appendChild(as);
+    }
+  }
+
+  // Email timeline + resend
+  const sNo = (o.serial != null) ? o.serial : o.cancelled_serial;
+  if (sNo != null) {
+    const es = drawerSection('Emails');
+    const elog = (state.emailsBySerial && state.emailsBySerial[String(sNo)]) || [];
+    const em = el('div', 'emails');
+    const hist = elog.length
+      ? elog.map(function (e) {
+          return e.kind + ' ' + (e.ok ? '✓' : '✗ ' + (e.error || 'failed')) + ' · ' + fmtWhen(e.created_at);
+        }).join('   ·   ')
+      : 'no emails sent yet';
+    em.appendChild(el('span', 'micro', '✉ ' + hist));
+    const kinds = [['placed', 'confirmation']];
+    if (o.status === 'shipped' || o.status === 'delivered') kinds.push(['shipped', 'shipment']);
+    if (o.status === 'returned' || o.status === 'cancelled') kinds.push(['cancelled', 'cancellation']);
+    kinds.forEach(function (k) {
+      const rb = el('button', 'btn ghost', 'Resend ' + k[1]); rb.type = 'button';
+      rb.addEventListener('click', function () {
+        withBusy(rb, async function () {
+          const r = await resendEmail(sNo, k[0]);
+          if (!r.ok) { fail('Resend email', { message: r.message || 'failed' }); return; }
+          toast('Re-sent ' + k[1] + ' for Nº ' + Number(sNo).toLocaleString('en-US'));
+          loadCustomers();
+        });
+      });
+      em.appendChild(rb);
+    });
+    es.appendChild(em);
+    dw.appendChild(es);
+  }
+
+  // Client book — what the concierge has learned about this patron
+  const bs = drawerSection('Client book — what the concierge has learned');
+  const notes = (c && c.notes) || [];
+  if (!notes.length) {
+    bs.appendChild(el('div', 'empty micro',
+      'Nothing recorded yet. The concierge notes what signed-in patrons share (a room, a favored cloth, a gift occasion), what it does for them, and how to serve them better next time.'));
+  } else {
+    notes.forEach(function (n) {
+      const line = el('div', 'cust-order');
+      line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
+      const kind = (n.kind === 'event' || n.kind === 'reflection') ? n.kind : 'fact';
+      const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a' }[kind];
+      const tag = el('span', null, kind);
+      tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
+      line.appendChild(tag);
+      const txt = el('span', null, n.note || ''); txt.style.flex = '1 1 220px';
+      line.appendChild(txt);
+      const del = el('button', 'btn ghost danger', '×'); del.setAttribute('aria-label', 'Delete note');
+      del.addEventListener('click', function () {
+        withBusy(del, async function () {
+          const r = await sb.from('customer_notes').delete().eq('id', n.id);
+          if (r.error) { fail('Delete note', r.error); return; }
+          line.remove();
+          toast('Note removed from the client book');
+        });
+      });
+      line.appendChild(del);
+      bs.appendChild(line);
+    });
+  }
+  dw.appendChild(bs);
+
+  bd.classList.add('on');
+  requestAnimationFrame(function () { dw.classList.add('on'); });
 }
 
 function renderCustomers() {
@@ -3635,216 +4016,153 @@ function renderCustomers() {
 
   const serialActive = /^\d+$/.test(($('cust-serial').value || '').trim());
   // When jumping to an order Nº the server already narrowed to it — don't also
-  // apply the free-text box (it's ignored on that path) and open the row.
+  // apply the free-text box (it's ignored on that path).
   const q = serialActive ? '' : ($('cust-search').value || '').trim().toLowerCase();
-  const rows = state.customers.filter(function (c) {
-    return !q || c.email.toLowerCase().indexOf(q) >= 0 || c.name.toLowerCase().indexOf(q) >= 0;
-  });
 
+  // Register figures reflect what's loaded (paged 200 orders/page).
   let totalOrders = 0, totalActive = 0;
   state.customers.forEach(function (c) { totalOrders += c.orders.length; totalActive += c.count; });
   $('m-cust-count').textContent = String(state.customers.length);
   $('m-cust-orders').textContent = String(totalOrders);
   $('m-cust-ltv').textContent = '$' + (totalActive * PRICE).toLocaleString('en-US');
-  // The register view is paged (200 orders/page); figures reflect what's loaded.
   const moreShown = $('cust-more') && $('cust-more').style.display !== 'none';
   if ($('cust-count')) $('cust-count').textContent =
     state.customers.length ? (state.customers.length + ' patrons · ' + totalOrders + ' orders loaded' + (moreShown ? ' — Load more for older' : '')) : '';
 
-  if (!rows.length) {
-    list.appendChild(el('div', 'empty micro',
-      q ? 'No patron matches that.' : 'No entries in the register yet.'));
+  // Flat order list, keyed for selection.
+  const allOrders = (state.custOrders || []).slice();
+  state.custByKey = {};
+  allOrders.forEach(function (o) { state.custByKey[orderKey(o)] = o; });
+
+  if (!allOrders.length) {
+    list.appendChild(el('div', 'empty micro', q ? 'No order matches that.' : 'No entries in the register yet.'));
     return;
   }
 
-  rows.forEach(function (c) {
-    const row = el('div', 'cust-row');
-    const head = el('div', 'cust-head');
-    head.appendChild(el('span', 'cust-name', c.name));
-    head.appendChild(el('span', 'cust-email', c.email));
-    head.appendChild(el('span', 'cust-tier', c.tier));
-    if (c.notes.length) {
-      head.appendChild(el('span', 'cust-book-badge', '❦ ' + c.notes.length +
-        (c.notes.length === 1 ? ' note' : ' notes')));
-    }
-    const meta = el('span', 'cust-meta');
-    const bLtv = el('b', null, '$' + c.ltv.toLocaleString('en-US'));
-    meta.appendChild(bLtv);
-    meta.appendChild(document.createTextNode(
-      ' · ' + c.count + (c.count === 1 ? ' blanket' : ' blankets') +
-      ' · last ' + fmtWhen(c.latest)));
-    head.appendChild(meta);
-    row.appendChild(head);
-
-    const orders = el('div', 'cust-orders');
-    c.orders.forEach(function (o) {
-      const line = el('div', 'cust-order');
-      line.appendChild(el('span', 'serial', 'Nº ' + Number(o.serial != null ? o.serial : o.cancelled_serial).toLocaleString('en-US')));
-      line.appendChild(el('span', null, o.colorway || '—'));
-      line.appendChild(el('span', 'st', o.status || '—'));
-      if (o.is_gift && o.recipient_name) {
-        line.appendChild(el('span', 'gift', 'gift → ' + o.recipient_name));
-      }
-      if (o.billing && o.billing.city) {
-        line.appendChild(el('span', 'place', 'billing: ' + o.billing.city + ', ' + (o.billing.state || '')));
-      }
-      const place = (o.city ? o.city + ', ' : '') + (o.state || '');
-      line.appendChild(el('span', 'place',
-        (place ? place + ' · ' : '') + fmtWhen(o.placed_at)));
-      orders.appendChild(line);
-
-      /* Fulfillment: advance status + set tracking (shipped/cancelled emails
-         the buyer). Only for live entries with a serial. */
-      const stSpan = line.querySelector('.st');
-      if (o.serial != null && o.status !== 'cancelled') {
-        const ctl = el('div', 'fulfill');
-        const sel = document.createElement('select');
-        sel.className = 'ffsel';
-        ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 'returned'].forEach(function (s) {
-          const opt = document.createElement('option');
-          opt.value = s; opt.textContent = s;
-          if (s === o.status) opt.selected = true;
-          sel.appendChild(opt);
-        });
-        const trk = document.createElement('input');
-        trk.type = 'text'; trk.className = 'fftrk'; trk.placeholder = 'tracking #';
-        trk.value = o.tracking || '';
-        const btn = el('button', 'btn ghost', 'Update');
-        btn.type = 'button';
-        btn.addEventListener('click', function () {
-          withBusy(btn, async function () {
-            const r = await fulfillOrder(o.serial, sel.value, trk.value.trim());
-            if (!r.ok) { fail('Update order', { message: r.message || 'failed' }); return; }
-            o.status = sel.value; o.tracking = trk.value.trim();
-            if (stSpan) stSpan.textContent = sel.value;
-            toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' → ' + sel.value +
-              (sel.value === 'shipped' || sel.value === 'returned' ? ' (buyer emailed)' : ''));
-          });
-        });
-        ctl.appendChild(sel); ctl.appendChild(trk); ctl.appendChild(btn);
-        orders.appendChild(ctl);
-
-        /* Address correction — labeled fields, validated server-side, only
-           before shipment. The reliable way to fix a mangled address. */
-        if (['placed', 'weaving', 'finishing'].indexOf(o.status) >= 0) {
-          const aw = el('div', 'addr-edit');
-          const head2 = el('div', 'addr-head');
-          function addrLine(o2) {
-            const loc = [(o2.city || ''), (o2.state || '')].filter(Boolean).join(', ') + (o2.zip ? ' ' + o2.zip : '');
-            return '✎ ' + ([o2.address, o2.address2, loc.trim()].filter(Boolean).join(' · ') || 'no address on file');
-          }
-          const cur = el('span', 'micro', addrLine(o));
-          const toggle = el('button', 'btn ghost', 'Edit address'); toggle.type = 'button';
-          head2.appendChild(cur); head2.appendChild(toggle);
-          aw.appendChild(head2);
-          const form = el('div', 'addr-form'); form.style.display = 'none';
-          function mk(ph, val, w) {
-            const i = document.createElement('input');
-            i.type = 'text'; i.placeholder = ph; i.value = val || ''; i.className = 'addr-in';
-            if (w) i.style.maxWidth = w;
-            return i;
-          }
-          const iAddr = mk('Street address', o.address);
-          const iAddr2 = mk('Apt, suite (optional)', o.address2);
-          const iCity = mk('City', o.city);
-          const iState = mk('State', o.state, '64px');
-          const iZip = mk('ZIP', o.zip, '104px');
-          const save = el('button', 'btn primary', 'Save address'); save.type = 'button';
-          save.addEventListener('click', function () {
-            withBusy(save, async function () {
-              const r = await saveAddress(o.serial, {
-                address: iAddr.value.trim(), address2: iAddr2.value.trim(),
-                city: iCity.value.trim(), state: iState.value.trim(), zip: iZip.value.trim()
-              });
-              if (!r.ok) { fail('Save address', { message: r.message || 'failed' }); return; }
-              o.address = r.data.address; o.address2 = r.data.address2;
-              o.city = r.data.city; o.state = r.data.state; o.zip = r.data.zip;
-              cur.textContent = addrLine(o);
-              form.style.display = 'none';
-              toast('Nº ' + Number(o.serial).toLocaleString('en-US') + ' address corrected');
-            });
-          });
-          [iAddr, iAddr2, iCity, iState, iZip, save].forEach(function (e) { form.appendChild(e); });
-          toggle.addEventListener('click', function () {
-            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
-          });
-          aw.appendChild(form);
-          orders.appendChild(aw);
-        }
-      }
-
-      /* Email history for this order + re-send. Uses the live number, or the
-         archived one for a cancelled entry. */
-      const sNo = (o.serial != null) ? o.serial : o.cancelled_serial;
-      if (sNo != null) {
-        const elog = (state.emailsBySerial && state.emailsBySerial[String(sNo)]) || [];
-        const em = el('div', 'emails');
-        const hist = elog.length
-          ? elog.map(function (e) {
-              return e.kind + ' ' + (e.ok ? '✓' : '✗ ' + (e.error || 'failed')) + ' · ' + fmtWhen(e.created_at);
-            }).join('   ·   ')
-          : 'no emails sent yet';
-        em.appendChild(el('span', 'micro', '✉ ' + hist));
-        const kinds = [['placed', 'confirmation']];
-        if (o.status === 'shipped' || o.status === 'delivered') kinds.push(['shipped', 'shipment']);
-        if (o.status === 'returned' || o.status === 'cancelled') kinds.push(['cancelled', 'cancellation']);
-        kinds.forEach(function (k) {
-          const rb = el('button', 'btn ghost', 'Resend ' + k[1]);
-          rb.type = 'button';
-          rb.addEventListener('click', function () {
-            withBusy(rb, async function () {
-              const r = await resendEmail(sNo, k[0]);
-              if (!r.ok) { fail('Resend email', { message: r.message || 'failed' }); return; }
-              toast('Re-sent ' + k[1] + ' for Nº ' + Number(sNo).toLocaleString('en-US'));
-              loadCustomers();
-            });
-          });
-          em.appendChild(rb);
-        });
-        orders.appendChild(em);
-      }
-    });
-    row.appendChild(orders);
-
-    /* The client book — always shown when a row is expanded, so it is
-       findable even before the concierge has learned anything. */
-    const book = el('div', 'cust-orders cust-book');
-    book.appendChild(el('div', 'micro', 'Client book — what the concierge has learned'));
-    if (!c.notes.length) {
-      book.appendChild(el('div', 'empty micro',
-        'Nothing recorded yet. The concierge notes what signed-in patrons share (a room, a favored cloth, a gift occasion) as it talks with them.'));
-    } else {
-      c.notes.forEach(function (n) {
-        const line = el('div', 'cust-order');
-        line.appendChild(el('span', 'place', fmtWhen(n.created_at)));
-        const kind = (n.kind === 'event' || n.kind === 'reflection') ? n.kind : 'fact';
-        const kindColor = { event: '#3b7a4b', reflection: '#8a6d3b', fact: '#5a6b7a' }[kind];
-        const tag = el('span', null, kind);
-        tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + kindColor + ';';
-        line.appendChild(tag);
-        const txt = el('span', null, n.note || '');
-        txt.style.flex = '1 1 240px';
-        line.appendChild(txt);
-        const del = el('button', 'btn ghost danger', '×');
-        del.setAttribute('aria-label', 'Delete note');
-        del.addEventListener('click', function () {
-          withBusy(del, async function () {
-            const r = await sb.from('customer_notes').delete().eq('id', n.id);
-            if (r.error) { fail('Delete note', r.error); return; }
-            line.remove();
-            toast('Note removed from the client book');
-          });
-        });
-        line.appendChild(del);
-        book.appendChild(line);
-      });
-    }
-    row.appendChild(book);
-
-    head.addEventListener('click', function () { row.classList.toggle('open'); });
-    if (serialActive) row.classList.add('open');   // land on the order, expanded
-    list.appendChild(row);
+  // Client-side text filter (name / email / recipient) atop the server search.
+  let shown = allOrders.filter(function (o) {
+    if (!q) return true;
+    return (o.email || '').toLowerCase().indexOf(q) >= 0
+      || (o.name || '').toLowerCase().indexOf(q) >= 0
+      || (o.recipient_name || '').toLowerCase().indexOf(q) >= 0;
   });
+
+  // Count chips by status (computed before the chip filter narrows the view).
+  const counts = {}; let allN = 0;
+  shown.forEach(function (o) { const s = o.status || '—'; counts[s] = (counts[s] || 0) + 1; allN++; });
+  const chips = el('div', 'ord-chips');
+  function chip(key, label, dotColor) {
+    const c = el('div', 'ord-chip' + (state.custChip === key ? ' on' : ''));
+    if (dotColor) { const sw = el('span', 'swatch'); sw.style.background = dotColor; c.appendChild(sw); }
+    c.appendChild(document.createTextNode(label + ' '));
+    c.appendChild(el('span', 'n', String(key ? (counts[key] || 0) : allN)));
+    c.addEventListener('click', function () {
+      state.custChip = (state.custChip === key) ? '' : key;
+      renderCustomers();
+    });
+    return c;
+  }
+  chips.appendChild(chip('', 'All', null));
+  STATUS_ORDER.forEach(function (s) { if (counts[s]) chips.appendChild(chip(s, s, STATUS_COLOR[s])); });
+  list.appendChild(chips);
+
+  if (state.custChip) shown = shown.filter(function (o) { return (o.status || '—') === state.custChip; });
+
+  // Sort the loaded set.
+  const sk = state.custSort.key, dir = state.custSort.dir;
+  shown.sort(function (a, b) {
+    let av, bv;
+    if (sk === 'serial') { av = orderNo(a) || 0; bv = orderNo(b) || 0; }
+    else if (sk === 'status') { av = STATUS_ORDER.indexOf(a.status); bv = STATUS_ORDER.indexOf(b.status); }
+    else if (sk === 'colorway') { av = a.colorway || ''; bv = b.colorway || ''; }
+    else { av = a.placed_at || ''; bv = b.placed_at || ''; }
+    if (av < bv) return -1 * dir; if (av > bv) return 1 * dir; return 0;
+  });
+
+  list.appendChild(renderBulkBar());
+
+  // Compact order table.
+  const tbl = el('div', 'ord-tbl');
+  const hrow = el('div', 'ord-hrow');
+  const chkAll = document.createElement('input'); chkAll.type = 'checkbox'; chkAll.className = 'ord-check';
+  chkAll.title = 'Select all shown';
+  const shownKeys = shown.map(orderKey);
+  chkAll.checked = shown.length > 0 && shownKeys.every(function (k) { return state.custSel.has(k); });
+  chkAll.addEventListener('change', function () {
+    if (chkAll.checked) shownKeys.forEach(function (k) { state.custSel.add(k); });
+    else shownKeys.forEach(function (k) { state.custSel.delete(k); });
+    renderCustomers();
+  });
+  function sortHead(label, key, extra) {
+    const s = el('span', 'sortable' + (extra ? ' ' + extra : ''));
+    s.appendChild(document.createTextNode(label));
+    if (state.custSort.key === key) s.appendChild(el('span', 'arr', state.custSort.dir < 0 ? ' ↓' : ' ↑'));
+    s.addEventListener('click', function () {
+      if (state.custSort.key === key) state.custSort.dir *= -1;
+      else { state.custSort.key = key; state.custSort.dir = (key === 'placed_at' || key === 'serial') ? -1 : 1; }
+      renderCustomers();
+    });
+    return s;
+  }
+  hrow.appendChild(chkAll);
+  hrow.appendChild(sortHead('Nº', 'serial'));
+  hrow.appendChild(sortHead('Cloth', 'colorway'));
+  hrow.appendChild(sortHead('Status', 'status'));
+  hrow.appendChild(el('span', 'col-cust', 'Patron'));
+  hrow.appendChild(el('span', null, 'Destination'));
+  hrow.appendChild(sortHead('Placed', 'placed_at', 'col-when'));
+  hrow.appendChild(el('span', null, ''));
+  tbl.appendChild(hrow);
+
+  shown.forEach(function (o) {
+    const key = orderKey(o);
+    const row = el('div', 'ord-row' + (state.custSel.has(key) ? ' sel' : ''));
+    const chk = document.createElement('input'); chk.type = 'checkbox'; chk.className = 'ord-check';
+    chk.checked = state.custSel.has(key);
+    chk.addEventListener('click', function (e) { e.stopPropagation(); });
+    chk.addEventListener('change', function () {
+      if (chk.checked) state.custSel.add(key); else state.custSel.delete(key);
+      row.classList.toggle('sel', chk.checked);
+      refreshBulkBar();
+    });
+    row.appendChild(chk);
+
+    row.appendChild(el('span', 'no', 'Nº ' + orderNo(o).toLocaleString('en-US')));
+
+    const cloth = el('span', 'ord-cloth');
+    cloth.appendChild(clothDot(o.colorway));
+    cloth.appendChild(el('span', 'nm', o.colorway || '—'));
+    row.appendChild(cloth);
+
+    row.appendChild(stBadge(o.status));
+
+    const cust = el('span', 'ord-cust');
+    cust.appendChild(el('span', 'cn', o.name || '—'));
+    cust.appendChild(el('span', 'ce', o.email || '—'));
+    row.appendChild(cust);
+
+    const dest = el('span', 'ord-dest');
+    if (o.is_gift && o.recipient_name) {
+      dest.appendChild(el('span', 'gift', 'gift → ' + o.recipient_name));
+    } else {
+      const place = (o.city ? o.city + ', ' : '') + (o.state || '');
+      dest.appendChild(document.createTextNode(place || '—'));
+    }
+    row.appendChild(dest);
+
+    row.appendChild(el('span', 'ord-when', fmtWhen(o.placed_at)));
+    row.appendChild(el('span', 'ord-chev', '›'));
+
+    row.addEventListener('click', function () { openOrderDrawer(o); });
+    tbl.appendChild(row);
+  });
+  list.appendChild(tbl);
+
+  // Landing on an order Nº opens its drawer once.
+  if (serialActive && !state._custJumpDone && shown.length) {
+    state._custJumpDone = true;
+    openOrderDrawer(shown[0]);
+  }
 }
 
 /* ---- Waitlist (in the Customers tab) ---- */
@@ -3928,10 +4246,16 @@ async function loadConversations(more) {
 
   // A bare conversation UUID (or session key) is looked up DIRECTLY — this is how
   // you pull one specific conversation to vet it (e.g. which model each message
-  // used). Otherwise the keyword searches patron email OR transcript content.
+  // used). An IP address (v4 or v6) matches the logged origin IP — this is the
+  // lookup you use when reporting abuse to authorities. Otherwise the keyword
+  // searches patron email OR transcript content.
   const isUuid = kw && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(kw);
+  const isIp = kw && !isUuid && (
+    /^(\d{1,3}\.){3}\d{1,3}$/.test(kw) ||          // full IPv4
+    /^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,}$/i.test(kw) // IPv6 (incl. ::-compressed)
+  );
   let msgIds = null;
-  if (kw && !isUuid) {
+  if (kw && !isUuid && !isIp) {
     const mm = await sb.from('concierge_messages')
       .select('conversation_id')
       .ilike('content', '%' + kw + '%')
@@ -3953,9 +4277,13 @@ async function loadConversations(more) {
   if (isUuid) {
     // match either the conversation id or its session key
     q = q.or('id.eq.' + kw + ',session_key.eq.' + kw);
+  } else if (isIp) {
+    // exact origin-IP match (the column stores one IP per conversation)
+    q = q.eq('ip', kw);
   } else if (kw) {
     const ids = (msgIds && msgIds.length) ? msgIds : ['00000000-0000-0000-0000-000000000000'];
-    q = q.or('user_email.ilike.*' + kw + '*,id.in.(' + ids.join(',') + ')');
+    // also match a partial IP typed into the box (e.g. a /24 prefix like "203.0.113")
+    q = q.or('user_email.ilike.*' + kw + '*,ip.ilike.*' + kw + '*,id.in.(' + ids.join(',') + ')');
   }
   const res = await q;
   if (res.error) { fail('Load conversations', res.error); return; }
