@@ -608,7 +608,7 @@ wall-clock limit.
 | --- | --- | --- |
 | `GET ?recent=1` | public | Recent real orders (serial + city/state only — no name/email) for the site ticker. |
 | `GET ?next=1` | public | The live edition figures: `{next_serial, run_size, remaining}` (drives the ticker). |
-| `GET ?me=1` | signed-in | Signed-in patron's standing + latest entry + **`addresses[]`** (a deduped ship-to address book derived from recent order history — `{key, label, is_gift, recipient_name, name, address, address2, city, state, zip}`, newest-first, ≤6, personal doors + past gift recipients) for checkout prefill (`Cache-Control: no-store`). Derived on read — no address table. See DESIGN §4.12. |
+| `GET ?me=1` | signed-in | Signed-in patron's standing + latest entry + **`addresses[]`** (deduped **ship-to** book) + **`billing_addresses[]`** (deduped from `orders.billing`) for checkout prefill (`Cache-Control: no-store`). Each entry: `{key, label, is_gift, recipient_name, name, address, address2, city, state, zip}`, newest-first, ≤8. `addresses` labels personal doors (`Home`) + past gift recipients; `billing_addresses` are prior differing billing addresses. Built by `deriveAddressBook` / `deriveBillingBook` on read — no address table. See DESIGN §4.12. |
 | `POST ?hold=1` | public (rate-limited) | Reserve the visit's serial (`hold_serial`). |
 | `POST` | signed-in (rate-limited) | Place the order (`commission_order`) with the **verified** email; emails a confirmation (best-effort, `EdgeRuntime.waitUntil`). |
 | `POST ?waitlist=1` | public (rate-limited) | Join the waitlist: `{email, name?, colorway?, note?, source?}` → inserts a `waitlist` row (links `user_id` if signed in). |

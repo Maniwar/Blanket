@@ -716,27 +716,57 @@ views keep order-management and relationship-management from crowding each other
 
 ### 4.12 The checkout address book — re-order without re-typing
 **Decision:** a returning signed-in patron shouldn't retype an address the house
-already has. `GET ?me=1` returns, alongside standing and the latest entry, an
-**`addresses[]`** derived from the buyer's recent order history — one entry per
-distinct ship-to `(address · city · zip · recipient)`, newest-first, capped at
-six. Each entry is labelled: a **personal** door (`Home`) or a **past gift
-recipient** (their name). The checkout's Act II renders these as tap-to-fill
-chips, plus a **"New"** chip to clear and type a fresh one.
+already has. `GET ?me=1` returns, alongside standing and the latest entry, two
+derived books:
+
+- **`addresses[]`** — distinct **ship-to** addresses from order history, one entry
+  per `(address · city · zip · recipient)`, newest-first, ≤8. Each is labelled a
+  **personal** door (`Home`) or a **past gift recipient** (their name).
+- **`billing_addresses[]`** — distinct **billing** addresses from `orders.billing`
+  (only stored when it differed from shipping), same shape, ≤8.
+
+**Server functions.** `deriveAddressBook(rows)` and `deriveBillingBook(rows)` in
+the commission function dedupe the last 30 non-cancelled orders into these two
+lists. Both return the shared `AddressEntry` shape
+`{key, label, is_gift, recipient_name, name, address, address2, city, state, zip}`.
+
+**Client.** Checkout Act II renders each book as a compact **`<select>`** (scales
+to any number of addresses — the earlier chip row got unwieldy and showed
+indistinct duplicate "Home" tags). Ship-to options read *"Home — 8201 peach
+orchard pass, MCKINNEY"* / *"Gift → Oma — …"* / *"＋ Enter a new address"*; the
+billing select appears only when **"billing differs from shipping"** is checked.
+Picking an option calls `applyAddress` / `applyBillingAddress`, which overrides the
+typed fields and re-renders the act.
 
 **The gift sharp-edge, fixed.** An order's single `address` is the *ship-to* — for
 a gift, that's the **recipient's** address. The old prefill blindly reused the
 latest order's ship-to, so a patron whose last order was a gift saw the
 recipient's address in their own next order. Now the **default** prefill is the
 most recent *non-gift* address (their own door); gift addresses never auto-fill —
-they're only there as explicit taps. Tapping a gift chip re-addresses the order
-to that recipient (sets `is_gift` + `recipient`), so "send Oma another" is one
-tap. The `feier-patron` local cache carries an `is_gift` flag for the same
-reason, so even the offline prefill won't leak a recipient's door.
+they're only there as explicit picks. Choosing a gift option re-addresses the
+order to that recipient (sets `is_gift` + `recipient`), so "send Oma another" is
+one selection. The `feier-patron` local cache carries an `is_gift` flag for the
+same reason, so even the offline prefill won't leak a recipient's door.
 
-**Nothing new stored.** The address book is *derived* from existing order rows on
-read — no address table, no new write path, no extra PII at rest. Only fields
-that already exist on `orders` are returned, and only to the signed-in owner
-(`?me=1` is JWT-gated, `Cache-Control: no-store`).
+**Nothing new stored.** Both books are *derived* from existing order rows on read
+— no address table, no new write path, no extra PII at rest. Only fields that
+already exist on `orders` (including the `billing` jsonb) are returned, and only
+to the signed-in owner (`?me=1` is JWT-gated, `Cache-Control: no-store`).
+
+```mermaid
+flowchart LR
+  OH["orders history<br/>ship-to + billing jsonb"] --> ME["commission GET ?me=1<br/>JWT-gated · no-store"]
+  ME -->|deriveAddressBook| A[["addresses[]<br/>Home + gift recipients"]]
+  ME -->|deriveBillingBook| B[["billing_addresses[]"]]
+  A --> SEL["Act II · Ship-to select"]
+  B --> BSEL["Billing select<br/>(only if billing differs)"]
+  SEL -->|"default = most recent PERSONAL"| PF["prefill order fields"]
+  SEL -->|"pick a gift address"| GA["re-address:<br/>is_gift + recipient"]
+  BSEL -->|applyBillingAddress| BF["fill bill_* fields"]
+  PF --> POST["POST commission<br/>place order"]
+  GA --> POST
+  BF --> POST
+```
 
 ### 4.13 House directives — the team instructs the concierge, per patron
 **Decision:** the team can leave a **standing instruction for a specific patron**
@@ -774,6 +804,30 @@ order was late; offer a care kit, once." A VIP rule → "always propose priority
 handling." A do-not → "do not ship to the old Berlin address; it's stale." Each is
 a plain sentence a clerk would understand, and the concierge treats it as the
 house's word.
+
+```mermaid
+flowchart LR
+  ADM["Admin · Orders & Customers<br/>Leave instruction"] -->|"insert kind=directive<br/>resolved=false, author"| CN[["customer_notes"]]
+  CN --> CBQ["customerBlock<br/>(every turn · UNCACHED tail)"]
+  CBQ -->|"open directives, printed first with (#id)"| SYS["system prompt<br/>HOUSE INSTRUCTIONS"]
+  SYS --> BOT["Concierge follows on the<br/>patron's NEXT message"]
+  BOT -->|"standing preference"| CBQ
+  BOT -->|"one-time task, once done"| RES["resolve_admin_note(#id)<br/>ownership-scoped"]
+  RES -->|"resolved=true, resolved_at<br/>+ books an event note"| CN
+  ADM -.->|"Resolve / Reopen (manual)"| CN
+```
+
+**Data & API summary (directives).**
+- **Table:** `customer_notes`, `kind='directive'` — new fields `resolved boolean`
+  (default false), `resolved_at timestamptz`, `author text`; partial index
+  `customer_notes_directive_idx (email, resolved) where kind='directive'`.
+  Migration `0040_admin_directives.sql` (mirrored in `setup.sql`).
+- **Write:** admin insert (RLS "admin all"), `author` = admin email.
+- **Read:** `customerBlock` (a dedicated `resolved=eq.false` query, unbounded by
+  the 14-note window) prints them first in the CUSTOMER block.
+- **Resolve:** model tool `resolve_admin_note({note_id})` — ownership-scoped
+  PATCH; books an `event` via `logAction`/`bookEvent`. Also admin Resolve/Reopen.
+- **Behaviour:** SOP `house-directives` (seeded, editable in Procedures).
 
 ---
 
