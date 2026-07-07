@@ -1197,6 +1197,7 @@ const state = {
   custIpLoaded: false,     // the loaded order set came from a server-side IP filter
   houseNotes: null,        // all directives, for the House notes management view
   houseFilter: 'open',     // open | resolved | all
+  houseQ: '',              // House notes text filter (customer email / note text)
   houseActedIn: {},        // note_id → conversation_id the concierge resolved it in
   houseSel: new Set(),     // selected house-note ids for bulk resolve/reopen/delete
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
@@ -4069,6 +4070,12 @@ function openOrderDrawer(o) {
     });
     who.appendChild(ipLine);
   }
+  if (o.email) {
+    const chatsBtn = el('button', 'btn ghost', 'View this customer’s conversations'); chatsBtn.type = 'button';
+    chatsBtn.style.marginTop = '10px';
+    chatsBtn.addEventListener('click', function () { closeDrawer(); openCustomerChats(o.email); });
+    who.appendChild(chatsBtn);
+  }
   dw.appendChild(who);
 
   // Fulfillment (advance + tracking), only for live orders
@@ -4476,6 +4483,14 @@ function renderPatrons(list, q) {
   });
 }
 
+/* Jump to the Conversations tab, filtered to one customer's chats (by email). */
+function openCustomerChats(email) {
+  activateTab('conversations');
+  const q = $('convo-q'); if (q) q.value = email || '';
+  const sr = $('convo-serial'); if (sr) sr.value = '';
+  loadConversations();
+}
+
 /* Load every house directive across all patrons + the map of which conversation
    the concierge resolved each in (from the resolve_admin_note audit action). */
 async function loadHouseNotes() {
@@ -4505,7 +4520,7 @@ async function loadHouseNotes() {
 function renderHouseNotes(list) {
   list.appendChild(el('p', 'note', 'Every house instruction left for the concierge, across all patrons. ' +
     'Standing preferences stay open; one-time tasks are checked off (by the concierge when it acts, or by you). ' +
-    'When the concierge resolved one in a chat, jump straight to that conversation.'));
+    'Filter to a customer and “Select all” for bulk work; open a customer’s chats to find where the bot acted.'));
 
   if (state.houseNotes === null) {
     list.appendChild(el('div', 'empty micro', 'Loading house notes…'));
@@ -4531,96 +4546,144 @@ function renderHouseNotes(list) {
   chips.appendChild(refresh);
   list.appendChild(chips);
 
-  const shown = notes.filter(function (n) { return f === 'all' || (f === 'open' ? !n.resolved : !!n.resolved); });
-  if (!shown.length) { list.appendChild(el('div', 'empty micro', 'No ' + (f === 'all' ? '' : f + ' ') + 'house notes.')); return; }
+  // Filter by customer/keyword, so "all of a customer's notes" is one search.
+  const tools = el('div', 'row-tools'); tools.style.margin = '0 0 12px';
+  const search = document.createElement('input');
+  search.type = 'text'; search.placeholder = 'Filter by customer email or note text…';
+  search.style.maxWidth = '320px'; search.value = state.houseQ || '';
+  search.addEventListener('input', function () { state.houseQ = search.value; renderTable(); });
+  tools.appendChild(search);
+  list.appendChild(tools);
 
-  // Bulk bar — resolve / reopen / delete the selected notes.
-  if (state.houseSel.size) {
-    const bbar = el('div', 'bulkbar');
-    const bs = el('span', 'bsel'); bs.appendChild(el('b', null, String(state.houseSel.size)));
-    bs.appendChild(document.createTextNode(' note' + (state.houseSel.size === 1 ? '' : 's') + ' selected'));
-    bbar.appendChild(bs);
-    [['Resolve', 'resolve'], ['Reopen', 'reopen'], ['Delete', 'delete']].forEach(function (a) {
-      const b = el('button', 'btn ghost' + (a[1] === 'delete' ? ' danger' : ''), a[0]); b.type = 'button';
-      b.addEventListener('click', function () { withBusy(b, function () { return bulkHouseNotes(a[1]); }); });
-      bbar.appendChild(b);
+  // The table lives in its own holder so the search + selection re-render in
+  // place, keeping the chips (and the search box's focus) put.
+  const holder = el('div'); holder.id = 'house-holder'; list.appendChild(holder);
+  renderTable();
+
+  function renderTable() {
+    const box = $('house-holder'); if (!box) return; box.textContent = '';
+    const q = (state.houseQ || '').trim().toLowerCase();
+    const shown = notes.filter(function (n) {
+      if (!(f === 'all' || (f === 'open' ? !n.resolved : !!n.resolved))) return false;
+      if (!q) return true;
+      return (n.email || '').toLowerCase().indexOf(q) >= 0 || (n.note || '').toLowerCase().indexOf(q) >= 0;
     });
-    bbar.appendChild(el('span', 'spacer'));
-    const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
-    clr.addEventListener('click', function () { state.houseSel = new Set(); renderCustomers(); });
-    bbar.appendChild(clr);
-    list.appendChild(bbar);
-  }
+    const shownIds = shown.map(function (n) { return n.id; });
 
-  const tbl = el('div', 'ord-tbl');
-  shown.forEach(function (n) {
-    const row = el('div'); row.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--hairline-dim);';
-    const head = el('div'); head.style.cssText = 'display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;';
-    const chk = document.createElement('input'); chk.type = 'checkbox'; chk.className = 'ord-check';
-    chk.checked = state.houseSel.has(n.id); chk.style.alignSelf = 'center';
-    chk.addEventListener('change', function () {
-      if (chk.checked) state.houseSel.add(n.id); else state.houseSel.delete(n.id);
-      renderCustomers();
-    });
-    head.appendChild(chk);
-    const stag = el('span', null, n.resolved ? 'resolved' : 'open');
-    stag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 7px; border-radius:4px; color:#fff; background:' + (n.resolved ? '#3b7a4b' : '#a9772a') + ';';
-    head.appendChild(stag);
-    head.appendChild(el('span', 'cust-email', n.email || '—'));
-    head.appendChild(el('span', 'micro', (n.author ? 'by ' + n.author + ' · ' : '') + 'left ' + fmtWhen(n.created_at) +
-      (n.resolved && n.resolved_at ? ' · resolved ' + fmtWhen(n.resolved_at) : '')));
-    row.appendChild(head);
-
-    const txt = el('div', null, n.note || ''); txt.style.cssText = 'margin:7px 0; color:var(--wool);';
-    row.appendChild(txt);
-
-    const acts = el('div'); acts.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap;';
-    const tgl = el('button', 'btn ghost', n.resolved ? 'Reopen' : 'Resolve'); tgl.type = 'button';
-    tgl.addEventListener('click', function () {
-      withBusy(tgl, async function () {
-        const patch = n.resolved ? { resolved: false, resolved_at: null } : { resolved: true, resolved_at: nowIso() };
-        const r = await sb.from('customer_notes').update(patch).eq('id', n.id);
-        if (r.error) { fail('Update note', r.error); return; }
-        n.resolved = !n.resolved; n.resolved_at = patch.resolved_at;
-        toast(n.resolved ? 'Marked resolved' : 'Reopened'); renderCustomers();
+    // Bulk bar (when something is selected).
+    if (state.houseSel.size) {
+      const bbar = el('div', 'bulkbar');
+      const bs = el('span', 'bsel'); bs.appendChild(el('b', null, String(state.houseSel.size)));
+      bs.appendChild(document.createTextNode(' note' + (state.houseSel.size === 1 ? '' : 's') + ' selected'));
+      bbar.appendChild(bs);
+      [['Resolve', 'resolve'], ['Reopen', 'reopen'], ['Delete', 'delete']].forEach(function (a) {
+        const b = el('button', 'btn ghost' + (a[1] === 'delete' ? ' danger' : ''), a[0]); b.type = 'button';
+        b.addEventListener('click', function () { withBusy(b, function () { return bulkHouseNotes(a[1]); }); });
+        bbar.appendChild(b);
       });
-    });
-    acts.appendChild(tgl);
-
-    const vc = el('button', 'btn ghost', 'View customer'); vc.type = 'button';
-    vc.addEventListener('click', function () {
-      state.custView = 'patrons';
-      $('cust-search').value = n.email || '';
-      if ($('cust-serial')) $('cust-serial').value = '';
-      renderCustomers();
-    });
-    acts.appendChild(vc);
-
-    const conv = state.houseActedIn && state.houseActedIn[String(n.id)];
-    if (conv) {
-      const fc = el('button', 'btn ghost', 'Find the chat'); fc.type = 'button';
-      fc.addEventListener('click', function () {
-        activateTab('conversations');
-        const q = $('convo-q'); if (q) q.value = conv;
-        loadConversations();
-      });
-      acts.appendChild(fc);
+      bbar.appendChild(el('span', 'spacer'));
+      const clr = el('button', 'btn ghost', 'Clear'); clr.type = 'button';
+      clr.addEventListener('click', function () { state.houseSel = new Set(); renderTable(); });
+      bbar.appendChild(clr);
+      box.appendChild(bbar);
     }
 
-    const del = el('button', 'btn ghost danger', 'Delete'); del.type = 'button';
-    del.addEventListener('click', function () {
-      withBusy(del, async function () {
-        const r = await sb.from('customer_notes').delete().eq('id', n.id);
-        if (r.error) { fail('Delete note', r.error); return; }
-        state.houseNotes = (state.houseNotes || []).filter(function (x) { return x.id !== n.id; });
-        toast('House note deleted'); renderCustomers();
-      });
+    // Select-all for the shown (filtered) set.
+    const selbar = el('div'); selbar.style.cssText = 'margin-bottom:10px;';
+    const lbl = el('label'); lbl.style.cssText = 'display:inline-flex; align-items:center; gap:7px; cursor:pointer; color:var(--wool-dim); font-size:12px;';
+    const chkAll = document.createElement('input'); chkAll.type = 'checkbox'; chkAll.className = 'ord-check';
+    chkAll.checked = shown.length > 0 && shownIds.every(function (id) { return state.houseSel.has(id); });
+    chkAll.addEventListener('change', function () {
+      if (chkAll.checked) shownIds.forEach(function (id) { state.houseSel.add(id); });
+      else shownIds.forEach(function (id) { state.houseSel.delete(id); });
+      renderTable();
     });
-    acts.appendChild(del);
-    row.appendChild(acts);
-    tbl.appendChild(row);
-  });
-  list.appendChild(tbl);
+    lbl.appendChild(chkAll);
+    lbl.appendChild(document.createTextNode('Select all ' + shown.length + ' shown'));
+    selbar.appendChild(lbl);
+    box.appendChild(selbar);
+
+    if (!shown.length) { box.appendChild(el('div', 'empty micro', 'No matching house notes.')); return; }
+
+    const tbl = el('div', 'ord-tbl');
+    shown.forEach(function (n) {
+      const row = el('div'); row.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--hairline-dim);';
+      const head = el('div'); head.style.cssText = 'display:flex; gap:10px; align-items:center; flex-wrap:wrap;';
+      const chk = document.createElement('input'); chk.type = 'checkbox'; chk.className = 'ord-check';
+      chk.checked = state.houseSel.has(n.id);
+      chk.addEventListener('change', function () {
+        if (chk.checked) state.houseSel.add(n.id); else state.houseSel.delete(n.id);
+        renderTable();
+      });
+      head.appendChild(chk);
+      const stag = el('span', null, n.resolved ? 'resolved' : 'open');
+      stag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 7px; border-radius:4px; color:#fff; background:' + (n.resolved ? '#3b7a4b' : '#a9772a') + ';';
+      head.appendChild(stag);
+      head.appendChild(el('span', 'cust-email', n.email || '—'));
+      head.appendChild(el('span', 'micro', (n.author ? 'by ' + n.author + ' · ' : '') + 'left ' + fmtWhen(n.created_at) +
+        (n.resolved && n.resolved_at ? ' · resolved ' + fmtWhen(n.resolved_at) : '')));
+      row.appendChild(head);
+
+      const txt = el('div', null, n.note || ''); txt.style.cssText = 'margin:7px 0; color:var(--wool);';
+      row.appendChild(txt);
+
+      const acts = el('div'); acts.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap;';
+      const tgl = el('button', 'btn ghost', n.resolved ? 'Reopen' : 'Resolve'); tgl.type = 'button';
+      tgl.addEventListener('click', function () {
+        withBusy(tgl, async function () {
+          const patch = n.resolved ? { resolved: false, resolved_at: null } : { resolved: true, resolved_at: nowIso() };
+          const r = await sb.from('customer_notes').update(patch).eq('id', n.id);
+          if (r.error) { fail('Update note', r.error); return; }
+          n.resolved = !n.resolved; n.resolved_at = patch.resolved_at;
+          toast(n.resolved ? 'Marked resolved' : 'Reopened'); renderTable();
+        });
+      });
+      acts.appendChild(tgl);
+
+      const vc = el('button', 'btn ghost', 'View customer'); vc.type = 'button';
+      vc.addEventListener('click', function () {
+        state.custView = 'patrons';
+        $('cust-search').value = n.email || '';
+        if ($('cust-serial')) $('cust-serial').value = '';
+        renderCustomers();
+      });
+      acts.appendChild(vc);
+
+      // All of this customer's conversations — the way to find where the bot
+      // addressed a note that wasn't formally resolved.
+      if (n.email) {
+        const cc = el('button', 'btn ghost', "Customer's chats"); cc.type = 'button';
+        cc.addEventListener('click', function () { openCustomerChats(n.email); });
+        acts.appendChild(cc);
+      }
+
+      const conv = state.houseActedIn && state.houseActedIn[String(n.id)];
+      if (conv) {
+        const fc = el('button', 'btn ghost', 'Find the resolving chat'); fc.type = 'button';
+        fc.addEventListener('click', function () {
+          activateTab('conversations');
+          const cq = $('convo-q'); if (cq) cq.value = conv;
+          loadConversations();
+        });
+        acts.appendChild(fc);
+      }
+
+      const del = el('button', 'btn ghost danger', 'Delete'); del.type = 'button';
+      del.addEventListener('click', function () {
+        withBusy(del, async function () {
+          const r = await sb.from('customer_notes').delete().eq('id', n.id);
+          if (r.error) { fail('Delete note', r.error); return; }
+          state.houseNotes = (state.houseNotes || []).filter(function (x) { return x.id !== n.id; });
+          state.houseSel.delete(n.id);
+          toast('House note deleted'); renderTable();
+        });
+      });
+      acts.appendChild(del);
+      row.appendChild(acts);
+      tbl.appendChild(row);
+    });
+    box.appendChild(tbl);
+  }
 }
 
 function renderCustomers() {
