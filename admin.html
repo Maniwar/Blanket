@@ -4079,21 +4079,28 @@ function openOrderDrawer(o) {
     dw.appendChild(es);
   }
 
-  // Saved addresses — the patron's distinct ship-to addresses (the admin mirror
-  // of the checkout address book), derived from their order history.
-  const addrs = deriveAddressesFromOrders((c && c.orders) || []);
-  if (addrs.length) {
-    const ads = drawerSection('Saved addresses (' + addrs.length + ')');
-    addrs.forEach(function (a) {
-      const row = el('div', 'cust-order');
-      const tag = el('span', null, a.label);
-      tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + (a.is_gift ? '#8a6d3b' : '#3b6a7a') + ';';
-      row.appendChild(tag);
-      const line = [a.address, a.address2, [a.city, a.state].filter(Boolean).join(', '), a.zip].filter(Boolean).join(' · ');
-      const t = el('span', null, line); t.style.flex = '1 1 220px';
-      row.appendChild(t);
-      ads.appendChild(row);
-    });
+  // Saved addresses — the patron's distinct SHIPPING and BILLING addresses,
+  // derived from their order history (there is no address table; both are
+  // projections of the orders' address fields + billing jsonb). Grouped and
+  // tagged so it's always clear which is which.
+  const shipAddrs = deriveAddressesFromOrders((c && c.orders) || []);
+  const billAddrs = deriveBillingFromOrders((c && c.orders) || []);
+  if (shipAddrs.length || billAddrs.length) {
+    const ads = drawerSection('Saved addresses');
+    if (shipAddrs.length) {
+      const h = el('div', 'micro', 'Shipping'); h.style.marginBottom = '2px';
+      ads.appendChild(h);
+      shipAddrs.forEach(function (a) {
+        ads.appendChild(savedAddrRow(
+          a.is_gift ? ('ship · gift → ' + (a.recipient_name || 'recipient')) : 'ship · home',
+          a.is_gift ? '#8a6d3b' : '#3b6a7a', a));
+      });
+    }
+    if (billAddrs.length) {
+      const h = el('div', 'micro', 'Billing'); h.style.cssText = 'margin:10px 0 2px;';
+      ads.appendChild(h);
+      billAddrs.forEach(function (a) { ads.appendChild(savedAddrRow('bill', '#5a6b7a', a)); });
+    }
     dw.appendChild(ads);
   }
 
@@ -4181,6 +4188,37 @@ function deriveAddressesFromOrders(orders) {
     });
   });
   return out;
+}
+
+/* Distinct BILLING addresses from a patron's orders (orders.billing jsonb, stored
+   only when it differed from shipping) — deduped on address+city+zip. */
+function deriveBillingFromOrders(orders) {
+  const seen = {}, out = [];
+  (orders || []).forEach(function (o) {
+    const b = o.billing;
+    if (!b || typeof b !== 'object') return;
+    const address = (b.address || '').trim(), city = (b.city || '').trim();
+    if (!address || !city) return;
+    const key = [address.toLowerCase(), city.toLowerCase(), (b.zip || '').trim().toLowerCase()].join('|');
+    if (seen[key]) return; seen[key] = 1;
+    out.push({
+      label: 'Billing', address: address, address2: (b.address2 || '').trim(),
+      city: city, state: (b.state || '').trim(), zip: (b.zip || '').trim()
+    });
+  });
+  return out;
+}
+
+/* One row in the Saved-addresses panel: a coloured type tag + the address line. */
+function savedAddrRow(tagText, color, a) {
+  const row = el('div', 'cust-order');
+  const tag = el('span', null, tagText);
+  tag.style.cssText = 'flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; padding:1px 6px; border-radius:4px; color:#fff; background:' + color + ';';
+  row.appendChild(tag);
+  const line = [a.address, a.address2, [a.city, a.state].filter(Boolean).join(', '), a.zip].filter(Boolean).join(' · ');
+  const t = el('span', null, line); t.style.flex = '1 1 200px';
+  row.appendChild(t);
+  return row;
 }
 
 /* Compose box for a human directive — a standing instruction the concierge must

@@ -211,10 +211,13 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   flag: the concierge calls `resolve_admin_note` after doing a one-time task; I
   can also Resolve/Reopen any directive by hand. An SOP tells the bot to check for
   these every signed-in visit, follow them, and resolve only what it has done.)*
-- **As the merchant**, I want to see a patron's **saved addresses** at a glance
-  (their own door and past gift recipients), so that I understand their history
-  when handling an order. *(Order drawer + Patrons view: distinct ship-tos derived
-  from their orders — the admin mirror of the checkout address book, §4.12.)*
+- **As the merchant**, I want to see a patron's **saved addresses** at a glance —
+  both **shipping** (their own door, past gift recipients) and **billing**,
+  clearly labelled — so that I understand their history when handling an order.
+  *(Order drawer "Saved addresses": `deriveAddressesFromOrders` (ship-to) +
+  `deriveBillingFromOrders` (`orders.billing`), grouped Shipping/Billing with a
+  type tag per row — the admin mirror of the checkout books, §4.12. Read-only:
+  both are projections of order history, edited per-order via the address form.)*
 - **As the merchant**, I want to see every **register action** the concierge took
   on a customer's behalf — status reads, address and colorway changes,
   cancellations, context recalls, notes written — so that nothing the bot did to
