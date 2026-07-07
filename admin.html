@@ -1387,6 +1387,7 @@ const state = {
   houseActedIn: {},        // note_id → conversation_id the concierge resolved it in
   houseSel: new Set(),     // selected house-note ids for bulk resolve/reopen/delete
   convoHouse: {},          // conversation_id → [note_id] acted on in that chat
+  convoIdentity: null,     // when set, Conversations shows ONE patron's own chats (exact user_email), not a fuzzy search
   custSel: new Set(),      // selected order keys (Nº) for bulk actions
   custSort: { key: 'placed_at', dir: -1 },
   patSort: 'standing',     // patrons view: standing|value|recent|name|notes
@@ -1751,8 +1752,15 @@ function wireStatic() {
   $('convo-rating').addEventListener('change', renderConversations);
   // House-note-chats filter needs a server round-trip (it constrains by id set).
   $('convo-house').addEventListener('change', function () { loadConversations(); });
-  // Clear also unchecks it — capture phase, so it's off before wireFilter reloads.
-  $('convo-clear').addEventListener('click', function () { $('convo-house').checked = false; }, true);
+  // Any MANUAL use of the search box exits the exact "this patron's chats" scope
+  // (state.convoIdentity), so a typed email/word does its normal fuzzy search —
+  // including finding chats that MENTION an email. Programmatic .value sets (from
+  // openCustomerChats / jumpToConversation) don't fire 'input', so they're safe.
+  $('convo-q').addEventListener('input', function () { state.convoIdentity = null; });
+  $('convo-apply').addEventListener('click', function () { state.convoIdentity = null; }, true);
+  // Clear also unchecks the house filter and drops the identity scope — capture
+  // phase, so both are off before wireFilter reloads.
+  $('convo-clear').addEventListener('click', function () { $('convo-house').checked = false; state.convoIdentity = null; }, true);
   $('wl-refresh').addEventListener('click', function () { withBusy($('wl-refresh'), loadWaitlist); });
   $('wl-export').addEventListener('click', exportWaitlistCsv);
 }
@@ -4941,9 +4949,14 @@ function renderPatrons(list, q) {
   });
 }
 
-/* Jump to the Conversations tab, filtered to one customer's chats (by email). */
+/* Jump to the Conversations tab, filtered to one customer's chats by EXACT
+   identity (their own user_email) — not a fuzzy/content search, so a chat that
+   merely mentions the address elsewhere is never presented as this patron's.
+   `state.convoIdentity` makes loadConversations match user_email exactly; any
+   manual edit/Apply/Clear of the search box drops it (see init wiring). */
 function openCustomerChats(email) {
   activateTab('conversations');
+  state.convoIdentity = email || null;
   const q = $('convo-q'); if (q) q.value = email || '';
   const sr = $('convo-serial'); if (sr) sr.value = '';
   loadConversations();
@@ -4956,6 +4969,7 @@ function openCustomerChats(email) {
 async function jumpToConversation(convId, atIso, reason) {
   if (!convId) return;
   state.jumpTo = { conv: convId, at: atIso || null, reason: reason || null };
+  state.convoIdentity = null;   // a specific-conversation jump, not a patron scope
   activateTab('conversations');
   const q = $('convo-q'); if (q) q.value = convId;
   const sr = $('convo-serial'); if (sr) sr.value = '';
@@ -5543,8 +5557,15 @@ async function loadConversations(more) {
     /^(\d{1,3}\.){3}\d{1,3}$/.test(kw) ||          // full IPv4
     /^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,}$/i.test(kw) // IPv6 (incl. ::-compressed)
   );
+  // "This patron's chats" navigation (openCustomerChats) sets state.convoIdentity
+  // to an exact email so it matches the conversation's OWN user_email only — never
+  // transcript content — so foreign chats that merely MENTION the address don't get
+  // presented as this patron's. The manual search box stays fuzzy (below): typing an
+  // email there still finds chats that mention it. Any manual edit/Apply/Clear drops
+  // convoIdentity (see wiring), so the box is never silently constrained.
+  const identityEmail = state.convoIdentity || '';
   let msgIds = null;
-  if (kw && !isUuid && !isIp) {
+  if (kw && !isUuid && !isIp && !identityEmail) {
     const mm = await sb.from('concierge_messages')
       .select('conversation_id')
       .ilike('content', '%' + kw + '%')
@@ -5591,6 +5612,10 @@ async function loadConversations(more) {
   } else if (isIp) {
     // exact origin-IP match (the column stores one IP per conversation)
     q = q.eq('ip', kw);
+  } else if (identityEmail) {
+    // "this patron's chats": this account's OWN conversations, case-insensitive
+    // exact — never a transcript-content match (which would surface foreign chats).
+    q = q.ilike('user_email', identityEmail);
   } else if (kw) {
     const ids = (msgIds && msgIds.length) ? msgIds : ['00000000-0000-0000-0000-000000000000'];
     // also match a partial IP typed into the box (e.g. a /24 prefix like "203.0.113")

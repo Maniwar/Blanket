@@ -1051,7 +1051,18 @@ chat and `renderTranscript` selects the last assistant message at/just-before
 `at`. Each row also offers **Customer's chats** (all of that patron's
 conversations — the fallback for a note with no recorded resolving action), and
 the view has a text filter + **Select all shown** so bulk work isn't one checkbox
-at a time. **Bulk:** the Orders bulk bar can write one directive to all distinct
+at a time.
+
+*"Customer's chats" is an exact-identity scope, not a search.* It sets
+`state.convoIdentity` so `loadConversations` matches the conversation's **own**
+`user_email` exactly — never transcript content — so a chat that merely *mentions*
+the address (another patron who typed it, or the concierge echoing it back) is
+never presented as this patron's. The manual search box stays fuzzy and keeps its
+input-type dispatch: a **conversation id / session key** → exact lookup, an
+**IPv4/IPv6** → exact (prefix = substring), and **free text (including an email)**
+→ `user_email` substring **OR transcript-content** match — so typing an email in
+the box still finds chats that *mention* it. Any manual edit / Apply / Clear drops
+`convoIdentity`, so the exact scope never silently constrains a later search. **Bulk:** the Orders bulk bar can write one directive to all distinct
 customers behind the selected orders; the House notes view multi-selects for bulk
 Resolve/Reopen/Delete.
 
