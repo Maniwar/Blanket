@@ -65,6 +65,24 @@
   .field{ margin-bottom:18px; }
   .field > .micro{ display:block; margin-bottom:7px; }
   .field .hint{ display:block; margin-top:6px; font-size:12.5px; color:var(--wool-faint); }
+  /* Inline info badge — carries the field's helper text in a hover tooltip so the
+     label can stay short. */
+  .info-badge{ display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+    border-radius:50%; border:1px solid var(--hairline); color:var(--wool-faint); font-size:9.5px;
+    font-family:'IBM Plex Mono', monospace; cursor:help; margin-left:7px; vertical-align:middle;
+    user-select:none; line-height:1; }
+  .info-badge:hover{ color:var(--brass-soft); border-color:var(--brass-soft); }
+  /* "Effect:" readout — what a steering field is doing right now (custom vs the
+     built-in default that applies when it's blank). */
+  .cfg-state{ margin-top:6px; font-size:11.5px; color:var(--wool-faint); font-family:'IBM Plex Mono', monospace;
+    letter-spacing:.02em; }
+  .cfg-state .cfg-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:6px;
+    background:var(--wool-faint); vertical-align:middle; }
+  .cfg-state.custom{ color:var(--wool-dim); }
+  .cfg-state.custom .cfg-dot{ background:var(--brass-soft); }
+  .cfg-state .cfg-revert{ margin-left:10px; background:none; border:none; padding:0; cursor:pointer;
+    font:inherit; color:var(--brass-soft); text-decoration:underline; text-underline-offset:2px; }
+  .cfg-state .cfg-revert:hover{ color:var(--brass); }
 
   .btn{
     font-family:'IBM Plex Mono', monospace;
@@ -766,13 +784,14 @@
             </label>
           </div>
           <div class="field">
-            <label class="micro" for="cfg-model">Model</label>
+            <label class="micro" for="cfg-model">Model<span class="info-badge" title="The Anthropic model the concierge answers with. Blank = use the Fallback model below, then the server's MODEL env var, then a built-in default.">i</span></label>
             <input type="text" id="cfg-model" class="mono-field" list="model-list" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false">
             <datalist id="model-list">
               <option value="claude-sonnet-4-5"></option>
               <option value="claude-sonnet-5"></option>
               <option value="claude-haiku-4-5-20251001"></option>
             </datalist>
+            <div class="cfg-state" id="cfg-model-state"></div>
           </div>
           <div class="field">
             <label class="micro" for="cfg-model-fallback">Fallback model</label>
@@ -780,8 +799,9 @@
             <p class="micro" style="margin-top:4px;opacity:.7;">Used only if <em>Model</em> is blank. If the config itself can't be read (a rare DB blip), the server falls back to the <code>MODEL</code> env var, then a built-in default.</p>
           </div>
           <div class="field">
-            <label class="micro" for="cfg-max-tokens">Max tokens</label>
+            <label class="micro" for="cfg-max-tokens">Max tokens<span class="info-badge" title="Ceiling on the length of each concierge reply. Blank = the built-in default (1024).">i</span></label>
             <input type="number" id="cfg-max-tokens" class="mono-field" min="1" step="1" placeholder="1024">
+            <div class="cfg-state" id="cfg-max-tokens-state"></div>
           </div>
         </div>
         <div class="card-foot">
@@ -823,12 +843,14 @@
           <span class="micro">concierge_config</span>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-greeting">Greeting</label>
+          <label class="micro" for="cfg-greeting">Greeting<span class="info-badge" title="The first line the concierge speaks when a chat opens. You can drop {{reply:…}} pills in here. Blank = the built-in opening line is used.">i</span></label>
           <textarea id="cfg-greeting" rows="3" placeholder="The first line the concierge speaks."></textarea>
+          <div class="cfg-state" id="cfg-greeting-state"></div>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-voice">Tuning notes — appended to the system prompt. Steer tone, emphasis, do/don't.</label>
+          <label class="micro" for="cfg-voice">Tuning notes<span class="info-badge" title="Appended to the system prompt to steer tone, emphasis, and do/don'ts. This ADDS to the built-in voice — it does not replace it. Blank = the built-in voice is used unchanged.">i</span></label>
           <textarea id="cfg-voice" rows="5" placeholder="e.g. Never oversell. Speak of the wool with restraint."></textarea>
+          <div class="cfg-state" id="cfg-voice-state"></div>
         </div>
         <div class="card-foot">
           <button id="save-voice" class="btn primary">Save voice</button>
@@ -842,8 +864,9 @@
         </div>
         <p class="note" style="margin-bottom:16px;">Like a support agent's notes, the concierge keeps a typed client book it reads back when talking to a patron: <strong>events</strong> (what it did — cancellations, address/cloth changes; written automatically), <strong>facts</strong> (durable preferences), and <strong>reflections</strong> (private "serve them better next time" reminders). Tune what the end-of-conversation summarizer records here.</p>
         <div class="field">
-          <label class="micro" for="cfg-clientbook">Client book policy — extra rules for what to record and what to skip (blank = built-in policy).</label>
+          <label class="micro" for="cfg-clientbook">Client-book policy<span class="info-badge" title="Extra rules layered on top of the built-in policy for what the end-of-conversation summarizer records and what it skips. Blank = the built-in policy only.">i</span></label>
           <textarea id="cfg-clientbook" rows="4" placeholder="e.g. Always note cancellations and address changes. Never re-record a preference already on file. Keep reflections to one concrete, actionable line."></textarea>
+          <div class="cfg-state" id="cfg-clientbook-state"></div>
         </div>
         <div class="grid-2">
           <label class="checkline"><input type="checkbox" id="cfg-cb-actions"><span class="micro">Log every action as an event note (recommended)</span></label>
@@ -976,14 +999,16 @@
           <div class="micro" id="cfg-assert-label" style="color:var(--brass-soft);"></div>
         </div>
         <div class="field" style="margin-bottom:16px;">
-          <label class="micro" for="cfg-hooks">Selling angles — one per line. True, house-approved lines the bot can weave in to build desire.</label>
+          <label class="micro" for="cfg-hooks">Selling angles<span class="info-badge" title="One per line — true, house-approved lines the concierge can weave in to build desire. Blank = the built-in selling angles.">i</span></label>
           <textarea id="cfg-hooks" rows="4" placeholder="Woven to order at four yards an hour — 15,000 a year, never more.
 About twelve dollars a year across the fifty it takes to be inherited."></textarea>
+          <div class="cfg-state" id="cfg-hooks-state"></div>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-objections">Objection playbook — one per line, as <code>trigger | response</code>. The bot meets the hesitation, then re-opens the door.</label>
+          <label class="micro" for="cfg-objections">Objection playbook<span class="info-badge" title="One per line as “trigger | response” — the concierge meets the hesitation, then re-opens the door. Blank = the built-in objection playbook.">i</span></label>
           <textarea id="cfg-objections" rows="4" placeholder="price | About twelve dollars a year, and mended for life — the cost is the last time you buy one.
 care | Wool self-cleans; airing handles most days. Wash it less than you think."></textarea>
+          <div class="cfg-state" id="cfg-objections-state"></div>
         </div>
         <div class="card-foot">
           <button id="save-selling" class="btn primary">Save selling style</button>
@@ -1713,6 +1738,11 @@ function wireStatic() {
     withBusy($('save-selling'), saveSelling);
   });
   $('cfg-assert').addEventListener('input', renderAssertLabel);
+  // Live "Effect" readouts for the tuning fields that fall back to a built-in default.
+  CFG_FIELDS.forEach(function (f) {
+    const inp = $(f.id);
+    if (inp) inp.addEventListener('input', function () { refreshCfgState(f); });
+  });
   $('site-save').addEventListener('click', function () { withBusy($('site-save'), saveSite); });
   $('site-refresh').addEventListener('click', function () { withBusy($('site-refresh'), loadSite); });
   $('tools-save').addEventListener('click', function () { withBusy($('tools-save'), saveTools); });
@@ -1870,6 +1900,58 @@ function setPill(enabled) {
    TAB 1 — TUNING (concierge_config)
    ============================================================ */
 
+/* Tuning fields that fall back to a built-in default when left blank. Each gets a
+   live "Effect" readout (custom vs default) under the input and a one-click
+   "Revert to default" (which simply clears the field — blank = the built-in). */
+function cfgLineCount(v) { return v.split('\n').filter(function (l) { return l.trim(); }).length; }
+const CFG_FIELDS = [
+  { id: 'cfg-greeting', state: 'cfg-greeting-state',
+    dflt: 'the built-in opening line',
+    custom: function () { return 'a custom greeting'; } },
+  { id: 'cfg-voice', state: 'cfg-voice-state',
+    dflt: 'the built-in voice, unchanged (nothing appended)',
+    custom: function (v) { return 'custom tuning notes — ' + v.length + ' chars appended to the base voice'; } },
+  { id: 'cfg-clientbook', state: 'cfg-clientbook-state',
+    dflt: 'the built-in client-book policy',
+    custom: function (v) { return 'custom rules — ' + v.length + ' chars added on top'; } },
+  { id: 'cfg-model', state: 'cfg-model-state',
+    dflt: 'the fallback model, then a built-in default',
+    custom: function (v) { return v; } },
+  { id: 'cfg-max-tokens', state: 'cfg-max-tokens-state',
+    dflt: 'the built-in default (1024)',
+    custom: function (v) { return v + ' tokens'; } },
+  { id: 'cfg-hooks', state: 'cfg-hooks-state',
+    dflt: 'no extra selling angles (the salescraft still sells)',
+    custom: function (v) { var n = cfgLineCount(v); return n + ' custom selling angle' + (n === 1 ? '' : 's'); } },
+  { id: 'cfg-objections', state: 'cfg-objections-state',
+    dflt: 'no playbook (the salescraft still meets hesitations)',
+    custom: function (v) { var n = cfgLineCount(v); return n + ' custom objection' + (n === 1 ? '' : 's'); } }
+];
+function refreshCfgState(f) {
+  const inp = $(f.id), st = $(f.state);
+  if (!inp || !st) return;
+  const v = (inp.value || '').trim();
+  st.textContent = '';
+  st.appendChild(el('span', 'cfg-dot'));
+  if (v) {
+    st.classList.add('custom');
+    st.appendChild(document.createTextNode('Now: ' + f.custom(v) + '.'));
+    const rev = el('button', 'cfg-revert', 'Revert to default'); rev.type = 'button';
+    rev.title = 'Clear this field so ' + f.dflt + ' is used again';
+    rev.addEventListener('click', function () {
+      inp.value = '';
+      refreshCfgState(f);
+      try { inp.focus(); } catch (e) { /* ignore */ }
+      toast('Reverted to the built-in default — press Save to apply');
+    });
+    st.appendChild(rev);
+  } else {
+    st.classList.remove('custom');
+    st.appendChild(document.createTextNode('Blank → using ' + f.dflt + '.'));
+  }
+}
+function refreshAllCfgStates() { CFG_FIELDS.forEach(refreshCfgState); }
+
 async function loadConfig() {
   const res = await sb.from('concierge_config').select('key,value');
   if (res.error) { fail('Load config', res.error); return; }
@@ -1919,6 +2001,7 @@ async function loadConfig() {
   $('cfg-hooks').value = Array.isArray(cfg.hooks)
     ? cfg.hooks.filter(function (h) { return typeof h === 'string'; }).join('\n') : '';
   $('cfg-objections').value = objectionsToText(cfg.objections);
+  refreshAllCfgStates();   // "Effect" readouts + revert links reflect the loaded config
 
   state.images = imgObjToRows(cfg.images);
   renderImageRows();

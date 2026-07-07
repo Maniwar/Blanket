@@ -146,6 +146,17 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, I want to tune the concierge's voice, the greeting, and the
   starter prompts without a deploy, so that I can iterate on tone live. *(Tuning
   tab: config + voice notes + starters — DB-backed, 60s cache.)*
+- **As the merchant**, I want each tunable field to tell me **what's in effect
+  right now** and let me **revert to the built-in default**, so that I can lightly
+  edit the current configuration instead of guessing or starting blank. *(Every
+  field that falls back to a default when empty — greeting, voice notes,
+  client-book policy, model, max tokens, selling angles, objection playbook —
+  carries an **ⓘ info badge** (helper text in a hover tooltip so the label stays
+  short) and a live **"Effect" readout** beneath it: `Now: custom …` (with a
+  one-click **Revert to default** that clears the field) when set, or `Blank →
+  using <the built-in default>` when empty. These fields are **additive** — blank
+  means the base behavior applies with nothing overlaid — so reverting is simply
+  clearing the field; there is no separate default text to load.)*
 - **As the merchant**, I want to control how quickly and eagerly the concierge
   reaches out — the in-chat follow-up delays, the idle reach-out when the widget
   is closed, and whether it engages a visitor who hasn't scrolled — so that I can
