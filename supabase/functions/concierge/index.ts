@@ -3239,12 +3239,18 @@ async function handleChatPost(req: Request): Promise<Response> {
     const lastMsg = validated.messages[validated.messages.length - 1];
     const unansweredAsk = typeof lastMsg?.content === "string" &&
       /\?\s*["'”’]?\s*$/.test(lastMsg.content.trim());
+    // NOTE: the guard must never offer holding as the easy out — a hold leaves
+    // the unanswered question as the trailing line, so the guard would re-fire
+    // on every later beat and the bot would fall silent entirely (a hold loop).
+    // It demands a STATEMENT: the conversation keeps breathing, just without
+    // another question mark.
     const askGuard = unansweredAsk
-      ? " YOUR LAST LINE IS AN UNANSWERED QUESTION, still on their screen. On THIS beat do not ask " +
-        "another question and do not rephrase that one — it reads as pestering. Say ONE short line " +
-        "with no question mark at all (a true detail, a small picture, a service note from their " +
-        "register), or hold. The question stays open — once they speak again, or on a later beat " +
-        "after you've offered something new, you may return to it through a different door."
+      ? " YOUR LAST LINE WAS A QUESTION they haven't answered — it is still on their screen. On THIS " +
+        "beat do not ask anything and do not rephrase it; SPEAK one short STATEMENT instead (a true " +
+        "cloth detail, a small picture, a service note from their register) with no question mark. " +
+        "Do not go silent just because your question is pending — an ignored question plus silence " +
+        "reads as sulking; one warm statement keeps the room comfortable. The question stays open: " +
+        "once they speak, or after you've offered something new, return to it through a different door."
       : "";
     const groundNote = signedIn
       ? " They are a KNOWN patron — ground the line in their CUSTOMER block (first name, standing, " +
@@ -3266,8 +3272,11 @@ async function handleChatPost(req: Request): Promise<Response> {
       decision = "This is a later check-in — keep a light, HUMAN presence, the way a clerk " +
         "lingers nearby: a brief, low-pressure line (\"Still here whenever you'd like to pick " +
         "this up\", \"Anything else on your mind?\"), warm and unhurried, at most one sentence. " +
-        "Do not re-pitch or repeat yourself. If they truly seem done, you may reply exactly " +
-        "[HOLD] to give space — but most of the time, a short human check-in is right.";
+        "Do not re-pitch or repeat yourself." +
+        (unansweredAsk
+          ? " Speak the short statement described above — do not hold on this beat."
+          : " If they truly seem done, you may reply exactly [HOLD] to give space — but most " +
+            "of the time, a short human check-in is right.");
     }
     // For an anonymous visitor, occasionally invite them to leave their email so
     // the house can remember them — an account is how their orders and client
