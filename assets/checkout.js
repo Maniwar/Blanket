@@ -81,6 +81,21 @@
   function clearChatVia() {
     try { window.sessionStorage.removeItem('cx-commission-via'); } catch (eX) { /* ignore */ }
   }
+  /* Funnel beacon: the register sheet opened (?track=1, PII-free — see
+     ATTRIBUTION.md). via records whether the concierge's own button opened it.
+     Fire-and-forget; a beacon must never affect checkout. */
+  function trackOpen() {
+    try {
+      var url = conciergeEndpoint();
+      if (!url) { return; }
+      var body = { kind: 'checkout_open', visit_key: visitKey(), via: chatVia() === 'concierge' ? 'concierge' : 'page' };
+      var k = chatKey(); if (k) { body.session_key = k; }
+      fetch(url + (url.indexOf('?') === -1 ? '?track=1' : '&track=1'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        keepalive: true, body: JSON.stringify(body)
+      })['catch'](function () { /* nothing to recover */ });
+    } catch (eT) { /* never breaks checkout */ }
+  }
   /* re-confirm the visit's held number whenever the sheet opens */
   function refreshHold() {
     var e = commissionEndpoint();
@@ -2100,6 +2115,7 @@
   function openPanel() {
     if (!panel || panelOpen) { return; }
     panelOpen = true;
+    trackOpen();
     pubCkState();
     refreshHold();
     prefillReturning();

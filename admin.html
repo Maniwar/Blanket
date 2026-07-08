@@ -346,6 +346,44 @@
     border-radius:20px; padding:5px 13px; transition:border-color .14s ease, color .14s ease; }
   .ord-chip:hover{ border-color:var(--hairline); color:var(--wool); }
   .ord-chip.on{ color:var(--wool); border-color:var(--brass); background:rgba(196,155,91,.1); }
+  /* Conversion report — KPI deltas, chart cards, tooltips, funnel snapshot */
+  .cv-delta{ margin-top:4px; font-size:11px; font-family:'IBM Plex Mono', monospace; color:var(--wool-faint); min-height:14px; }
+  .cv-delta.up{ color:#7fb069; }
+  .cv-delta.down{ color:#c98a6b; }
+  .cv-charts{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .cv-charts .card{ margin-bottom:26px; }
+  @media (max-width:980px){ .cv-charts{ grid-template-columns:1fr; } }
+  .cv-chart{ position:relative; }
+  .cv-chart svg{ display:block; width:100%; height:auto; }
+  .cv-chart svg:focus{ outline:1px solid var(--brass-soft); outline-offset:3px; }
+  .cv-tip{ position:absolute; pointer-events:none; z-index:3; display:none; min-width:150px;
+    background:#101610; border:1px solid var(--hairline); border-radius:4px; padding:8px 11px; }
+  .cv-tip .tt{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--wool-faint); margin-bottom:5px; }
+  .cv-tip .tr{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--wool-dim); padding:1.5px 0; }
+  .cv-tip .tk{ display:inline-block; width:14px; height:0; border-top:2px solid; border-radius:1px; }
+  .cv-tip .tv{ margin-left:auto; font-weight:600; color:var(--wool); font-variant-numeric:tabular-nums; }
+  .cv-legend2{ display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; }
+  .cv-legend2 .li{ display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--wool-dim); }
+  .cv-legend2 .lk{ display:inline-block; width:16px; height:0; border-top:2px solid; border-radius:1px; }
+  .cv-tblbtn{ margin-top:8px; background:none; border:none; cursor:pointer; padding:0;
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.05em;
+    color:var(--wool-faint); text-decoration:underline; text-underline-offset:2px; }
+  .cv-tblbtn:hover{ color:var(--brass-soft); }
+  .cv-tbl{ width:100%; border-collapse:collapse; margin-top:10px; }
+  .cv-tbl th,.cv-tbl td{ text-align:right; padding:5px 10px; font-size:11.5px; color:var(--wool-dim);
+    border-bottom:1px solid var(--hairline-dim); font-variant-numeric:tabular-nums; }
+  .cv-tbl th{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--wool-faint); }
+  .cv-tbl th:first-child,.cv-tbl td:first-child{ text-align:left; }
+  .fnl-row{ display:flex; align-items:center; gap:12px; padding:5px 0; }
+  .fnl-row .fl{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.04em;
+    color:var(--wool-dim); width:190px; flex:none; display:inline-flex; align-items:center; gap:8px; }
+  .fnl-row .fl .sw{ width:11px; height:11px; border-radius:2px; flex:none; }
+  .fnl-row .fbar{ flex:1; height:22px; border-radius:3px 4px 4px 3px; background:var(--ink-well); position:relative; }
+  .fnl-row .fbar .fill{ height:100%; border-radius:3px 4px 4px 3px; min-width:2px; }
+  .fnl-row .fv{ width:200px; flex:none; font-size:12px; color:var(--wool-dim); font-variant-numeric:tabular-nums; }
+  .fnl-row .fv b{ color:var(--wool); }
   /* Conversion report — stacked attribution/funnel bars + breakdown rows */
   .cv-bar{ display:flex; height:26px; border-radius:4px; overflow:hidden; border:1px solid var(--hairline-dim); margin:6px 0 10px; }
   .cv-bar .seg{ min-width:2px; }
@@ -1408,13 +1446,11 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <h2>Conversations</h2>
       </div>
 
-      <div class="metrics">
-        <div class="stat"><span class="micro">Conversations today</span><div class="val" id="m-convos">—</div></div>
-        <div class="stat"><span class="micro">Messages today</span><div class="val" id="m-msgs">—</div></div>
-        <div class="stat"><span class="micro">Assisted commissions</span><div class="val" id="m-assist">—</div></div>
-        <div class="stat"><span class="micro">Assisted revenue</span><div class="val" id="m-assist-rev">—</div></div>
-        <div class="stat"><span class="micro">👍 rate</span><div class="val" id="m-rate">—</div></div>
-      </div>
+      <!-- Metrics live in ONE place — the Conversion tab — so numbers never
+           disagree between views. This tab is the working floor: find, read,
+           grade, and act on transcripts. -->
+      <p class="note" style="margin-bottom:18px;">Revenue, conversion, and funnel metrics live on the
+        <a href="#" id="convo-to-conversion">Conversion</a> tab.</p>
 
       <div class="conv-toolbar">
         <!-- FILTER zone — what to show. Text/date need Apply; the selects filter live. -->
@@ -1494,11 +1530,11 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <span class="micro">The ledger</span>
         <h2>Conversion</h2>
       </div>
-      <p class="note">How the concierge turns conversations into commissions. Three attribution tiers:
-        <b>✳ concierge-initiated</b> — checkout was opened from the concierge's own commission button
-        (the causal tier you optimize); <b>chat-assisted</b> — a conversation happened in the buying
-        session but checkout came from a page button; <b>unassisted</b> — no conversation.
-        Full mechanics in <span class="mono">ATTRIBUTION.md</span>.</p>
+      <p class="note">The one place every number lives. Attribution tiers: <b>✳ concierge-initiated</b> —
+        checkout opened from the concierge's own commission button (the causal tier you optimize);
+        <b>chat-assisted</b> — a conversation ran in the buying session, checkout came from a page button;
+        <b>unassisted</b> — no conversation. Hover any <span class="info-badge">i</span> for the exact
+        definition; formal definitions with date bases in <span class="mono">ATTRIBUTION.md</span>.</p>
 
       <div class="ct-row" style="margin-bottom:18px;">
         <span class="ct-tag">Range</span>
@@ -1507,43 +1543,98 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <button id="cv-refresh" class="btn ghost" type="button">Refresh</button>
       </div>
 
+      <!-- Commerce KPIs — range-scoped, each with a definition and a delta vs the prior equal window -->
       <div class="metrics" id="cv-tiles">
-        <div class="stat"><span class="micro">Commissions (kept)</span><div class="val" id="cv-orders">—</div></div>
-        <div class="stat"><span class="micro">✳ Concierge-initiated</span><div class="val" id="cv-initiated">—</div></div>
-        <div class="stat"><span class="micro">Chat-assisted</span><div class="val" id="cv-assisted">—</div></div>
-        <div class="stat"><span class="micro">Attributed revenue</span><div class="val" id="cv-revenue">—</div></div>
-        <div class="stat"><span class="micro">Chat → commission rate</span><div class="val" id="cv-rate">—</div></div>
+        <div class="stat"><span class="micro">Revenue<span class="info-badge" title="Kept (non-cancelled) commissions placed in the range × the register price (Edition &amp; access → Register price). Date basis: order date (placed_at).">i</span></span><div class="val" id="cv-revenue">—</div><div class="cv-delta" id="cv-revenue-d"></div></div>
+        <div class="stat"><span class="micro">Commissions<span class="info-badge" title="Orders placed in the range that were not cancelled. Date basis: order date (placed_at). Click to open them in the register.">i</span></span><div class="val" id="cv-orders">—</div><div class="cv-delta" id="cv-orders-d"></div></div>
+        <div class="stat"><span class="micro">Avg order value<span class="info-badge" title="Revenue ÷ kept commissions. In this demo every commission is one blanket at the register price, so AOV equals the price until multi-item or variable pricing exists.">i</span></span><div class="val" id="cv-aov">—</div><div class="cv-delta" id="cv-aov-d"></div></div>
+        <div class="stat"><span class="micro">Conversion rate<span class="info-badge" title="Attributed kept commissions (✳ + chat-assisted, by order date) ÷ conversations started in the range (by conversation start date). Cross-basis: a chat late in the window can convert after it — treat the tail as approximate. Click to open the commissioned chats.">i</span></span><div class="val" id="cv-rate">—</div><div class="cv-delta" id="cv-rate-d"></div></div>
+      </div>
+
+      <!-- Concierge KPIs — attribution + engagement -->
+      <div class="metrics" id="cv-tiles2">
+        <div class="stat"><span class="micro">✳ Concierge-initiated<span class="info-badge" title="Kept commissions where checkout was opened from the concierge's own commission button (orders.chat_via = concierge). The causal tier — the number to optimize. Click to open them.">i</span></span><div class="val" id="cv-initiated">—</div><div class="cv-delta" id="cv-initiated-d"></div></div>
+        <div class="stat"><span class="micro">Chat-assisted<span class="info-badge" title="Kept commissions with a conversation in the buying session but checkout from a page button (chat_session set, no button click). Co-occurrence, not proven cause. Click to open them.">i</span></span><div class="val" id="cv-assisted">—</div><div class="cv-delta" id="cv-assisted-d"></div></div>
+        <div class="stat"><span class="micro">Attributed revenue<span class="info-badge" title="(✳ + chat-assisted) × register price, in the range. Quote the ✳ share when claiming causation — adding both tiers overstates.">i</span></span><div class="val" id="cv-attr-rev">—</div><div class="cv-delta" id="cv-attr-rev-d"></div></div>
+        <div class="stat"><span class="micro">Conversations<span class="info-badge" title="Conversations started in the range (by created_at), signed-in and anonymous alike.">i</span></span><div class="val" id="cv-convos">—</div><div class="cv-delta" id="cv-convos-d"></div></div>
+        <div class="stat"><span class="micro">👍 rate (all-time)<span class="info-badge" title="Thumbs-up ÷ all rated replies, ALL-TIME (feedback rows carry no timestamp, so this cannot be range-scoped). A reply-quality signal, not a conversion metric.">i</span></span><div class="val" id="cv-thumbs">—</div><div class="cv-delta"></div></div>
+      </div>
+
+      <!-- The behavioral funnel over time — visits → chat → spoke → register → commission -->
+      <section class="card">
+        <div class="card-head">
+          <h3>Funnel over time</h3>
+          <span class="micro">Unique visitors reaching each stage per bucket — visit → chat opened → spoke to concierge → register opened → commission</span>
+        </div>
+        <div id="cv-chart-funnel" class="cv-chart"></div>
+      </section>
+
+      <!-- Funnel snapshot — the range totals with stage-to-stage conversion -->
+      <section class="card">
+        <div class="card-head">
+          <h3>Funnel — this range</h3>
+          <span class="micro">Unique visitors per stage, with stage-to-stage conversion</span>
+        </div>
+        <div id="cv-fsnap"></div>
+      </section>
+
+      <!-- Trends — direction of the money and the rate -->
+      <div class="cv-charts">
+        <section class="card">
+          <div class="card-head">
+            <h3>Revenue over time</h3>
+            <span class="micro">Kept commissions × price, by order date — total vs attributed</span>
+          </div>
+          <div id="cv-chart-rev" class="cv-chart"></div>
+        </section>
+        <section class="card">
+          <div class="card-head">
+            <h3>Conversion rate over time</h3>
+            <span class="micro">Attributed commissions ÷ conversations started, per bucket</span>
+          </div>
+          <div id="cv-chart-rate" class="cv-chart"></div>
+        </section>
       </div>
 
       <section class="card">
         <div class="card-head">
           <h3>Attribution split</h3>
-          <span class="micro">Every kept commission in the range, by tier</span>
+          <span class="micro">Every kept commission in the range, by tier — click a tier to open its orders</span>
         </div>
         <div id="cv-split"></div>
       </section>
 
       <section class="card">
         <div class="card-head">
-          <h3>Conversation funnel</h3>
-          <span class="micro">Graded stage of every conversation in the range</span>
+          <h3>Conversation stages</h3>
+          <span class="micro">The judge's graded stage of every conversation started in the range</span>
         </div>
         <div id="cv-funnel"></div>
       </section>
 
       <section class="card">
         <div class="card-head">
+          <h3>Where the opportunities are</h3>
+          <span class="micro">Computed reads of this range — what to turn next</span>
+        </div>
+        <div id="cv-opps"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>What converts</h3>
-          <span class="micro">Where concierge-initiated commissions came from (the click's context)</span>
+          <span class="micro">Where ✳ concierge-initiated commissions came from (the click's context)</span>
         </div>
         <div id="cv-breakdown"></div>
       </section>
 
-      <p class="micro" style="opacity:.7;">Coverage: attribution is captured when the chat and the
-        checkout happen in the same browser tab session. A chat today that converts tomorrow (or on
-        another device) records as unassisted — treat the attributed numbers as a floor, not a ceiling.
-        Cancelled orders are excluded from revenue but keep their attribution. Orders placed before the
-        tier column existed count as chat-assisted when they carry a chat link.</p>
+      <p class="micro" style="opacity:.7;">Date bases: order metrics bucket by <b>order date</b> (placed_at);
+        conversation metrics by <b>conversation start</b> (created_at); funnel stages by <b>event time</b>,
+        unique visitors per bucket. Deltas compare the prior window of equal length. Attribution is captured
+        when chat and checkout share a browser tab session — cross-day and cross-device journeys record as
+        unassisted, so attributed figures are a floor, not a ceiling. Funnel events begin at their ship date —
+        earlier history shows zeros. Cancelled orders are excluded from revenue but keep their attribution.
+        Full definitions: <span class="mono">ATTRIBUTION.md</span>.</p>
     </div>
 
     <!-- ============ TAB 7 : WEBSITE (storefront CMS) ============ -->
@@ -2084,6 +2175,9 @@ function wireStatic() {
   // House-note-chats filter needs a server round-trip (it constrains by id set).
   $('convo-house').addEventListener('change', function () { loadConversations(); });
   $('convo-comm').addEventListener('change', function () { loadConversations(); });
+  $('convo-to-conversion').addEventListener('click', function (ev) {
+    ev.preventDefault(); activateTab('conversion');
+  });
   // Any MANUAL use of the search box exits the exact "this patron's chats" scope
   // (state.convoIdentity), so a typed email/word does its normal fuzzy search —
   // including finding chats that MENTION an email. Programmatic .value sets (from
@@ -6696,7 +6790,6 @@ function exportWaitlistCsv() {
    ============================================================ */
 
 async function loadConversations(more) {
-  loadMetrics();
   if (!more) { pageState.convo = 0; state.convoSel = new Set(); }   // fresh load drops any bulk selection
   const df = fFrom('convo-from'), dt = fTo('convo-to'), kw = fkw('convo-q');
 
@@ -6850,48 +6943,6 @@ async function loadConversations(more) {
   renderConvoList(counts);
 }
 
-async function loadMetrics() {
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
-  const iso = dayStart.toISOString();
-  try {
-    const results = await Promise.all([
-      // Today's counts are date-bounded (created_at index) so exact stays cheap.
-      sb.from('concierge_conversations').select('*', { count: 'exact', head: true }).gte('created_at', iso),
-      sb.from('concierge_messages').select('*', { count: 'exact', head: true }).gte('created_at', iso),
-      // These scan whole tables — use planner estimates so they stay O(1) at
-      // scale (PostgREST returns exact for small tables, estimated for large).
-      sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }),
-      sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }).eq('rating', 1),
-      sb.from('orders').select('*', { count: 'estimated', head: true })
-        .not('chat_session', 'is', null).neq('status', 'cancelled')
-    ]);
-    const convosToday = results[0], msgsToday = results[1], fbAll = results[2], fbUp = results[3];
-    const assisted = results[4];
-
-    $('m-convos').textContent = convosToday.error ? '—' : String(convosToday.count || 0);
-    $('m-msgs').textContent = msgsToday.error ? '—' : String(msgsToday.count || 0);
-    if (assisted.error) {
-      $('m-assist').textContent = '—';
-      $('m-assist-rev').textContent = '—';
-    } else {
-      const n = assisted.count || 0;
-      $('m-assist').textContent = String(n);
-      $('m-assist-rev').textContent = '$' + (n * PRICE).toLocaleString('en-US');
-    }
-
-    if (fbAll.error || fbUp.error || !(fbAll.count > 0)) {
-      $('m-rate').textContent = '—';
-    } else {
-      $('m-rate').textContent = Math.round(100 * (fbUp.count || 0) / fbAll.count) + '%';
-    }
-    const firstErr = results.find(function (r) { return r.error; });
-    if (firstErr) fail('Metrics', firstErr.error);
-  } catch (e) {
-    fail('Metrics', e);
-  }
-}
-
 /* ============================================================
    TAB — CONVERSION (revenue attribution & funnel report)
    Reads orders (chat_session/chat_via/chat_meta) + conversations
@@ -6983,36 +7034,303 @@ async function cvOpenChat(o) {
   jumpToConversation(pick.id, o.placed_at || null, null);
 }
 
+/* Funnel stages, in order, with a palette validated (dataviz six-checks) against
+   this admin's dark surface — identity is never color-alone: every chart ships a
+   legend, a unified tooltip, and a table view. */
+const CV_FUNNEL = [
+  { key: 'visit', label: 'Visits', color: '#3F9FC4' },
+  { key: 'chat_open', label: 'Chat opened', color: '#5E9C57' },
+  { key: 'spoke', label: 'Spoke to concierge', color: '#B56AA8' },
+  { key: 'checkout_open', label: 'Register opened', color: '#C06552' },
+  { key: 'commission', label: 'Commissions', color: '#B08838' }
+];
+const CV_EMPH = '#B08838';   // emphasis hue (validated); the money series
+const CV_CTX = '#8b9284';    // de-emphasis context line (total/rest)
+
+/* Time buckets for the current window: daily ≤ 31 days, weekly ≤ 200, else
+   monthly. Returns { starts:[ms], labels:[str], idx(tsMs)→bucket|-1 }. */
+function cvBuckets(fromMs, toMs) {
+  const day = 86400000, span = toMs - fromMs;
+  const gran = span <= 32 * day ? 'day' : span <= 200 * day ? 'week' : 'month';
+  const starts = [];
+  const d = new Date(fromMs);
+  d.setHours(0, 0, 0, 0);
+  if (gran === 'week') d.setDate(d.getDate() - d.getDay());
+  if (gran === 'month') d.setDate(1);
+  while (d.getTime() <= toMs) {
+    starts.push(d.getTime());
+    if (gran === 'day') d.setDate(d.getDate() + 1);
+    else if (gran === 'week') d.setDate(d.getDate() + 7);
+    else d.setMonth(d.getMonth() + 1);
+  }
+  const labels = starts.map(function (t) {
+    const x = new Date(t);
+    return gran === 'month'
+      ? x.toLocaleDateString([], { month: 'short', year: '2-digit' })
+      : x.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  });
+  return {
+    starts: starts, labels: labels, gran: gran,
+    idx: function (t) {
+      if (t < starts[0]) return -1;
+      for (let i = starts.length - 1; i >= 0; i--) { if (t >= starts[i]) return i; }
+      return -1;
+    }
+  };
+}
+
+/* A small SVG line/area chart to the dataviz spec: hairline grid, clean y
+   ticks, 2px lines, 10% area wash, 4px end dots with a surface ring, legend
+   for 2+ series, crosshair + one tooltip listing EVERY series at the snapped
+   bucket (pointer and keyboard alike), and a table view so no value is gated
+   behind hover. One y-axis, always. */
+function cvChart(mount, opts) {
+  mount.textContent = '';
+  const n = opts.labels.length;
+  if (!n || !opts.series.some(function (s) { return s.values.some(function (v) { return v > 0; }); })) {
+    mount.appendChild(el('div', 'empty micro', 'Nothing to plot in this range yet.'));
+    return;
+  }
+  const W = 640, H = 235, L = 54, R = 14, T = 12, B = 26;
+  const iw = W - L - R, ih = H - T - B;
+  let max = 0;
+  opts.series.forEach(function (s) { s.values.forEach(function (v) { if (v > max) max = v; }); });
+  if (max <= 0) max = 1;
+  const nice = function (x) {
+    const p = Math.pow(10, Math.floor(Math.log10(x)));
+    const f = x / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  };
+  const step = nice(max / 4);
+  const top = step * 4 >= max ? step * 4 : step * 5;
+  const X = function (i) { return L + (n === 1 ? iw / 2 : iw * i / (n - 1)); };
+  const Y = function (v) { return T + ih - ih * (v / top); };
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = function (tag) { return document.createElementNS(NS, tag); };
+  const sv = mk('svg');
+  sv.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  sv.setAttribute('tabindex', '0');
+  sv.setAttribute('role', 'img');
+  sv.setAttribute('aria-label', opts.aria || 'trend chart — use arrow keys to read values');
+  // grid + y ticks (recessive hairlines, clean numbers)
+  for (let g = 0; g <= 4; g++) {
+    const v = top * g / 4, y = Y(v);
+    const ln = mk('line');
+    ln.setAttribute('x1', L); ln.setAttribute('x2', W - R);
+    ln.setAttribute('y1', y); ln.setAttribute('y2', y);
+    ln.setAttribute('stroke', 'rgba(241,236,226,.08)'); ln.setAttribute('stroke-width', '1');
+    sv.appendChild(ln);
+    const tx = mk('text');
+    tx.setAttribute('x', L - 8); tx.setAttribute('y', y + 3.5);
+    tx.setAttribute('text-anchor', 'end'); tx.setAttribute('font-size', '10');
+    tx.setAttribute('fill', 'rgba(241,236,226,.38)');
+    tx.textContent = opts.fmt(v, true);
+    sv.appendChild(tx);
+  }
+  // sparse x labels — first / middle / last (the tooltip carries the rest)
+  (n <= 4 ? opts.labels.map(function (_, i) { return i; }) : [0, Math.floor((n - 1) / 2), n - 1])
+    .forEach(function (i) {
+      const tx = mk('text');
+      tx.setAttribute('x', X(i)); tx.setAttribute('y', H - 8);
+      tx.setAttribute('text-anchor', i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle');
+      tx.setAttribute('font-size', '10'); tx.setAttribute('fill', 'rgba(241,236,226,.38)');
+      tx.textContent = opts.labels[i];
+      sv.appendChild(tx);
+    });
+  // series: 10% area wash + 2px line + end dot with surface ring
+  opts.series.forEach(function (s) {
+    const pts = s.values.map(function (v, i) { return X(i) + ',' + Y(v); });
+    if (s.wash !== false) {
+      const ar = mk('path');
+      ar.setAttribute('d', 'M' + pts.join('L') + 'L' + X(n - 1) + ',' + (T + ih) + 'L' + X(0) + ',' + (T + ih) + 'Z');
+      ar.setAttribute('fill', s.color); ar.setAttribute('opacity', '0.1');
+      sv.appendChild(ar);
+    }
+    const p = mk('path');
+    p.setAttribute('d', 'M' + pts.join('L'));
+    p.setAttribute('fill', 'none'); p.setAttribute('stroke', s.color);
+    p.setAttribute('stroke-width', '2');
+    p.setAttribute('stroke-linejoin', 'round'); p.setAttribute('stroke-linecap', 'round');
+    sv.appendChild(p);
+    const dot = mk('circle');
+    dot.setAttribute('cx', X(n - 1)); dot.setAttribute('cy', Y(s.values[n - 1]));
+    dot.setAttribute('r', '4'); dot.setAttribute('fill', s.color);
+    dot.setAttribute('stroke', '#1c241e'); dot.setAttribute('stroke-width', '2');
+    sv.appendChild(dot);
+  });
+  // crosshair + unified tooltip (pointer AND keyboard)
+  const ch = mk('line');
+  ch.setAttribute('y1', T); ch.setAttribute('y2', T + ih);
+  ch.setAttribute('stroke', 'rgba(196,155,91,.45)'); ch.setAttribute('stroke-width', '1');
+  ch.setAttribute('visibility', 'hidden');
+  sv.appendChild(ch);
+  const tip = el('div', 'cv-tip');
+  let ki = -1;
+  function showIdx(i) {
+    i = Math.max(0, Math.min(n - 1, i)); ki = i;
+    ch.setAttribute('x1', X(i)); ch.setAttribute('x2', X(i));
+    ch.setAttribute('visibility', 'visible');
+    tip.textContent = '';
+    tip.appendChild(el('div', 'tt', opts.labels[i]));
+    opts.series.forEach(function (s) {
+      const r = el('div', 'tr');
+      const k = el('span', 'tk'); k.style.borderTopColor = s.color;
+      r.appendChild(k);
+      r.appendChild(document.createTextNode(s.name));
+      r.appendChild(el('span', 'tv', opts.fmt(s.values[i], false)));
+      tip.appendChild(r);
+    });
+    if (opts.tipNote) { const nte = opts.tipNote(i); if (nte) tip.appendChild(el('div', 'tt', nte)); }
+    tip.style.display = 'block';
+    const mw = mount.clientWidth || W;
+    const px = (X(i) / W) * mw;
+    tip.style.left = Math.max(0, Math.min(mw - 170, px + 12)) + 'px';
+    tip.style.top = '8px';
+  }
+  function hideTip() { ch.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; ki = -1; }
+  sv.addEventListener('pointermove', function (e) {
+    const r = sv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (W / r.width);
+    showIdx(Math.round((px - L) / (iw / (n - 1 || 1))));
+  });
+  sv.addEventListener('pointerleave', hideTip);
+  sv.addEventListener('focus', function () { showIdx(n - 1); });
+  sv.addEventListener('blur', hideTip);
+  sv.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') { showIdx((ki < 0 ? n - 1 : ki) - 1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { showIdx((ki < 0 ? n - 1 : ki) + 1); e.preventDefault(); }
+    else if (e.key === 'Escape') { hideTip(); }
+  });
+  mount.appendChild(sv);
+  mount.appendChild(tip);
+  // legend — always for 2+ series (never color alone); one series is named by the card title
+  if (opts.series.length > 1) {
+    const leg = el('div', 'cv-legend2');
+    opts.series.forEach(function (s) {
+      const li = el('span', 'li');
+      const k = el('span', 'lk'); k.style.borderTopColor = s.color;
+      li.appendChild(k);
+      li.appendChild(document.createTextNode(s.name));
+      leg.appendChild(li);
+    });
+    mount.appendChild(leg);
+  }
+  // table view — every value reachable without hovering
+  const tbtn = el('button', 'cv-tblbtn', '⊞ show values as a table');
+  tbtn.type = 'button';
+  let tbl = null;
+  tbtn.addEventListener('click', function () {
+    if (tbl) { tbl.remove(); tbl = null; tbtn.textContent = '⊞ show values as a table'; return; }
+    tbl = el('table', 'cv-tbl');
+    const hr = el('tr');
+    hr.appendChild(el('th', '', opts.gran || 'bucket'));
+    opts.series.forEach(function (s) { hr.appendChild(el('th', '', s.name)); });
+    tbl.appendChild(hr);
+    opts.labels.forEach(function (lb, i) {
+      const r = el('tr');
+      r.appendChild(el('td', '', lb));
+      opts.series.forEach(function (s) { r.appendChild(el('td', '', opts.fmt(s.values[i], false))); });
+      tbl.appendChild(r);
+    });
+    mount.appendChild(tbl);
+    tbtn.textContent = '⊟ hide table';
+  });
+  mount.appendChild(tbtn);
+}
+
+const cvFmtN = function (v) { return Number(v).toLocaleString('en-US'); };
+const cvFmtMoney = function (v, axis) {
+  if (axis && v >= 1000) return '$' + (Math.round(v / 100) / 10) + 'k';
+  return '$' + Math.round(v).toLocaleString('en-US');
+};
+const cvFmtPct = function (v) { return (Math.round(v * 10) / 10) + '%'; };
+
 async function loadConversion() {
   if (state.cvDays === undefined) state.cvDays = 30;
   cvRangeChips();
   const since = cvSince();
+  const nowMs = Date.now();
+  // Fetch 2× the window in one pass, then split — the prior window feeds the
+  // per-tile deltas. All-time has no prior window (no deltas).
+  const prevSince = state.cvDays ? new Date(nowMs - 2 * state.cvDays * 86400000).toISOString() : null;
+  const fetchFrom = prevSince || null;
 
-  // Full rows so the range can be exported with the standard orders CSV shape.
   let oq = sb.from('orders').select('*').order('placed_at', { ascending: false }).limit(10000);
-  let cq = sb.from('concierge_conversations').select('id,sales_stage,created_at').limit(10000);
-  if (since) { oq = oq.gte('placed_at', since); cq = cq.gte('created_at', since); }
-  const [ores, cres] = await Promise.all([oq, cq]);
+  let cq = sb.from('concierge_conversations').select('id,sales_stage,created_at,section').limit(10000);
+  let eq = sb.from('site_events').select('kind,visit_key,created_at,via').limit(20000);
+  let mq = sb.from('concierge_messages').select('conversation_id,created_at').eq('role', 'user').limit(20000);
+  if (fetchFrom) {
+    oq = oq.gte('placed_at', fetchFrom); cq = cq.gte('created_at', fetchFrom);
+    eq = eq.gte('created_at', fetchFrom); mq = mq.gte('created_at', fetchFrom);
+  }
+  const [ores, cres, eres, mres, fbAll, fbUp] = await Promise.all([
+    oq, cq, eq, mq,
+    sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }),
+    sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }).eq('rating', 1)
+  ]);
   if (ores.error) { fail('Conversion — orders', ores.error); return; }
   if (cres.error) { fail('Conversion — conversations', cres.error); return; }
-  const orders = ores.data || [];
-  const convos = cres.data || [];
+  if (eres.error && String(eres.error.message || '').indexOf('site_events') < 0) fail('Conversion — events', eres.error);
+  const sinceMs = since ? new Date(since).getTime() : -Infinity;
+  const inCur = function (iso) { return iso && new Date(iso).getTime() >= sinceMs; };
+
+  const allOrders = ores.data || [];
+  const allConvos = cres.data || [];
+  const allEvents = (eres && eres.data) || [];   // empty until setup.sql ran / beacons ship
+  const allUserMsgs = (mres && mres.data) || [];
+  const orders = allOrders.filter(function (o) { return inCur(o.placed_at); });
+  const convos = allConvos.filter(function (c) { return inCur(c.created_at); });
+  const pOrders = allOrders.filter(function (o) { return !inCur(o.placed_at); });
+  const pConvos = allConvos.filter(function (c) { return !inCur(c.created_at); });
   state.cvOrders = orders;   // what Export CSV on this tab downloads
 
   // Attribution tiers over KEPT (non-cancelled) commissions. An order placed
   // before chat_via existed still counts as chat-assisted via chat_session.
-  const kept = orders.filter(function (o) { return o.status !== 'cancelled'; });
-  const initiated = kept.filter(function (o) { return o.chat_via === 'concierge'; });
-  const ambient = kept.filter(function (o) { return o.chat_session && o.chat_via !== 'concierge'; });
-  const unassisted = kept.filter(function (o) { return !o.chat_session; });
-  const attributed = initiated.length + ambient.length;
+  const tiers = function (list) {
+    const kept = list.filter(function (o) { return o.status !== 'cancelled'; });
+    const ini = kept.filter(function (o) { return o.chat_via === 'concierge'; });
+    const amb = kept.filter(function (o) { return o.chat_session && o.chat_via !== 'concierge'; });
+    const una = kept.filter(function (o) { return !o.chat_session; });
+    return { kept: kept, ini: ini, amb: amb, una: una, attr: ini.length + amb.length };
+  };
+  const cur = tiers(orders), prev = tiers(pOrders);
+  const kept = cur.kept, initiated = cur.ini, ambient = cur.amb, unassisted = cur.una;
+  const attributed = cur.attr;
+  const rateOf = function (t, cs) { return cs.length ? 100 * t.attr / cs.length : null; };
+  const curRate = rateOf(cur, convos), prevRate = rateOf(prev, pConvos);
 
+  // ---- KPI tiles + deltas (vs the prior equal window; all-time has none) ----
+  $('cv-revenue').textContent = '$' + (kept.length * PRICE).toLocaleString('en-US');
   $('cv-orders').textContent = String(kept.length);
+  $('cv-aov').textContent = '$' + PRICE.toLocaleString('en-US');
+  $('cv-rate').textContent = curRate === null ? '—' : cvFmtPct(curRate);
+  $('cv-rate').title = attributed + ' attributed commissions ÷ ' + convos.length + ' conversations in range';
   $('cv-initiated').textContent = String(initiated.length);
   $('cv-assisted').textContent = String(ambient.length);
-  $('cv-revenue').textContent = '$' + (attributed * PRICE).toLocaleString('en-US');
-  $('cv-rate').textContent = convos.length ? (Math.round(1000 * attributed / convos.length) / 10) + '%' : '—';
-  $('cv-rate').title = attributed + ' attributed commissions ÷ ' + convos.length + ' conversations in range';
+  $('cv-attr-rev').textContent = '$' + (attributed * PRICE).toLocaleString('en-US');
+  $('cv-convos').textContent = String(convos.length);
+  $('cv-thumbs').textContent = (!fbAll.error && !fbUp.error && fbAll.count > 0)
+    ? Math.round(100 * (fbUp.count || 0) / fbAll.count) + '%' : '—';
+
+  const priorName = 'prior ' + state.cvDays + 'd';
+  const setDelta = function (id, curV, prevV, goodUp) {
+    const n = $(id); if (!n) return;
+    n.className = 'cv-delta';
+    if (!state.cvDays) { n.textContent = ''; return; }              // all-time: no prior window
+    if (prevV === null || curV === null) { n.textContent = '— vs ' + priorName; return; }
+    if (prevV === 0) { n.textContent = (curV > 0 ? 'new vs ' : '0 in ') + priorName; return; }
+    const pct = Math.round(1000 * (curV - prevV) / prevV) / 10;
+    n.textContent = (pct >= 0 ? '+' : '') + pct + '% vs ' + priorName;
+    if (pct !== 0) n.classList.add((pct > 0) === !!goodUp ? 'up' : 'down');
+  };
+  setDelta('cv-revenue-d', kept.length * PRICE, prev.kept.length * PRICE, true);
+  setDelta('cv-orders-d', kept.length, prev.kept.length, true);
+  $('cv-aov-d').textContent = 'fixed — one blanket per commission';
+  setDelta('cv-rate-d', curRate, prevRate, true);
+  setDelta('cv-initiated-d', initiated.length, prev.ini.length, true);
+  setDelta('cv-assisted-d', ambient.length, prev.amb.length, true);
+  setDelta('cv-attr-rev-d', attributed * PRICE, prev.attr * PRICE, true);
+  setDelta('cv-convos-d', convos.length, pConvos.length, true);
 
   // Every tile drills into the list behind it (onclick assignment, not
   // addEventListener, so re-loading the report never stacks handlers).
@@ -7020,6 +7338,7 @@ async function loadConversion() {
     const tile = $(id).parentElement;
     tile.style.cursor = 'pointer'; tile.title = title; tile.onclick = fn;
   };
+  tileGo('cv-revenue', function () { cvOpenOrders(''); }, 'Open the register (all orders)');
   tileGo('cv-orders', function () { cvOpenOrders(''); }, 'Open the register (all orders)');
   tileGo('cv-initiated', function () { cvOpenOrders('initiated'); }, 'Open these orders in the register');
   tileGo('cv-assisted', function () { cvOpenOrders('assisted'); }, 'Open these orders in the register');
@@ -7027,6 +7346,179 @@ async function loadConversion() {
     if ($('convo-comm')) $('convo-comm').checked = true;
     activateTab('conversations'); loadConversations();
   }, 'Open the commissioned chats in Conversations');
+  tileGo('cv-convos', function () {
+    if ($('convo-comm')) $('convo-comm').checked = false;
+    activateTab('conversations'); loadConversations();
+  }, 'Open the Conversations floor');
+
+  // ---- Time buckets over the CURRENT window ----
+  const datumsMs = orders.map(function (o) { return new Date(o.placed_at).getTime(); })
+    .concat(convos.map(function (c) { return new Date(c.created_at).getTime(); }))
+    .concat(allEvents.filter(function (e) { return inCur(e.created_at); })
+      .map(function (e) { return new Date(e.created_at).getTime(); }))
+    .filter(function (t) { return !isNaN(t); });
+  const fromMs = since ? sinceMs : (datumsMs.length ? Math.min.apply(null, datumsMs) : nowMs - 6 * 86400000);
+  const bk = cvBuckets(fromMs, nowMs);
+  const zeros = function () { return bk.starts.map(function () { return 0; }); };
+
+  // Revenue per bucket — total vs attributed (emphasis: the money line leads)
+  const revTotal = zeros(), revAttr = zeros(), cntAttr = zeros();
+  kept.forEach(function (o) {
+    const i = bk.idx(new Date(o.placed_at).getTime()); if (i < 0) return;
+    revTotal[i] += PRICE;
+    if (o.chat_session) { revAttr[i] += PRICE; cntAttr[i]++; }
+  });
+  const convoCnt = zeros();
+  convos.forEach(function (c) {
+    const i = bk.idx(new Date(c.created_at).getTime()); if (i >= 0) convoCnt[i]++;
+  });
+  cvChart($('cv-chart-rev'), {
+    labels: bk.labels, gran: bk.gran, fmt: cvFmtMoney,
+    aria: 'Revenue over time — total and attributed, per ' + bk.gran,
+    series: [
+      { name: 'Total revenue', color: CV_CTX, values: revTotal, wash: false },
+      { name: 'Attributed (chat)', color: CV_EMPH, values: revAttr }
+    ]
+  });
+  // Conversion rate per bucket (single series; tooltip carries the raw counts)
+  const rateVals = bk.starts.map(function (_, i) {
+    return convoCnt[i] ? Math.round(1000 * cntAttr[i] / convoCnt[i]) / 10 : 0;
+  });
+  cvChart($('cv-chart-rate'), {
+    labels: bk.labels, gran: bk.gran, fmt: cvFmtPct,
+    aria: 'Conversion rate over time, per ' + bk.gran,
+    series: [{ name: 'Conversion rate', color: CV_EMPH, values: rateVals }],
+    tipNote: function (i) { return cntAttr[i] + ' attributed ÷ ' + convoCnt[i] + ' chats'; }
+  });
+
+  // ---- The behavioral funnel: unique visitors per stage, per bucket ----
+  // visit / chat_open / checkout_open from site_events beacons (unique
+  // visit_key per bucket); 'spoke' = conversations with a user turn in the
+  // bucket (unique conversation); 'commission' = kept orders placed.
+  const uniq = {};   // stage → bucket → Set
+  CV_FUNNEL.forEach(function (s) { uniq[s.key] = bk.starts.map(function () { return new Set(); }); });
+  allEvents.forEach(function (e) {
+    if (!inCur(e.created_at)) return;
+    const i = bk.idx(new Date(e.created_at).getTime());
+    if (i < 0 || !uniq[e.kind]) return;
+    uniq[e.kind][i].add(e.visit_key);
+  });
+  allUserMsgs.forEach(function (m) {
+    if (!inCur(m.created_at)) return;
+    const i = bk.idx(new Date(m.created_at).getTime());
+    if (i >= 0) uniq.spoke[i].add(m.conversation_id);
+  });
+  kept.forEach(function (o) {
+    const i = bk.idx(new Date(o.placed_at).getTime());
+    if (i >= 0) uniq.commission[i].add(o.serial != null ? o.serial : (o.id || Math.random()));
+  });
+  const funnelSeries = CV_FUNNEL.map(function (s) {
+    return { name: s.label, color: s.color, values: uniq[s.key].map(function (set) { return set.size; }) };
+  });
+  cvChart($('cv-chart-funnel'), {
+    labels: bk.labels, gran: bk.gran, fmt: cvFmtN,
+    aria: 'Funnel over time — unique visitors per stage per ' + bk.gran,
+    series: funnelSeries
+  });
+
+  // Funnel snapshot — range totals with stage-to-stage conversion.
+  const totals = {};
+  CV_FUNNEL.forEach(function (s) {
+    const all = new Set();
+    uniq[s.key].forEach(function (set) { set.forEach(function (v) { all.add(v); }); });
+    totals[s.key] = all.size;
+  });
+  const fs = $('cv-fsnap');
+  fs.textContent = '';
+  const maxStage = Math.max(totals.visit, 1);
+  let prevN = null;
+  CV_FUNNEL.forEach(function (s) {
+    const n = totals[s.key];
+    const row = el('div', 'fnl-row');
+    const lab = el('span', 'fl');
+    const sw = el('span', 'sw'); sw.style.background = s.color;
+    lab.appendChild(sw); lab.appendChild(document.createTextNode(s.label));
+    row.appendChild(lab);
+    const bar = el('div', 'fbar');
+    const fill = el('div', 'fill');
+    fill.style.width = Math.max(0.5, 100 * n / maxStage) + '%';
+    fill.style.background = s.color;
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    const passThrough = prevN === null ? '' : (prevN > 0 ? ' · ' + Math.round(100 * n / prevN) + '% of previous' : '');
+    const v = el('span', 'fv');
+    v.appendChild(el('b', '', cvFmtN(n)));
+    v.appendChild(document.createTextNode(passThrough));
+    row.appendChild(v);
+    fs.appendChild(row);
+    prevN = n;
+  });
+  const overall = totals.visit > 0 ? (Math.round(1000 * totals.commission / totals.visit) / 10) + '%' : '—';
+  const fsNote = el('p', 'micro');
+  fsNote.style.marginTop = '10px';
+  fsNote.textContent = (totals.visit === 0 && totals.chat_open === 0)
+    ? 'No funnel events yet — visit / chat-open / register-open beacons start counting from their ship date. Spoke and Commissions fill from existing data.'
+    : 'Overall visit → commission: ' + overall + '. Stages count UNIQUE visitors in the range (a stage can exceed a later bucket\'s earlier stage when a journey spans buckets).';
+  fs.appendChild(fsNote);
+
+  // ---- Where the opportunities are — computed reads, each with its lever ----
+  const opps = $('cv-opps');
+  opps.textContent = '';
+  const oppList = el('div', 'cv-rows');
+  const addOpp = function (k, v) {
+    const r = el('div', 'row');
+    r.appendChild(el('span', 'k', k));
+    r.appendChild(el('span', 'v', v));
+    oppList.appendChild(r);
+  };
+  // 1. Biggest funnel drop (only when events exist)
+  if (totals.visit > 0) {
+    let worst = null;
+    for (let i = 1; i < CV_FUNNEL.length; i++) {
+      const a = totals[CV_FUNNEL[i - 1].key], b = totals[CV_FUNNEL[i].key];
+      if (a >= 5) {
+        const keep = a > 0 ? b / a : 1;
+        if (!worst || keep < worst.keep) worst = { from: CV_FUNNEL[i - 1].label, to: CV_FUNNEL[i].label, keep: keep, a: a, b: b };
+      }
+    }
+    if (worst) addOpp('Biggest funnel drop', worst.from + ' → ' + worst.to + ': only ' +
+      Math.round(100 * worst.keep) + '% carry through (' + worst.a + ' → ' + worst.b +
+      '). That hand-off is the highest-leverage fix.');
+  } else {
+    addOpp('Funnel top', 'Traffic beacons just shipped — visits and opens start counting now; check back after real traffic.');
+  }
+  // 2. Rate trend
+  if (state.cvDays && curRate !== null && prevRate !== null && prevRate > 0) {
+    const d = Math.round(10 * (curRate - prevRate)) / 10;
+    addOpp('Conversion trend', d >= 0
+      ? 'Rate is up ' + d + ' pts vs the prior window — whatever changed (goals, angles, dial) is working; keep it.'
+      : 'Rate is down ' + Math.abs(d) + ' pts vs the prior window — review what changed in Tuning, and read a few lost/objection chats.');
+  }
+  // 3. Unassisted share
+  if (kept.length >= 5 && unassisted.length / kept.length > 0.5) {
+    addOpp('Unassisted majority', Math.round(100 * unassisted.length / kept.length) +
+      '% of commissions never met the concierge — earlier outreach (dwell opener, starters) could lift attach.');
+  }
+  // 4. Sections with chats but no ✳ conversions
+  const secConvos = {};
+  convos.forEach(function (c) { if (c.section) secConvos[c.section] = (secConvos[c.section] || 0) + 1; });
+  initiated.forEach(function (o) {
+    const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : {};
+    if (m.section) delete secConvos[m.section];
+  });
+  const coldSecs = Object.keys(secConvos).sort(function (a, b) { return secConvos[b] - secConvos[a]; });
+  if (coldSecs.length && secConvos[coldSecs[0]] >= 3) {
+    addOpp('Cold section', "'" + coldSecs[0] + "' has " + secConvos[coldSecs[0]] +
+      ' chats but no ✳ commissions this range — aim a per-section goal or a sharper angle there.');
+  }
+  // 5. Grading coverage
+  const gradedN = convos.filter(function (c) { return !!c.sales_stage; }).length;
+  if (convos.length >= 5 && gradedN / convos.length < 0.6) {
+    addOpp('Grading coverage', 'Only ' + Math.round(100 * gradedN / convos.length) +
+      '% of chats are graded — the stage funnel understates reality. Conversations → Re-grade shown.');
+  }
+  if (!oppList.childNodes.length) addOpp('Nothing pressing', 'No red flags in this range — check the trend charts for direction.');
+  opps.appendChild(oppList);
 
   // Split bar — the tier mix, plus cancelled shown separately for honesty.
   const split = $('cv-split');
@@ -7148,7 +7640,6 @@ async function savePrice() {
   if (state.config) state.config.unit_price = n;
   PRICE = (typeof n === 'number' && n > 0) ? n : 589;
   toast(n ? 'Register price saved — $' + n.toLocaleString('en-US') : 'Register price cleared — using $589');
-  loadMetrics();
 }
 
 function fmtWhen(ts) {

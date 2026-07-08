@@ -3945,8 +3945,39 @@ async function handleReengage(req: Request): Promise<Response> {
   } catch { return fallback(); }
 }
 
+// ── POST ?track=1 — funnel beacon (visit / chat_open / checkout_open) ────────
+// The behavioral top of the conversion funnel (ATTRIBUTION.md): page loaded,
+// concierge panel opened, register sheet opened (via = concierge|page).
+// PII-free by design — a random visit token, no IP stored, no identity.
+// Rate-limited per caller; ALWAYS answers 204 so a beacon can never break the
+// page or reveal validation behavior.
+const TRACK_KINDS = new Set(["visit", "chat_open", "checkout_open"]);
+const TRACK_KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+async function handleTrackPost(req: Request): Promise<Response> {
+  const done = () => new Response(null, { status: 204, headers: corsHeaders(req) });
+  try {
+    const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+    if (await rateLimited("tk:" + ip, 120)) return done();
+    const body = await req.json() as Record<string, unknown>;
+    const kind = typeof body.kind === "string" && TRACK_KINDS.has(body.kind) ? body.kind : null;
+    const vk = typeof body.visit_key === "string" && TRACK_KEY_RE.test(body.visit_key) ? body.visit_key : null;
+    if (!kind || !vk) return done();
+    const sk = typeof body.session_key === "string" && TRACK_KEY_RE.test(body.session_key) ? body.session_key : null;
+    const section = typeof body.section === "string" && /^[a-z0-9_-]{1,32}$/i.test(body.section) ? body.section : null;
+    const via = body.via === "concierge" || body.via === "page" ? body.via : null;
+    await pgInsert("site_events", {
+      kind, visit_key: vk, session_key: sk, section,
+      via: kind === "checkout_open" ? via : null,
+    });
+  } catch { /* a beacon never errors */ }
+  return done();
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
+  if (req.method === "POST" && new URL(req.url).searchParams.get("track")) {
+    return await handleTrackPost(req);
+  }
   if (req.method === "GET" && new URL(req.url).searchParams.get("config")) {
     return await handleConfigGet(req);
   }

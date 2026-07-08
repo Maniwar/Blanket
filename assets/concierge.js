@@ -3202,6 +3202,7 @@
       return;
     }
     panelOpen = true;
+    sendBeacon('chat_open');
     /* Make it visible FIRST, so nothing below (a render hiccup, Supabase load)
        can leave the panel invisible while panelOpen is true. */
     hideChip();
@@ -3374,8 +3375,48 @@
   /* ----------------------------------------------------------
      15. Boot
   ---------------------------------------------------------- */
+  /* ── Funnel beacons (?track=1) — PII-free events feeding the admin's
+     Conversion funnel: 'visit' (page loaded) and 'chat_open' (panel opened)
+     from here; 'checkout_open' from checkout.js. One per kind per tab
+     session (the funnel dedupes by visit_key anyway); fire-and-forget —
+     a beacon must never affect the page. See ATTRIBUTION.md. */
+  function beaconVisitKey() {
+    try {
+      var k = window.localStorage.getItem('feier-visit');
+      if (k && /^[A-Za-z0-9_-]{8,64}$/.test(k)) { return k; }
+      k = 'v';
+      var a = new Uint8Array(16);
+      if (window.crypto && window.crypto.getRandomValues) { window.crypto.getRandomValues(a); }
+      else { for (var j = 0; j < a.length; j++) { a[j] = Math.floor(Math.random() * 256); } }
+      for (var i = 0; i < a.length; i++) { k += (a[i] % 36).toString(36); }
+      window.localStorage.setItem('feier-visit', k);
+      return k;
+    } catch (eV) { return ''; }
+  }
+  function sendBeacon(kind, extra) {
+    if (isDemo()) { return; }
+    try {
+      if (window.sessionStorage.getItem('cx-ev-' + kind) === '1') { return; }
+      window.sessionStorage.setItem('cx-ev-' + kind, '1');
+    } catch (eD) { /* no storage — still send once */ }
+    try {
+      var vk = beaconVisitKey();
+      if (!vk) { return; }
+      var body = { kind: kind, visit_key: vk, section: currentSection() };
+      var sk = '';
+      try { sk = window.sessionStorage.getItem('cx-skey') || ''; } catch (eK) { /* ignore */ }
+      if (sk) { body.session_key = sk; }
+      if (extra) { for (var p in extra) { if (extra[p] != null) { body[p] = extra[p]; } } }
+      fetch(endpoint() + (endpoint().indexOf('?') === -1 ? '?track=1' : '&track=1'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        keepalive: true, body: JSON.stringify(body)
+      })['catch'](function () { /* nothing to recover */ });
+    } catch (eB) { /* a beacon never breaks the page */ }
+  }
+
   function mountAll() {
     buildUI();
+    sendBeacon('visit');
     initInlineStarters();
     initSectionObserver();
     initSectionPoll();

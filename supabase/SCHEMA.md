@@ -430,6 +430,23 @@ Function (service role + verified-JWT ownership). Migration `0041`. See DESIGN �
 **Written by:** the `log_order_event` trigger on every insert/update of
 `orders`. **Read by:** admin (order history / full audit). Read-only RLS.
 
+### `site_events` — funnel beacons (PII-free)
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `kind` | text | `visit` (page loaded) · `chat_open` (concierge panel opened) · `checkout_open` (register sheet opened). Checked constraint. |
+| `visit_key` | text | Random device token (`feier-visit`) — the funnel's unique-visitor key. **No IP, no email, no name.** |
+| `session_key` | text | The chat session in play, when one exists (joins to `concierge_conversations.session_key`). |
+| `section` | text | Page section at the event. |
+| `via` | text | `checkout_open` only: `concierge` (the concierge's commission button opened the sheet) or `page`. |
+| `created_at` | timestamptz | Event time — the funnel's date basis. |
+
+**Written by:** the concierge function's rate-limited `POST ?track=1` (beacons
+from `concierge.js` and `checkout.js`; always answers 204). **Read by:** admin
+(Conversion tab funnel). Admin-read RLS; pruned by `prune_high_write` with the
+other high-write tables. Full metric semantics in
+[`ATTRIBUTION.md`](../ATTRIBUTION.md).
+
 ### `concierge_goals` — admin-defined conversation goals
 | Column | Type | Purpose |
 | --- | --- | --- |

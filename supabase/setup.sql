@@ -124,6 +124,24 @@ create table if not exists public.serial_holds (
 create index if not exists serial_holds_session_idx on public.serial_holds (session_key);
 create index if not exists serial_holds_expires_idx on public.serial_holds (expires_at);
 
+-- Funnel events — the behavioral top of the conversion funnel (ATTRIBUTION.md).
+-- One row per beacon: 'visit' (page loaded), 'chat_open' (concierge panel
+-- opened), 'checkout_open' (register sheet opened; via = concierge|page).
+-- Deliberately PII-free: visit_key is a random device token, no IP, no email.
+-- Written only by the concierge edge function (?track=1, rate-limited);
+-- admin-read via RLS. Pruned with the other high-write tables.
+create table if not exists public.site_events (
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('visit','chat_open','checkout_open')),
+  visit_key text not null,
+  session_key text,
+  section text,
+  via text check (via is null or via in ('concierge','page')),
+  created_at timestamptz not null default now());
+create index if not exists site_events_kind_created_idx
+  on public.site_events (kind, created_at desc);
+create index if not exists site_events_visit_idx on public.site_events (visit_key);
+
 create table if not exists public.concierge_sops (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null, title text not null, content_md text not null,
@@ -294,7 +312,7 @@ begin
     'concierge_messages','concierge_feedback','customers','orders','allocation_counter',
     'serial_holds','concierge_sops','concierge_actions','concierge_cache','concierge_flags',
     'concierge_forms','customer_notes','customer_addresses','order_events','concierge_goals','site_content',
-    'concierge_tools','concierge_evals','concierge_edit_history'
+    'concierge_tools','concierge_evals','concierge_edit_history','site_events'
   ] loop
     execute format('alter table public.%I enable row level security', t);
   end loop;
@@ -322,6 +340,8 @@ drop policy if exists "admin read" on public.order_events;
 create policy "admin read" on public.order_events for select to authenticated using (public.is_concierge_admin());
 drop policy if exists "admin read" on public.concierge_edit_history;
 create policy "admin read" on public.concierge_edit_history for select to authenticated using (public.is_concierge_admin());
+drop policy if exists "admin read" on public.site_events;
+create policy "admin read" on public.site_events for select to authenticated using (public.is_concierge_admin());
 
 -- concierge_admins roster, from the admin panel:
 --   • any admin may LIST the roster and ADD a (non-super) admin;
@@ -719,7 +739,7 @@ create or replace function public.prune_high_write(p_days int default 180)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   cutoff   timestamptz := now() - make_interval(days => greatest(coalesce(p_days, 180), 1));
-  c_convos bigint; c_actions bigint; c_email bigint; c_rate bigint;
+  c_convos bigint; c_actions bigint; c_email bigint; c_rate bigint; c_events bigint;
 begin
   delete from public.concierge_conversations where created_at < cutoff;
   get diagnostics c_convos = row_count;
@@ -727,10 +747,13 @@ begin
   get diagnostics c_actions = row_count;
   delete from public.email_log where created_at < cutoff;
   get diagnostics c_email = row_count;
+  delete from public.site_events where created_at < cutoff;
+  get diagnostics c_events = row_count;
   delete from public.rate_limits where window_start < now() - interval '2 hours';
   get diagnostics c_rate = row_count;
   return jsonb_build_object('cutoff', cutoff, 'conversations_deleted', c_convos,
-    'actions_deleted', c_actions, 'email_log_deleted', c_email, 'rate_limits_deleted', c_rate);
+    'actions_deleted', c_actions, 'email_log_deleted', c_email,
+    'site_events_deleted', c_events, 'rate_limits_deleted', c_rate);
 end $$;
 revoke execute on function public.prune_high_write(int) from public, anon, authenticated;
 -- Nightly with pg_cron (enable the extension first), uncomment:

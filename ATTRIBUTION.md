@@ -58,30 +58,76 @@ tier and mention chat-assisted separately — adding them together overstates.
 
 ## What each admin number means
 
-**Conversion tab** (all figures over the selected range; cancelled orders are
-excluded from revenue but keep their attribution):
+The **Conversion tab is the single metrics home** — the Conversations tab is
+the working floor (transcripts, filters, grading) and carries no figures of its
+own, so numbers can never disagree between views.
 
-- **Commissions (kept)** — orders with `status ≠ 'cancelled'`,
-  by `placed_at`.
-- **✳ Concierge-initiated / Chat-assisted** — tier counts as defined above.
-  Orders placed before the tier column existed can never be ✳ (the data wasn't
-  captured); they count as chat-assisted when they carry a chat link.
-- **Attributed revenue** — (✳ + assisted) × the **register price**
-  (`concierge_config.unit_price`, editable under Edition & access; $589 when
-  unset). The split line prices each tier separately.
-- **Chat → commission rate** — attributed kept commissions ÷ conversations
-  started in the range. Both sides are range-bounded, so a chat late in the
-  window whose order lands after the window slightly undercounts.
-- **Conversation funnel** — the LLM judge's `sales_stage` per conversation
-  (`browsing → engaged → evaluating → objection → ready → won / lost`). This is
-  a *transcript reading*, not an order record: a stage of `won` and an actual
-  attributed order usually agree, but the ✳ tier is the hard, order-level
-  signal; the funnel tells you *where* conversations stall.
+### Events glossary (what gets recorded, and when)
+
+| Event | Recorded when | Stored as | Timestamp used |
+|---|---|---|---|
+| **Visit** | The page loads with the widget live (once per tab session) | `site_events` `kind='visit'` | event time |
+| **Chat opened** | The concierge panel opens | `site_events` `kind='chat_open'` | event time |
+| **Spoke to concierge** | A conversation receives a **user** message | `concierge_messages` (`role='user'`) | message time |
+| **Register opened** | The checkout sheet opens (`via` = `concierge` if the concierge's button opened it, else `page`) | `site_events` `kind='checkout_open'` | event time |
+| **Commission click** | The buyer taps the concierge's "Begin the commission" button | `sessionStorage` marker → `orders.chat_via/chat_meta` at placement | click context frozen at placement |
+| **Order placed** | `commission_order` inserts the row | `orders` | `placed_at` |
+| **Cancellation** | `cancel_order_return` | `orders.status`, `cancelled_at` | `cancelled_at` |
+
+Funnel beacons are **PII-free**: a random device token (`visit_key`), optional
+chat session key, section — no IP, no email, no name. They begin counting from
+their ship date; earlier history shows zeros.
+
+### Metric definitions (the formal table)
+
+Every tile carries this same definition in its ⓘ hover. **Range** = the picker
+(7/30/90 days or all time). **Prior window** = the equal-length window
+immediately before the range (deltas; all-time has none).
+
+| Metric | Formula | Date basis | Exclusions |
+|---|---|---|---|
+| **Revenue** | kept commissions × register price | order date (`placed_at`) | cancelled orders |
+| **Commissions** | count of orders `status ≠ 'cancelled'` | order date | — |
+| **Avg order value** | revenue ÷ kept commissions | order date | ≡ register price in this demo (one blanket per order, one price) — flat until multi-item/variable pricing exists |
+| **Conversion rate** | attributed kept commissions ÷ conversations started | **cross-basis**: numerator by order date, denominator by conversation start | see caveat below |
+| **✳ Concierge-initiated** | kept commissions with `chat_via='concierge'` | order date | — |
+| **Chat-assisted** | kept commissions with `chat_session` set and not ✳ | order date | — |
+| **Attributed revenue** | (✳ + assisted) × register price | order date | quote ✳ alone when claiming causation |
+| **Conversations** | conversation rows created in range | conversation start (`created_at`) | — |
+| **👍 rate** | thumbs-up ÷ all rated replies | **all-time** (feedback rows carry no timestamp) | not range-scopable |
+| **Funnel stages** | UNIQUE visitors (`visit_key`) per stage; *Spoke* = unique conversations with a user turn; *Commissions* = kept orders | event time / message time / order date | dedup is per bucket on the trend chart, per range on the snapshot |
+
+**Which chat gets the credit:** the order's `chat_session` names the buying
+session; when several conversation rows share that key, drill-ins open the
+**latest conversation begun before the order was placed** — the chat that was
+live at checkout.
+
+**Bucketing:** ranges ≤ 31 days plot daily, ≤ 200 days weekly, longer monthly.
+The trend charts bucket the current range only; deltas compare whole windows.
+
+**Cross-basis caveat (conversion rate):** the numerator counts orders by order
+date and the denominator counts chats by start date, so a chat late in the
+window that converts after it undercounts slightly, and a bucket with zero
+chats shows 0% regardless of orders. At 30+ days this skew is noise; don't
+read single sparse buckets as trend.
+
+### The report's other panels
+
+- **Funnel over time** — the layered area/line chart of unique visitors
+  reaching each stage per bucket; the snapshot card shows range totals with
+  stage-to-stage pass-through and the overall visit → commission rate.
+- **Conversation stages** — the LLM judge's `sales_stage` per conversation
+  (`browsing → engaged → evaluating → objection → ready → won / lost`). A
+  *transcript reading*, not an order record — the ✳ tier is the hard,
+  order-level signal; the stages tell you *where* conversations stall.
+- **Where the opportunities are** — computed reads: the biggest funnel drop,
+  the rate trend vs the prior window, an unassisted majority, sections with
+  chats but no ✳ conversions, and grading coverage — each phrased with the
+  lever to pull.
 - **What converts** — for ✳ orders only, the commission-click context from
   `chat_meta`: which page **sections** and **entry beats** (typed, pill,
   opener, outreach, nudge) produce the taps, and the average conversation
-  depth. This is the optimization surface: feed what appears (starters, goals,
-  selling angles on those sections), investigate what never does.
+  depth, plus the order list itself.
 
 **Nothing is a dead end.** Every Conversion number drills into the records
 behind it: the tiles and split-bar legend open the register pre-filtered to
@@ -94,9 +140,6 @@ attribution-tier chips beside the status chips, and Conversations has a
 Conversion tab's Export CSV downloads the range with tier + click-context
 columns (`attribution`, `attr_entry`, `attr_section`, `attr_turns`), and the
 regular register export carries the same columns.
-
-**Conversations-tab tiles**: *Assisted commissions* = all-time kept orders with
-a chat link (both tiers); *Assisted revenue* = that count × the register price.
 
 **Order drawer**: each order shows its tier line (with the click context in the
 tooltip); the **Chats** tab lists chats that *touched* the order — see below.
@@ -162,6 +205,7 @@ The levers, in the order they usually pay off:
 | `orders` | `chat_meta` | `{entry, section, turns}` at the commission click (✳ only) |
 | `concierge_conversations` | `sales_stage`, `goal_status` | Judge-graded funnel stage + per-goal outcomes |
 | `concierge_actions` | `conversation_id`, `serial` | Service touches on existing orders |
+| `site_events` | `kind`, `visit_key`, `via` | Funnel beacons: visit / chat_open / checkout_open (PII-free) |
 | `concierge_config` | `unit_price` | Register price behind every revenue figure |
 
 Full column docs in [`supabase/SCHEMA.md`](supabase/SCHEMA.md); design
