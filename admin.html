@@ -1248,6 +1248,25 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
 
       <section class="card">
         <div class="card-head">
+          <h3>Data retention</h3>
+          <span class="micro">What happens to old conversations, actions, and funnel events</span>
+        </div>
+        <p class="micro" style="margin:0 0 12px;">The default is <b>keep everything forever</b> — no
+          automatic deletion is scheduled. Pruning is a deliberate act you run from here: it deletes
+          conversations, register actions, funnel events, and email logs <b>older than the horizon you
+          choose</b>. Orders and their attribution stamps always survive, so revenue reporting is
+          unaffected — only the drill-down into pruned transcripts is lost. Why prune at all: transcripts
+          hold customer PII, and a bounded horizon is the usual privacy/cost hygiene at scale.</p>
+        <div class="field" style="max-width:280px;">
+          <label class="micro" for="ret-days">Horizon (days)<span class="info-badge" title="Everything in the high-write tables older than this many days is deleted when you run the prune. Minimum 30. This runs prune_high_write(p_days) — the same routine an operator could schedule nightly with pg_cron (see setup.sql), where 180 is only the suggested default.">i</span></label>
+          <input type="number" id="ret-days" class="mono-field" min="30" step="1" placeholder="180">
+        </div>
+        <div class="card-foot"><button id="run-prune" class="btn primary" type="button">Run prune now</button></div>
+        <div id="ret-note" class="micro"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Register price</h3>
           <span class="micro">The per-blanket price behind every revenue figure</span>
         </div>
@@ -1546,7 +1565,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         definition; formal definitions with date bases in <span class="mono">ATTRIBUTION.md</span>.</p>
 
       <div class="ct-row" style="margin-bottom:10px;">
-        <span class="ct-tag">Range</span>
+        <span class="ct-tag" title="There is no single shared date — the range filters each fact by ITS OWN clock: orders by order date (placed_at), conversations by start date (created_at), funnel beacons by event time, spoke-stage by message time. So 'Commissions' = orders PLACED in the range, 'Conversations' = chats STARTED in the range, and the conversion rate deliberately crosses the two (see its ⓘ).">Range</span>
         <div id="cv-range" class="ord-chips" style="margin-bottom:0;"></div>
         <button id="cv-export" class="btn ghost" type="button" style="margin-left:auto;" title="Every order in the range with its attribution tier and click context — same columns as the register export">Export CSV</button>
         <button id="cv-refresh" class="btn ghost" type="button">Refresh</button>
@@ -1556,16 +1575,15 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <div id="cv-gran" class="ord-chips" style="margin-bottom:0;"></div>
         <span class="ct-tag" style="margin-left:18px;" title="What deltas and the dashed chart ghost-lines measure against. Calendar ranges compare period-to-date (this month, 8 days in, vs the first 8 days of last month) — never a full period against a partial one.">Compare</span>
         <div id="cv-compare" class="ord-chips" style="margin-bottom:0;"></div>
-        <span class="ct-tag" style="margin-left:18px;" title="Which day begins the week — drives the This-week range, weekly chart buckets, and week-over-week comparison. Saved for all admins (concierge_config.week_start).">Week starts</span>
-        <select id="cv-wkstart">
-          <option value="0">Sunday</option>
-          <option value="1">Monday</option>
-          <option value="2">Tuesday</option>
-          <option value="3">Wednesday</option>
-          <option value="4">Thursday</option>
-          <option value="5">Friday</option>
-          <option value="6">Saturday</option>
-        </select>
+        <!-- Only shown while weeks are actually in play (This-week range or weekly
+             chart buckets) — a permanent global picker was noise. -->
+        <span id="cv-wkwrap" style="display:none; align-items:center; gap:8px;">
+          <span class="ct-tag" style="margin-left:18px;" title="Which day begins the week — drives the This-week range, weekly chart buckets, and week-over-week comparison. Saved for all admins (concierge_config.week_start).">Week starts</span>
+          <select id="cv-wkstart">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+          </select>
+        </span>
       </div>
 
       <!-- Commerce KPIs — range-scoped, each with a definition and a delta vs the prior equal window -->
@@ -2123,10 +2141,13 @@ function wireStatic() {
   $('save-price').addEventListener('click', function () {
     withBusy($('save-price'), savePrice);
   });
+  $('run-prune').addEventListener('click', function () {
+    withBusy($('run-prune'), runPrune);
+  });
   $('cv-refresh').addEventListener('click', function () { loadConversion(); });
   $('cv-wkstart').addEventListener('change', function () {
     const v = parseInt($('cv-wkstart').value, 10);
-    state.weekStart = (v >= 0 && v <= 6) ? v : 0;
+    state.weekStart = v === 1 ? 1 : 0;
     // Persisted so every admin sees the same weeks (and history stays comparable).
     sb.from('concierge_config').upsert(
       [{ key: 'week_start', value: state.weekStart, updated_at: nowIso() }], { onConflict: 'key' }
@@ -2845,8 +2866,9 @@ async function loadConfig() {
 
   PRICE = (typeof cfg.unit_price === 'number' && cfg.unit_price > 0) ? cfg.unit_price : 589;
   if ($('ed-price')) $('ed-price').value = (typeof cfg.unit_price === 'number' && cfg.unit_price > 0) ? cfg.unit_price : '';
-  state.weekStart = (typeof cfg.week_start === 'number' && cfg.week_start >= 0 && cfg.week_start <= 6) ? cfg.week_start : 0;
+  state.weekStart = cfg.week_start === 1 ? 1 : 0;   // Sunday or Monday — the two real conventions
   if ($('cv-wkstart')) $('cv-wkstart').value = String(state.weekStart);
+  if ($('ret-days')) $('ret-days').value = (typeof cfg.retention_days === 'number' && cfg.retention_days >= 30) ? cfg.retention_days : '';
 
   $('cfg-enabled').checked = cfg.enabled === true;
   $('cfg-enabled-label').textContent = cfg.enabled === true ? 'Live' : 'Paused';
@@ -7494,6 +7516,11 @@ async function loadConversion() {
   const fromMs = win.curStart !== null ? win.curStart
     : (datumsMs.length ? Math.min.apply(null, datumsMs) : nowMs - 6 * 86400000);
   const bk = cvBuckets(fromMs, nowMs, state.cvGran);
+  // The week-start picker appears only while weeks are in play — the This-week
+  // range, or charts actually bucketing weekly (explicit pick or Auto's choice).
+  if ($('cv-wkwrap')) {
+    $('cv-wkwrap').style.display = (win.range === 'week' || bk.gran === 'week') ? 'inline-flex' : 'none';
+  }
   const zeros = function () { return bk.starts.map(function () { return 0; }); };
 
   // Per-bucket series builder over any window — used for the current lines and
@@ -7838,6 +7865,46 @@ async function loadConversion() {
     if (initiated.length > 50) olist.appendChild(el('p', 'micro', 'Showing the 50 most recent of ' + initiated.length + ' — Export CSV for the full range.'));
     bd.appendChild(olist);
   }
+}
+
+/* Run the retention prune (admin-gated ?prune=1 → prune_high_write RPC).
+   Deletes conversations/actions/events/email logs older than the horizon;
+   orders and attribution stamps survive. Deliberate and confirmed — this is
+   the ONLY path that deletes history (nothing is scheduled by default). */
+async function runPrune() {
+  const raw = $('ret-days').value.trim();
+  const days = parseInt(raw, 10);
+  if (!Number.isFinite(days) || days < 30) {
+    toast('Set a horizon of at least 30 days first', true);
+    return;
+  }
+  if (!window.confirm('Permanently delete all conversations, register actions, funnel events, and ' +
+      'email logs older than ' + days + ' days?\n\nOrders and their attribution stamps survive. ' +
+      'This cannot be undone.')) return;
+  const token = state.session && state.session.access_token;
+  let res;
+  try {
+    res = await fetch(SUPABASE_URL + '/functions/v1/concierge?prune=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) },
+      body: JSON.stringify({ days: days })
+    });
+  } catch (e) { fail('Prune', e); return; }
+  if (!res.ok) {
+    const t = await res.text().catch(function () { return ''; });
+    fail('Prune', { message: 'HTTP ' + res.status + ' ' + t.slice(0, 140) });
+    return;
+  }
+  const j = await res.json().catch(function () { return {}; });
+  const r = (j && j.result) || {};
+  $('ret-note').textContent = 'Pruned before ' + (r.cutoff ? String(r.cutoff).slice(0, 10) : '—') + ' — ' +
+    (r.conversations_deleted || 0) + ' conversations, ' + (r.actions_deleted || 0) + ' actions, ' +
+    (r.site_events_deleted || 0) + ' funnel events, ' + (r.email_log_deleted || 0) + ' email logs deleted.';
+  // Record the chosen horizon so the policy is visible in config/version history.
+  await sb.from('concierge_config').upsert(
+    [{ key: 'retention_days', value: days, updated_at: nowIso() }], { onConflict: 'key' });
+  if (state.config) state.config.retention_days = days;
+  toast('Prune complete');
 }
 
 /* Save the register price (concierge_config.unit_price) and re-price the page. */

@@ -99,6 +99,14 @@ Every tile carries this same definition in its ⓘ hover.
 
 **Range** — calendar periods (**Today / This week / This month / This year**,
 each period-to-date) or rolling windows (**7 / 30 / 90 days**) or all time.
+**What the range actually selects:** there is no single shared date column —
+the range filters *each fact by its own clock*: **orders by order date**
+(`placed_at`), **conversations by start date** (`created_at`), **funnel
+beacons by event time**, **spoke-stage by message time**. So "Commissions"
+means orders *placed* in the range (wherever their chats began),
+"Conversations" means chats *started* in the range (whether or not they've
+converted yet), and the conversion rate deliberately crosses the two bases —
+its ⓘ and the caveat below spell out the consequences.
 **View by** — the trend charts' bucket granularity: **hourly / daily / weekly /
 monthly / yearly**, or Auto (hourly ≤ 2 days, daily ≤ 31, weekly ≤ 200, else
 monthly; an explicit pick auto-coarsens only past 400 buckets).
@@ -208,14 +216,16 @@ tooltip); the **Chats** tab lists chats that *touched* the order — see below.
   opportunity reads use the LLM judge's `sales_stage` — model judgments with
   sampling (`goal_sample_rate`), re-runnable (Re-grade), directional, never
   ledger entries.
-- **Retention is opt-in and configurable.** `prune_high_write(p_days := 180)`
-  deletes conversations/actions/events older than the parameter — but its
-  nightly pg_cron schedule **ships commented out** in `setup.sql`; nothing is
-  ever deleted unless the operator enables it, and the horizon is whatever
-  `p_days` you call it with. 180 is only the suggested privacy/cost balance
-  (transcripts hold PII). If pruning runs, order rows and their tier stamps
-  survive, so long-range revenue reporting still works — only the drill-down
-  into pruned transcripts is lost.
+- **Retention is opt-in, configurable, and now administrable.** The default is
+  keep-everything-forever: nothing is scheduled. Pruning happens only when the
+  merchant runs it from **Edition & access → Data retention** (choose a horizon
+  ≥ 30 days → confirmed **Run prune now** → admin-gated `?prune=1` →
+  `prune_high_write(p_days)`; the card reports exactly what was deleted and
+  records the chosen horizon as `concierge_config.retention_days`). An operator
+  *may* additionally schedule it nightly with pg_cron (`setup.sql`, commented
+  out; 180 is only the suggested privacy/cost balance — transcripts hold PII).
+  Either way, order rows and their tier stamps survive, so long-range revenue
+  reporting still works — only the drill-down into pruned transcripts is lost.
 - **Demo pricing.** Revenue = count × configured unit price. There are no
   taxes, discounts, refunds, or partial payments in this demo, so revenue is
   exactly proportional to counts.

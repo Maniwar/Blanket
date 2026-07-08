@@ -3973,10 +3973,31 @@ async function handleTrackPost(req: Request): Promise<Response> {
   return done();
 }
 
+// ── POST ?prune=1 — run the retention prune (admin-only, deliberate) ─────────
+// The ONLY path that deletes history: prune_high_write(p_days) removes
+// conversations/actions/site_events/email logs older than the horizon; orders
+// and their attribution stamps survive. Nothing is scheduled by default —
+// this is the merchant's explicit act from Edition & access → Data retention.
+async function handlePrunePost(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  let body: Record<string, unknown>;
+  try { body = await req.json() as Record<string, unknown>; } catch {
+    return jsonError(req, 400, "Request body must be valid JSON.");
+  }
+  const days = typeof body.days === "number" && Number.isFinite(body.days) ? Math.floor(body.days) : NaN;
+  if (!(days >= 30)) return jsonError(req, 400, "Horizon must be at least 30 days.");
+  const result = await pgRpc<Record<string, unknown>>("prune_high_write", { p_days: days });
+  if (!result) return jsonError(req, 502, "The prune did not run — check the function logs.");
+  return jsonResponse(req, 200, { result });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   if (req.method === "POST" && new URL(req.url).searchParams.get("track")) {
     return await handleTrackPost(req);
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("prune")) {
+    return await handlePrunePost(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("config")) {
     return await handleConfigGet(req);
