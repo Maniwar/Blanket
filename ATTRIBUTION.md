@@ -5,6 +5,12 @@ where every number in the admin's **Conversion** tab comes from, and — just as
 important — what the numbers can and cannot claim. Written for the merchant
 first, engineers second.
 
+![Conversion & attribution diagram](docs/conversion-metrics.svg)
+
+*The whole system on one page — capture pipeline, the three tiers, the funnel's
+stages and units, every metric's exact formula and date basis, credit rules,
+and the honest limits. The sections below are the prose behind each box.*
+
 ## The three tiers
 
 Every kept (non-cancelled) commission lands in exactly one tier:

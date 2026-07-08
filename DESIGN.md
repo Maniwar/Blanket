@@ -474,6 +474,41 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   quote and falls back to token overlap with the `note`, so it still works on
   conversations graded before quotes existed. Unmet goals aren't clickable — there's
   nothing to point at.)*
+- **As the merchant**, I want **one Conversion tab where every business number
+  lives** — revenue, commissions, average order value, conversion rate, the
+  attribution tiers, conversations, and the 👍 rate — so that metrics never
+  disagree between views. *(The Conversations tab carries no figures of its own;
+  each Conversion tile states its **exact definition, formula, and date basis**
+  in an ⓘ hover, and shows a **delta vs the prior equal-length window**.
+  Diagram: `docs/conversion-metrics.svg`; formal spec: `ATTRIBUTION.md`.)*
+- **As the merchant**, I want to know **which commissions the concierge actually
+  drove**, not just which buyers also chatted, so that I can quote assisted
+  revenue honestly and optimize the causal number. *(Three tiers on every kept
+  order: **✳ concierge-initiated** — the buyer tapped the concierge's own
+  commission button (`orders.chat_via`, with the click's `{entry, section,
+  turns}` in `chat_meta`); **chat-assisted** — a conversation co-occurred in the
+  buying session (`chat_session`); **unassisted**. See §4.8.)*
+- **As the merchant**, I want a **real behavioral funnel** — visits → chat
+  opened → spoke to the concierge → register opened → commission — **measured
+  over time**, so that I can see where journeys leak and whether changes move
+  the stages. *(PII-free `site_events` beacons (random device token, no IP/
+  email) + a funnel-over-time trend chart and a snapshot with stage-to-stage
+  pass-through; stages that predate the beacons render "not tracked yet",
+  never a fake 0.)*
+- **As the merchant**, I want **trend lines with tooltips and a table view** —
+  revenue (total vs attributed) and conversion rate per day/week/month — so
+  that direction is visible at a glance and every value is reachable without
+  hovering. *(Hand-built SVG charts to the dataviz spec: crosshair + unified
+  tooltip, keyboard-readable, colorblind-validated palette, ⊞ table toggle.)*
+- **As the merchant**, I want the report to **tell me where the opportunities
+  are**, so that I know what to turn next without spelunking. *(A computed
+  card: biggest funnel drop, rate trend vs the prior window, unassisted-
+  majority warning, sections with chats but no ✳ conversions, grading
+  coverage — each phrased with the lever to pull.)*
+- **As the merchant**, I want the **register price behind every revenue figure
+  to be configurable**, so that reporting follows the real price without a
+  deploy. *(`concierge_config.unit_price`, Edition & access → Register price;
+  $589 fallback. Feeds Conversion, the LTV figures, and patron stats.)*
 - **As the merchant**, I want to **filter conversations by funnel stage** and see
   a **funnel overview** — how many chats sit at browsing, engaged, considering,
   objection, ready, won, lost (and how many aren't graded yet) — so that I can see
