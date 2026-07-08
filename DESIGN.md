@@ -985,8 +985,28 @@ Because the pitch is "it's a virtual sales associate," it has to be measurable:
 - **Goals** are admin-defined and scored per conversation by an LLM judge that
   must cite evidence from the transcript (no evidence → unmet). The live status is
   fed *back* into the prompt so the concierge actively drives the open goals.
-- **Attribution** — an order carries the `chat_session` that drove it, so the
-  admin sees the concierge's assisted revenue.
+- **Attribution is tiered, not binary.** Every kept order lands in one of three
+  tiers: **✳ concierge-initiated** (`orders.chat_via='concierge'` — checkout was
+  opened from the concierge's own `{{action:commission}}` button; the click also
+  captures `chat_meta` = `{entry, section, turns}`), **chat-assisted**
+  (`chat_session` set, no button click — a conversation co-occurred in the buying
+  session), and **unassisted**. The tier distinction exists because
+  session-co-occurrence alone over-credits the bot; the merchant optimizes on the
+  ✳ tier. Capture is same-tab-session (`sessionStorage`), so attributed figures
+  are a floor on true influence — the trade-off is zero PII persistence and no
+  cross-device tracking, which fits the house. The stamp is a best-effort PATCH
+  after order insert (a failure never blocks the sale, but is logged).
+- **The Conversion tab is the ledger.** Range-bounded tiles (kept commissions,
+  tier counts, attributed revenue at the configurable
+  `concierge_config.unit_price`, chat→commission rate), the attribution split,
+  the judge's sales-stage funnel, and a "what converts" card grouping ✳ orders
+  by the commission-click's section/entry-beat/depth — the levers the merchant
+  actually turns. Full mechanics, metric definitions, and the honest limits of
+  each number live in [`ATTRIBUTION.md`](ATTRIBUTION.md).
+- **Two links, kept distinct:** the conversion link above vs the service link
+  (`concierge_actions.conversation_id`+`serial` — chats that later *acted on* an
+  existing order, feeding the order drawer's Chats tab). A chat can hold one
+  without the other.
 
 ### 4.9 Behavior evals — catching regressions in a non-deterministic bot
 **Decision:** a small automated test deck (`evals/`) replays scripted

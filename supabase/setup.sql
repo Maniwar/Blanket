@@ -89,7 +89,18 @@ alter table public.orders
   add column if not exists billing jsonb,
   add column if not exists cancelled_serial int,
   add column if not exists cancelled_at timestamptz,
-  add column if not exists chat_session text;
+  add column if not exists chat_session text,
+  -- Attribution tier: 'concierge' = checkout opened from the concierge's own
+  -- commission button (causal); 'ambient' = a chat existed this tab session but
+  -- checkout came from a page button (co-occurrence). NULL = unassisted or
+  -- pre-attribution order. chat_meta carries the commission-click context
+  -- ({entry, section, turns}) for 'concierge' orders. See ATTRIBUTION.md.
+  add column if not exists chat_via text,
+  add column if not exists chat_meta jsonb;
+-- attribution vocabulary (drop + re-add so re-running is clean)
+alter table public.orders drop constraint if exists orders_chat_via_check;
+alter table public.orders add constraint orders_chat_via_check
+  check (chat_via is null or chat_via in ('concierge','ambient'));
 -- serial may be released when an order is struck
 alter table public.orders alter column serial drop not null;
 -- status vocabulary (drop + re-add so re-running is clean)

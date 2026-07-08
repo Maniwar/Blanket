@@ -213,6 +213,8 @@ The core table. No payment or street-shipping data beyond what the demo needs.
 | `billing` | jsonb | Billing address when it differs from shipping. | placement |
 | `cancelled_serial` | int | Archives the number a cancelled order **used to** hold. | on cancel |
 | `chat_session` | text | The `session_key` of the concierge conversation that drove the sale (revenue attribution). Also the join key for **IP lookup**: `chat_session ↔ concierge_conversations.session_key ↔ .ip` lets the admin find every order placed from an IP, and show each order's origin IP in the detail drawer. | placement |
+| `chat_via` | text | Attribution **tier**: `concierge` = checkout was opened from the concierge's own commission button (causal); `ambient` = a chat existed this tab session but checkout came from a page button (co-occurrence); `NULL` = unassisted (or an order placed before this column existed). Constraint `orders_chat_via_check`. See [`ATTRIBUTION.md`](../ATTRIBUTION.md). | placement |
+| `chat_meta` | jsonb | Commission-click context for `concierge`-tier orders: `{entry, section, turns}` — which proactive beat the exchange came from, the page section, and conversation depth at the click. Whitelisted/bounded server-side. | placement |
 | `placed_at` | timestamptz | Placement time (feeds LTV recency). | placement |
 
 **Written by:** `commission_order` (placement), `cancel_order_return`

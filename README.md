@@ -59,6 +59,7 @@ passwordless email auth.
 | **[SETUP.md](SETUP.md)** | Stand it up and verify it — setup steps, custom SMTP, a `selftest`-driven checklist, troubleshooting. |
 | **[supabase/README.md](supabase/README.md)** | Backend reference — the edge functions, wire contracts (SSE frames, endpoints), rate limits. |
 | **[supabase/SCHEMA.md](supabase/SCHEMA.md)** | Data model — every table, column, RPC, and what reads/writes it. |
+| **[ATTRIBUTION.md](ATTRIBUTION.md)** | Revenue attribution & conversion tracking — the three attribution tiers (✳ concierge-initiated / chat-assisted / unassisted), how every Conversion-tab number is computed, honest limits, and the levers that raise conversion. |
 | **[evals/README.md](evals/README.md)** | Behavior evals — how the concierge is regression-tested (deterministic checks + a pinned binary LLM judge, reported as a pass rate), runnable from the CLI or the admin **Evals** tab. |
 | **[SECURITY.md](SECURITY.md)** | Security review — CISSP/OWASP-framed audit (injection, XSS, access control, RLS, secrets): what was found and fixed, residual risks, and the path to a formal certification. |
 | **[PRIVACY_REVIEW.md](PRIVACY_REVIEW.md)** | Privacy compliance check of the published notice against GDPR + CCPA/CPRA — required-disclosure gap analysis, factual corrections, and what still needs counsel. |

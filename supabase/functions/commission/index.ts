@@ -250,6 +250,29 @@ function readChatSession(raw: unknown): string | null {
   return typeof v === "string" && SESSION_RE.test(v) ? v : null;
 }
 
+/** Attribution tier: 'concierge' (checkout opened from the concierge's own
+ * commission button — causal) vs 'ambient' (a chat existed this session —
+ * co-occurrence). Anything else is dropped. */
+function readChatVia(raw: unknown): string | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const v = (raw as Record<string, unknown>).chat_via;
+  return v === "concierge" || v === "ambient" ? v : null;
+}
+
+/** Commission-click context ({entry, section, turns}) — whitelisted keys only,
+ * bounded values, so nothing free-form lands on the order row. */
+function readChatMeta(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const v = (raw as Record<string, unknown>).chat_meta;
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
+  const m = v as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof m.entry === "string" && m.entry.length <= 40 && /^[a-z0-9:_-]+$/i.test(m.entry)) out.entry = m.entry;
+  if (typeof m.section === "string" && m.section.length <= 32 && /^[a-z0-9_-]+$/i.test(m.section)) out.section = m.section;
+  if (typeof m.turns === "number" && Number.isFinite(m.turns) && m.turns >= 0) out.turns = Math.min(Math.floor(m.turns), 999);
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 // ── Standing — the patron's place in the Webbuch ─────────────────────────────
 
 function standingTier(n: number): string {
@@ -1130,6 +1153,8 @@ Deno.serve(async (req: Request) => {
   if (typeof validated === "string") return jsonError(req, 400, validated);
   const session = readSessionKey(parsed);
   const chatSession = readChatSession(parsed);
+  const chatVia = readChatVia(parsed);
+  const chatMeta = readChatMeta(parsed);
 
   // The register takes signed entries only: a verified magic-link session is
   // required, and the verified email is the one recorded — not the typed one.
@@ -1151,15 +1176,25 @@ Deno.serve(async (req: Request) => {
       "The year's run is fully spoken for at this moment. The 2027 waitlist stands open.");
   }
 
-  // Attribution: the concierge's commissions are counted (best-effort).
+  // Attribution: the concierge's commissions are counted (best-effort — the
+  // order stands either way, but a failure is LOGGED so lost attribution is
+  // visible in the function logs instead of silently undercounting).
   if (chatSession) {
+    const attribution: Record<string, unknown> = { chat_session: chatSession };
+    if (chatVia) attribution.chat_via = chatVia;
+    if (chatMeta) attribution.chat_meta = chatMeta;
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/orders?serial=eq.${serial}`, {
+      const pr = await fetch(`${SUPABASE_URL}/rest/v1/orders?serial=eq.${serial}`, {
         method: "PATCH",
         headers: RPC_HEADERS,
-        body: JSON.stringify({ chat_session: chatSession }),
+        body: JSON.stringify(attribution),
       });
-    } catch { /* the order stands either way */ }
+      if (!pr.ok) {
+        console.error(`attribution PATCH failed for serial ${serial}: HTTP ${pr.status} ${await pr.text().catch(() => "")}`.slice(0, 300));
+      }
+    } catch (e) {
+      console.error(`attribution PATCH threw for serial ${serial}:`, e instanceof Error ? e.message : String(e));
+    }
   }
 
   // Save the used ship-to (and any distinct billing) into the patron's managed

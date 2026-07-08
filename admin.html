@@ -346,6 +346,16 @@
     border-radius:20px; padding:5px 13px; transition:border-color .14s ease, color .14s ease; }
   .ord-chip:hover{ border-color:var(--hairline); color:var(--wool); }
   .ord-chip.on{ color:var(--wool); border-color:var(--brass); background:rgba(196,155,91,.1); }
+  /* Conversion report — stacked attribution/funnel bars + breakdown rows */
+  .cv-bar{ display:flex; height:26px; border-radius:4px; overflow:hidden; border:1px solid var(--hairline-dim); margin:6px 0 10px; }
+  .cv-bar .seg{ min-width:2px; }
+  .cv-legend{ display:flex; flex-wrap:wrap; gap:14px; }
+  .cv-legend .li{ display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--wool-dim); }
+  .cv-legend .sw{ width:11px; height:11px; border-radius:2px; display:inline-block; }
+  .cv-rows .row{ display:flex; align-items:baseline; gap:12px; padding:7px 0; border-bottom:1px solid var(--hairline-dim); }
+  .cv-rows .row:last-child{ border-bottom:none; }
+  .cv-rows .k{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--wool); min-width:170px; }
+  .cv-rows .v{ color:var(--wool-dim); font-size:12.5px; }
   .ord-chip .n{ font-size:12px; color:var(--wool); }
   .ord-chip .swatch{ width:8px; height:8px; border-radius:50%; }
 
@@ -805,6 +815,7 @@
     <button class="tab" data-tab="cache" role="tab">Cache</button>
     <button class="tab" data-tab="customers" role="tab">Orders &amp; Customers</button>
     <button class="tab" data-tab="conversations" role="tab">Conversations</button>
+    <button class="tab" data-tab="conversion" role="tab">Conversion</button>
     <button class="tab" data-tab="actions" role="tab">Actions</button>
     <button class="tab" data-tab="website" role="tab">Website</button>
     <button class="tab" data-tab="tools" role="tab">Tools</button>
@@ -1190,6 +1201,18 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
 
       <section class="card">
         <div class="card-head">
+          <h3>Register price</h3>
+          <span class="micro">The per-blanket price behind every revenue figure</span>
+        </div>
+        <div class="field" style="max-width:280px;">
+          <label class="micro" for="ed-price">Price per blanket (USD)<span class="info-badge" title="Used by the Conversion report, the metrics tiles, and patron LTV. This is a reporting figure only — the storefront copy is edited on the Website tab. Blank = the launch price, $589.">i</span></label>
+          <input type="number" id="ed-price" class="mono-field" min="1" step="1" placeholder="589">
+        </div>
+        <div class="card-foot"><button id="save-price" class="btn primary" type="button">Save price</button></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Administrators</h3>
           <span class="micro">Who can sign in here and manage the concierge</span>
         </div>
@@ -1460,6 +1483,63 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ============ TAB : CONVERSION (revenue attribution report) ============ -->
+    <div id="panel-conversion" class="panel">
+      <div class="panel-head">
+        <span class="micro">The ledger</span>
+        <h2>Conversion</h2>
+      </div>
+      <p class="note">How the concierge turns conversations into commissions. Three attribution tiers:
+        <b>✳ concierge-initiated</b> — checkout was opened from the concierge's own commission button
+        (the causal tier you optimize); <b>chat-assisted</b> — a conversation happened in the buying
+        session but checkout came from a page button; <b>unassisted</b> — no conversation.
+        Full mechanics in <span class="mono">ATTRIBUTION.md</span>.</p>
+
+      <div class="ct-row" style="margin-bottom:18px;">
+        <span class="ct-tag">Range</span>
+        <div id="cv-range" class="ord-chips" style="margin-bottom:0;"></div>
+        <button id="cv-refresh" class="btn ghost" type="button" style="margin-left:auto;">Refresh</button>
+      </div>
+
+      <div class="metrics" id="cv-tiles">
+        <div class="stat"><span class="micro">Commissions (kept)</span><div class="val" id="cv-orders">—</div></div>
+        <div class="stat"><span class="micro">✳ Concierge-initiated</span><div class="val" id="cv-initiated">—</div></div>
+        <div class="stat"><span class="micro">Chat-assisted</span><div class="val" id="cv-assisted">—</div></div>
+        <div class="stat"><span class="micro">Attributed revenue</span><div class="val" id="cv-revenue">—</div></div>
+        <div class="stat"><span class="micro">Chat → commission rate</span><div class="val" id="cv-rate">—</div></div>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Attribution split</h3>
+          <span class="micro">Every kept commission in the range, by tier</span>
+        </div>
+        <div id="cv-split"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Conversation funnel</h3>
+          <span class="micro">Graded stage of every conversation in the range</span>
+        </div>
+        <div id="cv-funnel"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>What converts</h3>
+          <span class="micro">Where concierge-initiated commissions came from (the click's context)</span>
+        </div>
+        <div id="cv-breakdown"></div>
+      </section>
+
+      <p class="micro" style="opacity:.7;">Coverage: attribution is captured when the chat and the
+        checkout happen in the same browser tab session. A chat today that converts tomorrow (or on
+        another device) records as unassisted — treat the attributed numbers as a floor, not a ceiling.
+        Cancelled orders are excluded from revenue but keep their attribution. Orders placed before the
+        tier column existed count as chat-assisted when they carry a chat link.</p>
     </div>
 
     <!-- ============ TAB 7 : WEBSITE (storefront CMS) ============ -->
@@ -1919,6 +1999,10 @@ function wireStatic() {
   $('save-edition').addEventListener('click', function () {
     withBusy($('save-edition'), saveEdition);
   });
+  $('save-price').addEventListener('click', function () {
+    withBusy($('save-price'), savePrice);
+  });
+  $('cv-refresh').addEventListener('click', function () { loadConversion(); });
   $('admin-add-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
     withBusy($('admin-add-btn'), addAdmin);
@@ -2042,9 +2126,10 @@ function activateTab(name) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'actions', 'website', 'tools', 'evals', 'edition'].forEach(function (p) {
+  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'conversion', 'actions', 'website', 'tools', 'evals', 'edition'].forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
+  if (name === 'conversion') loadConversion();
   if (name === 'tuning') autoGrowAll('#panel-tuning .tsub.on');
   if (name === 'knowledge') autoGrowAll('#kb-list');
   if (name === 'procedures') autoGrowAll('#sop-list');
@@ -2619,6 +2704,9 @@ async function loadConfig() {
   const cfg = {};
   (res.data || []).forEach(function (r) { cfg[r.key] = r.value; });
   state.config = cfg;
+
+  PRICE = (typeof cfg.unit_price === 'number' && cfg.unit_price > 0) ? cfg.unit_price : 589;
+  if ($('ed-price')) $('ed-price').value = (typeof cfg.unit_price === 'number' && cfg.unit_price > 0) ? cfg.unit_price : '';
 
   $('cfg-enabled').checked = cfg.enabled === true;
   $('cfg-enabled-label').textContent = cfg.enabled === true ? 'Live' : 'Paused';
@@ -4749,7 +4837,10 @@ function cacheEditor(row) {
    TAB 5 — CUSTOMERS (aggregated from orders)
    ============================================================ */
 
-const PRICE = 589;
+/* Register price (USD) behind every revenue figure in this admin. Configurable
+   via concierge_config.unit_price (Edition & access → Register price); 589 is
+   the launch price and the fallback when unset. */
+let PRICE = 589;
 
 function tierFor(n) {
   if (n >= 5) return 'Stifter';
@@ -5324,6 +5415,23 @@ function openOrderDrawer(o) {
     pOv.appendChild(stats);
   }
   if (o.is_gift && o.recipient_name) pOv.appendChild(el('div', 'dmicro', '🎁 Gift → ' + o.recipient_name));
+  // Attribution tier — how the concierge relates to THIS commission (ATTRIBUTION.md).
+  {
+    const attr = o.chat_via === 'concierge'
+      ? '✳ Concierge-initiated — checkout opened from the concierge’s commission button'
+      : o.chat_session
+        ? 'Chat-assisted — a conversation ran in the buying session'
+        : 'Unassisted — no conversation in the buying session';
+    const aLine = el('div', 'dmicro', attr);
+    if (o.chat_via === 'concierge') aLine.style.color = 'var(--brass-soft)';
+    const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : null;
+    if (m && (m.section || m.entry || typeof m.turns === 'number')) {
+      aLine.title = 'At the commission click — ' +
+        [m.section && ('section: ' + m.section), m.entry && ('entry: ' + m.entry),
+         typeof m.turns === 'number' && (m.turns + ' turns')].filter(Boolean).join(' · ');
+    }
+    pOv.appendChild(aLine);
+  }
   if (oip) {
     const ipLine = el('div', 'dlink dmicro', 'IP ' + oip);
     ipLine.title = 'Find every order from this IP';
@@ -6712,7 +6820,7 @@ async function loadMetrics() {
     } else {
       const n = assisted.count || 0;
       $('m-assist').textContent = String(n);
-      $('m-assist-rev').textContent = '$' + (n * 589).toLocaleString('en-US');
+      $('m-assist-rev').textContent = '$' + (n * PRICE).toLocaleString('en-US');
     }
 
     if (fbAll.error || fbUp.error || !(fbAll.count > 0)) {
@@ -6725,6 +6833,177 @@ async function loadMetrics() {
   } catch (e) {
     fail('Metrics', e);
   }
+}
+
+/* ============================================================
+   TAB — CONVERSION (revenue attribution & funnel report)
+   Reads orders (chat_session/chat_via/chat_meta) + conversations
+   (sales_stage) over a range and renders the merchant's ledger:
+   attribution tiers, revenue, funnel, and what converts.
+   Mechanics documented in ATTRIBUTION.md.
+   ============================================================ */
+
+const CV_RANGES = [[7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']];
+
+function cvRangeChips() {
+  const holder = $('cv-range');
+  holder.textContent = '';
+  CV_RANGES.forEach(function (r) {
+    const c = el('button', 'ord-chip' + (state.cvDays === r[0] ? ' on' : ''), r[1]);
+    c.type = 'button';
+    c.addEventListener('click', function () { state.cvDays = r[0]; loadConversion(); });
+    holder.appendChild(c);
+  });
+}
+
+function cvSince() {
+  if (!state.cvDays) return null;               // 0 = all time
+  const d = new Date(Date.now() - state.cvDays * 86400000);
+  return d.toISOString();
+}
+
+/* One stacked bar + legend from [{label, n, color}], skipping zero segments. */
+function cvBar(parts) {
+  const wrap = el('div');
+  const total = parts.reduce(function (s, p) { return s + p.n; }, 0);
+  if (!total) { wrap.appendChild(el('div', 'empty micro', 'Nothing in this range yet.')); return wrap; }
+  const bar = el('div', 'cv-bar');
+  parts.forEach(function (p) {
+    if (!p.n) return;
+    const seg = el('div', 'seg');
+    seg.style.cssText = 'width:' + (100 * p.n / total) + '%; background:' + p.color + ';';
+    seg.title = p.label + ' — ' + p.n + ' (' + Math.round(100 * p.n / total) + '%)';
+    bar.appendChild(seg);
+  });
+  wrap.appendChild(bar);
+  const leg = el('div', 'cv-legend');
+  parts.forEach(function (p) {
+    const li = el('span', 'li');
+    const sw = el('span', 'sw'); sw.style.background = p.color;
+    li.appendChild(sw);
+    li.appendChild(document.createTextNode(p.label + ' · ' + p.n + (total ? ' (' + Math.round(100 * p.n / total) + '%)' : '')));
+    leg.appendChild(li);
+  });
+  wrap.appendChild(leg);
+  return wrap;
+}
+
+async function loadConversion() {
+  if (state.cvDays === undefined) state.cvDays = 30;
+  cvRangeChips();
+  const since = cvSince();
+
+  let oq = sb.from('orders').select('serial,status,chat_session,chat_via,chat_meta,placed_at').limit(10000);
+  let cq = sb.from('concierge_conversations').select('id,sales_stage,created_at').limit(10000);
+  if (since) { oq = oq.gte('placed_at', since); cq = cq.gte('created_at', since); }
+  const [ores, cres] = await Promise.all([oq, cq]);
+  if (ores.error) { fail('Conversion — orders', ores.error); return; }
+  if (cres.error) { fail('Conversion — conversations', cres.error); return; }
+  const orders = ores.data || [];
+  const convos = cres.data || [];
+
+  // Attribution tiers over KEPT (non-cancelled) commissions. An order placed
+  // before chat_via existed still counts as chat-assisted via chat_session.
+  const kept = orders.filter(function (o) { return o.status !== 'cancelled'; });
+  const initiated = kept.filter(function (o) { return o.chat_via === 'concierge'; });
+  const ambient = kept.filter(function (o) { return o.chat_session && o.chat_via !== 'concierge'; });
+  const unassisted = kept.filter(function (o) { return !o.chat_session; });
+  const attributed = initiated.length + ambient.length;
+
+  $('cv-orders').textContent = String(kept.length);
+  $('cv-initiated').textContent = String(initiated.length);
+  $('cv-assisted').textContent = String(ambient.length);
+  $('cv-revenue').textContent = '$' + (attributed * PRICE).toLocaleString('en-US');
+  $('cv-rate').textContent = convos.length ? (Math.round(1000 * attributed / convos.length) / 10) + '%' : '—';
+  $('cv-rate').title = attributed + ' attributed commissions ÷ ' + convos.length + ' conversations in range';
+
+  // Split bar — the tier mix, plus cancelled shown separately for honesty.
+  const split = $('cv-split');
+  split.textContent = '';
+  split.appendChild(cvBar([
+    { label: '✳ Concierge-initiated', n: initiated.length, color: '#C49B5B' },
+    { label: 'Chat-assisted', n: ambient.length, color: '#7a915a' },
+    { label: 'Unassisted', n: unassisted.length, color: '#4a5560' }
+  ]));
+  const cancelled = orders.length - kept.length;
+  const revLine = el('p', 'micro');
+  revLine.style.marginTop = '10px';
+  revLine.textContent = 'Revenue at $' + PRICE.toLocaleString('en-US') + '/blanket — ✳ initiated: $' +
+    (initiated.length * PRICE).toLocaleString('en-US') + ' · assisted: $' +
+    (ambient.length * PRICE).toLocaleString('en-US') + ' · unassisted: $' +
+    (unassisted.length * PRICE).toLocaleString('en-US') +
+    (cancelled ? ' · (' + cancelled + ' cancelled excluded)' : '');
+  split.appendChild(revLine);
+
+  // Funnel — graded stage of every conversation in range.
+  const stages = ['browsing', 'engaged', 'evaluating', 'objection', 'ready', 'won', 'lost'];
+  const sc = {}; let ungraded = 0;
+  convos.forEach(function (c) {
+    if (c.sales_stage && stages.indexOf(c.sales_stage) >= 0) sc[c.sales_stage] = (sc[c.sales_stage] || 0) + 1;
+    else ungraded++;
+  });
+  const funnel = $('cv-funnel');
+  funnel.textContent = '';
+  funnel.appendChild(cvBar(stages.map(function (s) {
+    return { label: STAGE_LABELS[s] || s, n: sc[s] || 0, color: STAGE_TONE[s] || '#666' };
+  }).concat([{ label: 'ungraded', n: ungraded, color: '#333a41' }])));
+  const won = sc.won || 0;
+  const fLine = el('p', 'micro');
+  fLine.style.marginTop = '10px';
+  fLine.textContent = convos.length
+    ? convos.length + ' conversations · ' + won + ' graded “won” (' + (Math.round(1000 * won / convos.length) / 10) +
+      '%) · grading is the judge’s read of the transcript; the ✳ tier above is the hard order-level signal.'
+    : 'No conversations in this range.';
+  funnel.appendChild(fLine);
+
+  // What converts — the commission-click context on ✳ initiated orders.
+  const bd = $('cv-breakdown');
+  bd.textContent = '';
+  if (!initiated.length) {
+    bd.appendChild(el('div', 'empty micro',
+      'No concierge-initiated commissions in this range yet. This fills in as buyers tap the concierge’s “Begin the commission” button (orders placed before this tier existed can’t appear here).'));
+  } else {
+    const bySec = {}, byEntry = {}; let turnsSum = 0, turnsN = 0;
+    initiated.forEach(function (o) {
+      const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : {};
+      const sec = m.section || '(unknown)';
+      bySec[sec] = (bySec[sec] || 0) + 1;
+      // 'opener:greet' / 'outreach:dwell' → the beat family is the useful grain.
+      const entry = (typeof m.entry === 'string' && m.entry) ? m.entry.split(':')[0] : '(unknown)';
+      byEntry[entry] = (byEntry[entry] || 0) + 1;
+      if (typeof m.turns === 'number') { turnsSum += m.turns; turnsN++; }
+    });
+    const rows = el('div', 'cv-rows');
+    const addRow = function (k, v) {
+      const r = el('div', 'row');
+      r.appendChild(el('span', 'k', k));
+      r.appendChild(el('span', 'v', v));
+      rows.appendChild(r);
+    };
+    const fmtGroup = function (g) {
+      return Object.keys(g).sort(function (a, b) { return g[b] - g[a]; })
+        .map(function (k) { return k + ' × ' + g[k]; }).join('  ·  ');
+    };
+    addRow('By page section', fmtGroup(bySec));
+    addRow('By entry beat', fmtGroup(byEntry) + '  (typed / pill / opener / outreach / nudge)');
+    if (turnsN) addRow('Conversation depth', 'avg ' + Math.round(turnsSum / turnsN) + ' turns before the commission click');
+    bd.appendChild(rows);
+    bd.appendChild(el('p', 'micro', 'Read: which sections and proactive beats produce taps on “Begin the commission” — raise what works (starters, goals, angles on those sections), rethink what never appears.'));
+  }
+}
+
+/* Save the register price (concierge_config.unit_price) and re-price the page. */
+async function savePrice() {
+  const raw = $('ed-price').value.trim();
+  const n = raw === '' ? null : parseInt(raw, 10);
+  if (raw !== '' && (!Number.isFinite(n) || n <= 0)) { toast('Price must be a positive whole number', true); return; }
+  const res = await sb.from('concierge_config').upsert(
+    [{ key: 'unit_price', value: n, updated_at: nowIso() }], { onConflict: 'key' });
+  if (res.error) { fail('Save price', res.error); return; }
+  if (state.config) state.config.unit_price = n;
+  PRICE = (typeof n === 'number' && n > 0) ? n : 589;
+  toast(n ? 'Register price saved — $' + n.toLocaleString('en-US') : 'Register price cleared — using $589');
+  loadMetrics();
 }
 
 function fmtWhen(ts) {

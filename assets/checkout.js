@@ -48,6 +48,39 @@
       return (k && /^[A-Za-z0-9_-]{8,64}$/.test(k)) ? k : '';
     } catch (eC) { return ''; }
   }
+  /* Attribution tier for this order. 'concierge' = the sheet was opened from the
+     concierge's own commission button (the marker concierge.js stamps on that
+     click, honoured for 2 hours so a slow, considered checkout still counts);
+     'ambient' = a conversation existed this tab session but the sheet was opened
+     from a page button. Distinguishes "the chat drove this" from "a chat
+     happened" — the number the merchant optimizes on. */
+  function chatVia() {
+    if (!chatKey()) { return ''; }
+    try {
+      var m = JSON.parse(window.sessionStorage.getItem('cx-commission-via') || 'null');
+      if (m && typeof m.ts === 'number' && (Date.now() - m.ts) < 2 * 3600000) { return 'concierge'; }
+    } catch (eV) { /* fall through */ }
+    return 'ambient';
+  }
+  /* Context captured at the commission-button click (entry beat, page section,
+     conversation depth) — only meaningful for a 'concierge' attribution. */
+  function chatMeta() {
+    if (chatVia() !== 'concierge') { return null; }
+    try {
+      var m = JSON.parse(window.sessionStorage.getItem('cx-commission-via') || 'null');
+      if (!m) { return null; }
+      return {
+        entry: (typeof m.entry === 'string') ? m.entry.slice(0, 40) : undefined,
+        section: (typeof m.section === 'string') ? m.section.slice(0, 32) : undefined,
+        turns: (typeof m.turns === 'number') ? m.turns : undefined
+      };
+    } catch (eM) { return null; }
+  }
+  /* One order, one click: once an order is recorded the marker must not leak
+     onto a later, unrelated commission made from a page button. */
+  function clearChatVia() {
+    try { window.sessionStorage.removeItem('cx-commission-via'); } catch (eX) { /* ignore */ }
+  }
   /* re-confirm the visit's held number whenever the sheet opens */
   function refreshHold() {
     var e = commissionEndpoint();
@@ -1775,6 +1808,8 @@
       colorway: order.colorway,
       session_key: visitKey() || undefined,
       chat_session: chatKey() || undefined,
+      chat_via: chatVia() || undefined,
+      chat_meta: chatMeta() || undefined,
       is_gift: order.is_gift || undefined,
       recipient: (order.is_gift && order.recipient) || undefined,
       billing: order.bill_differs && order.bill_address ? {
@@ -1807,6 +1842,7 @@
           else if (j.no != null) { serial = parseInt(String(j.no).replace(/,/g, ''), 10); }
         }
         if (!serial || isNaN(serial)) { serial = demoSerial(); }
+        clearChatVia(); /* this order consumed the commission-click marker */
         onOk(serial, (j && j.standing) || null);
       })['catch'](function (err) { onFail(err && err.code ? err.code : 0); });
     } catch (eF) { onFail(0); }

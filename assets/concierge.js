@@ -964,7 +964,22 @@
             actName === 'commission' ? '✳ Begin the commission' : '✳ Sign in — the key arrives by mail');
           ab.type = 'button';
           ab.addEventListener('click', actName === 'commission'
-            ? function () { closePanel(); window.FeierabendCheckout.open(); }
+            ? function () {
+              /* Attribution: the register sheet is opening from the concierge's
+                 own commission button — the strongest "the chat drove this"
+                 signal there is. Stamp it so checkout can send chat_via:
+                 'concierge' with the order (vs 'ambient' = a chat merely
+                 existed this session). Read by chatVia() in checkout.js. */
+              try {
+                window.sessionStorage.setItem('cx-commission-via', JSON.stringify({
+                  ts: Date.now(),
+                  entry: entryMode,
+                  section: currentSection(),
+                  turns: history.length
+                }));
+              } catch (eAttr) { /* storage unavailable — attribution degrades to ambient */ }
+              closePanel(); window.FeierabendCheckout.open();
+            }
             : function () { openAuthRow(); });
           act.appendChild(ab);
           frag.appendChild(act);
