@@ -135,10 +135,15 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   closed-panel idle thresholds and budgets (`reengageIdle*Ms`, `reengageMax*`,
   `reengageEnabled`), bubble linger (`bubbleWithdrawMs`), ambient budget
   (`maxAmbient`), post-sale behavior (`reengageGraceMs`,
-  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`), and the kept-transcript
-  window (`historyKeepMs`). Blank = built-in default, scaled by the
-  assertiveness dial. `FeierabendConcierge.status()` reports the *effective*
-  caps after config and dial are applied.
+  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`), the kept-transcript
+  window (`historyKeepMs`), and the **substance gate itself** (`substanceGate`,
+  default on). Blank = built-in default, scaled by the assertiveness dial.
+  `FeierabendConcierge.status()` reports the *effective* caps after config and
+  dial are applied. **Held beats are monitored, not invisible**: each one
+  writes `concierge_actions.action='beat_hold'` (conversation id + beat kind),
+  so the Actions tab shows deliberate silence and hold rate is a real metric.
+  The product-level user stories, acceptance criteria, and the full
+  quantitative/qualitative measure set live in [`DESIGN.md`](DESIGN.md) §2.10.
 - **Every proactive beat carries the full patron context.** In-panel nudges,
   openers, and the **closed-panel re-engagement bubble** all inject the complete
   CUSTOMER block (name, standing, orders, recency, client book, open house

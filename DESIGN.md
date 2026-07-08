@@ -757,12 +757,15 @@ rather than merely reacting:
 
 Admin-editable selling inputs (all config keys): `assertiveness`, `hooks`
 (selling angles woven in to build desire), `objections` (`{trigger, response}`
-playbook for the Reassure move), plus engagement pacing (`outreach.nudgeCap`,
-`outreach.maxAmbient`, `outreach.dwell2Ms`, re-engagement
-(`outreach.reengageEnabled`, `reengageIdleAnonMs`/`reengageMaxAnon`,
+playbook for the Reassure move), plus engagement pacing — the full in-chat
+ladder `outreach.nudge1Ms`–`nudge5Ms`, rest counts `nudgeCap`/`unackedCap`,
+`holdBudget`, opener timings `openerSignedMs`/`openerAnonMs`/`openerReengageMs`,
+`maxAmbient` and `bubbleWithdrawMs`, the `substanceGate` toggle, re-engagement
+(`reengageEnabled`, `reengageIdleAnonMs`/`reengageMaxAnon`,
 `reengageIdleSignedMs`/`reengageMaxSigned`, post-sale
-`reengageGraceMs`/`reengagePostSaleWindowMs`/`reengagePostSaleEnabled`), and the
-existing nudge/dwell/draft timings and `goal_sample_rate`).
+`reengageGraceMs`/`reengagePostSaleWindowMs`/`reengagePostSaleEnabled`),
+the kept-transcript window `historyKeepMs`, and the existing dwell/draft
+timings and `goal_sample_rate`.
 
 The **storefront itself** is admin-editable too — copy, section images, and
 SEO/meta — via the Studio's **Website** tab, backed by the `site_content` table,
@@ -849,6 +852,81 @@ direct controls over the result.
   not typing an id from memory. The Model and Fallback fields gain a dropdown
   populated live from Anthropic's model list (`?models=1`, key stays server-side),
   and the free-text field stays for any custom id.
+
+### 2.10 Proactive engagement — substance, silence, and measurement
+
+The proactive system's product bar: **a shopper should feel accompanied, never
+chased — and the merchant should be able to see, tune, and prove which one is
+happening.** Stories with acceptance criteria:
+
+**Shopper-facing**
+
+- **As a shopper, a proactive line only reaches me when it's worth my
+  attention.**
+  *Accepted when:* a beat with nothing new to say emits nothing (the model
+  answers `[HOLD]`, the client shows no text); a beat that speaks carries at
+  least one concrete, previously-unmentioned fact (register entry, goal step,
+  house note) in **one–two plain sentences**; no beat invents facts — every
+  count, cloth, city, and number matches the register verbatim.
+- **As a shopper, I'm never re-asked a question I've ignored.**
+  *Accepted when:* while any question of the bot's sits unanswered (checked
+  across the whole trailing run of its unprompted lines, not just the last),
+  proactive beats contain no question marks; the pending question may return
+  only after I speak again.
+- **As a shopper, successive reach-outs don't orbit one topic.**
+  *Accepted when:* from the second reach-out on, each beat opens a subject not
+  yet offered, and when the subjects are spent the bot holds instead of
+  re-wrapping old ones.
+- **As a signed-in patron, my conversation survives the tab.**
+  *Accepted when:* closing and reopening the site within the kept-transcript
+  window restores the visible thread and the bot's context (no re-greeting, no
+  repeated pitch); signing out or switching identity wipes the kept copy;
+  anonymous chats stay per-tab.
+- **As any visitor, my "leave me alone" always wins.**
+  *Accepted when:* quiet mode stops every beat until I type; unacknowledged
+  reach-outs pause the bot at the configured count.
+
+**Merchant-facing**
+
+- **As the merchant, every pacing number is mine to tune, without a deploy.**
+  *Accepted when:* Tuning → Engagement pace exposes the full in-chat ladder
+  (`nudge1Ms`–`nudge5Ms`), both rest counts (`nudgeCap`, `unackedCap`), the
+  hold budget, opener timings (`openerSignedMs`/`openerAnonMs`/
+  `openerReengageMs`), closed-panel idle/max per audience, bubble linger
+  (`bubbleWithdrawMs`), post-sale behavior, and the kept-transcript window
+  (`historyKeepMs`); a blank field falls back to the built-in default scaled
+  by the assertiveness dial; changes take effect within the 60s config cache.
+- **As the merchant, I control the substance gate itself.**
+  *Accepted when:* the "Substance gate" toggle (default ON) switches the beat
+  prompts between hold-when-nothing-new and the older always-speak bias.
+- **As the merchant, silence is measurable, not invisible.**
+  *Accepted when:* every held beat writes a `concierge_actions` row
+  (`action='beat_hold'`, with conversation id and beat kind), so the Actions
+  tab can filter to holds and **hold rate** (holds ÷ proactive beats) is
+  derivable per period; a broken widget and a deliberately quiet one no longer
+  look the same.
+- **As the merchant, I can diagnose the live widget without guessing.**
+  *Accepted when:* `FeierabendConcierge.status()` reports the *effective*
+  caps/timers (after config + dial) and `lastSkip` names the exact gate that
+  stopped the last beat, per [`BEHAVIOR.md`](BEHAVIOR.md).
+
+**The measures to build to** (all merchant-visible):
+
+| Kind | Measure | Where |
+|---|---|---|
+| Quantitative | ✳ concierge-initiated revenue & share, chat→commission rate, AOV | Conversion tab (definitions in [`ATTRIBUTION.md`](ATTRIBUTION.md)) |
+| Quantitative | Conversion by **entry beat** (typed / opener / outreach / nudge) | Conversion tab, "what converts" |
+| Quantitative | **Hold rate** — held ÷ (held + spoken) proactive beats | Actions tab (`beat_hold`) vs transcript beat lines |
+| Quantitative | Reply rate to proactive beats; unacked-pause frequency | Transcripts; `status()` during QA |
+| Quantitative | Goal outcomes (met / partial / unmet) per conversation | Goals grading, Conversations tab |
+| Qualitative | Per-conversation grade with cited evidence | Grader (Conversations drawer) |
+| Qualitative | Gap flags (odd replies auto-flagged) & transcript drill-in | Conversations tab |
+| Qualitative | Prompt-tuner critique of the assembled prompt | Tuning (`?promptreview=1`) |
+
+The north star pairing: **✳ attributed revenue up** while **hold rate stays
+honest** (a healthy agent holds sometimes — 0% holds at high beat counts means
+it's inventing content again) and **quiet-mode invocations stay rare** (shoppers
+asking for silence is the counter-metric for "chased").
 
 ---
 
@@ -1006,10 +1084,24 @@ A luxury associate lingers nearby without hovering. Encoding that:
   life resumes it. A reply always counts.
 - **Customer control** — an explicit "that's all for now" or "don't message me
   until I write back" (quiet mode) always wins over the automatic behavior.
+- **Substance gate** — beats fire on timers, but timers don't create new facts:
+  a model *ordered* to speak on schedule fills the gap with atmosphere and
+  invented color once the true facts are spent. So the beat prompts demand
+  something **new and concrete** or an explicit `[HOLD]`; proactive lines are
+  held to plain, register-verbatim speech. Every held beat is **logged**
+  (`concierge_actions.action='beat_hold'`) so deliberate silence is measurable
+  and distinguishable from breakage; the gate itself is an admin toggle
+  (`outreach.substanceGate`, default on).
+- **Signed-in continuity** — the transcript is kept device-side keyed to the
+  patron's identity, so a closed tab doesn't reset the bot to an empty thread
+  (the root cause of cross-tab repetition). Wiped on sign-out; admin-tunable
+  window; anonymous stays per-tab.
 
 **Trade-off:** several heuristics and caps to tune, but the alternative (fixed
 timers, or pinging until a hard cap) either annoys present users or wastes calls
-on absent ones.
+on absent ones. The full story-level spec with acceptance criteria is §2.10;
+the step-change roadmap (event-driven beats, decide-then-speak, per-visit
+campaign state) is in §8.
 
 ### 4.7 Everything tunable is data
 Config, knowledge base, standard operating procedures, in-chat forms,
@@ -1556,6 +1648,26 @@ Called out so the docs never overclaim:
 - **Scheduled idle-close job.** See §9 — leave-detection is best-effort; a
   server-side sweep would close conversations idle for N hours regardless of the
   beacon firing.
+- **Proactive-engagement step change** (the path from "doesn't annoy" to
+  "high-level sales agent"), in leverage order:
+  1. **Decide-then-speak beats.** Split each beat into a cheap structured
+     "is there a next-best-action worth saying, or NONE?" call and a speaking
+     call that runs only on substance, briefed with the chosen action. Today
+     one completion is judge and performer at once, and generative models are
+     biased toward producing output when asked; the prompt-level substance
+     gate mitigates but can't remove that. Smallest build, biggest quality win
+     (the goal-regrade and directive-reconcile passes already model the shape).
+  2. **Event-driven beats.** Fire on signals — section change, dwell on one
+     cloth, checkout opened-and-stalled, return visit, order status change —
+     with the idle timer demoted to low-frequency fallback. The funnel beacons
+     and section tracking already capture most of these signals; they just
+     don't trigger beats yet. Fresh input per beat removes confabulation by
+     construction.
+  3. **Per-visit campaign state.** A compact server-side agenda per
+     conversation (subjects touched, offers made, question pending, last beat's
+     action) fed into every beat — today the model re-infers all of that from
+     the raw transcript each time, and the anti-orbit rule leans on exhortation
+     rather than state.
 
 ## 9. Known limitations (inherent)
 

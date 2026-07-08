@@ -3280,25 +3280,39 @@ async function handleChatPost(req: Request): Promise<Response> {
       ? " They are a KNOWN patron — ground the line in their CUSTOMER block (first name, standing, " +
         "an order in their queue, a client-book note), never in generic prospect questions."
       : "";
+    // Admin control: Tuning → Engagement pace → "Substance gate" (default ON).
+    // Off restores the older always-say-something bias for merchants who prefer
+    // constant presence over held beats. (60s-cached read — effectively free.)
+    const beatOutreach = (await loadConciergeData()).config?.outreach as Record<string, unknown> | undefined;
+    const substanceGate = beatOutreach?.substanceGate !== false;
     let decision: string;
     if (cnt <= 2) {
       // First couple: engage — but only with substance. The old "SPEAK now (do
       // not hold)" ordered content on a timer; with nothing new to say the
       // model complied by inventing atmosphere. Substance or silence.
-      decision = "If you have one NEW, CONCRETE thing for THIS shopper — a register fact not yet " +
-        "mentioned, the room or person they brought up, an open goal's next step — send ONE warm, " +
-        "plain line built on it (one or two short sentences, a clerk's speech, no stacked imagery). " +
-        "If you have nothing new and true, reply exactly [HOLD] — do not restate what they can " +
-        "already see, and never invent detail. Don't re-ask or rephrase a question they haven't " +
-        "answered. Persistence is fine; repetition and filler are what annoy.";
+      decision = substanceGate
+        ? "If you have one NEW, CONCRETE thing for THIS shopper — a register fact not yet " +
+          "mentioned, the room or person they brought up, an open goal's next step — send ONE warm, " +
+          "plain line built on it (one or two short sentences, a clerk's speech, no stacked imagery). " +
+          "If you have nothing new and true, reply exactly [HOLD] — do not restate what they can " +
+          "already see, and never invent detail. Don't re-ask or rephrase a question they haven't " +
+          "answered. Persistence is fine; repetition and filler are what annoy."
+        : "SPEAK now (do not hold). Send one warm, specific, PLAIN line drawn from THIS " +
+          "conversation and what you know of them — one or two short sentences, a clerk's speech, " +
+          "every fact verbatim from the register, never invented color. Don't re-ask or rephrase " +
+          "a question they haven't answered — vary the door instead.";
     } else {
       // Later: a light, human "still here" presence — and an honest default
       // toward silence once the doors are spent.
-      decision = "This is a later check-in — keep a light, HUMAN presence, the way a clerk " +
-        "lingers nearby: at most one brief, low-pressure sentence (\"Still here whenever you'd " +
-        "like to pick this up\"). Do not re-pitch, repeat yourself, or dress the register up in " +
-        "new words. If nothing has changed since your last line, reply exactly [HOLD] — resting " +
-        "is better service than talking.";
+      decision = substanceGate
+        ? "This is a later check-in — keep a light, HUMAN presence, the way a clerk " +
+          "lingers nearby: at most one brief, low-pressure sentence (\"Still here whenever you'd " +
+          "like to pick this up\"). Do not re-pitch, repeat yourself, or dress the register up in " +
+          "new words. If nothing has changed since your last line, reply exactly [HOLD] — resting " +
+          "is better service than talking."
+        : "This is a later check-in — keep a light, HUMAN presence: a brief, low-pressure line, " +
+          "warm and unhurried, at most one sentence, plain speech. Do not re-pitch or repeat " +
+          "yourself. If they truly seem done, you may reply exactly [HOLD] to give space.";
     }
     // For an anonymous visitor, occasionally invite them to leave their email so
     // the house can remember them — an account is how their orders and client
@@ -3604,6 +3618,16 @@ async function handleChatPost(req: Request): Promise<Response> {
           if (holdish && (isNudge || isOpener)) {
             send({ hold: 1 });
             finalText = "";
+            // A held beat is invisible in the transcript by design — record it
+            // to the audit log so hold rate is measurable (Actions tab,
+            // action='beat_hold'). The substance gate working looks like holds,
+            // not text; without this row, silence and breakage look identical.
+            pgInsert("concierge_actions", {
+              conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
+              action: "beat_hold", serial: null,
+              payload: { kind: isNudge ? "nudge" : "opener" },
+              result: "beat held — nothing new to say",
+            }).catch(() => { /* audit failures never break the chat */ });
           } else {
             if (holdish) { finalText = "I'm here — what can I help you with?"; }
             for (const piece of chunked(finalText)) send({ t: piece });

@@ -95,11 +95,23 @@ hard to sell; scales the prompt guidance and the client nudge/outreach budget),
 `hooks` (array of true "selling angles" the bot weaves in to build desire),
 `objections` (array of `{trigger, response}` for the Reassure move).
 
-*Engagement pacing* lives under the `outreach` key (object): `nudge1Ms`/
-`nudge2Ms` (in-chat follow-up delays), `dwellMs`/`dwell2Ms` (closed-panel
-reach-out delays), `draftMs` (half-written-order nudge), `idleReach` (bool),
-`nudgeCap` (max in-chat follow-ups), `maxAmbient` (max closed-panel reach-outs).
-The client reads these via `?config=1`.
+*Engagement pacing* lives under the `outreach` key (object), all admin-editable
+in Tuning → Engagement pace: the in-chat follow-up ladder `nudge1Ms`–`nudge5Ms`
+(the fifth repeats), `nudgeCap` (max in-chat follow-ups), `unackedCap` (pause
+after N unacknowledged reach-outs), `holdBudget` (consecutive silent holds
+before resting), opener delays `openerSignedMs`/`openerAnonMs`/
+`openerReengageMs`, `dwellMs`/`dwell2Ms` (closed-panel reach-out delays),
+`draftMs` (half-written-order nudge), `idleReach` (bool), `maxAmbient` (max
+closed-panel reach-outs), `bubbleWithdrawMs` (how long the outreach bubble
+lingers), `substanceGate` (bool, default true — a proactive beat must have
+something new and concrete or it holds; held beats are logged as
+`concierge_actions.action='beat_hold'`), re-engagement keys (`reengageEnabled`,
+`reengageIdleAnonMs`/`reengageMaxAnon`, `reengageIdleSignedMs`/
+`reengageMaxSigned`, `reengageGraceMs`, `reengagePostSaleWindowMs`,
+`reengagePostSaleEnabled`), and `historyKeepMs` (how long a signed-in patron's
+device-kept transcript survives a closed tab; default 7 days). The client reads
+these via `?config=1`; blank/absent keys fall back to built-in defaults scaled
+by `assertiveness`.
 
 *Reporting & retention keys* (Conversion tab / Edition & access — see
 [`ATTRIBUTION.md`](../ATTRIBUTION.md)): `unit_price` (USD behind every revenue
@@ -322,7 +334,7 @@ post-purchase behavior. **Written by:** admin (Procedures tab). **Read by:**
 | `id` | bigint identity PK | Row id. |
 | `conversation_id` | uuid → conversations | Where it happened. |
 | `user_id`,`email` | — | Who. |
-| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resolve_admin_note`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …). |
+| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resolve_admin_note`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …) — plus non-tool audit rows: `attribution_qa` (QA run evidence) and `beat_hold` (a proactive beat that chose silence under the substance gate; payload carries the beat kind, so hold rate is measurable). |
 | `serial` | int | Affected order, if any. |
 | `payload` | jsonb | The tool input. |
 | `result` | text | Outcome summary. |
