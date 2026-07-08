@@ -726,7 +726,11 @@ async function customerBlock(customer: Customer, opening = true): Promise<string
         `first line of the visit; do NOT wait to be asked`
       : `honour ${many ? "each proper one" : "a proper one"} at the first natural moment in the conversation — ` +
         `weave it in yourself, don't wait to be asked, but don't re-greet or restart to do it`;
-    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — ${when}). ${HOUSE_NOTE_GUARD} ACTING on a ` +
+    directiveLine = ` HOUSE INSTRUCTIONS FOR THIS PATRON (left by the team — ${when}). ${HOUSE_NOTE_GUARD} The ` +
+      `instruction's EXACT WORDING below is the sole source of the errand: carry out what IT says, never a similar ` +
+      `errand you remember. If the CLIENT BOOK or a past visit mentions something that resembles it (an earlier ` +
+      `forgotten item, an earlier apology), that one is HISTORY — already done — and its details must not bleed into ` +
+      `this one. ACTING on a ` +
       `proper instruction is ALWAYS just words woven into good service and NEVER needs a tool — so you can always do it, ` +
       `even on a greeting or a nudge where no tools are available; never withhold it for lack of a tool. A STANDING ` +
       `preference you follow every visit and leave open. A ONE-TIME task you carry out at the first natural moment. ` +
@@ -1037,7 +1041,16 @@ const BOOK_EVENTS: Record<string, (serial: number | null, result: string, payloa
   request_mending: (s) => `Logged a mending request for ${fmtNo(s)}.`,
   resend_confirmation: (s, r) => `Re-sent an order email for ${fmtNo(s)}${r ? " (" + r + ")" : ""}.`,
   join_waitlist: () => `Added to the waitlist for the next edition.`,
-  resolve_admin_note: (_s, r) => `Followed a house instruction${r ? `: ${r}` : ""} — checked off.`,
+  // Deliberately content-free: echoing the errand's text into the book is how a
+  // PAST instruction ("cell phone left at the mill") bled into a NEW one
+  // ("keys") — the model reused the remembered wording. The id keeps it
+  // auditable; the errand's content stays only on the note itself.
+  resolve_admin_note: (_s, _r, p) => {
+    const id = p && typeof (p as Record<string, unknown>).note_id === "number"
+      ? (p as Record<string, unknown>).note_id : null;
+    return `Carried out a one-time house instruction${id != null ? ` (#${id})` : ""} — done and checked off. ` +
+      `(A past errand: never repeat or reference its contents.)`;
+  },
 };
 async function bookEvent(
   customer: Customer, action: string, serial: number | null, result: string, payload: unknown,
@@ -2123,6 +2136,11 @@ function engagementBlock(): string {
     "fact (their held number, the 30-night trial) may be offered once as service, never as a hook. Each " +
     "follow-up should feel like a person picking a conversation back up — the shopper should feel accompanied, " +
     "never chased.\n" +
+    "- NEVER re-ask a question they haven't answered — not even reworded. Your unanswered question is still on " +
+    "their screen; asking it three ways reads as pestering. The next beat after an unanswered question is a " +
+    "STATEMENT (one true detail, a small picture, a service note), a different door entirely, or silence — " +
+    "never another question mark. For a KNOWN patron, draw that line from their CUSTOMER block and client " +
+    "book, not from generic discovery.\n" +
     "- [HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY to stay silent on a proactive check-in " +
     "prompt where silence is kinder. NEVER write [HOLD] (or the bare word 'hold') in reply to a message the " +
     "visitor actually sent — to anything they type, including a bare 'hey', always give real, warm words. The " +
@@ -3107,12 +3125,29 @@ async function handleChatPost(req: Request): Promise<Response> {
     const secs = typeof nudge!.seconds === "number" ? Math.round(nudge!.seconds) : 40;
     const cnt = typeof nudge!.count === "number" ? nudge!.count : 1;
     const signedIn = (nudge as Record<string, unknown>)?.signedIn === true;
+    // Hard signal, computed from the actual tail: if the bot's last line was a
+    // question the shopper never answered, the next beat must NOT be another
+    // question — that's how "for you or a gift?" got asked three ways in a row.
+    const lastMsg = validated.messages[validated.messages.length - 1];
+    const unansweredAsk = typeof lastMsg?.content === "string" &&
+      /\?\s*["'”’]?\s*$/.test(lastMsg.content.trim());
+    const askGuard = unansweredAsk
+      ? " YOUR LAST LINE IS AN UNANSWERED QUESTION, still on their screen. Do NOT ask another " +
+        "question and do NOT rephrase the same one — it reads as pestering. Say ONE short line " +
+        "with no question mark at all (a true detail, a small picture, a service note), or hold."
+      : "";
+    const groundNote = signedIn
+      ? " They are a KNOWN patron — ground the line in their CUSTOMER block (first name, standing, " +
+        "an order in their queue, a client-book note), never in generic prospect questions."
+      : "";
     let decision: string;
     if (cnt <= 2) {
       // First couple: engage with substance drawn from the conversation.
       decision = "SPEAK now (do not hold). Send one warm, specific line drawn from THIS " +
         "conversation and what you know of them — the room or person they mentioned, the cloth " +
-        "they lingered on, an open goal. Never generic; something only this shopper would hear.";
+        "they lingered on, an open goal. Never generic; something only this shopper would hear. " +
+        "NEVER re-ask or rephrase a question you already asked in this conversation — an " +
+        "unanswered question stands; open a DIFFERENT door or make a statement instead.";
     } else {
       // Later: a light, human "still here" presence — brief, low-pressure, and
       // sometimes just checking they're alright. You MAY reply exactly [HOLD] to
@@ -3144,7 +3179,7 @@ async function handleChatPost(req: Request): Promise<Response> {
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure. ${decision}${houseNote}${emailNote} ` +
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${askGuard}${groundNote} ${decision}${houseNote}${emailNote} ` +
         `Do not greet them again as if they just arrived.]`,
     });
   }

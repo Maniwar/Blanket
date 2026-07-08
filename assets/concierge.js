@@ -2797,13 +2797,28 @@
 
   function getAccessToken() {
     return new Promise(function (resolve) {
-      if (!sbClient) { resolve(null); return; }
-      try {
-        sbClient.auth.getSession().then(function (r) {
-          var s = r && r.data ? r.data.session : null;
-          resolve((s && s.access_token) ? s.access_token : null);
-        }, function () { resolve(null); });
-      } catch (eG) { resolve(null); }
+      /* A proactive opener can fire ~1.2s after the panel opens — before
+         supabase-js has finished loading. Resolving null then sends a KNOWN
+         patron's request out anonymous, so the opener greets them like a
+         stranger (no name, no order history, generic discovery questions).
+         When a session is expected (we remember their email), wait briefly
+         for the client instead of giving up immediately. */
+      var waited = 0;
+      function attempt() {
+        if (sbClient) {
+          try {
+            sbClient.auth.getSession().then(function (r) {
+              var s = r && r.data ? r.data.session : null;
+              resolve((s && s.access_token) ? s.access_token : null);
+            }, function () { resolve(null); });
+          } catch (eG) { resolve(null); }
+          return;
+        }
+        if (!authEmail || waited >= 3600) { resolve(null); return; }
+        waited += 180;
+        setTimeout(attempt, 180);
+      }
+      attempt();
     });
   }
 
