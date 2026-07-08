@@ -119,6 +119,15 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   to **plain speech** (one or two clerk-plain sentences, at most one image,
   every fact verbatim from the register — never invented rituals, meanings, or
   tallies).
+- **Plain is not blunt; the book is background; status words are law.** Three
+  guardrails on the plain-speech correction: (1) dropping poetry never means
+  dropping warmth — no curtness, no interrogation, no scorekeeping; a patron
+  asking "why buy?" always gets the true service answer (another room, a gift,
+  the trial), never "I have no good answer." (2) The client book *seasons* a
+  line once — an old note (a room, a light) is background, never the recurring
+  agenda, and never a current fact. (3) An order's register status is
+  authoritative: `placed` has not arrived — the bot never describes a cloth as
+  settled in or in use unless the register says delivered.
 - **Vary the door, not the words (proactive pacing).** The bot never repeats or
   rephrases its own unanswered question on a proactive beat. The server scans
   the **whole trailing run** of its own unprompted lines (not just the last
