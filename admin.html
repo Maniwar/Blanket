@@ -1112,17 +1112,43 @@
             <input type="number" id="cfg-nudge1" class="mono-field" min="3" step="1" placeholder="20"></div>
           <div><label class="micro" for="cfg-nudge2">Second follow-up (in chat)</label>
             <input type="number" id="cfg-nudge2" class="mono-field" min="3" step="1" placeholder="45"></div>
+          <div><label class="micro" for="cfg-nudge3">Third follow-up (in chat)</label>
+            <input type="number" id="cfg-nudge3" class="mono-field" min="3" step="1" placeholder="90"></div>
+          <div><label class="micro" for="cfg-nudge4">Fourth follow-up (in chat)</label>
+            <input type="number" id="cfg-nudge4" class="mono-field" min="3" step="1" placeholder="180"></div>
+          <div><label class="micro" for="cfg-nudge5">Later follow-ups (repeats)</label>
+            <input type="number" id="cfg-nudge5" class="mono-field" min="3" step="1" placeholder="300"></div>
           <div><label class="micro" for="cfg-dwell">Reach out when idle (widget closed)</label>
             <input type="number" id="cfg-dwell" class="mono-field" min="5" step="1" placeholder="45"></div>
           <div><label class="micro" for="cfg-draft">Nudge a half-written order</label>
             <input type="number" id="cfg-draft" class="mono-field" min="5" step="1" placeholder="25"></div>
         </div>
-        <p class="note" style="margin:14px 0 6px;">These two are <strong>counts</strong>, not seconds — how many times the concierge may reach out before it rests.</p>
+        <p class="note" style="margin:14px 0 6px;">These are <strong>counts</strong>, not seconds — how many times the concierge may reach out before it rests.</p>
         <div class="ed-grid">
           <div><label class="micro" for="cfg-nudgecap">Max in-chat follow-ups</label>
             <input type="number" id="cfg-nudgecap" class="mono-field" min="0" step="1" placeholder="6"></div>
           <div><label class="micro" for="cfg-maxambient">Max reach-outs (widget closed)</label>
             <input type="number" id="cfg-maxambient" class="mono-field" min="0" step="1" placeholder="2"></div>
+          <div><label class="micro" for="cfg-unackedcap">Pause after unacknowledged reach-outs</label>
+            <input type="number" id="cfg-unackedcap" class="mono-field" min="0" step="1" placeholder="2"></div>
+          <div><label class="micro" for="cfg-holdbudget">Consecutive silent holds before resting</label>
+            <input type="number" id="cfg-holdbudget" class="mono-field" min="0" step="1" placeholder="4"></div>
+        </div>
+        <p class="note" style="margin:14px 0 6px;"><strong>Openers &amp; bubble</strong> — how fast the concierge speaks first when the panel opens, and how long the closed-panel bubble lingers. Seconds; decimals allowed (e.g. 1.2).</p>
+        <div class="ed-grid">
+          <div><label class="micro" for="cfg-opener-signed">Opener · signed-in greet</label>
+            <input type="number" id="cfg-opener-signed" class="mono-field" min="0" step="0.1" placeholder="1.2"></div>
+          <div><label class="micro" for="cfg-opener-anon">Opener · anonymous follow-up</label>
+            <input type="number" id="cfg-opener-anon" class="mono-field" min="0" step="0.1" placeholder="16"></div>
+          <div><label class="micro" for="cfg-opener-reengage">Opener · returning to a live thread</label>
+            <input type="number" id="cfg-opener-reengage" class="mono-field" min="0" step="0.1" placeholder="1.1"></div>
+          <div><label class="micro" for="cfg-bubble-withdraw">Bubble withdraws after</label>
+            <input type="number" id="cfg-bubble-withdraw" class="mono-field" min="3" step="1" placeholder="22"></div>
+        </div>
+        <div style="margin-top:12px;">
+          <label class="micro" for="cfg-history-keep">Kept transcript window (days)</label>
+          <input type="number" id="cfg-history-keep" class="mono-field" min="0" step="1" placeholder="7" style="max-width:120px;">
+          <p class="note" style="margin-top:4px;">A <strong>signed-in</strong> patron's chat transcript survives closing the tab (kept on their device, keyed to their identity, wiped on sign-out). Older than this window, it starts fresh. Anonymous chats always stay per-tab.</p>
         </div>
         <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="cfg-idlereach">
@@ -2927,6 +2953,17 @@ async function loadConfig() {
   const ms2s = function (v) { return (typeof v === 'number' && v > 0) ? Math.round(v / 1000) : ''; };
   $('cfg-nudge1').value = ms2s(o.nudge1Ms);
   $('cfg-nudge2').value = ms2s(o.nudge2Ms);
+  $('cfg-nudge3').value = ms2s(o.nudge3Ms);
+  $('cfg-nudge4').value = ms2s(o.nudge4Ms);
+  $('cfg-nudge5').value = ms2s(o.nudge5Ms);
+  $('cfg-unackedcap').value = (typeof o.unackedCap === 'number') ? o.unackedCap : '';
+  $('cfg-holdbudget').value = (typeof o.holdBudget === 'number') ? o.holdBudget : '';
+  const ms2sDec = function (v) { return (typeof v === 'number' && v >= 0) ? (Math.round(v / 100) / 10) : ''; };
+  $('cfg-opener-signed').value = ms2sDec(o.openerSignedMs);
+  $('cfg-opener-anon').value = ms2sDec(o.openerAnonMs);
+  $('cfg-opener-reengage').value = ms2sDec(o.openerReengageMs);
+  $('cfg-bubble-withdraw').value = ms2s(o.bubbleWithdrawMs);
+  $('cfg-history-keep').value = (typeof o.historyKeepMs === 'number' && o.historyKeepMs > 0) ? Math.round(o.historyKeepMs / 86400000) : '';
   $('cfg-dwell').value = ms2s(o.dwellMs);
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
@@ -3004,6 +3041,24 @@ async function saveEngagement() {
   const o = {};
   const n1 = s2ms('cfg-nudge1'); if (n1) o.nudge1Ms = n1;
   const n2 = s2ms('cfg-nudge2'); if (n2) o.nudge2Ms = n2;
+  const n3 = s2ms('cfg-nudge3'); if (n3) o.nudge3Ms = n3;
+  const n4 = s2ms('cfg-nudge4'); if (n4) o.nudge4Ms = n4;
+  const n5 = s2ms('cfg-nudge5'); if (n5) o.nudge5Ms = n5;
+  const uc = Number($('cfg-unackedcap').value);
+  if ($('cfg-unackedcap').value !== '' && Number.isFinite(uc) && uc >= 0) o.unackedCap = Math.round(uc);
+  const hbg = Number($('cfg-holdbudget').value);
+  if ($('cfg-holdbudget').value !== '' && Number.isFinite(hbg) && hbg >= 0) o.holdBudget = Math.round(hbg);
+  /* opener fields allow 0 (fire immediately) and decimals */
+  const s2msZ = function (id) {
+    const v = Number($(id).value);
+    return ($(id).value !== '' && Number.isFinite(v) && v >= 0) ? Math.round(v * 1000) : null;
+  };
+  const opS = s2msZ('cfg-opener-signed'); if (opS !== null) o.openerSignedMs = opS;
+  const opA = s2msZ('cfg-opener-anon'); if (opA !== null) o.openerAnonMs = opA;
+  const opR = s2msZ('cfg-opener-reengage'); if (opR !== null) o.openerReengageMs = opR;
+  const bw = s2ms('cfg-bubble-withdraw'); if (bw) o.bubbleWithdrawMs = bw;
+  const hk = Number($('cfg-history-keep').value);
+  if ($('cfg-history-keep').value !== '' && Number.isFinite(hk) && hk > 0) o.historyKeepMs = Math.round(hk * 86400000);
   const dw = s2ms('cfg-dwell'); if (dw) o.dwellMs = dw;
   const dr = s2ms('cfg-draft'); if (dr) o.draftMs = dr;
   o.idleReach = $('cfg-idlereach').checked;

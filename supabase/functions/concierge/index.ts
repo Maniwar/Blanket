@@ -2128,10 +2128,17 @@ function sellingBlock(data: ConciergeData): string {
 function engagementBlock(): string {
   return "\nENGAGEMENT & PACING\n" +
     "- You may receive a proactive follow-up prompt when the shopper falls quiet. Each time, DECIDE: " +
-    "speak or give space. SPEAK when a natural thread is open (they asked and paused, you offered a cloth " +
-    "and they went still) — draw the line from THIS conversation and what you know of them, never a generic " +
-    "nudge. Give SPACE when speaking would intrude (they're clearly reading, mid-checkout, just declined, or " +
-    "you already followed up once with no reply).\n" +
+    "speak or give space. The test is SUBSTANCE: speak only when you have something NEW and CONCRETE — a " +
+    "register fact not yet mentioned, a real answer to something they raised, an open goal's next step, a " +
+    "house instruction. If every true thing has already been said, reply [HOLD]. A beat with nothing new " +
+    "is a hold, not a performance — filling silence with restatements or atmosphere reads as noise, and " +
+    "inventing color (rituals, habits, meanings, tallies not in the register) is lying. Silence is service " +
+    "too.\n" +
+    "- PLAIN SPEECH on proactive lines: one or two short, concrete sentences, the way a good clerk speaks. " +
+    "At most one image, and only if it earns its place — never stacked metaphors, never 'poetic'. Every " +
+    "fact verbatim from the register or customer block (counts, cloths, cities, numbers); if you find " +
+    "yourself describing what a blanket 'asks for' or 'holds', rewrite it as something a clerk would " +
+    "actually say, or hold.\n" +
     "- At most two proactive follow-ups, then rest and let them come back. Never manufacture urgency; a real " +
     "fact (their held number, the 30-night trial) may be offered once as service, never as a hook. Each " +
     "follow-up should feel like a person picking a conversation back up — the shopper should feel accompanied, " +
@@ -3233,24 +3240,41 @@ async function handleChatPost(req: Request): Promise<Response> {
     const secs = typeof nudge!.seconds === "number" ? Math.round(nudge!.seconds) : 40;
     const cnt = typeof nudge!.count === "number" ? nudge!.count : 1;
     const signedIn = (nudge as Record<string, unknown>)?.signedIn === true;
-    // Hard signal, computed from the actual tail: if the bot's last line was a
-    // question the shopper never answered, the next beat must NOT be another
-    // question — that's how "for you or a gift?" got asked three ways in a row.
-    const lastMsg = validated.messages[validated.messages.length - 1];
-    const unansweredAsk = typeof lastMsg?.content === "string" &&
-      /\?\s*["'”’]?\s*$/.test(lastMsg.content.trim());
+    // Hard signal, computed from the actual tail. The whole run of consecutive
+    // assistant lines at the end IS the unprompted reach-out streak — if ANY of
+    // them asked a question the shopper never answered, it is still pending.
+    // Checking only the very last line let a statement beat "launder" the
+    // guard: ask → statement → statement → re-ask the same question. Now a
+    // pending question forbids question marks on every beat until they speak.
+    let runStart = validated.messages.length;
+    while (runStart > 0 && validated.messages[runStart - 1].role === "assistant") runStart--;
+    const trailingRun = validated.messages.slice(runStart);
+    const unansweredAsk = trailingRun.some((m) =>
+      typeof m.content === "string" && /\?\s*["'”’]?\s*$/.test(m.content.trim()));
     // NOTE: the guard must never offer holding as the easy out — a hold leaves
     // the unanswered question as the trailing line, so the guard would re-fire
     // on every later beat and the bot would fall silent entirely (a hold loop).
     // It demands a STATEMENT: the conversation keeps breathing, just without
     // another question mark.
     const askGuard = unansweredAsk
-      ? " YOUR LAST LINE WAS A QUESTION they haven't answered — it is still on their screen. On THIS " +
-        "beat do not ask anything and do not rephrase it; SPEAK one short STATEMENT instead (a true " +
-        "cloth detail, a small picture, a service note from their register) with no question mark. " +
-        "Do not go silent just because your question is pending — an ignored question plus silence " +
-        "reads as sulking; one warm statement keeps the room comfortable. The question stays open: " +
-        "once they speak, or after you've offered something new, return to it through a different door."
+      ? " A QUESTION OF YOURS IS STILL UNANSWERED on their screen (look at your own recent lines). " +
+        "On THIS beat do not ask ANYTHING — not that question, not a rephrase, not a different one. " +
+        "If you have one true, NEW, concrete thing to offer (a register fact, a service note), speak " +
+        "it as one short statement with no question mark; otherwise reply exactly [HOLD]. Never fill " +
+        "the gap with atmosphere just to avoid silence. The question stays open: once THEY speak, " +
+        "you may return to it through a different door."
+      : "";
+    // Anti-orbit: successive reach-outs must move, not circle. Whatever the
+    // previous unprompted lines centred on, the next one opens a genuinely
+    // different door — that's what keeps five beats about one Loden from
+    // happening. And when the doors are spent, the honest move is silence,
+    // never invention.
+    const doorNote = cnt >= 2
+      ? " Look at your OWN previous unprompted lines above: whatever cloth, room, or order they " +
+        "centred on, this line must open a DIFFERENT door — a subject you have not yet offered " +
+        "(care, another piece in their register, the workshop). If every door is spent — nothing " +
+        "new and true left to offer — reply exactly [HOLD]; never invent color or restate what " +
+        "is already on their screen in new wrapping."
       : "";
     const groundNote = signedIn
       ? " They are a KNOWN patron — ground the line in their CUSTOMER block (first name, standing, " +
@@ -3258,25 +3282,23 @@ async function handleChatPost(req: Request): Promise<Response> {
       : "";
     let decision: string;
     if (cnt <= 2) {
-      // First couple: engage with substance drawn from the conversation.
-      decision = "SPEAK now (do not hold). Send one warm, specific line drawn from THIS " +
-        "conversation and what you know of them — the room or person they mentioned, the cloth " +
-        "they lingered on, an open goal. Never generic; something only this shopper would hear. " +
-        "Don't re-ask or rephrase a question they haven't answered — vary the door instead " +
-        "(a true detail, a small picture, a service note, a different subject). Persistence is " +
-        "fine; repetition is what annoys.";
+      // First couple: engage — but only with substance. The old "SPEAK now (do
+      // not hold)" ordered content on a timer; with nothing new to say the
+      // model complied by inventing atmosphere. Substance or silence.
+      decision = "If you have one NEW, CONCRETE thing for THIS shopper — a register fact not yet " +
+        "mentioned, the room or person they brought up, an open goal's next step — send ONE warm, " +
+        "plain line built on it (one or two short sentences, a clerk's speech, no stacked imagery). " +
+        "If you have nothing new and true, reply exactly [HOLD] — do not restate what they can " +
+        "already see, and never invent detail. Don't re-ask or rephrase a question they haven't " +
+        "answered. Persistence is fine; repetition and filler are what annoy.";
     } else {
-      // Later: a light, human "still here" presence — brief, low-pressure, and
-      // sometimes just checking they're alright. You MAY reply exactly [HOLD] to
-      // give space, but lean toward a short human line most of the time.
+      // Later: a light, human "still here" presence — and an honest default
+      // toward silence once the doors are spent.
       decision = "This is a later check-in — keep a light, HUMAN presence, the way a clerk " +
-        "lingers nearby: a brief, low-pressure line (\"Still here whenever you'd like to pick " +
-        "this up\", \"Anything else on your mind?\"), warm and unhurried, at most one sentence. " +
-        "Do not re-pitch or repeat yourself." +
-        (unansweredAsk
-          ? " Speak the short statement described above — do not hold on this beat."
-          : " If they truly seem done, you may reply exactly [HOLD] to give space — but most " +
-            "of the time, a short human check-in is right.");
+        "lingers nearby: at most one brief, low-pressure sentence (\"Still here whenever you'd " +
+        "like to pick this up\"). Do not re-pitch, repeat yourself, or dress the register up in " +
+        "new words. If nothing has changed since your last line, reply exactly [HOLD] — resting " +
+        "is better service than talking.";
     }
     // For an anonymous visitor, occasionally invite them to leave their email so
     // the house can remember them — an account is how their orders and client
@@ -3299,7 +3321,7 @@ async function handleChatPost(req: Request): Promise<Response> {
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${askGuard}${groundNote} ${decision}${houseNote}${emailNote} ` +
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${askGuard}${doorNote}${groundNote} ${decision}${houseNote}${emailNote} ` +
         `Do not greet them again as if they just arrived.]`,
     });
   }

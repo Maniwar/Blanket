@@ -90,7 +90,7 @@
   <!-- 5 engagement -->
   <rect x="506" y="416" width="438" height="46" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
   <text x="520" y="437" class="t h" font-size="14">5 · Engagement &amp; pacing</text>
-  <text x="520" y="454" class="m" font-size="11">toggle · proactive-beat rules · [HOLD] signal · never re-ask unanswered questions — vary the door (detail → picture → service note → new subject)</text>
+  <text x="520" y="454" class="m" font-size="11">toggle · substance or silence ([HOLD] when nothing new) · plain speech, register-verbatim facts · never re-ask while a question is pending · new door each beat</text>
 
   <!-- 6 sops -->
   <rect x="506" y="468" width="438" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>

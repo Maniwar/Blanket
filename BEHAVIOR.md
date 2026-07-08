@@ -104,16 +104,41 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   turns that into a hold and shows nothing. It must never write `[HOLD]` in reply
   to a message the visitor actually sent; the token can never reach the reader (the
   pipeline strips it on every path).
+- **Substance or silence (proactive beats).** A proactive beat may speak only
+  when it has something **new and concrete** — a register fact not yet
+  mentioned, an open goal's next step, a house instruction. Nothing new →
+  `[HOLD]`. This inverts the old "SPEAK now (do not hold)" bias, which ordered
+  content on a timer and made the model fill the gap with atmosphere and
+  invented color once the real facts were spent. Proactive lines are also held
+  to **plain speech** (one or two clerk-plain sentences, at most one image,
+  every fact verbatim from the register — never invented rituals, meanings, or
+  tallies).
 - **Vary the door, not the words (proactive pacing).** The bot never repeats or
-  rephrases its own unanswered question on a proactive beat — the server detects
-  an unanswered trailing question and hard-forbids another question mark on that
-  beat; the prompt rotates genuinely different approaches instead (a true cloth
-  detail → a picture in their home → a service note from their register → a
-  different question). The rule is **scoped**, not a gag: it governs only the
-  bot's own unprompted follow-ups; an ambiguous reply invites a gentle clarify,
-  explicit confirmations (a cancellation, a change) are always asked, and an
-  earlier question may be re-opened once the patron speaks again or after new
-  value was offered. Persistence stays wanted; repetition is what annoys.
+  rephrases its own unanswered question on a proactive beat. The server scans
+  the **whole trailing run** of its own unprompted lines (not just the last
+  one — a statement beat used to "launder" the guard, and the same question
+  came back two beats later): while any question of the bot's is pending, every
+  proactive beat is question-free — one true statement if it has one, `[HOLD]`
+  if it doesn't. From the second reach-out on, each beat must open a
+  **different door** — a subject not yet offered — and when every door is
+  spent, the honest move is `[HOLD]`, never invention, so five beats never
+  orbit one cloth. The rule is **scoped**, not a gag: it governs only the
+  bot's own unprompted follow-ups; an ambiguous reply invites a gentle
+  clarify, explicit confirmations (a cancellation, a change) are always asked,
+  and a pending question may be returned to once the patron speaks again.
+  Persistence stays wanted; repetition is what annoys.
+- **Every pacing number is admin-tunable** (Tuning → Engagement pace, stored on
+  the `outreach` config key, no deploy): the five-step in-chat follow-up ladder
+  (`nudge1Ms`–`nudge5Ms`, last repeats), `nudgeCap`, `unackedCap` (pause after
+  N unacknowledged reach-outs), `holdBudget` (consecutive silent holds before
+  resting), opener timings (`openerSignedMs`/`openerAnonMs`/`openerReengageMs`),
+  closed-panel idle thresholds and budgets (`reengageIdle*Ms`, `reengageMax*`,
+  `reengageEnabled`), bubble linger (`bubbleWithdrawMs`), ambient budget
+  (`maxAmbient`), post-sale behavior (`reengageGraceMs`,
+  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`), and the kept-transcript
+  window (`historyKeepMs`). Blank = built-in default, scaled by the
+  assertiveness dial. `FeierabendConcierge.status()` reports the *effective*
+  caps after config and dial are applied.
 - **Every proactive beat carries the full patron context.** In-panel nudges,
   openers, and the **closed-panel re-engagement bubble** all inject the complete
   CUSTOMER block (name, standing, orders, recency, client book, open house
@@ -136,9 +161,16 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   desktop window): the cursor lands in the box on open and returns to it after each
   reply, so you can send back-to-back with Enter. On touch it's left alone so the
   keyboard doesn't spring up.
-- **Session identity is per-tab** (`sessionStorage` key), so a refresh resumes the
-  same conversation; a second tab, or the magic-link sign-in opening a new tab, is
-  a separate conversation by design.
+- **The transcript follows a signed-in patron across tabs.** The live thread is
+  per-tab (`sessionStorage`), but for a **signed-in** patron every save is also
+  kept device-side keyed to their identity — so closing the tab and coming back
+  restores the conversation, for the visitor *and* for the bot (which otherwise
+  restarted from an empty thread and repeated itself). The keep is wiped on
+  sign-out or identity change, expires after an admin-tunable window
+  (`outreach.historyKeepMs`, default 7 days), and never applies to anonymous
+  visitors — their chats stay per-tab for privacy. Server-side, a new tab still
+  opens a fresh conversation row; continuity is the transcript the model sees,
+  not a merged analytics session.
 
 ## Diagnosing a quiet widget (browser console)
 

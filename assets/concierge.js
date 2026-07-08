@@ -1475,7 +1475,7 @@
         b.classList.remove('cx-on');
         setTimeout(function () { b.remove(); if (outreachEl === b) { outreachEl = null; } }, 700);
       }
-    }, 22000);
+    }, (typeof oc.bubbleWithdrawMs === 'number' && oc.bubbleWithdrawMs > 0) ? oc.bubbleWithdrawMs : 22000);
     return true;
   }
 
@@ -1662,6 +1662,15 @@
   function ssSet(key, val) {
     try { window.sessionStorage.setItem(key, val); } catch (e) { /* ignore */ }
   }
+  function lsGet(key) {
+    try { return window.localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function lsSet(key, val) {
+    try { window.localStorage.setItem(key, val); } catch (e) { /* ignore */ }
+  }
+  function lsDel(key) {
+    try { window.localStorage.removeItem(key); } catch (e) { /* ignore */ }
+  }
 
   /* Per-pageview chip state — in memory, so a reload starts fresh and the
      nudges behave predictably. Caps: once per section, CHIP_CAP per view. */
@@ -1754,6 +1763,41 @@
     if (history.length > HISTORY_CAP) { history = history.slice(history.length - HISTORY_CAP); }
     ssSet(HISTORY_KEY, JSON.stringify(history));
     ssSet(OWNER_KEY, authEmail || '');   /* tag whose conversation this is */
+    /* A signed-in patron's transcript also survives the TAB: kept device-side,
+       keyed to their identity, so closing and reopening doesn't lose the thread
+       — for them or for the bot (which otherwise repeats itself against an
+       empty transcript). Anonymous chats stay per-tab for privacy; the keep is
+       wiped on sign-out / identity change (resetConversation). */
+    if (authEmail) {
+      lsSet(KEEP_KEY, JSON.stringify({ owner: authEmail, ts: Date.now(), turns: history }));
+    }
+  }
+  var KEEP_KEY = 'cx-history-keep';
+  function keepWindowMs() {
+    var o = orCfg();
+    return (typeof o.historyKeepMs === 'number' && o.historyKeepMs > 0) ? o.historyKeepMs : 7 * 86400000;
+  }
+  /* Adopt the kept transcript for this identity when the tab has none of its
+     own. Runs whenever a signed-in identity resolves; a stale keep (older than
+     the admin's window) is discarded instead of resurrected. */
+  function restoreKeptHistory() {
+    if (!authEmail || history.length || storedHistoryLen() > 0) { return; }
+    var stash = null;
+    try { stash = JSON.parse(lsGet(KEEP_KEY) || 'null'); } catch (eKH) { stash = null; }
+    if (!stash || stash.owner !== authEmail) { return; }
+    if (typeof stash.ts !== 'number' || (Date.now() - stash.ts) > keepWindowMs()) { lsDel(KEEP_KEY); return; }
+    var turns = stash.turns, i, t;
+    if (Object.prototype.toString.call(turns) !== '[object Array]' || !turns.length) { return; }
+    for (i = 0; i < turns.length; i++) {
+      t = turns[i];
+      if (t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string') {
+        history.push({ role: t.role, content: t.content, ts: (typeof t.ts === 'number') ? t.ts : 0 });
+      }
+    }
+    if (history.length) {
+      saveHistory();
+      if (panelOpen && msgsEl) { renderHistory(); }
+    }
   }
   function storedHistoryLen() {
     try { var a = JSON.parse(ssGet(HISTORY_KEY) || '[]'); return (Object.prototype.toString.call(a) === '[object Array]') ? a.length : 0; } catch (e) { return 0; }
@@ -2441,7 +2485,7 @@
       if (nudgeCount > 0) { nudgeCount--; }
       holdAttempts++;
       setStreaming(false);
-      if (holdAttempts < 4) { scheduleNudge(true); } /* keep a light presence a while longer */
+      if (holdAttempts < effHoldBudget()) { scheduleNudge(true); } /* keep a light presence a while longer */
       return;
     }
     var content = shell.getText();
@@ -2476,6 +2520,18 @@
   var NUDGE_DELAYS = [20000, 45000, 90000, 180000, 300000]; /* last value repeats */
   var NUDGE_CAP = 6;            /* total proactive check-ins before it fully rests */
   var UNACKED_CAP = 2;          /* stop after this many reach-outs with no sign of life */
+  var HOLD_BUDGET = 4;          /* consecutive silent holds before the bot rests */
+  /* Effective caps: the admin's outreach config wins outright; otherwise the
+     built-in default, shifted by the assertiveness dial where noted. */
+  function effUnackedCap() {
+    var o = orCfg();
+    if (typeof o.unackedCap === 'number' && o.unackedCap >= 0) { return o.unackedCap; }
+    return assertLevel() >= 4 ? 3 : UNACKED_CAP;
+  }
+  function effHoldBudget() {
+    var o = orCfg();
+    return (typeof o.holdBudget === 'number' && o.holdBudget >= 0) ? o.holdBudget : HOLD_BUDGET;
+  }
   function scheduleNudge(spacious) {
     clearNudge();
     if (isDemo()) { noteSkip('nudge: demo mode'); return; }
@@ -2489,7 +2545,7 @@
     /* Don't talk into the void: if the last couple of reach-outs went completely
        unacknowledged (no scroll, tap, type, or return to the tab), the visitor
        isn't watching — pause. Any sign of life resets this and resumes us. */
-    var ucap = assertLevel() >= 4 ? 3 : UNACKED_CAP;
+    var ucap = effUnackedCap();
     if (unacked >= ucap) { noteSkip('nudge: ' + unacked + ' reach-outs unacknowledged (no scroll/tap/type) — paused until a sign of life'); return; }
     /* only when a real exchange is underway and the last word was the bot's */
     if (!history.length || history[history.length - 1].role !== 'assistant') { noteSkip('nudge: waiting — last word is the visitor\'s or no exchange yet'); return; }
@@ -2502,6 +2558,9 @@
     var wait = NUDGE_DELAYS[idx];
     if (idx === 0 && typeof o.nudge1Ms === 'number') { wait = o.nudge1Ms; }
     if (idx === 1 && typeof o.nudge2Ms === 'number') { wait = o.nudge2Ms; }
+    if (idx === 2 && typeof o.nudge3Ms === 'number') { wait = o.nudge3Ms; }
+    if (idx === 3 && typeof o.nudge4Ms === 'number') { wait = o.nudge4Ms; }
+    if (idx >= 4 && typeof o.nudge5Ms === 'number') { wait = o.nudge5Ms; }
     wait = Math.round(wait * assertDelayMult());          /* assertiveness scales the pace */
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
     nudgeTimer = setTimeout(function () {
@@ -2546,15 +2605,19 @@
     }
     var hadUser = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { hadUser = true; break; } }
+    var oo = orCfg();
     var kind = '', delay = 1100;
     if (last && last.role === 'assistant' && hadUser) {
-      kind = 'reengage'; delay = 1100;           /* came back to a live thread — pick it up now */
+      kind = 'reengage';                         /* came back to a live thread — pick it up now */
+      delay = (typeof oo.openerReengageMs === 'number' && oo.openerReengageMs >= 0) ? oo.openerReengageMs : 1100;
     } else if (!history.length) {
       kind = 'greet';
       /* a known patron is greeted personally right away; a fresh/anonymous
          visitor gets a warm follow-up on the house greeting after an idle beat,
          so they're never left in an open, silent panel */
-      delay = authEmail ? 1200 : 16000;
+      delay = authEmail
+        ? ((typeof oo.openerSignedMs === 'number' && oo.openerSignedMs >= 0) ? oo.openerSignedMs : 1200)
+        : ((typeof oo.openerAnonMs === 'number' && oo.openerAnonMs >= 0) ? oo.openerAnonMs : 16000);
     }
     if (!kind) { noteSkip('opener: last word is the visitor\'s — the bot replies rather than re-opens'); return; }
     reengagedThisOpen = true;
@@ -2910,6 +2973,7 @@
     abortStream();
     history = [];
     try { ssSet(HISTORY_KEY, '[]'); } catch (eRC) { /* ignore */ }
+    lsDel(KEEP_KEY);             /* the kept transcript belongs to the old identity */
     ssSet(OWNER_KEY, authEmail || '');
     rotateSessionKey();
     reengagedThisOpen = false;
@@ -2972,6 +3036,7 @@
              continuity. The next turn backfills identity server-side, and we let
              the concierge acknowledge them now that it knows who they are. */
           ssSet(OWNER_KEY, em);
+          restoreKeptHistory();
           if (panelOpen && msgsEl && !streaming) {
             reengagedThisOpen = false;
             if (!history.length) { renderHistory(); }
@@ -2997,6 +3062,7 @@
         resetConversation();
       } else {
         ssSet(OWNER_KEY, em);
+        if (em) { restoreKeptHistory(); }
         if (panelOpen && !streaming && !history.length && msgsEl) { renderHistory(); }
       }
     }
@@ -3573,7 +3639,7 @@
     status: function () {
       var oc = orCfg();
       var cap = (typeof oc.nudgeCap === 'number') ? oc.nudgeCap : (NUDGE_CAP + (assertLevel() - 3));
-      var ucap = assertLevel() >= 4 ? 3 : UNACKED_CAP;
+      var ucap = effUnackedCap();
       var spoke = false, i;
       for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
       return {
@@ -3588,6 +3654,7 @@
         unacked: unacked,
         unackedCap: ucap,
         holdAttempts: holdAttempts,
+        holdBudget: effHoldBudget(),
         reengageCount: reengageCount,
         historyTurns: history.length,
         lastRole: history.length ? history[history.length - 1].role : null,
