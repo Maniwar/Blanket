@@ -140,6 +140,38 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   same conversation; a second tab, or the magic-link sign-in opening a new tab, is
   a separate conversation by design.
 
+## Diagnosing a quiet widget (browser console)
+
+The concierge has many *deliberate* reasons to stay silent (quiet mode, spent
+budgets, an anonymous visitor who hasn't typed, a congrats grace window after a
+sale). To make silence readable instead of a mystery, the widget exposes
+diagnostics on any page where it's mounted — open the browser console and run:
+
+- **`FeierabendConcierge.status()`** — a snapshot of the engagement state:
+  signed-in email, `panelOpen`, `quietMode`, `wrappedUp`, whether the visitor
+  has typed, nudge count vs. effective cap, unacknowledged reach-outs vs. cap,
+  hold attempts, history length and last speaker, `entryMode` (how this
+  conversation began: typed / opener / nudge / tapped outreach),
+  `nudgeTimerArmed` (a follow-up is scheduled right now), and a `reengage`
+  object for the closed-panel bubble (enabled, count vs. max, fires-after-idle
+  threshold vs. how long you've actually been idle, whether page activity has
+  been seen, whether a bubble is on screen, post-sale grace).
+- **`status().lastSkip`** — the headline field: names, in plain language with a
+  timestamp, the exact gate that stopped the **most recent** proactive beat
+  (e.g. *"reengage: not idle long enough — fires after 30s still; last activity
+  4s ago (moving the mouse resets the clock)"*).
+- **`window.FEIER_CX_DEBUG = true`** — from then on, every skipped beat also
+  logs live to the console (`[concierge] skip: …`) as it happens.
+- **`FeierabendConcierge.open()` / `.close()`** — programmatic panel control
+  (`open('question')` opens and sends the question).
+
+Instrumented beats: in-panel follow-ups (`scheduleNudge`), the on-open
+opener, the closed-panel re-engagement tick, and the ambient outreach bubble —
+every early return names itself. One structural guarantee worth knowing: an
+open panel never sits with **no** beat armed — if the opener stands down (for
+example, the outreach line you just tapped *is* the opener), the light-presence
+follow-up loop is armed in its place.
+
 ## Journey-aware goals
 - Each goal can carry one or more **sections** (page/journey stages), set as
   checkboxes in Procedures → Conversation goals. The bot leads with an open goal

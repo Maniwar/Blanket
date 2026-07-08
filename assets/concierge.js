@@ -3,7 +3,10 @@
    The Mill Concierge · assets/concierge.js
    Self-contained. No dependencies. Loaded with defer.
    All classes and ids are prefixed 'cx-'.
-   Public API: window.FeierabendConcierge = { open(prefill), close() }
+   Public API: window.FeierabendConcierge = { open(prefill), close(), status() }
+   Diagnostics: status() snapshots the engagement state incl. lastSkip (why the
+   most recent proactive beat did NOT fire); window.FEIER_CX_DEBUG = true logs
+   each skip live. Documented in BEHAVIOR.md ("Diagnosing a quiet widget").
    ============================================================ */
 (function () {
   'use strict';
@@ -1417,13 +1420,15 @@
      `repeatable` skips the once-per-session seen-guard for beats that manage
      their own budget (re-engagement). */
   function showOutreach(kind, text, exempt, repeatable) {
-    if (!text || panelOpen || outreachEl || quietMode) { return false; }
-    if (!repeatable && orSeen(kind)) { return false; }
+    if (!text || panelOpen) { return false; }
+    if (outreachEl) { noteSkip('bubble(' + kind + '): another outreach bubble is already on screen'); return false; }
+    if (quietMode) { noteSkip('bubble(' + kind + '): QUIET MODE is on for this tab'); return false; }
+    if (!repeatable && orSeen(kind)) { noteSkip('bubble(' + kind + '): already shown this visit — one-time bubbles never repeat'); return false; }
     /* ambient reach-out budget: admin maxAmbient wins, else scales with
        assertiveness (driving settings earn one more knock). */
     var oc = orCfg();
     var ambientCap = (typeof oc.maxAmbient === 'number') ? oc.maxAmbient : (assertLevel() >= 4 ? 3 : 2);
-    if (!exempt && orCount() >= ambientCap) { return false; }
+    if (!exempt && orCount() >= ambientCap) { noteSkip('bubble(' + kind + '): ambient reach-out budget spent (' + orCount() + '/' + ambientCap + ')'); return false; }
     if (!repeatable) { orMark(kind); }
     if (!exempt) { orBump(); }
     /* the launcher carries an unread mark until the visitor engages */
@@ -2111,14 +2116,28 @@
     };
   }
   function reengageTick() {
-    if (isDemo() || panelOpen || quietMode || streaming || outreachEl || reengageBusy) { return; }
+    /* panel open / demo are not diagnostic — stay silent so lastSkip keeps
+       the in-panel story; everything below names its gate. */
+    if (isDemo() || panelOpen || reengageBusy) { return; }
+    if (quietMode) { noteSkip('reengage: QUIET MODE is on for this tab (typing a message lifts it)'); return; }
+    if (streaming) { noteSkip('reengage: a reply is streaming'); return; }
+    if (outreachEl) { noteSkip('reengage: an outreach bubble is already on screen (it withdraws by itself after ~22s)'); return; }
     var pc = reengagePostCfg();
     var pa = purchaseAgeMs();
-    if (pa !== null && pa < pc.graceMs) { return; }              /* fresh sale — congrats owns it */
-    if (!hadActivity || !activeSinceReengage) { return; }        /* need fresh activity */
+    if (pa !== null && pa < pc.graceMs) {                        /* fresh sale — congrats owns it */
+      noteSkip('reengage: fresh commission — congrats grace window, ' + Math.ceil((pc.graceMs - pa) / 1000) + 's left');
+      return;
+    }
+    if (!hadActivity) { noteSkip('reengage: no page activity seen yet this visit — scroll/tap/move first (console use doesn\'t count)'); return; }
+    if (!activeSinceReengage) { noteSkip('reengage: waiting for FRESH activity since the last reach-out (so someone who truly left isn\'t nagged)'); return; }
     var c = reengageCfg();
-    if (!c.enabled || reengageCount >= c.max) { return; }
-    if (Date.now() - lastActivityTs < c.idleMs) { return; }      /* not idle long enough yet */
+    if (!c.enabled) { noteSkip('reengage: turned OFF in admin (outreach.reengageEnabled)'); return; }
+    if (reengageCount >= c.max) { noteSkip('reengage: budget spent (' + reengageCount + '/' + c.max + ' this visit)'); return; }
+    var idleFor = Date.now() - lastActivityTs;
+    if (idleFor < c.idleMs) {                                    /* not idle long enough yet */
+      noteSkip('reengage: not idle long enough — fires after ' + Math.round(c.idleMs / 1000) + 's still; last activity ' + Math.round(idleFor / 1000) + 's ago (moving the mouse resets the clock)');
+      return;
+    }
     /* Past the grace but recently purchased → re-engage for a SECOND sale
        (companion cloth / gift), not "still eyeing" — unless the admin turned the
        post-sale beat off, in which case stay quiet through the window. */
@@ -2504,6 +2523,16 @@
      purely anonymous first-timer (the static greeting serves them), or right on
      the heels of an outreach line they just tapped. */
   function maybeOpenerOnOpen() {
+    openerOnOpenCore();
+    /* Whatever the opener decided, the panel must never sit silent with no
+       beat armed: if no opener timer is pending and nothing is streaming,
+       start the light-presence loop. This covers the tapped-outreach path —
+       the tapped line IS the opener, but before this fallback nothing ever
+       armed the follow-ups, so the bot went mute until the visitor typed.
+       scheduleNudge applies all its own gates (demo/quiet/caps/anonymous). */
+    if (panelOpen && !nudgeTimer && !streaming) { scheduleNudge(); }
+  }
+  function openerOnOpenCore() {
     if (isDemo()) { noteSkip('opener: demo mode'); return; }
     if (quietMode) { noteSkip('opener: QUIET MODE is on for this tab (persists across reload; typing a message lifts it)'); return; }
     if (streaming) { noteSkip('opener: a reply is already streaming'); return; }
@@ -3563,6 +3592,21 @@
         historyTurns: history.length,
         lastRole: history.length ? history[history.length - 1].role : null,
         entryMode: entryMode,
+        nudgeTimerArmed: !!nudgeTimer,
+        reengage: (function () {
+          var c = reengageCfg(), pc = reengagePostCfg(), pa = purchaseAgeMs();
+          return {
+            enabled: c.enabled,
+            count: reengageCount,
+            max: c.max,
+            firesAfterIdleMs: c.idleMs,
+            idleForMs: hadActivity ? (Date.now() - lastActivityTs) : null,
+            hadPageActivity: hadActivity,
+            freshActivitySinceLast: activeSinceReengage,
+            bubbleOnScreen: !!outreachEl,
+            postSaleGraceActive: pa !== null && pa < pc.graceMs
+          };
+        })(),
         lastSkip: lastSkip || '(no proactive beat has been skipped yet)'
       };
     }
