@@ -83,6 +83,18 @@ excluded from revenue but keep their attribution):
   depth. This is the optimization surface: feed what appears (starters, goals,
   selling angles on those sections), investigate what never does.
 
+**Nothing is a dead end.** Every Conversion number drills into the records
+behind it: the tiles and split-bar legend open the register pre-filtered to
+that tier; the rate tile opens Conversations filtered to 🛒 commissioned
+chats; each ✳ commission row jumps to the **conversation that drove it**
+(`chat ↗`) or its register row (`order ↗`); an order drawer's attribution line
+opens the driving chat. Filters match the rest of the app — the register has
+attribution-tier chips beside the status chips, and Conversations has a
+**🛒 commissioned chats** checkbox beside the house-note one. **Export**: the
+Conversion tab's Export CSV downloads the range with tier + click-context
+columns (`attribution`, `attr_entry`, `attr_section`, `attr_turns`), and the
+regular register export carries the same columns.
+
 **Conversations-tab tiles**: *Assisted commissions* = all-time kept orders with
 a chat link (both tiers); *Assisted revenue* = that count × the register price.
 

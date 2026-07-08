@@ -1451,6 +1451,9 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
           <label class="ct-check" title="Only chats where the concierge acted on a house note">
             <input type="checkbox" id="convo-house"> 🏷 house-note chats
           </label>
+          <label class="ct-check" title="Only chats whose session produced a commission (chat-assisted or ✳ concierge-initiated — see ATTRIBUTION.md)">
+            <input type="checkbox" id="convo-comm"> 🛒 commissioned chats
+          </label>
           <button id="convo-apply" class="btn">Apply</button>
           <button id="convo-clear" class="btn ghost">Clear</button>
         </div>
@@ -1500,7 +1503,8 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <div class="ct-row" style="margin-bottom:18px;">
         <span class="ct-tag">Range</span>
         <div id="cv-range" class="ord-chips" style="margin-bottom:0;"></div>
-        <button id="cv-refresh" class="btn ghost" type="button" style="margin-left:auto;">Refresh</button>
+        <button id="cv-export" class="btn ghost" type="button" style="margin-left:auto;" title="Every order in the range with its attribution tier and click context — same columns as the register export">Export CSV</button>
+        <button id="cv-refresh" class="btn ghost" type="button">Refresh</button>
       </div>
 
       <div class="metrics" id="cv-tiles">
@@ -2003,6 +2007,9 @@ function wireStatic() {
     withBusy($('save-price'), savePrice);
   });
   $('cv-refresh').addEventListener('click', function () { loadConversion(); });
+  $('cv-export').addEventListener('click', function () {
+    exportOrdersCsv(state.cvOrders || [], 'conversion-' + (state.cvDays ? state.cvDays + 'd' : 'all') + '.csv');
+  });
   $('admin-add-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
     withBusy($('admin-add-btn'), addAdmin);
@@ -2076,6 +2083,7 @@ function wireStatic() {
   $('convo-rating').addEventListener('change', renderConversations);
   // House-note-chats filter needs a server round-trip (it constrains by id set).
   $('convo-house').addEventListener('change', function () { loadConversations(); });
+  $('convo-comm').addEventListener('change', function () { loadConversations(); });
   // Any MANUAL use of the search box exits the exact "this patron's chats" scope
   // (state.convoIdentity), so a typed email/word does its normal fuzzy search —
   // including finding chats that MENTION an email. Programmatic .value sets (from
@@ -2084,7 +2092,7 @@ function wireStatic() {
   $('convo-apply').addEventListener('click', function () { state.convoIdentity = null; }, true);
   // Clear also unchecks the house filter and drops the identity scope — capture
   // phase, so both are off before wireFilter reloads.
-  $('convo-clear').addEventListener('click', function () { $('convo-house').checked = false; state.convoIdentity = null; }, true);
+  $('convo-clear').addEventListener('click', function () { $('convo-house').checked = false; $('convo-comm').checked = false; state.convoIdentity = null; }, true);
   $('wl-refresh').addEventListener('click', function () { withBusy($('wl-refresh'), loadWaitlist); });
   $('wl-export').addEventListener('click', exportWaitlistCsv);
 }
@@ -5093,10 +5101,18 @@ function exportOrdersCsv(orders, filename) {
   if (!orders || !orders.length) { toast('Nothing to export', true); return; }
   const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
   const head = ['placed_at', 'serial', 'cancelled_serial', 'status', 'colorway', 'email', 'name',
-    'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking', 'ip'];
+    'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking', 'ip',
+    'attribution', 'attr_entry', 'attr_section', 'attr_turns'];
   const lines = [head.join(',')];
   orders.forEach(function (o) {
-    lines.push(head.map(function (k) { return esc(k === 'ip' ? orderIp(o) : o[k]); }).join(','));
+    const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : {};
+    const extra = {
+      attribution: o.chat_via === 'concierge' ? 'concierge-initiated' : o.chat_session ? 'chat-assisted' : 'unassisted',
+      attr_entry: m.entry, attr_section: m.section, attr_turns: m.turns
+    };
+    lines.push(head.map(function (k) {
+      return esc(k === 'ip' ? orderIp(o) : (k in extra ? extra[k] : o[k]));
+    }).join(','));
   });
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
@@ -5422,14 +5438,18 @@ function openOrderDrawer(o) {
       : o.chat_session
         ? 'Chat-assisted — a conversation ran in the buying session'
         : 'Unassisted — no conversation in the buying session';
-    const aLine = el('div', 'dmicro', attr);
+    const aLine = el('div', 'dmicro' + (o.chat_session ? ' dlink' : ''), attr + (o.chat_session ? '  ↗' : ''));
     if (o.chat_via === 'concierge') aLine.style.color = 'var(--brass-soft)';
     const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : null;
-    if (m && (m.section || m.entry || typeof m.turns === 'number')) {
-      aLine.title = 'At the commission click — ' +
+    const ctx = m && (m.section || m.entry || typeof m.turns === 'number')
+      ? 'At the commission click — ' +
         [m.section && ('section: ' + m.section), m.entry && ('entry: ' + m.entry),
-         typeof m.turns === 'number' && (m.turns + ' turns')].filter(Boolean).join(' · ');
-    }
+         typeof m.turns === 'number' && (m.turns + ' turns')].filter(Boolean).join(' · ')
+      : '';
+    if (o.chat_session) {
+      aLine.title = (ctx ? ctx + '. ' : '') + 'Click to open the driving conversation.';
+      aLine.addEventListener('click', function () { closeDrawer(); cvOpenChat(o); });
+    } else if (ctx) aLine.title = ctx;
     pOv.appendChild(aLine);
   }
   if (oip) {
@@ -6477,9 +6497,32 @@ function renderCustomers() {
   }
   chips.appendChild(chip('', 'All', null));
   STATUS_ORDER.forEach(function (s) { if (counts[s]) chips.appendChild(chip(s, s, STATUS_COLOR[s])); });
+
+  // Attribution tier chips — the same toggle pattern as status, so a merchant can
+  // narrow the register to ✳ concierge-initiated / chat-assisted / unassisted
+  // commissions (orders.chat_via + chat_session; ATTRIBUTION.md).
+  const tierOf = function (o) {
+    return o.chat_via === 'concierge' ? 'initiated' : o.chat_session ? 'assisted' : 'unassisted';
+  };
+  const tCounts = { initiated: 0, assisted: 0, unassisted: 0 };
+  shown.forEach(function (o) { tCounts[tierOf(o)]++; });
+  [['initiated', '✳ initiated', '#C49B5B'], ['assisted', 'chat-assisted', '#7a915a'], ['unassisted', 'unassisted', '#4a5560']].forEach(function (t) {
+    if (!tCounts[t[0]]) return;
+    const c = el('div', 'ord-chip' + (state.custVia === t[0] ? ' on' : ''));
+    const sw = el('span', 'swatch'); sw.style.background = t[2]; c.appendChild(sw);
+    c.appendChild(document.createTextNode(t[1] + ' '));
+    c.appendChild(el('span', 'n', String(tCounts[t[0]])));
+    c.title = 'Attribution tier — see ATTRIBUTION.md';
+    c.addEventListener('click', function () {
+      state.custVia = (state.custVia === t[0]) ? '' : t[0];
+      renderCustomers();
+    });
+    chips.appendChild(c);
+  });
   list.appendChild(chips);
 
   if (state.custChip) shown = shown.filter(function (o) { return (o.status || '—') === state.custChip; });
+  if (state.custVia) shown = shown.filter(function (o) { return tierOf(o) === state.custVia; });
 
   // Sort the loaded set.
   const sk = state.custSort.key, dir = state.custSort.dir;
@@ -6709,6 +6752,19 @@ async function loadConversations(more) {
     houseIds = [...acted];
   }
 
+  // Commissioned chats — conversations whose session produced an order (the
+  // orders.chat_session ↔ session_key attribution link; both tiers). Constrains
+  // by session_key set, mirroring the house-note filter's id-set approach.
+  const commOnly = $('convo-comm') && $('convo-comm').checked;
+  let commKeys = null;
+  if (commOnly) {
+    const or = await sb.from('orders').select('chat_session')
+      .not('chat_session', 'is', null).limit(10000);
+    const seen = new Set();
+    if (!or.error) (or.data || []).forEach(function (r) { if (r.chat_session) seen.add(r.chat_session); });
+    commKeys = [...seen];
+  }
+
   const from = pageState.convo * PAGE;
   let q = sb.from('concierge_conversations').select('*')
     .order('created_at', { ascending: false })
@@ -6716,6 +6772,7 @@ async function loadConversations(more) {
   if (df) q = q.gte('created_at', df);
   if (dt) q = q.lte('created_at', dt);
   if (houseOnly) q = q.in('id', houseIds.length ? houseIds : ['00000000-0000-0000-0000-000000000000']);
+  if (commOnly) q = q.in('session_key', (commKeys && commKeys.length) ? commKeys : ['-none-']);
   if (isUuid) {
     // match either the conversation id or its session key
     q = q.or('id.eq.' + kw + ',session_key.eq.' + kw);
@@ -6882,10 +6939,48 @@ function cvBar(parts) {
     const sw = el('span', 'sw'); sw.style.background = p.color;
     li.appendChild(sw);
     li.appendChild(document.createTextNode(p.label + ' · ' + p.n + (total ? ' (' + Math.round(100 * p.n / total) + '%)' : '')));
+    if (p.onClick && p.n) {
+      li.style.cursor = 'pointer';
+      li.style.textDecoration = 'underline';
+      li.style.textUnderlineOffset = '3px';
+      li.title = p.clickTitle || 'Open the list behind this number';
+      li.addEventListener('click', p.onClick);
+    }
     leg.appendChild(li);
   });
   wrap.appendChild(leg);
   return wrap;
+}
+
+/* Open the Orders register pre-filtered to an attribution tier — the drill
+   behind the Conversion tab's split legend. */
+function cvOpenOrders(tier) {
+  state.custVia = tier || '';
+  state.custChip = '';
+  state.custView = 'orders';
+  if ($('cust-search')) $('cust-search').value = '';
+  if ($('cust-serial')) $('cust-serial').value = '';
+  activateTab('customers');
+  loadCustomers();
+}
+
+/* Open the conversation that drove an order (orders.chat_session →
+   concierge_conversations.session_key; several rows can share a key, so pick
+   the latest one begun before the order — the chat that was live at checkout). */
+async function cvOpenChat(o) {
+  if (!o || !o.chat_session) { toast('This order carries no chat link.', true); return; }
+  const r = await sb.from('concierge_conversations').select('id,created_at')
+    .eq('session_key', o.chat_session)
+    .order('created_at', { ascending: false }).limit(10);
+  if (r.error) { fail('Find driving chat', r.error); return; }
+  const rows = r.data || [];
+  if (!rows.length) {
+    toast('The driving conversation is no longer stored (pruned by retention, or never logged).', true);
+    return;
+  }
+  const before = rows.filter(function (c) { return o.placed_at && c.created_at <= o.placed_at; });
+  const pick = before.length ? before[0] : rows[rows.length - 1];
+  jumpToConversation(pick.id, o.placed_at || null, null);
 }
 
 async function loadConversion() {
@@ -6893,7 +6988,8 @@ async function loadConversion() {
   cvRangeChips();
   const since = cvSince();
 
-  let oq = sb.from('orders').select('serial,status,chat_session,chat_via,chat_meta,placed_at').limit(10000);
+  // Full rows so the range can be exported with the standard orders CSV shape.
+  let oq = sb.from('orders').select('*').order('placed_at', { ascending: false }).limit(10000);
   let cq = sb.from('concierge_conversations').select('id,sales_stage,created_at').limit(10000);
   if (since) { oq = oq.gte('placed_at', since); cq = cq.gte('created_at', since); }
   const [ores, cres] = await Promise.all([oq, cq]);
@@ -6901,6 +6997,7 @@ async function loadConversion() {
   if (cres.error) { fail('Conversion — conversations', cres.error); return; }
   const orders = ores.data || [];
   const convos = cres.data || [];
+  state.cvOrders = orders;   // what Export CSV on this tab downloads
 
   // Attribution tiers over KEPT (non-cancelled) commissions. An order placed
   // before chat_via existed still counts as chat-assisted via chat_session.
@@ -6917,13 +7014,30 @@ async function loadConversion() {
   $('cv-rate').textContent = convos.length ? (Math.round(1000 * attributed / convos.length) / 10) + '%' : '—';
   $('cv-rate').title = attributed + ' attributed commissions ÷ ' + convos.length + ' conversations in range';
 
+  // Every tile drills into the list behind it (onclick assignment, not
+  // addEventListener, so re-loading the report never stacks handlers).
+  const tileGo = function (id, fn, title) {
+    const tile = $(id).parentElement;
+    tile.style.cursor = 'pointer'; tile.title = title; tile.onclick = fn;
+  };
+  tileGo('cv-orders', function () { cvOpenOrders(''); }, 'Open the register (all orders)');
+  tileGo('cv-initiated', function () { cvOpenOrders('initiated'); }, 'Open these orders in the register');
+  tileGo('cv-assisted', function () { cvOpenOrders('assisted'); }, 'Open these orders in the register');
+  tileGo('cv-rate', function () {
+    if ($('convo-comm')) $('convo-comm').checked = true;
+    activateTab('conversations'); loadConversations();
+  }, 'Open the commissioned chats in Conversations');
+
   // Split bar — the tier mix, plus cancelled shown separately for honesty.
   const split = $('cv-split');
   split.textContent = '';
   split.appendChild(cvBar([
-    { label: '✳ Concierge-initiated', n: initiated.length, color: '#C49B5B' },
-    { label: 'Chat-assisted', n: ambient.length, color: '#7a915a' },
-    { label: 'Unassisted', n: unassisted.length, color: '#4a5560' }
+    { label: '✳ Concierge-initiated', n: initiated.length, color: '#C49B5B',
+      onClick: function () { cvOpenOrders('initiated'); }, clickTitle: 'Open these orders in the register' },
+    { label: 'Chat-assisted', n: ambient.length, color: '#7a915a',
+      onClick: function () { cvOpenOrders('assisted'); }, clickTitle: 'Open these orders in the register' },
+    { label: 'Unassisted', n: unassisted.length, color: '#4a5560',
+      onClick: function () { cvOpenOrders('unassisted'); }, clickTitle: 'Open these orders in the register' }
   ]));
   const cancelled = orders.length - kept.length;
   const revLine = el('p', 'micro');
@@ -6989,6 +7103,37 @@ async function loadConversion() {
     if (turnsN) addRow('Conversation depth', 'avg ' + Math.round(turnsSum / turnsN) + ' turns before the commission click');
     bd.appendChild(rows);
     bd.appendChild(el('p', 'micro', 'Read: which sections and proactive beats produce taps on “Begin the commission” — raise what works (starters, goals, angles on those sections), rethink what never appears.'));
+
+    // The orders themselves — each drills into the chat that drove it, or the
+    // register row, so a number here is never a dead end.
+    bd.appendChild(el('div', 'dsub-lbl', 'The commissions behind these numbers'));
+    const olist = el('div', 'cv-rows');
+    initiated.slice(0, 50).forEach(function (o) {
+      const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : {};
+      const r = el('div', 'row');
+      const k = el('span', 'k', 'Nº ' + (o.serial != null ? Number(o.serial).toLocaleString('en-US') : (o.cancelled_serial || '—')));
+      r.appendChild(k);
+      r.appendChild(el('span', 'v',
+        fmtWhen(o.placed_at) + '  ·  ' + (o.email || '—') +
+        (m.section ? '  ·  ' + m.section : '') + (m.entry ? '  ·  ' + m.entry : '') +
+        (typeof m.turns === 'number' ? '  ·  ' + m.turns + ' turns' : '')));
+      const chatBtn = el('button', 'btn ghost mini', 'chat ↗'); chatBtn.type = 'button';
+      chatBtn.title = 'Open the conversation that drove this commission';
+      chatBtn.style.marginLeft = 'auto';
+      chatBtn.addEventListener('click', function () { cvOpenChat(o); });
+      const ordBtn = el('button', 'btn ghost mini', 'order ↗'); ordBtn.type = 'button';
+      ordBtn.title = 'Open this order in the register';
+      ordBtn.addEventListener('click', function () {
+        state.custView = 'orders'; state.custVia = ''; state.custChip = '';
+        if ($('cust-search')) $('cust-search').value = '';
+        if ($('cust-serial')) $('cust-serial').value = String(o.serial != null ? o.serial : (o.cancelled_serial || ''));
+        activateTab('customers'); loadCustomers();
+      });
+      r.appendChild(chatBtn); r.appendChild(ordBtn);
+      olist.appendChild(r);
+    });
+    if (initiated.length > 50) olist.appendChild(el('p', 'micro', 'Showing the 50 most recent of ' + initiated.length + ' — Export CSV for the full range.'));
+    bd.appendChild(olist);
   }
 }
 
