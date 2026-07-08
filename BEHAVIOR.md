@@ -89,6 +89,12 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   (Full design in [`DESIGN.md`](DESIGN.md) §4.13.)
 
 ## Selling, pacing, re-engagement
+
+![Conversation-flow diagram](docs/conversation-flow.svg)
+*The full beat lifecycle — triggers, client gates, the context every beat
+carries (patron record, client book, house notes, goals, house knowledge,
+the moment), the substance-gate decision, and the measures — in one picture.*
+
 - Covered in [`DESIGN.md`](DESIGN.md) §2.8: the move-selector (Ask/Recommend/Show/
   Advance/Reassure/Space), the assertiveness dial, hooks/objections, journey-aware
   goals, closed-panel re-engagement, and post-sale behavior. All admin-tunable.

@@ -1068,6 +1068,9 @@ load, rather than trusting `sessionStorage` blindly — more code, but it's the
 difference between "feels right" and "shows a stranger's order numbers."
 
 ### 4.6 The engagement model — attentive, not annoying
+
+![Conversation-flow diagram](docs/conversation-flow.svg)
+
 A luxury associate lingers nearby without hovering. Encoding that:
 
 - **Openers** — on opening the panel, the concierge speaks first, contextually:

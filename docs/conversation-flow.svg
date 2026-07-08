@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1390" viewBox="0 0 1180 1390" font-family="'Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/>
+    </marker>
+    <style>
+      .t{fill:#2a2620}.m{fill:#6b6455}.w{fill:#f7f8f9}
+      .h{font-weight:700}
+      .cap{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+      .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    </style>
+  </defs>
+
+  <rect width="1180" height="1390" fill="#f6f2ea"/>
+  <text x="40" y="46" class="t h" font-size="24">Proactive conversation flow — context, gates, substance, and measurement</text>
+  <text x="40" y="70" class="m" font-size="13">Client beats (concierge.js) → gates → full context → server beat prompt (index.ts) → substance gate → speak or hold.</text>
+  <text x="40" y="88" class="m" font-size="13">Every number is admin config (Tuning → Engagement pace); user stories &amp; acceptance criteria: DESIGN.md §2.10.</text>
+
+  <!-- ============ ROW 1: TRIGGERS ============ -->
+  <text x="40" y="110" class="cap t h">1 · Three beats can start a line</text>
+  <rect x="40" y="114" width="350" height="92" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="56" y="137" class="t h" font-size="13.5">Opener — panel just opened</text>
+  <text x="56" y="156" class="m" font-size="11.5">Speaks first, once per panel session. Signed-in greet</text>
+  <text x="56" y="171" class="m" font-size="11.5">1.2s · anonymous 16s · returning to a live thread 1.1s</text>
+  <text x="56" y="189" class="m mono" font-size="10.5">openerSignedMs · openerAnonMs · openerReengageMs</text>
+
+  <rect x="415" y="114" width="350" height="92" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="431" y="137" class="t h" font-size="13.5">Idle nudge — panel open, visitor quiet</text>
+  <text x="431" y="156" class="m" font-size="11.5">Only when the last word is the bot's. Five-step ladder</text>
+  <text x="431" y="171" class="m" font-size="11.5">20s→45s→90s→3m→5m (repeats), scaled by the dial</text>
+  <text x="431" y="189" class="m mono" font-size="10.5">nudge1Ms…nudge5Ms · assertiveness ×[1.5…0.65]</text>
+
+  <rect x="790" y="114" width="350" height="92" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="806" y="137" class="t h" font-size="13.5">Re-engage bubble — panel closed</text>
+  <text x="806" y="156" class="m" font-size="11.5">Was active, then went idle. Line composed server-side</text>
+  <text x="806" y="171" class="m" font-size="11.5">from open goals + patron record; withdraws itself (22s)</text>
+  <text x="806" y="189" class="m mono" font-size="10.5">reengageIdle*Ms · reengageMax* · bubbleWithdrawMs</text>
+
+  <path d="M215 206 L215 236" stroke="#8a7a5a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M590 206 L590 236" stroke="#8a7a5a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M965 206 L965 236" stroke="#8a7a5a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ============ ROW 2: CLIENT GATES ============ -->
+  <rect x="40" y="240" width="1100" height="118" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
+  <text x="56" y="264" class="cap t h">2 · Client gates — a beat that fails one stays silent and names itself</text>
+  <g font-size="11.5" class="m">
+    <text x="56" y="288">quiet mode (visitor asked for room — typing lifts it) · follow-up budget spent (nudgeCap) · unacknowledged reach-outs ≥ cap (unackedCap —</text>
+    <text x="56" y="306">any sign of life resumes) · anonymous visitor hasn't typed yet (by design) · last word is the visitor's (reply, don't re-open) · another bubble</text>
+    <text x="56" y="324">already on screen · post-sale congrats grace (reengageGraceMs) · demo mode</text>
+  </g>
+  <text x="56" y="346" class="t" font-size="11.5">Every skip is observable: <tspan class="mono">FeierabendConcierge.status().lastSkip</tspan> names the gate; <tspan class="mono">FEIER_CX_DEBUG</tspan> logs each one live.</text>
+
+  <path d="M590 358 L590 390" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="604" y="380" class="m" font-size="11">beat request → edge function (a context note — never logged as the shopper's words)</text>
+
+  <!-- ============ ROW 3: CONTEXT ============ -->
+  <text x="40" y="418" class="cap t h">3 · What every beat knows — the full context, injected fresh each request</text>
+  <rect x="40" y="428" width="1100" height="264" rx="10" fill="#eef6ee" stroke="#bcd8bc"/>
+
+  <!-- patron card -->
+  <rect x="56" y="444" width="350" height="232" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="70" y="466" class="t h" font-size="13">THE PATRON — customer block (live state)</text>
+  <g font-size="11" class="m">
+    <text x="70" y="486">First name · standing tier (Wiederkehr / Hausfreund /</text>
+    <text x="70" y="501">Stifter, from real LTV) · every order with status, cloth,</text>
+    <text x="70" y="516">city, gift details · recency ("last here …")</text>
+    <text x="70" y="538"><tspan class="t h">Client book</tspan> — notes from prior visits and actions,</text>
+    <text x="70" y="553">rolled up into a summary; read invisibly, never recited.</text>
+    <text x="70" y="575"><tspan class="t h">House instructions</tspan> — team-left errands (#id): exact</text>
+    <text x="70" y="590">wording is the sole source; woven into service, checked</text>
+    <text x="70" y="605">off after; resolved notes become content-free history.</text>
+    <text x="70" y="627"><tspan class="t h">Greet-on-opening-only</tspan> — the "welcome back" banner</text>
+    <text x="70" y="642">renders on the first beat of a visit, never mid-thread.</text>
+    <text x="70" y="664" class="mono" font-size="10">customerBlock() · auth-wait: no anonymous mis-greet</text>
+  </g>
+
+  <!-- conversation card -->
+  <rect x="422" y="444" width="340" height="108" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="436" y="466" class="t h" font-size="13">THE CONVERSATION</text>
+  <g font-size="11" class="m">
+    <text x="436" y="486">Full transcript — including the device-kept history a</text>
+    <text x="436" y="501">signed-in patron carries across closed tabs, so the bot</text>
+    <text x="436" y="516">never restarts blind. Its own recent lines feed the</text>
+    <text x="436" y="531">pending-question scan and the door check below.</text>
+    <text x="436" y="547" class="mono" font-size="10">historyKeepMs · pending-ask over the whole trailing run</text>
+  </g>
+
+  <!-- agenda card -->
+  <rect x="422" y="568" width="340" height="108" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="436" y="590" class="t h" font-size="13">THE AGENDA — conversation goals</text>
+  <g font-size="11" class="m">
+    <text x="436" y="610">Admin-defined goals, filtered to the section the visitor</text>
+    <text x="436" y="625">is reading, LLM-graded per conversation with cited</text>
+    <text x="436" y="640">evidence. An UNMET goal is substance — it licenses a</text>
+    <text x="436" y="655">beat once; met goals stop licensing. Never announced.</text>
+    <text x="436" y="671" class="mono" font-size="10">concierge_goals · goal_sample_rate · reengage_regrade</text>
+  </g>
+
+  <!-- house card -->
+  <rect x="778" y="444" width="346" height="108" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="792" y="466" class="t h" font-size="13">THE HOUSE — how it sells &amp; what it knows</text>
+  <g font-size="11" class="m">
+    <text x="792" y="486">Knowledge base (cloths, care, the mill) · SOPs filtered</text>
+    <text x="792" y="501">by audience · the six moves (Ask · Recommend · Show ·</text>
+    <text x="792" y="516">Advance · Reassure · Space) · assertiveness dial ·</text>
+    <text x="792" y="531">selling angles (hooks) · objection playbook · voice.</text>
+    <text x="792" y="547" class="mono" font-size="10">all admin-editable, versioned — prompt-assembly.svg</text>
+  </g>
+
+  <!-- moment card -->
+  <rect x="778" y="568" width="346" height="108" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="792" y="590" class="t h" font-size="13">THE MOMENT + THE REGISTER (tools)</text>
+  <g font-size="11" class="m">
+    <text x="792" y="610">Which section they're reading · signed-in or not · post-</text>
+    <text x="792" y="625">sale state. On TYPED turns the bot also calls register</text>
+    <text x="792" y="640">tools (get_my_orders, changes, mending…). Proactive</text>
+    <text x="792" y="655">beats run tool-less — the house reconciles afterwards</text>
+    <text x="792" y="671">(auto check-off of carried-out house notes).</text>
+  </g>
+
+  <path d="M590 692 L590 724" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ============ ROW 4: SERVER PIPELINE ============ -->
+  <text x="40" y="750" class="cap t h">4 · The beat decision — ordered checks</text>
+  <rect x="40" y="760" width="690" height="216" rx="10" fill="#eef6ee" stroke="#bcd8bc"/>
+
+  <rect x="56" y="776" width="658" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="70" y="797" class="t h" font-size="13">Pending-question scan — the whole trailing run</text>
+  <text x="70" y="815" class="m" font-size="11">if ANY unprompted line of the bot's still ends in an unanswered question → no question marks on this beat (statement or hold)</text>
+
+  <rect x="56" y="836" width="658" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="70" y="857" class="t h" font-size="13">Door check — from the 2nd reach-out on</text>
+  <text x="70" y="875" class="m" font-size="11">must open a subject not yet offered (care · another piece · the workshop); doors spent → hold, never invention</text>
+
+  <rect x="56" y="896" width="658" height="64" rx="8" fill="#fdf3e3" stroke="#e6cfa0"/>
+  <text x="70" y="917" class="t h" font-size="13">SUBSTANCE GATE  <tspan class="m mono" font-size="10.5">outreach.substanceGate (admin toggle, default ON)</tspan></text>
+  <text x="70" y="935" class="m" font-size="11">something NEW and CONCRETE from the context above? — an unmentioned register fact · an open goal's next step · a house instruction</text>
+  <text x="70" y="951" class="m" font-size="11">yes → speak plainly · no → [HOLD]. A goal is fuel for a beat once; it is not a license to orbit one topic.</text>
+
+  <!-- outcome arrows -->
+  <path d="M730 830 C 760 815, 775 800, 800 790" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <path d="M730 928 C 760 933, 775 938, 800 940" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- SPEAK outcome -->
+  <rect x="805" y="760" width="335" height="128" rx="10" fill="#ffffff" stroke="#5E9C57" stroke-width="1.5"/>
+  <text x="821" y="784" class="t h" font-size="14">SPEAK</text>
+  <text x="821" y="804" class="m" font-size="11.5">1–2 plain sentences, a clerk's speech, at most one</text>
+  <text x="821" y="819" class="m" font-size="11.5">image, every fact register-verbatim. On a buying signal</text>
+  <text x="821" y="834" class="m" font-size="11.5">the commission button rides the same reply.</text>
+  <text x="821" y="854" class="m" font-size="11.5">Logged to concierge_messages → transcript, grading,</text>
+  <text x="821" y="869" class="m" font-size="11.5">goal scoring, entry-beat conversion analytics.</text>
+  <text x="821" y="884" class="m mono" font-size="10">counts against nudgeCap · unacked until sign of life</text>
+
+  <!-- HOLD outcome -->
+  <rect x="805" y="898" width="335" height="98" rx="10" fill="#ffffff" stroke="#B08838" stroke-width="1.5"/>
+  <text x="821" y="922" class="t h" font-size="14">[HOLD] — silence as service</text>
+  <text x="821" y="942" class="m" font-size="11.5">Nothing renders; the token never reaches the reader.</text>
+  <text x="821" y="957" class="m" font-size="11.5">Audited: a beat_hold row (Actions) → hold rate is real;</text>
+  <text x="821" y="972" class="m" font-size="11.5">deliberate quiet ≠ breakage.</text>
+  <text x="821" y="988" class="m mono" font-size="10">next try waits ×1.5 longer · rests after holdBudget</text>
+
+  <!-- ============ ROW 5: VISITOR RESETS + CONTINUITY ============ -->
+  <path d="M590 996 L590 1026" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <rect x="40" y="1030" width="1100" height="118" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="56" y="1054" class="cap t h">5 · The visitor always resets the dance</text>
+  <g font-size="11.5" class="m">
+    <text x="56" y="1078"><tspan class="t h">They type</tspan> → quiet mode lifts, budgets reset, the pending question may be returned to, goals re-graded in the background.</text>
+    <text x="56" y="1096"><tspan class="t h">Sign of life</tspan> (scroll · tap · key · tab refocus) → the unacknowledged pause resumes a light presence.</text>
+    <text x="56" y="1114"><tspan class="t h">“That's all for now”</tspan> → quiet mode wins over everything until they write again.</text>
+    <text x="56" y="1136"><tspan class="t h">Signed-in continuity:</tspan> the transcript survives a closed tab (kept device-side, wiped on sign-out, historyKeepMs window) — the bot never re-pitches from scratch.</text>
+  </g>
+
+  <!-- ============ ROW 6: MEASUREMENT ============ -->
+  <path d="M590 1148 L590 1178" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <rect x="40" y="1182" width="1100" height="130" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
+  <text x="56" y="1206" class="cap t h">6 · How the merchant knows it's working</text>
+  <g font-size="11.5" class="m">
+    <text x="56" y="1230"><tspan class="t h">North star:</tspan> ✳ concierge-initiated revenue &amp; chat→commission rate (Conversion tab) — while the guardrails stay healthy:</text>
+    <text x="56" y="1250"><tspan class="t h">Hold rate</tspan> (beat_hold ÷ proactive beats): 0% at high beat counts = inventing content again; ~100% = mute. Both visible in Actions.</text>
+    <text x="56" y="1268"><tspan class="t h">Quiet-mode / unacked pauses</tspan> = the "chased" counter-metric · <tspan class="t h">conversion by entry beat</tspan> (typed / opener / outreach / nudge) = which beats sell.</text>
+    <text x="56" y="1288"><tspan class="t h">Qualitative:</tspan> per-conversation grades with cited evidence · gap flags · transcript drill-in · prompt-tuner critique.</text>
+  </g>
+
+  <!-- footer -->
+  <text x="40" y="1340" class="m" font-size="12">Full gate list &amp; console diagnostics: BEHAVIOR.md — “Diagnosing a quiet widget”. Prompt assembly: docs/prompt-assembly.svg. Metric definitions: ATTRIBUTION.md.</text>
+
+  <!-- legend -->
+  <rect x="40" y="1356" width="16" height="12" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="62" y="1367" class="m" font-size="11.5">client (concierge.js)</text>
+  <rect x="210" y="1356" width="16" height="12" fill="#eef6ee" stroke="#bcd8bc"/>
+  <text x="232" y="1367" class="m" font-size="11.5">server: context &amp; decision</text>
+  <rect x="420" y="1356" width="16" height="12" fill="#fdf3e3" stroke="#e6cfa0"/>
+  <text x="442" y="1367" class="m" font-size="11.5">admin-controlled decision</text>
+  <rect x="640" y="1356" width="16" height="12" fill="#eceae4" stroke="#d3cdbf"/>
+  <text x="662" y="1367" class="m" font-size="11.5">observability &amp; measures</text>
+</svg>
