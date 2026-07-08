@@ -87,6 +87,7 @@ own, so numbers can never disagree between views.
 | **Register opened** | The checkout sheet opens (`via` = `concierge` if the concierge's button opened it, else `page`) | `site_events` `kind='checkout_open'` | event time |
 | **Commission click** | The buyer taps the concierge's "Begin the commission" button | `sessionStorage` marker → `orders.chat_via/chat_meta` at placement | click context frozen at placement |
 | **Order placed** | `commission_order` inserts the row | `orders` | `placed_at` |
+| **Identity lookback** | At placement, when checkout carried no chat key and the buyer is signed in: the account's most recent conversation ≤ 30 days back | `orders.chat_via='identity'`, `chat_session`, `chat_meta.lookback_days` | placement time (the lookback gap is recorded) |
 | **Cancellation** | `cancel_order_return` | `orders.status`, `cancelled_at` | `cancelled_at` |
 
 Funnel beacons are **PII-free**: a random device token (`visit_key`), optional
@@ -97,8 +98,12 @@ their ship date; earlier history shows zeros.
 
 Every tile carries this same definition in its ⓘ hover.
 
-**Range** — calendar periods (**Today / This week / This month / This year**,
-each period-to-date) or rolling windows (**7 / 30 / 90 days**) or all time.
+**Range** — calendar periods, either to-date (**Today / This week / This month
+/ This year**) or complete closed periods (**Last week / Last month** — the
+full previous week/month, ending where the current one begins), rolling
+windows (**7 / 30 / 90 days**), or all time. Closed periods compare
+full-vs-full (last week vs the week before); to-date periods compare
+period-to-date.
 **What the range actually selects:** there is no single shared date column —
 the range filters *each fact by its own clock*: **orders by order date**
 (`placed_at`), **conversations by start date** (`created_at`), **funnel
@@ -178,9 +183,12 @@ chats; each ✳ commission row jumps to the **conversation that drove it**
 opens the driving chat. Filters match the rest of the app — the register has
 attribution-tier chips beside the status chips, and Conversations has a
 **🛒 commissioned chats** checkbox beside the house-note one. **Export**: the
-Conversion tab's Export CSV downloads the range with tier + click-context
-columns (`attribution`, `attr_entry`, `attr_section`, `attr_turns`), and the
-regular register export carries the same columns.
+Conversion tab's Export CSV downloads the range and the regular register
+export carries the same columns — `attribution` (the tier), `attr_entry` /
+`attr_section` / `attr_turns` (✳ click context), `attr_lookback_days`
+(identity tier), and `chat_session`, the **raw join key** back to
+`concierge_conversations.session_key` — so any spreadsheet or BI tool can
+re-derive and audit every tier from first principles.
 
 **Order drawer**: each order shows its tier line (with the click context in the
 tooltip); the **Chats** tab lists chats that *touched* the order — see below.
@@ -252,7 +260,7 @@ The levers, in the order they usually pay off:
 | Where | Field | Purpose |
 |---|---|---|
 | `orders` | `chat_session` | Session key of the chat in the buying session (text join → `concierge_conversations.session_key`) |
-| `orders` | `chat_via` | Tier: `concierge` / `ambient` / NULL (`orders_chat_via_check`) |
+| `orders` | `chat_via` | Tier: `concierge` / `ambient` / `identity` / NULL (`orders_chat_via_check`) |
 | `orders` | `chat_meta` | `{entry, section, turns}` at the commission click (✳ only) |
 | `concierge_conversations` | `sales_stage`, `goal_status` | Judge-graded funnel stage + per-goal outcomes |
 | `concierge_actions` | `conversation_id`, `serial` | Service touches on existing orders |

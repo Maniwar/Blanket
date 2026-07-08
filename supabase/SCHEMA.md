@@ -101,6 +101,15 @@ reach-out delays), `draftMs` (half-written-order nudge), `idleReach` (bool),
 `nudgeCap` (max in-chat follow-ups), `maxAmbient` (max closed-panel reach-outs).
 The client reads these via `?config=1`.
 
+*Reporting & retention keys* (Conversion tab / Edition & access — see
+[`ATTRIBUTION.md`](../ATTRIBUTION.md)): `unit_price` (USD behind every revenue
+figure; $589 fallback), `week_start` (0 = Sunday, 1 = Monday — drives the
+This-week range, weekly buckets, and WoW alignment for all admins),
+`retention_days` (the horizon last used by the Data-retention prune — a record
+of policy, not a schedule; nothing deletes automatically). Every change to any
+config key lands in `concierge_edit_history` (who/when/what), so reporting
+settings are themselves auditable.
+
 **Written by:** admin portal (Tuning tab — Config, Engagement pace, Selling
 style, Bot images). **Read by:** `handleConfigGet` (`GET ?config=1`),
 `handleChatPost` (every reply). **Seeded by:** `setup.sql` (`enabled`, `model`,

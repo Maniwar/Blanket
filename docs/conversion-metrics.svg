@@ -204,10 +204,10 @@
 
   <rect x="628" y="920" width="572" height="96" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
   <text x="644" y="944" class="t h" font-size="13">Ranges · View-by · buckets</text>
-  <text x="644" y="963" class="m" font-size="11.5">Ranges: Today / This week / This month / This year (period-to-date) · 7/30/90d · all.</text>
-  <text x="644" y="977" class="m" font-size="11.5">View-by sets chart granularity: hourly / daily / weekly / monthly / yearly, or Auto</text>
-  <text x="644" y="991" class="m" font-size="11.5">(hour ≤ 2d · day ≤ 31d · week ≤ 200d · month beyond). Funnel dedup: unique per</text>
-  <text x="644" y="1006" class="m" font-size="11.5">bucket on the trend chart, unique per range on the snapshot — they can differ.</text>
+  <text x="644" y="963" class="m" font-size="11.5">Ranges: Today / This week / This month / This year (to-date) · Last week / Last month</text>
+  <text x="644" y="977" class="m" font-size="11.5">(complete, closed) · 7/30/90d · all. Week start (Sun/Mon) is a shared config. The range</text>
+  <text x="644" y="991" class="m" font-size="11.5">filters EACH FACT BY ITS OWN CLOCK: orders by placed_at, chats by created_at, beacons</text>
+  <text x="644" y="1006" class="m" font-size="11.5">by event time. View-by sets chart buckets: hour/day/week/month/year or Auto.</text>
 
   <!-- ========== 6. WHERE IT SURFACES ========== -->
   <text x="40" y="1062" class="t h cap">6 · Where it surfaces — nothing is a dead end</text>
@@ -224,7 +224,7 @@
 
     <text x="56" y="1216" class="t h" font-size="12.5">Filters &amp; export</text>
     <text x="56" y="1234">register: tier chips beside status chips · Conversations: 🛒 commissioned-chats checkbox · Export CSV (Conversion tab + register)</text>
-    <text x="56" y="1248">adds attribution, attr_entry, attr_section, attr_turns columns</text>
+    <text x="56" y="1248">adds attribution, attr_entry, attr_section, attr_turns, attr_lookback_days, chat_session — the raw join key, so every tier is re-derivable externally</text>
   </g>
 
   <!-- ========== 7. HONEST LIMITS ========== -->
@@ -234,7 +234,7 @@
     <text x="56" y="1346">• Session capture is same-tab; the identity tier closes it for signed-in buyers (30d lookback) — anonymous cross-session journeys still read UNASSISTED (a floor).</text>
     <text x="56" y="1368">• Assisted tiers are co-occurrence, not causation — that is exactly why the ✳ tier exists.</text>
     <text x="56" y="1390">• Almost nothing depends on grading: revenue, tiers, rate, funnel are hard data; only the stages card + two opportunity reads use the judge (sampled, re-runnable).</text>
-    <text x="56" y="1412">• Retention is OPT-IN and configurable: prune_high_write(p_days:=180) ships with its schedule commented out — nothing is deleted unless the operator enables it.</text>
+    <text x="56" y="1412">• Retention: keep-forever by default; pruning is a confirmed admin act (Edition &amp; access → Data retention, ≥30d horizon) — orders and tier stamps always survive.</text>
     <text x="56" y="1434">• Demo pricing: revenue is exactly count × configured price — no tax, discounts, refunds, or partials.</text>
     <text x="56" y="1456">• Funnel stages mix units (devices / conversations / orders) — stage-to-stage pass-through is directional, and each row states its unit.</text>
   </g>

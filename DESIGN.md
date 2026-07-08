@@ -509,6 +509,21 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   to be configurable**, so that reporting follows the real price without a
   deploy. *(`concierge_config.unit_price`, Edition & access → Register price;
   $589 fallback. Feeds Conversion, the LTV figures, and patron stats.)*
+- **As the merchant**, I want to **compare any period against the one before it
+  or the same period last year** — day, week, month, or year over year — and
+  **view trends at the granularity I choose**, so that direction is measurable,
+  not guessed. *(Ranges: to-date and complete calendar periods + rolling;
+  Compare: prior period / last year / off, period-to-date aligned with dashed
+  ghost-lines on the charts; View-by: hourly→yearly buckets; a shared
+  configurable week start.)*
+- **As the merchant**, I want **data retention to be my deliberate act, not a
+  hidden default**, so that nothing is deleted without me and privacy hygiene
+  is still one click when I want it. *(Default keep-forever — nothing
+  scheduled; Edition & access → Data retention runs a confirmed
+  `prune_high_write` at a chosen ≥30-day horizon via the admin-gated
+  `?prune=1`, reports the deleted counts, and records the horizon as
+  `concierge_config.retention_days`. Orders and attribution stamps always
+  survive.)*
 - **As the merchant**, I want to **filter conversations by funnel stage** and see
   a **funnel overview** — how many chats sit at browsing, engaged, considering,
   objection, ready, won, lost (and how many aren't graded yet) — so that I can see

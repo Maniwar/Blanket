@@ -1561,6 +1561,7 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <p class="note">The one place every number lives. Attribution tiers: <b>✳ concierge-initiated</b> —
         checkout opened from the concierge's own commission button (the causal tier you optimize);
         <b>chat-assisted</b> — a conversation ran in the buying session, checkout came from a page button;
+        <b>identity-assisted</b> — a signed-in buyer whose account chatted within 30 days (cross-session);
         <b>unassisted</b> — no conversation. Hover any <span class="info-badge">i</span> for the exact
         definition; formal definitions with date bases in <span class="mono">ATTRIBUTION.md</span>.</p>
 
@@ -5254,9 +5255,13 @@ async function loadCustomers(more) {
 function exportOrdersCsv(orders, filename) {
   if (!orders || !orders.length) { toast('Nothing to export', true); return; }
   const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  // Attribution columns make the export externally auditable: the tier, the
+  // click context (✳ orders), the identity lookback gap, and chat_session —
+  // the raw join key back to concierge_conversations.session_key, so any
+  // spreadsheet or BI tool can re-derive and verify the tiers.
   const head = ['placed_at', 'serial', 'cancelled_serial', 'status', 'colorway', 'email', 'name',
     'is_gift', 'recipient_name', 'city', 'state', 'zip', 'tracking', 'ip',
-    'attribution', 'attr_entry', 'attr_section', 'attr_turns'];
+    'attribution', 'attr_entry', 'attr_section', 'attr_turns', 'attr_lookback_days', 'chat_session'];
   const lines = [head.join(',')];
   orders.forEach(function (o) {
     const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : {};
@@ -5264,7 +5269,8 @@ function exportOrdersCsv(orders, filename) {
       attribution: o.chat_via === 'concierge' ? 'concierge-initiated'
         : o.chat_via === 'identity' ? 'identity-assisted'
         : o.chat_session ? 'chat-assisted' : 'unassisted',
-      attr_entry: m.entry, attr_section: m.section, attr_turns: m.turns
+      attr_entry: m.entry, attr_section: m.section, attr_turns: m.turns,
+      attr_lookback_days: m.lookback_days, chat_session: o.chat_session
     };
     lines.push(head.map(function (k) {
       return esc(k === 'ip' ? orderIp(o) : (k in extra ? extra[k] : o[k]));
@@ -7024,7 +7030,8 @@ async function loadConversations(more) {
    the immediately-prior period (DoD/WoW/MoM/YoY when a calendar range is
    picked) or the same period one year ago. */
 const CV_RANGES = [
-  ['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['year', 'This year'],
+  ['today', 'Today'], ['week', 'This week'], ['lastweek', 'Last week'],
+  ['month', 'This month'], ['lastmonth', 'Last month'], ['year', 'This year'],
   [7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']
 ];
 const CV_GRANS = [['auto', 'Auto'], ['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'], ['year', 'Yearly']];
@@ -7052,32 +7059,49 @@ function cvWindow() {
   const r = state.cvRange === undefined ? 30 : state.cvRange;
   const d = new Date(now);
   d.setHours(0, 0, 0, 0);
-  let curStart = null;
+  let curStart = null, curEnd = null;   // curEnd null = the window runs to now
   const ws = (typeof state.weekStart === 'number') ? state.weekStart : 0;
   if (r === 'today') curStart = d.getTime();
   else if (r === 'week') { d.setDate(d.getDate() - ((d.getDay() - ws + 7) % 7)); curStart = d.getTime(); }
-  else if (r === 'month') { d.setDate(1); curStart = d.getTime(); }
-  else if (r === 'year') { d.setMonth(0, 1); curStart = d.getTime(); }
+  else if (r === 'lastweek') {
+    // COMPLETE closed week — [start of last week, start of this week)
+    d.setDate(d.getDate() - ((d.getDay() - ws + 7) % 7));
+    curEnd = d.getTime(); curStart = curEnd - 7 * 86400000;
+  } else if (r === 'month') { d.setDate(1); curStart = d.getTime(); }
+  else if (r === 'lastmonth') {
+    // COMPLETE closed month — [1st of last month, 1st of this month)
+    d.setDate(1); curEnd = d.getTime();
+    const p = new Date(curEnd); p.setMonth(p.getMonth() - 1); curStart = p.getTime();
+  } else if (r === 'year') { d.setMonth(0, 1); curStart = d.getTime(); }
   else if (typeof r === 'number' && r > 0) curStart = now - r * 86400000;
   // else 0 = all time → curStart null
   const cmpMode = state.cvCmp === undefined ? 'prior' : state.cvCmp;
   let cmpStart = null, cmpEnd = null, cmpLabel = '';
   if (curStart !== null && cmpMode !== 'off') {
-    const elapsed = now - curStart;
+    const endMs = curEnd !== null ? curEnd : now;
+    const elapsed = endMs - curStart;
     if (cmpMode === 'yoy') {
       const y = new Date(curStart); y.setFullYear(y.getFullYear() - 1);
-      cmpStart = y.getTime(); cmpLabel = 'same period last year';
+      cmpStart = y.getTime();
+      const ye = new Date(endMs); ye.setFullYear(ye.getFullYear() - 1);
+      cmpEnd = ye.getTime();      // calendar-shifted, so month lengths stay honest
+      cmpLabel = 'same period last year';
     } else {
       if (r === 'today') cmpStart = curStart - 86400000;
-      else if (r === 'week') cmpStart = curStart - 7 * 86400000;
-      else if (r === 'month') { const m = new Date(curStart); m.setMonth(m.getMonth() - 1); cmpStart = m.getTime(); }
+      else if (r === 'week' || r === 'lastweek') cmpStart = curStart - 7 * 86400000;
+      else if (r === 'month' || r === 'lastmonth') { const m = new Date(curStart); m.setMonth(m.getMonth() - 1); cmpStart = m.getTime(); }
       else if (r === 'year') { const y2 = new Date(curStart); y2.setFullYear(y2.getFullYear() - 1); cmpStart = y2.getTime(); }
       else cmpStart = curStart - elapsed;
-      cmpLabel = { today: 'yesterday', week: 'last week', month: 'last month', year: 'last year' }[r] || ('prior ' + r + 'd');
+      // Closed periods compare full-vs-full ([prev period start, cur period start));
+      // open (to-date) periods compare period-to-date.
+      cmpEnd = (r === 'lastweek' || r === 'lastmonth') ? curStart : cmpStart + elapsed;
+      cmpLabel = {
+        today: 'yesterday', week: 'last week', lastweek: 'the week before',
+        month: 'last month', lastmonth: 'the month before', year: 'last year'
+      }[r] || ('prior ' + r + 'd');
     }
-    cmpEnd = cmpStart + elapsed;   // period-to-date alignment
   }
-  return { now: now, curStart: curStart, cmpStart: cmpStart, cmpEnd: cmpEnd, cmpLabel: cmpLabel, range: r };
+  return { now: now, curStart: curStart, curEnd: curEnd, cmpStart: cmpStart, cmpEnd: cmpEnd, cmpLabel: cmpLabel, range: r };
 }
 
 /* One stacked bar + legend from [{label, n, color}], skipping zero segments. */
@@ -7410,9 +7434,10 @@ async function loadConversion() {
     const t = new Date(iso).getTime();
     return t >= (s === null ? -Infinity : s) && t < (e === null ? Infinity : e);
   };
-  const inCur = function (iso) { return inWin(iso, win.curStart, null); };
+  const inCur = function (iso) { return inWin(iso, win.curStart, win.curEnd); };
   const hasCmp = win.cmpStart !== null;
   const inCmp = function (iso) { return hasCmp && inWin(iso, win.cmpStart, win.cmpEnd); };
+  const winEndMs = win.curEnd !== null ? win.curEnd : nowMs;
 
   const allOrders = ores.data || [];
   const allConvos = cres.data || [];
@@ -7515,7 +7540,7 @@ async function loadConversion() {
     .filter(function (t) { return !isNaN(t); });
   const fromMs = win.curStart !== null ? win.curStart
     : (datumsMs.length ? Math.min.apply(null, datumsMs) : nowMs - 6 * 86400000);
-  const bk = cvBuckets(fromMs, nowMs, state.cvGran);
+  const bk = cvBuckets(fromMs, winEndMs - 1, state.cvGran);
   // The week-start picker appears only while weeks are in play — the This-week
   // range, or charts actually bucketing weekly (explicit pick or Auto's choice).
   if ($('cv-wkwrap')) {
@@ -7556,7 +7581,7 @@ async function loadConversion() {
   // at the same granularity and index-aligned under the current lines.
   let ghostRev = null, ghostRate = null;
   if (hasCmp) {
-    const cbk = cvBuckets(win.cmpStart, win.cmpEnd, bk.gran);
+    const cbk = cvBuckets(win.cmpStart, win.cmpEnd - 1, bk.gran);
     const cKept = prev.kept;
     const cRevAttr = bucketize(cbk, cKept.filter(function (o) { return o.chat_session; }),
       function (o) { return o.placed_at; }, function () { return PRICE; });
