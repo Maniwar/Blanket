@@ -3172,10 +3172,14 @@ async function handleSelfTest(req: Request): Promise<Response> {
         qa.conversation_delete = { ok: delC.ok, rows_deleted: delC.ok ? ((await delC.json()) as unknown[]).length : 0 };
       }
       // 3. Confirm cleanup left nothing behind (reporting also excludes qa-%).
-      const leftovers = await pgSelect<{ id: unknown }>(`orders?select=id&chat_session=like.qa-selftest-%&limit=5`);
-      qa.cleanup = { ok: !!leftovers && leftovers.length === 0, leftover_orders: leftovers ? leftovers.length : -1 };
+      // PostgREST's LIKE wildcard is `*` (a raw `%` breaks URL decoding → 400).
+      const leftovers = await pgSelect<{ id: unknown }>(`orders?select=id&chat_session=like.qa-selftest-*&limit=5`);
+      qa.cleanup = leftovers === null
+        ? { ok: false, query_ok: false, hint: "leftovers query failed — cleanup itself already reported rows_deleted above" }
+        : { ok: leftovers.length === 0, query_ok: true, leftover_orders: leftovers.length };
       const stepOk = (v: unknown) => !!v && (v as { ok?: boolean }).ok === true;
-      qa.verdict = ["event_insert", "event_readback", "conversation_insert", "order_insert", "tier_readback", "join_readback"]
+      qa.verdict = ["event_insert", "event_readback", "event_delete", "conversation_insert", "order_insert",
+        "tier_readback", "join_readback", "order_delete", "conversation_delete", "cleanup"]
         .every((k) => stepOk(qa[k])) ? "PASS" : "FAIL";
     } catch (e) {
       qa.verdict = "FAIL";
