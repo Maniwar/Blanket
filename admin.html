@@ -380,7 +380,7 @@
   .fnl-row .fl{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.04em;
     color:var(--wool-dim); width:190px; flex:none; display:inline-flex; align-items:center; gap:8px; }
   .fnl-row .fl .sw{ width:11px; height:11px; border-radius:2px; flex:none; }
-  .fnl-row .fbar{ flex:1; height:22px; border-radius:3px 4px 4px 3px; background:var(--ink-well); position:relative; }
+  .fnl-row .fbar{ flex:1; height:22px; border-radius:3px 4px 4px 3px; background:var(--ink-well); position:relative; overflow:hidden; }
   .fnl-row .fbar .fill{ height:100%; border-radius:3px 4px 4px 3px; min-width:2px; }
   .fnl-row .fv{ width:200px; flex:none; font-size:12px; color:var(--wool-dim); font-variant-numeric:tabular-nums; }
   .fnl-row .fv b{ color:var(--wool); }
@@ -7430,18 +7430,29 @@ async function loadConversion() {
   });
   const fs = $('cv-fsnap');
   fs.textContent = '';
-  const maxStage = Math.max(totals.visit, 1);
+  // Bars scale against the LARGEST stage — never assume visits is it (the
+  // beacons shipped later than chats/orders, so early on it can be zero and
+  // scaling on it would blow the bars out of the card).
+  const maxStage = Math.max.apply(null, CV_FUNNEL.map(function (s) { return totals[s.key]; }).concat([1]));
+  const STAGE_UNIT = {
+    visit: 'unique devices (visit beacon)',
+    chat_open: 'unique devices that opened the concierge',
+    spoke: 'unique conversations with a user message',
+    checkout_open: 'unique devices that opened the register sheet',
+    commission: 'kept orders placed'
+  };
   let prevN = null;
   CV_FUNNEL.forEach(function (s) {
     const n = totals[s.key];
     const row = el('div', 'fnl-row');
+    row.title = s.label + ' — ' + STAGE_UNIT[s.key];
     const lab = el('span', 'fl');
     const sw = el('span', 'sw'); sw.style.background = s.color;
     lab.appendChild(sw); lab.appendChild(document.createTextNode(s.label));
     row.appendChild(lab);
     const bar = el('div', 'fbar');
     const fill = el('div', 'fill');
-    fill.style.width = Math.max(0.5, 100 * n / maxStage) + '%';
+    fill.style.width = Math.min(100, Math.max(0.5, 100 * n / maxStage)) + '%';
     fill.style.background = s.color;
     bar.appendChild(fill);
     row.appendChild(bar);
@@ -7456,9 +7467,10 @@ async function loadConversion() {
   const overall = totals.visit > 0 ? (Math.round(1000 * totals.commission / totals.visit) / 10) + '%' : '—';
   const fsNote = el('p', 'micro');
   fsNote.style.marginTop = '10px';
-  fsNote.textContent = (totals.visit === 0 && totals.chat_open === 0)
-    ? 'No funnel events yet — visit / chat-open / register-open beacons start counting from their ship date. Spoke and Commissions fill from existing data.'
-    : 'Overall visit → commission: ' + overall + '. Stages count UNIQUE visitors in the range (a stage can exceed a later bucket\'s earlier stage when a journey spans buckets).';
+  fsNote.textContent = ((totals.visit === 0 && totals.chat_open === 0)
+    ? 'Beacon stages (visits, chat opened, register opened) start counting from their ship date — spoke and commissions fill from existing data, so pass-through against empty beacon stages is not meaningful yet. '
+    : 'Overall visit → commission: ' + overall + '. ') +
+    'Units per stage: visits / chat / register count unique DEVICES; spoke counts CONVERSATIONS; commissions counts ORDERS — pass-through across a unit change is directional, not exact (hover a row for its unit).';
   fs.appendChild(fsNote);
 
   // ---- Where the opportunities are — computed reads, each with its lever ----

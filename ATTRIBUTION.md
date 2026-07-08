@@ -95,7 +95,7 @@ immediately before the range (deltas; all-time has none).
 | **Attributed revenue** | (✳ + assisted) × register price | order date | quote ✳ alone when claiming causation |
 | **Conversations** | conversation rows created in range | conversation start (`created_at`) | — |
 | **👍 rate** | thumbs-up ÷ all rated replies | **all-time** (feedback rows carry no timestamp) | not range-scopable |
-| **Funnel stages** | UNIQUE visitors (`visit_key`) per stage; *Spoke* = unique conversations with a user turn; *Commissions* = kept orders | event time / message time / order date | dedup is per bucket on the trend chart, per range on the snapshot |
+| **Funnel stages** | UNIQUE count per stage — *Visits / Chat opened / Register opened* count unique **devices** (`visit_key`); *Spoke* counts unique **conversations** with a user turn; *Commissions* counts kept **orders** | event time / message time / order date | dedup is per bucket on the trend chart, per range on the snapshot; pass-through across a unit change (device→conversation→order) is directional, not an exact per-person rate |
 
 **Which chat gets the credit:** the order's `chat_session` names the buying
 session; when several conversation rows share that key, drill-ins open the
