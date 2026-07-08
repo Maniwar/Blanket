@@ -94,6 +94,13 @@
       'the weave, or the number that will be yours.';
   }
   var entryMode = 'typed';      /* how the current exchange was initiated */
+  var lastSkip = '';            /* why the last proactive beat did NOT fire — surfaced
+                                   by FeierabendConcierge.status() so "the bot is
+                                   quiet" is diagnosable instead of a mystery */
+  function noteSkip(why) {
+    lastSkip = why + ' (' + new Date().toLocaleTimeString() + ')';
+    try { if (window.FEIER_CX_DEBUG) { console.debug('[concierge] skip:', lastSkip); } } catch (eNS) { /* ignore */ }
+  }
   var lastSentAt = 0;           /* silence gap between the visitor's messages */
 
   function freshState() {
@@ -2452,24 +2459,26 @@
   var UNACKED_CAP = 2;          /* stop after this many reach-outs with no sign of life */
   function scheduleNudge(spacious) {
     clearNudge();
-    if (isDemo() || !panelOpen || quietMode) { return; }
+    if (isDemo()) { noteSkip('nudge: demo mode'); return; }
+    if (!panelOpen) { noteSkip('nudge: panel is closed'); return; }
+    if (quietMode) { noteSkip('nudge: QUIET MODE is on for this tab (persists across reload; typing a message lifts it)'); return; }
     var o = orCfg();
     /* Effective caps scale with assertiveness: a more driving concierge circles
        back a couple more times; admin nudgeCap overrides entirely. */
     var cap = (typeof o.nudgeCap === 'number') ? o.nudgeCap : (NUDGE_CAP + (assertLevel() - 3));
-    if (nudgeCount >= cap) { return; }
+    if (nudgeCount >= cap) { noteSkip('nudge: follow-up budget spent (' + nudgeCount + '/' + cap + ' this visit)'); return; }
     /* Don't talk into the void: if the last couple of reach-outs went completely
        unacknowledged (no scroll, tap, type, or return to the tab), the visitor
        isn't watching — pause. Any sign of life resets this and resumes us. */
     var ucap = assertLevel() >= 4 ? 3 : UNACKED_CAP;
-    if (unacked >= ucap) { return; }
+    if (unacked >= ucap) { noteSkip('nudge: ' + unacked + ' reach-outs unacknowledged (no scroll/tap/type) — paused until a sign of life'); return; }
     /* only when a real exchange is underway and the last word was the bot's */
-    if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
+    if (!history.length || history[history.length - 1].role !== 'assistant') { noteSkip('nudge: waiting — last word is the visitor\'s or no exchange yet'); return; }
     /* Normally we only circle back once the visitor has spoken — but a signed-in
        patron we already know earns a proactive follow-up even before they type. */
     var spoke = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
-    if (!spoke && !authEmail) { return; }
+    if (!spoke && !authEmail) { noteSkip('nudge: anonymous visitor has not typed yet — by design the bot waits for them (signed-in patrons get follow-ups before typing)'); return; }
     var idx = Math.min(nudgeCount, NUDGE_DELAYS.length - 1);
     var wait = NUDGE_DELAYS[idx];
     if (idx === 0 && typeof o.nudge1Ms === 'number') { wait = o.nudge1Ms; }
@@ -2495,11 +2504,15 @@
      purely anonymous first-timer (the static greeting serves them), or right on
      the heels of an outreach line they just tapped. */
   function maybeOpenerOnOpen() {
-    if (isDemo() || quietMode || streaming || reengagedThisOpen) { return; }
+    if (isDemo()) { noteSkip('opener: demo mode'); return; }
+    if (quietMode) { noteSkip('opener: QUIET MODE is on for this tab (persists across reload; typing a message lifts it)'); return; }
+    if (streaming) { noteSkip('opener: a reply is already streaming'); return; }
+    if (reengagedThisOpen) { noteSkip('opener: already spoke once this panel session'); return; }
     var last = history.length ? history[history.length - 1] : null;
     /* an outreach line they just tapped is itself the opener — don't double up */
     if (last && last.role === 'assistant' && (Date.now() - (last.ts || 0) < 5000)) {
       reengagedThisOpen = true;
+      noteSkip('opener: the outreach line just tapped is itself the opener');
       return;
     }
     var hadUser = false, i;
@@ -2514,13 +2527,15 @@
          so they're never left in an open, silent panel */
       delay = authEmail ? 1200 : 16000;
     }
-    if (!kind) { return; }
+    if (!kind) { noteSkip('opener: last word is the visitor\'s — the bot replies rather than re-opens'); return; }
     reengagedThisOpen = true;
     nudgeCount = 0; holdAttempts = 0; clearNudge();
     function fireOpener() {
-      if (!panelOpen || streaming || quietMode) { return; }
+      if (!panelOpen) { noteSkip('opener(' + kind + '): panel closed before it fired'); return; }
+      if (streaming) { noteSkip('opener(' + kind + '): a reply is streaming'); return; }
+      if (quietMode) { noteSkip('opener(' + kind + '): QUIET MODE is on for this tab'); return; }
       /* if they engaged during the wait (tapped a pill, typed), let them lead */
-      if (kind === 'greet' && history.length) { return; }
+      if (kind === 'greet' && history.length) { noteSkip('opener(greet): visitor engaged during the wait — they lead'); return; }
       /* don't open over someone already typing — hold the thought a beat */
       if (composing()) { nudgeTimer = setTimeout(fireOpener, 2000); return; }
       pendingOpener = kind;
@@ -3521,6 +3536,35 @@
   ---------------------------------------------------------- */
   window.FeierabendConcierge = {
     open: function (prefillQuestion) { openPanel(prefillQuestion); },
-    close: function () { closePanel(); }
+    close: function () { closePanel(); },
+    /* Diagnostic snapshot: why is the bot talking — or not? Run
+       FeierabendConcierge.status() in the console. lastSkip names the exact
+       gate that stopped the most recent proactive beat. Set
+       window.FEIER_CX_DEBUG = true to also see each skip logged live. */
+    status: function () {
+      var oc = orCfg();
+      var cap = (typeof oc.nudgeCap === 'number') ? oc.nudgeCap : (NUDGE_CAP + (assertLevel() - 3));
+      var ucap = assertLevel() >= 4 ? 3 : UNACKED_CAP;
+      var spoke = false, i;
+      for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
+      return {
+        signedIn: !!authEmail,
+        email: authEmail || null,
+        panelOpen: panelOpen,
+        quietMode: quietMode,
+        wrappedUp: wrappedUp,
+        visitorHasTyped: spoke,
+        nudgeCount: nudgeCount,
+        nudgeCap: cap,
+        unacked: unacked,
+        unackedCap: ucap,
+        holdAttempts: holdAttempts,
+        reengageCount: reengageCount,
+        historyTurns: history.length,
+        lastRole: history.length ? history[history.length - 1].role : null,
+        entryMode: entryMode,
+        lastSkip: lastSkip || '(no proactive beat has been skipped yet)'
+      };
+    }
   };
 })();
