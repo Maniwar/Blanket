@@ -2136,11 +2136,16 @@ function engagementBlock(): string {
     "fact (their held number, the 30-night trial) may be offered once as service, never as a hook. Each " +
     "follow-up should feel like a person picking a conversation back up — the shopper should feel accompanied, " +
     "never chased.\n" +
-    "- NEVER re-ask a question they haven't answered — not even reworded. Your unanswered question is still on " +
-    "their screen; asking it three ways reads as pestering. The next beat after an unanswered question is a " +
-    "STATEMENT (one true detail, a small picture, a service note), a different door entirely, or silence — " +
-    "never another question mark. For a KNOWN patron, draw that line from their CUSTOMER block and client " +
-    "book, not from generic discovery.\n" +
+    "- Don't repeat an unanswered question — vary the DOOR, not the words. This governs YOUR OWN unprompted " +
+    "follow-ups: after your question sits unanswered, the next proactive beat is a STATEMENT (one true detail, " +
+    "a small picture, a service note), a DIFFERENT subject, or silence — never the same ask reworded; three " +
+    "phrasings of one question reads as pestering. Persistence is welcome, repetition is not: rotate genuinely " +
+    "different approaches (a fact about the cloth they lingered on → a picture of it in their home → a service " +
+    "note from their register → a different question), and you may RE-OPEN an earlier question once they've " +
+    "spoken again or you've given something new since. For a KNOWN patron, draw every beat from their CUSTOMER " +
+    "block and client book, never generic discovery. This is pacing for proactive beats, NOT a gag: when the " +
+    "patron replies ambiguously, a gentle clarifying question is good service, and explicit confirmations " +
+    "(a cancellation, a change) must ALWAYS be asked — never skipped because a similar question came earlier.\n" +
     "- [HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY to stay silent on a proactive check-in " +
     "prompt where silence is kinder. NEVER write [HOLD] (or the bare word 'hold') in reply to a message the " +
     "visitor actually sent — to anything they type, including a bare 'hey', always give real, warm words. The " +
@@ -3187,9 +3192,11 @@ async function handleChatPost(req: Request): Promise<Response> {
     const unansweredAsk = typeof lastMsg?.content === "string" &&
       /\?\s*["'”’]?\s*$/.test(lastMsg.content.trim());
     const askGuard = unansweredAsk
-      ? " YOUR LAST LINE IS AN UNANSWERED QUESTION, still on their screen. Do NOT ask another " +
-        "question and do NOT rephrase the same one — it reads as pestering. Say ONE short line " +
-        "with no question mark at all (a true detail, a small picture, a service note), or hold."
+      ? " YOUR LAST LINE IS AN UNANSWERED QUESTION, still on their screen. On THIS beat do not ask " +
+        "another question and do not rephrase that one — it reads as pestering. Say ONE short line " +
+        "with no question mark at all (a true detail, a small picture, a service note from their " +
+        "register), or hold. The question stays open — once they speak again, or on a later beat " +
+        "after you've offered something new, you may return to it through a different door."
       : "";
     const groundNote = signedIn
       ? " They are a KNOWN patron — ground the line in their CUSTOMER block (first name, standing, " +
@@ -3201,8 +3208,9 @@ async function handleChatPost(req: Request): Promise<Response> {
       decision = "SPEAK now (do not hold). Send one warm, specific line drawn from THIS " +
         "conversation and what you know of them — the room or person they mentioned, the cloth " +
         "they lingered on, an open goal. Never generic; something only this shopper would hear. " +
-        "NEVER re-ask or rephrase a question you already asked in this conversation — an " +
-        "unanswered question stands; open a DIFFERENT door or make a statement instead.";
+        "Don't re-ask or rephrase a question they haven't answered — vary the door instead " +
+        "(a true detail, a small picture, a service note, a different subject). Persistence is " +
+        "fine; repetition is what annoys.";
     } else {
       // Later: a light, human "still here" presence — brief, low-pressure, and
       // sometimes just checking they're alright. You MAY reply exactly [HOLD] to
@@ -3937,23 +3945,21 @@ async function handleReengage(req: Request): Promise<Response> {
     const signed = customer !== null;
     const postSale = body.post_sale === true;
 
-    // Open HOUSE INSTRUCTIONS for a signed-in patron — this outreach line is a
-    // proactive beat too, so it must honour them. Words only (this endpoint has no
-    // tools and returns a single line); the house reconciles any check-off later.
+    // FULL patron context for a signed-in shopper — this outreach line must be
+    // able to welcome them back warmly by name, standing, orders, and client
+    // book, and honour any open house instruction (customerBlock carries the
+    // directives + honesty guard). Words only (no tools here); the house
+    // reconciles any check-off later. opening=false: the bubble itself is the
+    // re-engagement, so the "greet like someone returning" banner would be
+    // redundant pressure.
     let houseClause = "";
     if (customer) {
-      const safeEmail = customer.email?.replace(/["\\,()]/g, "");
-      const nf = safeEmail
-        ? `or=${encodeURIComponent(`(user_id.eq.${customer.id},email.eq."${safeEmail}")`)}`
-        : `user_id=eq.${encodeURIComponent(customer.id)}`;
-      const dirs = await pgSelect<{ note: string }>(
-        `customer_notes?select=note&${nf}&kind=eq.directive&resolved=eq.false&order=created_at.desc&limit=6`,
-      );
-      if (dirs && dirs.length) {
-        houseClause = " The team left a HOUSE INSTRUCTION for this patron: " +
-          dirs.map((d) => `"${d.note}"`).join("; ") + ". If it is a proper one, weave it into this outreach line in " +
-          "your OWN voice. " + HOUSE_NOTE_GUARD;
-      }
+      try {
+        const block = await customerBlock(customer, false);
+        houseClause = " " + block + " Ground the line in THIS patron — their first name, standing, an order " +
+          "in their queue, or a client-book note — never a generic prospect line. If a proper HOUSE " +
+          "INSTRUCTION is open above, weave it into this line in your OWN voice (no tool needed here).";
+      } catch { /* context is best-effort — the line still goes out */ }
     }
 
     let sys: string;
