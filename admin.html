@@ -7954,22 +7954,50 @@ async function runAttributionQA() {
     out.textContent = 'No attribution_qa section returned — are you signed in as an admin, and is the latest concierge deployed?';
     return;
   }
-  const order = ['event_insert', 'event_readback', 'conversation_insert', 'order_insert', 'tier_readback', 'join_readback', 'cleanup'];
+  // Evidence, not verdicts: every step shows the actual ids/values it created
+  // and read back, so a PASS is checkable — and the whole run is persisted to
+  // the Actions log (action = attribution_qa) for later audit.
+  out.appendChild(el('p', 'micro', 'Run ' + (qa.ran_at || '—') + ' by ' + (qa.ran_by || '—') +
+    ' · test key ' + (qa.key || '—') + ' · ' + (qa.duration_ms != null ? qa.duration_ms + 'ms' : '')));
+  const order = ['event_insert', 'event_readback', 'event_delete', 'conversation_insert', 'order_insert',
+    'tier_readback', 'join_readback', 'order_delete', 'conversation_delete', 'cleanup'];
   const rows = el('div', 'cv-rows');
   order.forEach(function (k) {
     if (!(k in qa)) return;
+    const step = qa[k];
     const r = el('div', 'row');
     r.appendChild(el('span', 'k', k.replace(/_/g, ' ')));
-    const v = el('span', 'v', String(qa[k]));
-    if (qa[k] !== 'ok') v.style.color = '#c98a6b';
+    let text, ok;
+    if (step && typeof step === 'object') {
+      ok = step.ok === true;
+      const bits = [];
+      Object.keys(step).forEach(function (p) {
+        if (p === 'ok') return;
+        bits.push(p + ': ' + (step[p] === null ? 'null' : String(step[p])));
+      });
+      text = (ok ? 'ok' : 'FAILED') + (bits.length ? ' — ' + bits.join(' · ') : '');
+    } else { ok = step === 'ok'; text = String(step); }
+    const v = el('span', 'v', text);
+    if (!ok) v.style.color = '#c98a6b';
     r.appendChild(v);
     rows.appendChild(r);
   });
   const verdict = el('p', 'micro');
   verdict.style.cssText = 'margin-top:8px; font-weight:700; color:' + (qa.verdict === 'PASS' ? '#7fb069' : '#c98a6b') + ';';
-  verdict.textContent = 'Verdict: ' + (qa.verdict || '—') + (qa.error ? ' — ' + qa.error : '');
+  verdict.textContent = 'Verdict: ' + (qa.verdict || '—') + (qa.error ? ' — ' + qa.error : '') +
+    (qa.audit_logged ? '  ·  logged to Actions (search "attribution_qa")' : '  ·  NOT logged to Actions');
   out.appendChild(rows);
   out.appendChild(verdict);
+  // The raw evidence, verbatim — copy/paste-able into an audit trail.
+  const det = document.createElement('details');
+  const sum = el('summary', 'micro', 'Raw evidence (JSON)');
+  sum.style.cursor = 'pointer';
+  det.appendChild(sum);
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'font-size:10.5px; white-space:pre-wrap; word-break:break-all; color:var(--wool-dim); margin:8px 0 0;';
+  pre.textContent = JSON.stringify(qa, null, 2);
+  det.appendChild(pre);
+  out.appendChild(det);
   toast(qa.verdict === 'PASS' ? 'Attribution QA passed' : 'Attribution QA FAILED — see steps', qa.verdict !== 'PASS');
 }
 

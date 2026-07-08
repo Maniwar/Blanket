@@ -3101,53 +3101,97 @@ async function handleSelfTest(req: Request): Promise<Response> {
   // reporting excludes as test data. Every row it creates is deleted before the
   // response returns; the order row uses serial=null + status 'cancelled', so
   // even a failed cleanup can never count as revenue or hold a number.
-  if (await requireAdmin(req)) {
+  // EVIDENCE, not verdicts: each step returns the actual key, row ids, and
+  // read-back values, and the whole run is persisted to concierge_actions
+  // (action='attribution_qa', with the admin's identity) so QA history is
+  // itself auditable in the Actions tab.
+  const qaAdmin = await requireAdmin(req);
+  if (qaAdmin) {
     const qa: Record<string, unknown> = {};
     const key = "qa-selftest-" + crypto.randomUUID().slice(0, 18);
+    const started = Date.now();
+    qa.key = key;
+    qa.ran_at = new Date(started).toISOString();
+    qa.ran_by = qaAdmin.email ?? qaAdmin.id;
     try {
       // 1. Funnel beacon row (site_events) — insert, read back, delete.
       const ev = await pgInsert<{ id: number }>("site_events", {
         kind: "visit", visit_key: key, session_key: key, section: "selftest",
       });
-      qa.event_insert = ev ? "ok" : "FAILED";
+      qa.event_insert = ev ? { ok: true, row_id: ev.id } : { ok: false };
       if (ev) {
-        const evBack = await pgSelect<{ id: number }>(`site_events?select=id&visit_key=eq.${key}&limit=1`);
-        qa.event_readback = evBack && evBack.length ? "ok" : "FAILED";
-        await fetch(`${SUPABASE_URL}/rest/v1/site_events?visit_key=eq.${key}`, { method: "DELETE", headers: PG_HEADERS });
+        const evBack = await pgSelect<{ id: number; kind: string }>(
+          `site_events?select=id,kind&visit_key=eq.${key}&limit=1`,
+        );
+        qa.event_readback = evBack && evBack.length
+          ? { ok: evBack[0].id === ev.id, row_id: evBack[0].id, kind: evBack[0].kind }
+          : { ok: false };
+        const del = await fetch(`${SUPABASE_URL}/rest/v1/site_events?visit_key=eq.${key}`, {
+          method: "DELETE", headers: { ...PG_HEADERS, "Prefer": "return=representation" },
+        });
+        qa.event_delete = { ok: del.ok, rows_deleted: del.ok ? ((await del.json()) as unknown[]).length : 0 };
       }
       // 2. Conversation + attributed order — insert both, verify the tier and
       //    the drill-in join (order.chat_session → conversation.session_key).
       const convo = await pgInsert<{ id: string }>("concierge_conversations", { session_key: key });
-      qa.conversation_insert = convo ? "ok" : "FAILED";
+      qa.conversation_insert = convo ? { ok: true, conversation_id: convo.id } : { ok: false };
       const ord = await pgInsert<{ id: string }>("orders", {
         email: "qa-selftest@feier-abend.co", status: "cancelled", serial: null,
         chat_session: key, chat_via: "identity", chat_meta: { lookback_days: 1 },
       });
-      qa.order_insert = ord ? "ok" : "FAILED (check chat_via/chat_meta columns + constraint)";
+      qa.order_insert = ord
+        ? { ok: true, order_id: ord.id }
+        : { ok: false, hint: "check chat_via/chat_meta columns + orders_chat_via_check constraint" };
       if (ord) {
-        const back = await pgSelect<{ chat_via: string; chat_meta: { lookback_days?: number } }>(
-          `orders?select=chat_via,chat_meta&chat_session=eq.${key}&limit=1`,
+        const back = await pgSelect<{ id: string; chat_via: string; chat_meta: { lookback_days?: number }; status: string; serial: number | null }>(
+          `orders?select=id,chat_via,chat_meta,status,serial&chat_session=eq.${key}&limit=1`,
         );
-        qa.tier_readback = back && back[0]?.chat_via === "identity" &&
-            back[0]?.chat_meta?.lookback_days === 1 ? "ok" : "FAILED";
+        const b = back && back[0];
+        qa.tier_readback = b
+          ? {
+            ok: b.chat_via === "identity" && b.chat_meta?.lookback_days === 1,
+            chat_via: b.chat_via, lookback_days: b.chat_meta?.lookback_days ?? null,
+            status: b.status, serial: b.serial,
+          }
+          : { ok: false };
         const join = await pgSelect<{ id: string }>(
           `concierge_conversations?select=id&session_key=eq.${key}&limit=1`,
         );
-        qa.join_readback = join && join.length && convo && join[0].id === convo.id ? "ok" : "FAILED";
-        await fetch(`${SUPABASE_URL}/rest/v1/orders?chat_session=eq.${key}`, { method: "DELETE", headers: PG_HEADERS });
+        qa.join_readback = join && join.length && convo
+          ? { ok: join[0].id === convo.id, joined_conversation_id: join[0].id, expected: convo.id }
+          : { ok: false };
+        const delO = await fetch(`${SUPABASE_URL}/rest/v1/orders?chat_session=eq.${key}`, {
+          method: "DELETE", headers: { ...PG_HEADERS, "Prefer": "return=representation" },
+        });
+        qa.order_delete = { ok: delO.ok, rows_deleted: delO.ok ? ((await delO.json()) as unknown[]).length : 0 };
       }
       if (convo) {
-        await fetch(`${SUPABASE_URL}/rest/v1/concierge_conversations?session_key=eq.${key}`, { method: "DELETE", headers: PG_HEADERS });
+        const delC = await fetch(`${SUPABASE_URL}/rest/v1/concierge_conversations?session_key=eq.${key}`, {
+          method: "DELETE", headers: { ...PG_HEADERS, "Prefer": "return=representation" },
+        });
+        qa.conversation_delete = { ok: delC.ok, rows_deleted: delC.ok ? ((await delC.json()) as unknown[]).length : 0 };
       }
       // 3. Confirm cleanup left nothing behind (reporting also excludes qa-%).
-      const leftovers = await pgSelect<{ id: unknown }>(`orders?select=id&chat_session=like.qa-selftest-%&limit=1`);
-      qa.cleanup = leftovers && leftovers.length === 0 ? "ok" : "LEFTOVERS (reporting still excludes qa-%)";
+      const leftovers = await pgSelect<{ id: unknown }>(`orders?select=id&chat_session=like.qa-selftest-%&limit=5`);
+      qa.cleanup = { ok: !!leftovers && leftovers.length === 0, leftover_orders: leftovers ? leftovers.length : -1 };
+      const stepOk = (v: unknown) => !!v && (v as { ok?: boolean }).ok === true;
       qa.verdict = ["event_insert", "event_readback", "conversation_insert", "order_insert", "tier_readback", "join_readback"]
-        .every((k) => qa[k] === "ok") ? "PASS" : "FAIL";
+        .every((k) => stepOk(qa[k])) ? "PASS" : "FAIL";
     } catch (e) {
       qa.verdict = "FAIL";
       qa.error = e instanceof Error ? e.message : String(e);
     }
+    qa.duration_ms = Date.now() - started;
+    // Durable audit record of the run itself — who, when, verdict, and the full
+    // step evidence. Visible in the admin's Actions tab (action = attribution_qa).
+    try {
+      await pgInsert("concierge_actions", {
+        conversation_id: null, user_id: qaAdmin.id, email: qaAdmin.email,
+        action: "attribution_qa", serial: null, payload: qa,
+        result: `${qa.verdict} — key ${key}, ${qa.duration_ms}ms`,
+      });
+      qa.audit_logged = true;
+    } catch { qa.audit_logged = false; }
     report.attribution_qa = qa;
   }
   return jsonResponse(req, 200, report);

@@ -251,9 +251,16 @@ tooltip); the **Chats** tab lists chats that *touched* the order — see below.
   attributed order (**serial-less and cancelled**, so it can never count as
   revenue or hold an edition number), verifies the tier stamp
   (`chat_via`/`chat_meta`), the order→conversation drill-in join, and then
-  deletes everything it created, reporting each step ok/FAILED with a PASS/FAIL
-  verdict. It runs no model calls; only admins can trigger it (the server gates
-  the write cycle).
+  deletes everything it created. It runs no model calls; only admins can
+  trigger it (the server gates the write cycle).
+- **QA runs are evidence, not verdicts — and are themselves audited.** Each
+  step returns the actual test key, row ids, read-back values (`chat_via`,
+  `lookback_days`, the joined conversation id vs the expected one), and
+  per-step delete counts; the UI shows them all plus the raw JSON. Every run
+  is persisted to `concierge_actions` as `action='attribution_qa'` with the
+  admin's identity, timestamp, duration, verdict, and the full step evidence
+  in `payload` — so the QA history is reviewable later in the Actions tab
+  (search "attribution_qa"), independent of whoever ran it.
 - **Belt and braces:** even if a QA run dies mid-cycle, its rows are `qa-`
   prefixed (excluded from reporting) and the order row is cancelled with no
   serial (excluded from revenue and allocation) — a failed test can never
