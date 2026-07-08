@@ -609,6 +609,15 @@
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
   .metrics.two{ grid-template-columns:repeat(2, 1fr); }
+  /* Conversion KPI rows fill their own widths — 4 commerce tiles, then 5
+     concierge tiles — so no row leaves ragged orphans. The 👍 tile's value
+     runs smaller at 5-up, so trim the type a touch on that row. */
+  #cv-tiles{ grid-template-columns:repeat(4, 1fr); margin-bottom:16px; }
+  #cv-tiles2{ grid-template-columns:repeat(5, 1fr); }
+  #cv-tiles2 .stat .val{ font-size:22px; }
+  @media (max-width:1180px){
+    #cv-tiles, #cv-tiles2{ grid-template-columns:repeat(2, 1fr); }
+  }
   .stat{ border:1px solid var(--hairline-dim); border-radius:3px; padding:16px 18px 14px; background:rgba(38,51,43,.28); }
   .stat .val{ font-family:'IBM Plex Mono', monospace; font-size:26px; color:var(--wool); margin-top:6px; }
   .convo-wrap{ display:grid; grid-template-columns:360px 1fr; gap:22px; align-items:start; }
@@ -779,7 +788,7 @@
     nav.tabs{ padding:0 18px; }
     main{ padding:24px 18px 70px; }
     .grid-3{ grid-template-columns:1fr; gap:16px; }
-    .metrics, .metrics.two{ grid-template-columns:1fr; }
+    .metrics, .metrics.two, #cv-tiles, #cv-tiles2{ grid-template-columns:1fr; }
     .convo-wrap{ grid-template-columns:1fr; }
     .convo-list{ max-height:38vh; }
     .msg{ max-width:92%; }
@@ -7412,9 +7421,14 @@ async function loadConversion() {
     const i = bk.idx(new Date(o.placed_at).getTime());
     if (i >= 0) uniq.commission[i].add(o.serial != null ? o.serial : (o.id || Math.random()));
   });
-  const funnelSeries = CV_FUNNEL.map(function (s) {
-    return { name: s.label, color: s.color, values: uniq[s.key].map(function (set) { return set.size; }) };
-  });
+  // Beacon stages with no events in range are "not tracked", not zero — leave
+  // them off the chart rather than drawing flat 0-lines that read as real data.
+  const anyEventsInRange = allEvents.some(function (e) { return inCur(e.created_at); });
+  const funnelSeries = CV_FUNNEL
+    .filter(function (s) { return anyEventsInRange || (s.key === 'spoke' || s.key === 'commission'); })
+    .map(function (s) {
+      return { name: s.label, color: s.color, values: uniq[s.key].map(function (set) { return set.size; }) };
+    });
   cvChart($('cv-chart-funnel'), {
     labels: bk.labels, gran: bk.gran, fmt: cvFmtN,
     aria: 'Funnel over time — unique visitors per stage per ' + bk.gran,
@@ -7441,34 +7455,51 @@ async function loadConversion() {
     checkout_open: 'unique devices that opened the register sheet',
     commission: 'kept orders placed'
   };
+  // A beacon stage with no events in range isn't a real zero — the beacons
+  // simply weren't live for (part of) the range. Render those as "not tracked",
+  // never as 0 in the funnel, and chain pass-through across TRACKED stages only
+  // — otherwise "0 visits, 56 spoke" reads as impossible data.
+  const BEACON_STAGES = { visit: 1, chat_open: 1, checkout_open: 1 };
+  const eventsInRange = allEvents.some(function (e) { return inCur(e.created_at); });
   let prevN = null;
   CV_FUNNEL.forEach(function (s) {
+    const untracked = !eventsInRange && BEACON_STAGES[s.key];
     const n = totals[s.key];
     const row = el('div', 'fnl-row');
-    row.title = s.label + ' — ' + STAGE_UNIT[s.key];
+    row.title = s.label + ' — ' + STAGE_UNIT[s.key] +
+      (untracked ? '. Not tracked for this range: the beacon shipped later.' : '');
     const lab = el('span', 'fl');
-    const sw = el('span', 'sw'); sw.style.background = s.color;
+    const sw = el('span', 'sw'); sw.style.background = untracked ? 'transparent' : s.color;
+    if (untracked) sw.style.border = '1px solid ' + s.color;
     lab.appendChild(sw); lab.appendChild(document.createTextNode(s.label));
+    if (untracked) lab.style.opacity = '.55';
     row.appendChild(lab);
     const bar = el('div', 'fbar');
-    const fill = el('div', 'fill');
-    fill.style.width = Math.min(100, Math.max(0.5, 100 * n / maxStage)) + '%';
-    fill.style.background = s.color;
-    bar.appendChild(fill);
+    if (!untracked) {
+      const fill = el('div', 'fill');
+      fill.style.width = Math.min(100, Math.max(0.5, 100 * n / maxStage)) + '%';
+      fill.style.background = s.color;
+      bar.appendChild(fill);
+    }
     row.appendChild(bar);
-    const passThrough = prevN === null ? '' : (prevN > 0 ? ' · ' + Math.round(100 * n / prevN) + '% of previous' : '');
     const v = el('span', 'fv');
-    v.appendChild(el('b', '', cvFmtN(n)));
-    v.appendChild(document.createTextNode(passThrough));
+    if (untracked) {
+      v.appendChild(document.createTextNode('— not tracked yet'));
+      v.style.opacity = '.55';
+    } else {
+      const passThrough = prevN === null || prevN <= 0 ? '' : ' · ' + Math.round(100 * n / prevN) + '% of previous';
+      v.appendChild(el('b', '', cvFmtN(n)));
+      v.appendChild(document.createTextNode(passThrough));
+      prevN = n;   // only tracked stages join the pass-through chain
+    }
     row.appendChild(v);
     fs.appendChild(row);
-    prevN = n;
   });
   const overall = totals.visit > 0 ? (Math.round(1000 * totals.commission / totals.visit) / 10) + '%' : '—';
   const fsNote = el('p', 'micro');
   fsNote.style.marginTop = '10px';
-  fsNote.textContent = ((totals.visit === 0 && totals.chat_open === 0)
-    ? 'Beacon stages (visits, chat opened, register opened) start counting from their ship date — spoke and commissions fill from existing data, so pass-through against empty beacon stages is not meaningful yet. '
+  fsNote.textContent = (!eventsInRange
+    ? 'Visit / chat-opened / register-opened tracking began 8 Jul 2026 — those stages fill in from now; spoke and commissions come from existing data. '
     : 'Overall visit → commission: ' + overall + '. ') +
     'Units per stage: visits / chat / register count unique DEVICES; spoke counts CONVERSATIONS; commissions counts ORDERS — pass-through across a unit change is directional, not exact (hover a row for its unit).';
   fs.appendChild(fsNote);
