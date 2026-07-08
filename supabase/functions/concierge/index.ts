@@ -3090,6 +3090,61 @@ async function handleSelfTest(req: Request): Promise<Response> {
       "Bearer <your user JWT> (not the anon key). If you ARE signed in on the site and this " +
       "still says false, the token isn't reaching the function.";
   }
+
+  // ── Attribution QA (admins only — it writes) ────────────────────────────────
+  // A full round-trip of the attribution pipeline using qa- prefixed keys that
+  // reporting excludes as test data. Every row it creates is deleted before the
+  // response returns; the order row uses serial=null + status 'cancelled', so
+  // even a failed cleanup can never count as revenue or hold a number.
+  if (await requireAdmin(req)) {
+    const qa: Record<string, unknown> = {};
+    const key = "qa-selftest-" + crypto.randomUUID().slice(0, 18);
+    try {
+      // 1. Funnel beacon row (site_events) — insert, read back, delete.
+      const ev = await pgInsert<{ id: number }>("site_events", {
+        kind: "visit", visit_key: key, session_key: key, section: "selftest",
+      });
+      qa.event_insert = ev ? "ok" : "FAILED";
+      if (ev) {
+        const evBack = await pgSelect<{ id: number }>(`site_events?select=id&visit_key=eq.${key}&limit=1`);
+        qa.event_readback = evBack && evBack.length ? "ok" : "FAILED";
+        await fetch(`${SUPABASE_URL}/rest/v1/site_events?visit_key=eq.${key}`, { method: "DELETE", headers: PG_HEADERS });
+      }
+      // 2. Conversation + attributed order — insert both, verify the tier and
+      //    the drill-in join (order.chat_session → conversation.session_key).
+      const convo = await pgInsert<{ id: string }>("concierge_conversations", { session_key: key });
+      qa.conversation_insert = convo ? "ok" : "FAILED";
+      const ord = await pgInsert<{ id: string }>("orders", {
+        email: "qa-selftest@feier-abend.co", status: "cancelled", serial: null,
+        chat_session: key, chat_via: "identity", chat_meta: { lookback_days: 1 },
+      });
+      qa.order_insert = ord ? "ok" : "FAILED (check chat_via/chat_meta columns + constraint)";
+      if (ord) {
+        const back = await pgSelect<{ chat_via: string; chat_meta: { lookback_days?: number } }>(
+          `orders?select=chat_via,chat_meta&chat_session=eq.${key}&limit=1`,
+        );
+        qa.tier_readback = back && back[0]?.chat_via === "identity" &&
+            back[0]?.chat_meta?.lookback_days === 1 ? "ok" : "FAILED";
+        const join = await pgSelect<{ id: string }>(
+          `concierge_conversations?select=id&session_key=eq.${key}&limit=1`,
+        );
+        qa.join_readback = join && join.length && convo && join[0].id === convo.id ? "ok" : "FAILED";
+        await fetch(`${SUPABASE_URL}/rest/v1/orders?chat_session=eq.${key}`, { method: "DELETE", headers: PG_HEADERS });
+      }
+      if (convo) {
+        await fetch(`${SUPABASE_URL}/rest/v1/concierge_conversations?session_key=eq.${key}`, { method: "DELETE", headers: PG_HEADERS });
+      }
+      // 3. Confirm cleanup left nothing behind (reporting also excludes qa-%).
+      const leftovers = await pgSelect<{ id: unknown }>(`orders?select=id&chat_session=like.qa-selftest-%&limit=1`);
+      qa.cleanup = leftovers && leftovers.length === 0 ? "ok" : "LEFTOVERS (reporting still excludes qa-%)";
+      qa.verdict = ["event_insert", "event_readback", "conversation_insert", "order_insert", "tier_readback", "join_readback"]
+        .every((k) => qa[k] === "ok") ? "PASS" : "FAIL";
+    } catch (e) {
+      qa.verdict = "FAIL";
+      qa.error = e instanceof Error ? e.message : String(e);
+    }
+    report.attribution_qa = qa;
+  }
   return jsonResponse(req, 200, report);
 }
 

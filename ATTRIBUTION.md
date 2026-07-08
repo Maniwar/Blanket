@@ -238,6 +238,27 @@ tooltip); the **Chats** tab lists chats that *touched* the order — see below.
   taxes, discounts, refunds, or partial payments in this demo, so revenue is
   exactly proportional to counts.
 
+## QA & test data (how we know it keeps working)
+
+- **Test-data convention:** any `session_key` / `visit_key` / `chat_session`
+  prefixed **`eval-`** (the behavior-evals deck) or **`qa-`** (the attribution
+  self-test) marks the row as QA traffic. The Conversion tab **excludes it from
+  every metric, chart, funnel stage, and export** — automated checks can run
+  daily without moving production numbers. (The Conversations tab still lists
+  them, so QA transcripts remain inspectable.)
+- **Attribution QA** (admin → Evals → *Attribution QA*): a full pipeline
+  round-trip with `qa-` keys — writes a funnel beacon, a conversation, and an
+  attributed order (**serial-less and cancelled**, so it can never count as
+  revenue or hold an edition number), verifies the tier stamp
+  (`chat_via`/`chat_meta`), the order→conversation drill-in join, and then
+  deletes everything it created, reporting each step ok/FAILED with a PASS/FAIL
+  verdict. It runs no model calls; only admins can trigger it (the server gates
+  the write cycle).
+- **Belt and braces:** even if a QA run dies mid-cycle, its rows are `qa-`
+  prefixed (excluded from reporting) and the order row is cancelled with no
+  serial (excluded from revenue and allocation) — a failed test can never
+  contaminate the ledger.
+
 ## How to raise the ✳ number
 
 The levers, in the order they usually pay off:

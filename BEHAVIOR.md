@@ -53,6 +53,13 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
 - **Honour them before anything else.** An open instruction outranks the bot's own
   plan for the conversation. It is woven into service, never read aloud or
   attributed to "the team."
+- **The note's exact wording is the sole source of the errand.** If the client
+  book or a past visit mentions a *similar* errand (an earlier forgotten item, an
+  earlier apology), that one is history — its details must never bleed into the
+  new instruction. To keep old errands from contaminating new ones, resolving a
+  note writes a **content-free** book event (the note's id only, marked "a past
+  errand: never repeat or reference its contents") — the errand's text lives
+  only on the note itself.
 - **Standing vs. one-time.** A standing preference ("always offer the Loden first")
   is followed every visit and left open. A one-time task ("apologise for the delay
   on Nº 231") is done at the first natural moment, then checked off by calling

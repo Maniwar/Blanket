@@ -1742,6 +1742,21 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
 
       <section class="card">
         <div class="card-head">
+          <h3>Attribution QA</h3>
+          <span class="micro">End-to-end pipeline check — no model calls, no production impact</span>
+        </div>
+        <p class="note" style="margin-bottom:14px;">Round-trips the attribution pipeline with
+          <span class="mono">qa-</span> test keys: writes a funnel beacon, a conversation, and an
+          attributed order (serial-less, cancelled — it can never count as revenue), verifies the tier
+          stamp and the order→conversation join, then deletes everything it created.
+          <span class="mono">qa-</span> and <span class="mono">eval-</span> traffic is excluded from every
+          Conversion metric, so QA never moves production numbers. Spec: <span class="mono">ATTRIBUTION.md</span>.</p>
+        <div class="card-foot"><button id="attrqa-run" class="btn primary" type="button">Run attribution QA</button></div>
+        <div id="attrqa-out" class="micro" style="margin-top:10px;"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
           <h3>Run the deck</h3>
           <span class="micro">live model calls — costs a little each run</span>
         </div>
@@ -2145,6 +2160,16 @@ function wireStatic() {
   $('run-prune').addEventListener('click', function () {
     withBusy($('run-prune'), runPrune);
   });
+  $('attrqa-run').addEventListener('click', function () {
+    withBusy($('attrqa-run'), runAttributionQA);
+  });
+  // Back/forward move between tabs; a #hash on load opens that tab directly.
+  window.addEventListener('popstate', function () {
+    const t = (location.hash || '').slice(1);
+    if (TAB_NAMES.indexOf(t) >= 0) activateTab(t, true);
+  });
+  const initialTab = (location.hash || '').slice(1);
+  if (TAB_NAMES.indexOf(initialTab) >= 0 && initialTab !== 'tuning') activateTab(initialTab, true);
   $('cv-refresh').addEventListener('click', function () { loadConversion(); });
   $('cv-wkstart').addEventListener('change', function () {
     const v = parseInt($('cv-wkstart').value, 10);
@@ -2282,13 +2307,20 @@ async function doSignOut() {
   route();
 }
 
-function activateTab(name) {
+const TAB_NAMES = ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'conversion', 'actions', 'website', 'tools', 'evals', 'edition'];
+function activateTab(name, fromHistory) {
   document.querySelectorAll('nav.tabs .tab').forEach(function (b) {
     b.classList.toggle('on', b.dataset.tab === name);
   });
-  ['tuning', 'knowledge', 'procedures', 'cache', 'customers', 'conversations', 'conversion', 'actions', 'website', 'tools', 'evals', 'edition'].forEach(function (p) {
+  TAB_NAMES.forEach(function (p) {
     $('panel-' + p).classList.toggle('on', p === name);
   });
+  // Browser navigation works like the rest of the web: each tab is a history
+  // entry (#hash), so Back returns to the previous tab instead of leaving the
+  // admin entirely, and a tab URL is shareable/bookmarkable.
+  if (!fromHistory && location.hash !== '#' + name) {
+    try { history.pushState({ tab: name }, '', '#' + name); } catch (eH) { /* ignore */ }
+  }
   if (name === 'conversion') loadConversion();
   if (name === 'tuning') autoGrowAll('#panel-tuning .tsub.on');
   if (name === 'knowledge') autoGrowAll('#kb-list');
@@ -7413,8 +7445,8 @@ async function loadConversion() {
   const fetchFrom = fetchFromMs === null ? null : new Date(fetchFromMs).toISOString();
 
   let oq = sb.from('orders').select('*').order('placed_at', { ascending: false }).limit(10000);
-  let cq = sb.from('concierge_conversations').select('id,sales_stage,created_at,section').limit(10000);
-  let eq = sb.from('site_events').select('kind,visit_key,created_at,via').limit(20000);
+  let cq = sb.from('concierge_conversations').select('id,session_key,sales_stage,created_at,section').limit(10000);
+  let eq = sb.from('site_events').select('kind,visit_key,session_key,created_at,via').limit(20000);
   let mq = sb.from('concierge_messages').select('conversation_id,created_at').eq('role', 'user').limit(20000);
   if (fetchFrom) {
     oq = oq.gte('placed_at', fetchFrom); cq = cq.gte('created_at', fetchFrom);
@@ -7439,10 +7471,19 @@ async function loadConversion() {
   const inCmp = function (iso) { return hasCmp && inWin(iso, win.cmpStart, win.cmpEnd); };
   const winEndMs = win.curEnd !== null ? win.curEnd : nowMs;
 
-  const allOrders = ores.data || [];
-  const allConvos = cres.data || [];
-  const allEvents = (eres && eres.data) || [];   // empty until setup.sql ran / beacons ship
-  const allUserMsgs = (mres && mres.data) || [];
+  // TEST DATA is excluded from every Conversion number: session keys prefixed
+  // 'eval-' (the behavior-evals deck) or 'qa-' (the attribution self-test) mark
+  // rows as QA traffic, so automated checks never move production metrics.
+  const isTestKey = function (k) { return typeof k === 'string' && /^(qa-|eval-)/.test(k); };
+  const rawConvos = cres.data || [];
+  const testConvoIds = new Set(rawConvos.filter(function (c) { return isTestKey(c.session_key); })
+    .map(function (c) { return c.id; }));
+  const allOrders = (ores.data || []).filter(function (o) { return !isTestKey(o.chat_session); });
+  const allConvos = rawConvos.filter(function (c) { return !isTestKey(c.session_key); });
+  const allEvents = ((eres && eres.data) || [])   // empty until setup.sql ran / beacons ship
+    .filter(function (e) { return !isTestKey(e.visit_key) && !isTestKey(e.session_key); });
+  const allUserMsgs = ((mres && mres.data) || [])
+    .filter(function (m) { return !testConvoIds.has(m.conversation_id); });
   const orders = allOrders.filter(function (o) { return inCur(o.placed_at); });
   const convos = allConvos.filter(function (c) { return inCur(c.created_at); });
   const pOrders = allOrders.filter(function (o) { return inCmp(o.placed_at); });
@@ -7890,6 +7931,46 @@ async function loadConversion() {
     if (initiated.length > 50) olist.appendChild(el('p', 'micro', 'Showing the 50 most recent of ' + initiated.length + ' — Export CSV for the full range.'));
     bd.appendChild(olist);
   }
+}
+
+/* Attribution QA — the ?selftest=1 attribution round-trip (admin-gated: the
+   server only runs the write/verify/delete cycle for admins). Renders each
+   step's ok/FAILED so a broken column, constraint, or join is pinpointed. */
+async function runAttributionQA() {
+  const out = $('attrqa-out');
+  out.textContent = 'Running…';
+  const token = state.session && state.session.access_token;
+  let res;
+  try {
+    res = await fetch(SUPABASE_URL + '/functions/v1/concierge?selftest=1', {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) }
+    });
+  } catch (e) { out.textContent = ''; fail('Attribution QA', e); return; }
+  if (!res.ok) { out.textContent = ''; fail('Attribution QA', { message: 'HTTP ' + res.status }); return; }
+  const j = await res.json().catch(function () { return {}; });
+  const qa = j && j.attribution_qa;
+  out.textContent = '';
+  if (!qa) {
+    out.textContent = 'No attribution_qa section returned — are you signed in as an admin, and is the latest concierge deployed?';
+    return;
+  }
+  const order = ['event_insert', 'event_readback', 'conversation_insert', 'order_insert', 'tier_readback', 'join_readback', 'cleanup'];
+  const rows = el('div', 'cv-rows');
+  order.forEach(function (k) {
+    if (!(k in qa)) return;
+    const r = el('div', 'row');
+    r.appendChild(el('span', 'k', k.replace(/_/g, ' ')));
+    const v = el('span', 'v', String(qa[k]));
+    if (qa[k] !== 'ok') v.style.color = '#c98a6b';
+    r.appendChild(v);
+    rows.appendChild(r);
+  });
+  const verdict = el('p', 'micro');
+  verdict.style.cssText = 'margin-top:8px; font-weight:700; color:' + (qa.verdict === 'PASS' ? '#7fb069' : '#c98a6b') + ';';
+  verdict.textContent = 'Verdict: ' + (qa.verdict || '—') + (qa.error ? ' — ' + qa.error : '');
+  out.appendChild(rows);
+  out.appendChild(verdict);
+  toast(qa.verdict === 'PASS' ? 'Attribution QA passed' : 'Attribution QA FAILED — see steps', qa.verdict !== 'PASS');
 }
 
 /* Run the retention prune (admin-gated ?prune=1 → prune_high_write RPC).
