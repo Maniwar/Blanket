@@ -1179,21 +1179,55 @@ Deno.serve(async (req: Request) => {
   // Attribution: the concierge's commissions are counted (best-effort — the
   // order stands either way, but a failure is LOGGED so lost attribution is
   // visible in the function logs instead of silently undercounting).
-  if (chatSession) {
-    const attribution: Record<string, unknown> = { chat_session: chatSession };
-    if (chatVia) attribution.chat_via = chatVia;
-    if (chatMeta) attribution.chat_meta = chatMeta;
-    try {
-      const pr = await fetch(`${SUPABASE_URL}/rest/v1/orders?serial=eq.${serial}`, {
-        method: "PATCH",
-        headers: RPC_HEADERS,
-        body: JSON.stringify(attribution),
-      });
-      if (!pr.ok) {
-        console.error(`attribution PATCH failed for serial ${serial}: HTTP ${pr.status} ${await pr.text().catch(() => "")}`.slice(0, 300));
+  // Session-level first (checkout sent a chat key); else IDENTITY-level: a
+  // signed-in buyer whose account had a conversation in the 30 days before
+  // placement gets chat_via='identity' with that conversation's session key —
+  // this catches cross-device and chat-today-buy-tomorrow journeys the
+  // same-tab-session capture misses. See ATTRIBUTION.md.
+  {
+    let attribution: Record<string, unknown> | null = null;
+    if (chatSession) {
+      attribution = { chat_session: chatSession };
+      if (chatVia) attribution.chat_via = chatVia;
+      if (chatMeta) attribution.chat_meta = chatMeta;
+    } else {
+      try {
+        const lookback = new Date(Date.now() - 30 * 86400000).toISOString();
+        const safeEmail = (validated.email ?? "").replace(/["\\,()]/g, "");
+        const filter = safeEmail
+          ? `or=(user_id.eq.${customer.id},user_email.eq."${encodeURIComponent(safeEmail)}")`
+          : `user_id=eq.${customer.id}`;
+        const cr = await fetch(
+          `${SUPABASE_URL}/rest/v1/concierge_conversations?select=session_key,created_at&${filter}` +
+            `&created_at=gte.${encodeURIComponent(lookback)}&order=created_at.desc&limit=1`,
+          { headers: RPC_HEADERS },
+        );
+        if (cr.ok) {
+          const rows = await cr.json() as { session_key: string | null; created_at: string }[];
+          if (rows.length > 0 && rows[0].session_key) {
+            const days = Math.max(0, Math.floor((Date.now() - new Date(rows[0].created_at).getTime()) / 86400000));
+            attribution = {
+              chat_session: rows[0].session_key,
+              chat_via: "identity",
+              chat_meta: { lookback_days: days },
+            };
+          }
+        }
+      } catch { /* identity lookback is purely additive */ }
+    }
+    if (attribution) {
+      try {
+        const pr = await fetch(`${SUPABASE_URL}/rest/v1/orders?serial=eq.${serial}`, {
+          method: "PATCH",
+          headers: RPC_HEADERS,
+          body: JSON.stringify(attribution),
+        });
+        if (!pr.ok) {
+          console.error(`attribution PATCH failed for serial ${serial}: HTTP ${pr.status} ${await pr.text().catch(() => "")}`.slice(0, 300));
+        }
+      } catch (e) {
+        console.error(`attribution PATCH threw for serial ${serial}:`, e instanceof Error ? e.message : String(e));
       }
-    } catch (e) {
-      console.error(`attribution PATCH threw for serial ${serial}:`, e instanceof Error ? e.message : String(e));
     }
   }
 

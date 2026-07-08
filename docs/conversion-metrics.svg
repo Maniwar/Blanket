@@ -13,7 +13,7 @@
 
   <rect width="1240" height="1560" fill="#f6f2ea"/>
   <text x="40" y="46" class="t h" font-size="24">Conversion &amp; revenue attribution — how every number is made</text>
-  <text x="40" y="70" class="m" font-size="13">The capture pipeline, the three attribution tiers, the behavioral funnel, and the exact metric formulas behind the admin's Conversion tab. Full prose: ATTRIBUTION.md.</text>
+  <text x="40" y="70" class="m" font-size="13">The capture pipeline, the four attribution tiers, the behavioral funnel, and the exact metric formulas behind the admin's Conversion tab. Full prose: ATTRIBUTION.md.</text>
 
   <!-- ========== 1. CAPTURE PIPELINE ========== -->
   <text x="40" y="112" class="t h cap">1 · Capture — the journey leaves evidence</text>
@@ -62,28 +62,40 @@
   <!-- ========== 2. THE THREE TIERS ========== -->
   <text x="40" y="292" class="t h cap">2 · Classify — every kept commission lands in exactly one tier</text>
 
-  <rect x="40" y="304" width="373" height="120" rx="10" fill="#fdf0e0" stroke="#C49B5B" stroke-width="1.5"/>
-  <text x="56" y="329" class="t h" font-size="14">✳ Concierge-initiated</text>
-  <text x="56" y="348" class="m mono" font-size="11">orders.chat_via = 'concierge'</text>
-  <text x="56" y="367" class="m" font-size="11.5">Checkout was opened from the concierge's own</text>
-  <text x="56" y="381" class="m" font-size="11.5">commission button. CAUSAL — the tier to optimize;</text>
-  <text x="56" y="395" class="m" font-size="11.5">quote this alone when claiming the bot drove revenue.</text>
-  <text x="56" y="413" class="m" font-size="10.5" font-style="italic">carries chat_meta {entry, section, turns} for What-converts</text>
+  <rect x="40" y="304" width="277" height="128" rx="10" fill="#fdf0e0" stroke="#C49B5B" stroke-width="1.5"/>
+  <text x="54" y="329" class="t h" font-size="13.5">✳ Concierge-initiated</text>
+  <text x="54" y="348" class="m mono" font-size="10.5">chat_via = 'concierge'</text>
+  <text x="54" y="367" class="m" font-size="11">Checkout opened from the concierge's</text>
+  <text x="54" y="381" class="m" font-size="11">own commission button. CAUSAL — the</text>
+  <text x="54" y="395" class="m" font-size="11">tier to optimize and to quote.</text>
+  <text x="54" y="415" class="m" font-size="10" font-style="italic">carries chat_meta {entry, section,</text>
+  <text x="54" y="427" class="m" font-size="10" font-style="italic">turns} for What-converts</text>
 
-  <rect x="433" y="304" width="373" height="120" rx="10" fill="#eef3e6" stroke="#7a915a" stroke-width="1.5"/>
-  <text x="449" y="329" class="t h" font-size="14">Chat-assisted</text>
-  <text x="449" y="348" class="m mono" font-size="11">chat_session set · chat_via ≠ 'concierge'</text>
-  <text x="449" y="367" class="m" font-size="11.5">A conversation ran in the buying tab session, but</text>
-  <text x="449" y="381" class="m" font-size="11.5">checkout came from a page button. CO-OCCURRENCE —</text>
-  <text x="449" y="395" class="m" font-size="11.5">influence plausible, not proven.</text>
-  <text x="449" y="413" class="m" font-size="10.5" font-style="italic">pre-tier orders with a chat link classify here</text>
+  <rect x="334" y="304" width="277" height="128" rx="10" fill="#eef3e6" stroke="#7a915a" stroke-width="1.5"/>
+  <text x="348" y="329" class="t h" font-size="13.5">Chat-assisted</text>
+  <text x="348" y="348" class="m mono" font-size="10.5">chat_session set · via ambient/NULL</text>
+  <text x="348" y="367" class="m" font-size="11">A conversation ran in the buying tab</text>
+  <text x="348" y="381" class="m" font-size="11">session; checkout from a page button.</text>
+  <text x="348" y="395" class="m" font-size="11">CO-OCCURRENCE — plausible, not proven.</text>
+  <text x="348" y="415" class="m" font-size="10" font-style="italic">pre-tier orders with a chat link</text>
+  <text x="348" y="427" class="m" font-size="10" font-style="italic">classify here</text>
 
-  <rect x="826" y="304" width="374" height="120" rx="10" fill="#eceef0" stroke="#8a94a6" stroke-width="1.5"/>
-  <text x="842" y="329" class="t h" font-size="14">Unassisted</text>
-  <text x="842" y="348" class="m mono" font-size="11">chat_session IS NULL</text>
-  <text x="842" y="367" class="m" font-size="11.5">No conversation in the buying session. The baseline —</text>
-  <text x="842" y="381" class="m" font-size="11.5">but remember: cross-day and cross-device journeys</text>
-  <text x="842" y="395" class="m" font-size="11.5">land here too, so attributed figures are a FLOOR.</text>
+  <rect x="628" y="304" width="277" height="128" rx="10" fill="#e6f0f5" stroke="#3F9FC4" stroke-width="1.5"/>
+  <text x="642" y="329" class="t h" font-size="13.5">Identity-assisted</text>
+  <text x="642" y="348" class="m mono" font-size="10.5">chat_via = 'identity'</text>
+  <text x="642" y="367" class="m" font-size="11">SIGNED-IN buyer, no same-session chat,</text>
+  <text x="642" y="381" class="m" font-size="11">but the account conversed ≤ 30 days</text>
+  <text x="642" y="395" class="m" font-size="11">before placement (server lookback).</text>
+  <text x="642" y="415" class="m" font-size="10" font-style="italic">catches cross-device and chat-today-</text>
+  <text x="642" y="427" class="m" font-size="10" font-style="italic">buy-tomorrow · chat_meta.lookback_days</text>
+
+  <rect x="922" y="304" width="278" height="128" rx="10" fill="#eceef0" stroke="#8a94a6" stroke-width="1.5"/>
+  <text x="936" y="329" class="t h" font-size="13.5">Unassisted</text>
+  <text x="936" y="348" class="m mono" font-size="10.5">chat_session IS NULL</text>
+  <text x="936" y="367" class="m" font-size="11">No conversation in the buying session</text>
+  <text x="936" y="381" class="m" font-size="11">and none on the account in the lookback.</text>
+  <text x="936" y="395" class="m" font-size="11">Anonymous cross-session journeys land</text>
+  <text x="936" y="409" class="m" font-size="11">here — attributed figures are a FLOOR.</text>
 
   <!-- ========== 3. THE FUNNEL ========== -->
   <text x="40" y="470" class="t h cap">3 · The behavioral funnel — five stages, three units</text>
@@ -160,10 +172,10 @@
 
     <rect x="334" y="754" width="278" height="108" rx="10" fill="#ffffff" stroke="#d3cdbf"/>
     <text x="350" y="778" class="t h" font-size="13.5">Attributed revenue</text>
-    <text x="350" y="798" class="m mono" font-size="11">(✳ + assisted) × unit_price</text>
+    <text x="350" y="798" class="m mono" font-size="11">(✳ + chat + identity) × unit_price</text>
     <text x="350" y="817" class="m" font-size="11">date basis: order date</text>
     <text x="350" y="835" class="m" font-size="10.5" font-style="italic">quote the ✳ share alone when claiming</text>
-    <text x="350" y="848" class="m" font-size="10.5" font-style="italic">causation — adding both tiers overstates</text>
+    <text x="350" y="848" class="m" font-size="10.5" font-style="italic">causation — assisted tiers co-occur</text>
 
     <rect x="628" y="754" width="278" height="108" rx="10" fill="#ffffff" stroke="#d3cdbf"/>
     <text x="644" y="778" class="t h" font-size="13.5">Conversations · 👍 rate</text>
@@ -173,11 +185,11 @@
     <text x="644" y="848" class="m" font-size="10.5" font-style="italic">rate cannot be range-scoped, and says so</text>
 
     <rect x="922" y="754" width="278" height="108" rx="10" fill="#ffffff" stroke="#d3cdbf"/>
-    <text x="938" y="778" class="t h" font-size="13.5">Deltas (every tile)</text>
-    <text x="938" y="798" class="m mono" font-size="11">(current − prior) ÷ prior</text>
-    <text x="938" y="817" class="m" font-size="11">prior = the equal-length window</text>
-    <text x="938" y="831" class="m" font-size="11">immediately before the range</text>
-    <text x="938" y="849" class="m" font-size="10.5" font-style="italic">all-time has no prior window → no delta</text>
+    <text x="938" y="778" class="t h" font-size="13.5">Deltas &amp; Compare (every tile)</text>
+    <text x="938" y="798" class="m mono" font-size="11">(current − compare) ÷ compare</text>
+    <text x="938" y="817" class="m" font-size="11">Compare = prior period (DoD/WoW/MoM/YoY)</text>
+    <text x="938" y="831" class="m" font-size="11">or same period last year, or off</text>
+    <text x="938" y="849" class="m" font-size="10.5" font-style="italic">period-to-date aligned · dashed ghost lines on charts</text>
   </g>
 
   <!-- ========== 5. WHICH CHAT GETS CREDIT + BUCKETS ========== -->
@@ -191,11 +203,11 @@
   <text x="56" y="1006" class="m" font-size="11.5">the chat that was live at checkout.</text>
 
   <rect x="628" y="920" width="572" height="96" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
-  <text x="644" y="944" class="t h" font-size="13">Buckets &amp; ranges</text>
-  <text x="644" y="963" class="m" font-size="11.5">Range picker: 7 / 30 / 90 days / all time. Trend charts bucket the current</text>
-  <text x="644" y="977" class="m" font-size="11.5">range only: daily ≤ 31 days · weekly ≤ 200 days · monthly beyond.</text>
-  <text x="644" y="991" class="m" font-size="11.5">Funnel dedup: unique per bucket on the trend chart, unique per range on</text>
-  <text x="644" y="1006" class="m" font-size="11.5">the snapshot — the two can legitimately differ.</text>
+  <text x="644" y="944" class="t h" font-size="13">Ranges · View-by · buckets</text>
+  <text x="644" y="963" class="m" font-size="11.5">Ranges: Today / This week / This month / This year (period-to-date) · 7/30/90d · all.</text>
+  <text x="644" y="977" class="m" font-size="11.5">View-by sets chart granularity: hourly / daily / weekly / monthly / yearly, or Auto</text>
+  <text x="644" y="991" class="m" font-size="11.5">(hour ≤ 2d · day ≤ 31d · week ≤ 200d · month beyond). Funnel dedup: unique per</text>
+  <text x="644" y="1006" class="m" font-size="11.5">bucket on the trend chart, unique per range on the snapshot — they can differ.</text>
 
   <!-- ========== 6. WHERE IT SURFACES ========== -->
   <text x="40" y="1062" class="t h cap">6 · Where it surfaces — nothing is a dead end</text>
@@ -219,10 +231,10 @@
   <text x="40" y="1308" class="t h cap">7 · Honest limits — read before quoting numbers</text>
   <rect x="40" y="1320" width="1160" height="150" rx="10" fill="#fbeeea" stroke="#dcae9f"/>
   <g font-size="11.5" class="m">
-    <text x="56" y="1346">• Capture is same-tab-session: chat-today-buy-tomorrow or phone-chat-laptop-buy records as UNASSISTED — attributed figures are a floor, not a ceiling.</text>
-    <text x="56" y="1368">• Chat-assisted is co-occurrence, not causation — that is exactly why the ✳ tier exists.</text>
-    <text x="56" y="1390">• The judge's sales stages are model reads of transcripts, re-runnable and sampled — directional, never ledger entries. The ✳ tier is the hard signal.</text>
-    <text x="56" y="1412">• Retention (~180 days) prunes conversations/events; order rows and tier stamps survive, so revenue reporting outlives the transcripts behind it.</text>
+    <text x="56" y="1346">• Session capture is same-tab; the identity tier closes it for signed-in buyers (30d lookback) — anonymous cross-session journeys still read UNASSISTED (a floor).</text>
+    <text x="56" y="1368">• Assisted tiers are co-occurrence, not causation — that is exactly why the ✳ tier exists.</text>
+    <text x="56" y="1390">• Almost nothing depends on grading: revenue, tiers, rate, funnel are hard data; only the stages card + two opportunity reads use the judge (sampled, re-runnable).</text>
+    <text x="56" y="1412">• Retention is OPT-IN and configurable: prune_high_write(p_days:=180) ships with its schedule commented out — nothing is deleted unless the operator enables it.</text>
     <text x="56" y="1434">• Demo pricing: revenue is exactly count × configured price — no tax, discounts, refunds, or partials.</text>
     <text x="56" y="1456">• Funnel stages mix units (devices / conversations / orders) — stage-to-stage pass-through is directional, and each row states its unit.</text>
   </g>

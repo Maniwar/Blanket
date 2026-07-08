@@ -18,12 +18,17 @@ Every kept (non-cancelled) commission lands in exactly one tier:
 | Tier | Meaning | Signal | Confidence |
 |---|---|---|---|
 | **✳ Concierge-initiated** | The buyer opened checkout by tapping the concierge's own **“Begin the commission”** button | `orders.chat_via = 'concierge'` | Causal — the chat produced the click that produced the order |
-| **Chat-assisted** | A conversation ran in the buying session, but checkout was opened from a page button | `orders.chat_session` set, `chat_via` ≠ `'concierge'` | Co-occurrence — the chat was present, influence is plausible but not proven |
-| **Unassisted** | No conversation existed in the buying session | `chat_session` NULL | The concierge played no visible part |
+| **Chat-assisted** | A conversation ran in the buying session, but checkout was opened from a page button | `orders.chat_session` set, `chat_via` NULL/`'ambient'` | Co-occurrence — the chat was present, influence is plausible but not proven |
+| **Identity-assisted** | A **signed-in** buyer with no same-session chat, whose account had a conversation in the **30 days** before placement | `orders.chat_via = 'identity'` (`chat_meta.lookback_days` = days since that chat) | Weakest co-occurrence — catches cross-device and chat-today-buy-tomorrow journeys the session tier misses |
+| **Unassisted** | No conversation in the buying session and none on the account within the lookback | `chat_session` NULL | The concierge played no visible part |
 
-**Optimize on the ✳ tier.** Chat-assisted is a supporting indicator; unassisted
-is the baseline. When quoting a single "concierge revenue" figure, quote the ✳
-tier and mention chat-assisted separately — adding them together overstates.
+**Optimize on the ✳ tier.** The assisted tiers are supporting indicators;
+unassisted is the baseline. When quoting a single "concierge revenue" figure,
+quote the ✳ tier and mention the assisted tiers separately — adding them
+together overstates. Identity-assisted is stamped **server-side at placement**
+(the anonymous same-tab capture can't see identity, so this tier requires a
+signed-in purchase) and carries the driving conversation's session key, so
+drill-ins work the same as the other tiers.
 
 ## How a commission gets attributed (the pipeline)
 
@@ -53,10 +58,14 @@ tier and mention chat-assisted separately — adding them together overstates.
    (`supabase/functions/commission/index.ts`) whitelists the values
    (`chat_via` ∈ {concierge, ambient}; `chat_meta` keys/lengths bounded) and,
    right after the order row is created, PATCHes `chat_session`, `chat_via`,
-   and `chat_meta` onto it. The PATCH is best-effort — an attribution failure
-   never blocks the sale — but any failure is **logged** in the function logs,
-   so lost attribution is visible rather than silent. The `order_events` audit
-   trail records the stamp as an `updated` event.
+   and `chat_meta` onto it. **When checkout sent no chat key**, the server
+   runs the **identity lookback**: the signed-in buyer's most recent
+   conversation (by `user_id` or verified email) within 30 days of placement
+   → `chat_via='identity'`, `chat_session` = that conversation's key,
+   `chat_meta.lookback_days` = the gap. The PATCH is best-effort — an
+   attribution failure never blocks the sale — but any failure is **logged**
+   in the function logs, so lost attribution is visible rather than silent.
+   The `order_events` audit trail records the stamp as an `updated` event.
 5. **The admin reads it back.** `orders.chat_session` joins to
    `concierge_conversations.session_key` (a text join, not a foreign key — one
    session key can span several conversation rows), which is also how the
@@ -86,9 +95,19 @@ their ship date; earlier history shows zeros.
 
 ### Metric definitions (the formal table)
 
-Every tile carries this same definition in its ⓘ hover. **Range** = the picker
-(7/30/90 days or all time). **Prior window** = the equal-length window
-immediately before the range (deltas; all-time has none).
+Every tile carries this same definition in its ⓘ hover.
+
+**Range** — calendar periods (**Today / This week / This month / This year**,
+each period-to-date) or rolling windows (**7 / 30 / 90 days**) or all time.
+**View by** — the trend charts' bucket granularity: **hourly / daily / weekly /
+monthly / yearly**, or Auto (hourly ≤ 2 days, daily ≤ 31, weekly ≤ 200, else
+monthly; an explicit pick auto-coarsens only past 400 buckets).
+**Compare** — what deltas and the dashed chart ghost-lines measure against:
+**Prior period** (DoD / WoW / MoM / YoY when a calendar range is selected;
+the previous N days for rolling ranges) or **Same period last year**, or Off.
+Calendar comparisons are **period-to-date aligned** — "this month, 8 days in"
+compares against the *first 8 days* of last month, never a full period against
+a partial one. Ghost lines align by bucket index (day 3 over day 3).
 
 | Metric | Formula | Date basis | Exclusions |
 |---|---|---|---|
@@ -97,8 +116,9 @@ immediately before the range (deltas; all-time has none).
 | **Avg order value** | revenue ÷ kept commissions | order date | ≡ register price in this demo (one blanket per order, one price) — flat until multi-item/variable pricing exists |
 | **Conversion rate** | attributed kept commissions ÷ conversations started | **cross-basis**: numerator by order date, denominator by conversation start | see caveat below |
 | **✳ Concierge-initiated** | kept commissions with `chat_via='concierge'` | order date | — |
-| **Chat-assisted** | kept commissions with `chat_session` set and not ✳ | order date | — |
-| **Attributed revenue** | (✳ + assisted) × register price | order date | quote ✳ alone when claiming causation |
+| **Chat-assisted** | kept commissions with `chat_session` set, `chat_via` not ✳/identity | order date | — |
+| **Identity-assisted** | kept commissions with `chat_via='identity'` (signed-in buyer, account conversation ≤ 30 days before placement, no same-session chat) | order date | stamped from its ship date forward |
+| **Attributed revenue** | (✳ + chat-assisted + identity-assisted) × register price | order date | quote ✳ alone when claiming causation |
 | **Conversations** | conversation rows created in range | conversation start (`created_at`) | — |
 | **👍 rate** | thumbs-up ÷ all rated replies | **all-time** (feedback rows carry no timestamp) | not range-scopable |
 | **Funnel stages** | UNIQUE count per stage — *Visits / Chat opened / Register opened* count unique **devices** (`visit_key`); *Spoke* counts unique **conversations** with a user turn; *Commissions* counts kept **orders** | event time / message time / order date | dedup is per bucket on the trend chart, per range on the snapshot; pass-through across a unit change (device→conversation→order) is directional, not an exact per-person rate |
@@ -108,8 +128,9 @@ session; when several conversation rows share that key, drill-ins open the
 **latest conversation begun before the order was placed** — the chat that was
 live at checkout.
 
-**Bucketing:** ranges ≤ 31 days plot daily, ≤ 200 days weekly, longer monthly.
-The trend charts bucket the current range only; deltas compare whole windows.
+**Bucketing:** the View-by control (see above) sets the trend charts'
+granularity; Auto picks hourly ≤ 2 days, daily ≤ 31, weekly ≤ 200, else
+monthly. Deltas always compare whole windows, whatever the chart granularity.
 
 **Cross-basis caveat (conversion rate):** the numerator counts orders by order
 date and the denominator counts chats by start date, so a chat late in the
@@ -163,24 +184,32 @@ tooltip); the **Chats** tab lists chats that *touched* the order — see below.
 
 ## Honest limits (read before quoting numbers)
 
-- **Same-tab-session capture.** The chat key lives in `sessionStorage`, so
-  attribution is captured only when the conversation and the checkout complete
-  in the same browser tab session. Chat-today-buy-tomorrow, or chat on the
-  phone then buy on the laptop, records as **unassisted**. For a considered
-  purchase this is common: treat attributed figures as a **floor** on the
+- **Session capture is same-tab.** The chat key lives in `sessionStorage`, so
+  the ✳ and chat-assisted tiers require the conversation and checkout to share
+  a browser tab session. The **identity tier** closes this gap for signed-in
+  buyers (30-day account lookback), but anonymous cross-session journeys still
+  record as **unassisted** — treat attributed figures as a **floor** on the
   concierge's true influence, never a ceiling.
-- **Ambient is not causation.** A one-line chat that answered nothing still
-  marks the order chat-assisted. That's why the tiers exist.
+- **Assisted is not causation.** A one-line chat that answered nothing still
+  marks the order chat-assisted, and an identity match proves recency, not
+  influence. That's why the tiers exist — the ✳ tier is the causal claim.
 - **Best-effort stamp.** If the post-insert PATCH fails, the order stands
   unattributed; the failure appears in the commission function's logs (search
   "attribution PATCH").
-- **The judge can be wrong.** `sales_stage`/goal grades are model judgments
-  with sampling (`goal_sample_rate`) and can be re-run (Re-grade); they're
-  directional, not ledger entries.
-- **History has an horizon.** `prune_high_write` deletes conversations/actions
-  after ~180 days; `orders.chat_session` then points at nothing. Order rows and
-  their tier stamps survive, so long-range revenue reporting still works —
-  only the drill-down into the transcript is lost.
+- **The judge can be wrong — and almost nothing here depends on it.** Revenue,
+  commissions, tiers, conversion rate, and the funnel are all hard data
+  (orders, beacons, messages). Only the **Conversation stages** card and two
+  opportunity reads use the LLM judge's `sales_stage` — model judgments with
+  sampling (`goal_sample_rate`), re-runnable (Re-grade), directional, never
+  ledger entries.
+- **Retention is opt-in and configurable.** `prune_high_write(p_days := 180)`
+  deletes conversations/actions/events older than the parameter — but its
+  nightly pg_cron schedule **ships commented out** in `setup.sql`; nothing is
+  ever deleted unless the operator enables it, and the horizon is whatever
+  `p_days` you call it with. 180 is only the suggested privacy/cost balance
+  (transcripts hold PII). If pruning runs, order rows and their tier stamps
+  survive, so long-range revenue reporting still works — only the drill-down
+  into pruned transcripts is lost.
 - **Demo pricing.** Revenue = count × configured unit price. There are no
   taxes, discounts, refunds, or partial payments in this demo, so revenue is
   exactly proportional to counts.

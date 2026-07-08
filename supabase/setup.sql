@@ -97,10 +97,15 @@ alter table public.orders
   -- ({entry, section, turns}) for 'concierge' orders. See ATTRIBUTION.md.
   add column if not exists chat_via text,
   add column if not exists chat_meta jsonb;
--- attribution vocabulary (drop + re-add so re-running is clean)
+-- attribution vocabulary (drop + re-add so re-running is clean):
+-- 'concierge' = checkout opened from the concierge's commission button (causal);
+-- 'ambient'   = a chat co-occurred in the buying tab session;
+-- 'identity'  = signed-in buyer with a conversation ≤30 days before placement
+--               and no same-session chat (stamped server-side at placement —
+--               catches cross-device / chat-today-buy-tomorrow journeys).
 alter table public.orders drop constraint if exists orders_chat_via_check;
 alter table public.orders add constraint orders_chat_via_check
-  check (chat_via is null or chat_via in ('concierge','ambient'));
+  check (chat_via is null or chat_via in ('concierge','ambient','identity'));
 -- serial may be released when an order is struck
 alter table public.orders alter column serial drop not null;
 -- status vocabulary (drop + re-add so re-running is clean)

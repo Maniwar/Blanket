@@ -613,7 +613,7 @@
      concierge tiles — so no row leaves ragged orphans. The 👍 tile's value
      runs smaller at 5-up, so trim the type a touch on that row. */
   #cv-tiles{ grid-template-columns:repeat(4, 1fr); margin-bottom:16px; }
-  #cv-tiles2{ grid-template-columns:repeat(5, 1fr); }
+  #cv-tiles2{ grid-template-columns:repeat(3, 1fr); }
   #cv-tiles2 .stat .val{ font-size:22px; }
   @media (max-width:1180px){
     #cv-tiles, #cv-tiles2{ grid-template-columns:repeat(2, 1fr); }
@@ -1545,11 +1545,17 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
         <b>unassisted</b> — no conversation. Hover any <span class="info-badge">i</span> for the exact
         definition; formal definitions with date bases in <span class="mono">ATTRIBUTION.md</span>.</p>
 
-      <div class="ct-row" style="margin-bottom:18px;">
+      <div class="ct-row" style="margin-bottom:10px;">
         <span class="ct-tag">Range</span>
         <div id="cv-range" class="ord-chips" style="margin-bottom:0;"></div>
         <button id="cv-export" class="btn ghost" type="button" style="margin-left:auto;" title="Every order in the range with its attribution tier and click context — same columns as the register export">Export CSV</button>
         <button id="cv-refresh" class="btn ghost" type="button">Refresh</button>
+      </div>
+      <div class="ct-row" style="margin-bottom:18px;">
+        <span class="ct-tag" title="Bucket size for the trend charts — Auto picks hourly/daily/weekly/monthly by range">View by</span>
+        <div id="cv-gran" class="ord-chips" style="margin-bottom:0;"></div>
+        <span class="ct-tag" style="margin-left:18px;" title="What deltas and the dashed chart ghost-lines measure against. Calendar ranges compare period-to-date (this month, 8 days in, vs the first 8 days of last month) — never a full period against a partial one.">Compare</span>
+        <div id="cv-compare" class="ord-chips" style="margin-bottom:0;"></div>
       </div>
 
       <!-- Commerce KPIs — range-scoped, each with a definition and a delta vs the prior equal window -->
@@ -1563,8 +1569,9 @@ care | Wool self-cleans; airing handles most days. Wash it less than you think."
       <!-- Concierge KPIs — attribution + engagement -->
       <div class="metrics" id="cv-tiles2">
         <div class="stat"><span class="micro">✳ Concierge-initiated<span class="info-badge" title="Kept commissions where checkout was opened from the concierge's own commission button (orders.chat_via = concierge). The causal tier — the number to optimize. Click to open them.">i</span></span><div class="val" id="cv-initiated">—</div><div class="cv-delta" id="cv-initiated-d"></div></div>
-        <div class="stat"><span class="micro">Chat-assisted<span class="info-badge" title="Kept commissions with a conversation in the buying session but checkout from a page button (chat_session set, no button click). Co-occurrence, not proven cause. Click to open them.">i</span></span><div class="val" id="cv-assisted">—</div><div class="cv-delta" id="cv-assisted-d"></div></div>
-        <div class="stat"><span class="micro">Attributed revenue<span class="info-badge" title="(✳ + chat-assisted) × register price, in the range. Quote the ✳ share when claiming causation — adding both tiers overstates.">i</span></span><div class="val" id="cv-attr-rev">—</div><div class="cv-delta" id="cv-attr-rev-d"></div></div>
+        <div class="stat"><span class="micro">Chat-assisted<span class="info-badge" title="Kept commissions with a conversation in the buying session but checkout from a page button (chat_session set at checkout, no button click). Co-occurrence, not proven cause. Click to open them.">i</span></span><div class="val" id="cv-assisted">—</div><div class="cv-delta" id="cv-assisted-d"></div></div>
+        <div class="stat"><span class="micro">Identity-assisted<span class="info-badge" title="Kept commissions by a SIGNED-IN buyer whose account had a conversation in the 30 days before placement, with no same-session chat (orders.chat_via = identity). Catches cross-device and chat-today-buy-tomorrow journeys the session tier misses. Weakest assisted tier. Click to open them.">i</span></span><div class="val" id="cv-identity">—</div><div class="cv-delta" id="cv-identity-d"></div></div>
+        <div class="stat"><span class="micro">Attributed revenue<span class="info-badge" title="(✳ + chat-assisted + identity-assisted) × register price, in the range. Quote the ✳ share when claiming causation — the assisted tiers are co-occurrence.">i</span></span><div class="val" id="cv-attr-rev">—</div><div class="cv-delta" id="cv-attr-rev-d"></div></div>
         <div class="stat"><span class="micro">Conversations<span class="info-badge" title="Conversations started in the range (by created_at), signed-in and anonymous alike.">i</span></span><div class="val" id="cv-convos">—</div><div class="cv-delta" id="cv-convos-d"></div></div>
         <div class="stat"><span class="micro">👍 rate (all-time)<span class="info-badge" title="Thumbs-up ÷ all rated replies, ALL-TIME (feedback rows carry no timestamp, so this cannot be range-scoped). A reply-quality signal, not a conversion metric.">i</span></span><div class="val" id="cv-thumbs">—</div><div class="cv-delta"></div></div>
       </div>
@@ -2108,7 +2115,8 @@ function wireStatic() {
   });
   $('cv-refresh').addEventListener('click', function () { loadConversion(); });
   $('cv-export').addEventListener('click', function () {
-    exportOrdersCsv(state.cvOrders || [], 'conversion-' + (state.cvDays ? state.cvDays + 'd' : 'all') + '.csv');
+    const r = state.cvRange === undefined ? 30 : state.cvRange;
+    exportOrdersCsv(state.cvOrders || [], 'conversion-' + (r === 0 ? 'all' : (typeof r === 'number' ? r + 'd' : r)) + '.csv');
   });
   $('admin-add-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
@@ -5210,7 +5218,9 @@ function exportOrdersCsv(orders, filename) {
   orders.forEach(function (o) {
     const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : {};
     const extra = {
-      attribution: o.chat_via === 'concierge' ? 'concierge-initiated' : o.chat_session ? 'chat-assisted' : 'unassisted',
+      attribution: o.chat_via === 'concierge' ? 'concierge-initiated'
+        : o.chat_via === 'identity' ? 'identity-assisted'
+        : o.chat_session ? 'chat-assisted' : 'unassisted',
       attr_entry: m.entry, attr_section: m.section, attr_turns: m.turns
     };
     lines.push(head.map(function (k) {
@@ -5538,9 +5548,11 @@ function openOrderDrawer(o) {
   {
     const attr = o.chat_via === 'concierge'
       ? '✳ Concierge-initiated — checkout opened from the concierge’s commission button'
-      : o.chat_session
-        ? 'Chat-assisted — a conversation ran in the buying session'
-        : 'Unassisted — no conversation in the buying session';
+      : o.chat_via === 'identity'
+        ? 'Identity-assisted — this signed-in buyer chatted within 30 days of placing (cross-session)'
+        : o.chat_session
+          ? 'Chat-assisted — a conversation ran in the buying session'
+          : 'Unassisted — no conversation in the buying session';
     const aLine = el('div', 'dmicro' + (o.chat_session ? ' dlink' : ''), attr + (o.chat_session ? '  ↗' : ''));
     if (o.chat_via === 'concierge') aLine.style.color = 'var(--brass-soft)';
     const m = (o.chat_meta && typeof o.chat_meta === 'object') ? o.chat_meta : null;
@@ -6605,11 +6617,14 @@ function renderCustomers() {
   // narrow the register to ✳ concierge-initiated / chat-assisted / unassisted
   // commissions (orders.chat_via + chat_session; ATTRIBUTION.md).
   const tierOf = function (o) {
-    return o.chat_via === 'concierge' ? 'initiated' : o.chat_session ? 'assisted' : 'unassisted';
+    return o.chat_via === 'concierge' ? 'initiated'
+      : o.chat_via === 'identity' ? 'identity'
+      : o.chat_session ? 'assisted' : 'unassisted';
   };
-  const tCounts = { initiated: 0, assisted: 0, unassisted: 0 };
+  const tCounts = { initiated: 0, identity: 0, assisted: 0, unassisted: 0 };
   shown.forEach(function (o) { tCounts[tierOf(o)]++; });
-  [['initiated', '✳ initiated', '#C49B5B'], ['assisted', 'chat-assisted', '#7a915a'], ['unassisted', 'unassisted', '#4a5560']].forEach(function (t) {
+  [['initiated', '✳ initiated', '#C49B5B'], ['assisted', 'chat-assisted', '#7a915a'],
+   ['identity', 'identity-assisted', '#3F9FC4'], ['unassisted', 'unassisted', '#4a5560']].forEach(function (t) {
     if (!tCounts[t[0]]) return;
     const c = el('div', 'ord-chip' + (state.custVia === t[0] ? ' on' : ''));
     const sw = el('span', 'swatch'); sw.style.background = t[2]; c.appendChild(sw);
@@ -6960,23 +6975,65 @@ async function loadConversations(more) {
    Mechanics documented in ATTRIBUTION.md.
    ============================================================ */
 
-const CV_RANGES = [[7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']];
+/* Ranges: calendar periods (period-to-date) + rolling windows + all time.
+   View-by: the bucket granularity for the trend charts (auto picks sensibly).
+   Compare: what the tile deltas and chart ghost-lines measure against —
+   the immediately-prior period (DoD/WoW/MoM/YoY when a calendar range is
+   picked) or the same period one year ago. */
+const CV_RANGES = [
+  ['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['year', 'This year'],
+  [7, '7 days'], [30, '30 days'], [90, '90 days'], [0, 'All time']
+];
+const CV_GRANS = [['auto', 'Auto'], ['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'], ['year', 'Yearly']];
+const CV_CMPS = [['prior', 'Prior period'], ['yoy', 'Last year'], ['off', 'Off']];
 
-function cvRangeChips() {
-  const holder = $('cv-range');
+function cvChipRow(holderId, items, key, def) {
+  const holder = $(holderId);
   holder.textContent = '';
-  CV_RANGES.forEach(function (r) {
-    const c = el('button', 'ord-chip' + (state.cvDays === r[0] ? ' on' : ''), r[1]);
+  const cur = state[key] === undefined ? def : state[key];
+  items.forEach(function (r) {
+    const c = el('button', 'ord-chip' + (cur === r[0] ? ' on' : ''), r[1]);
     c.type = 'button';
-    c.addEventListener('click', function () { state.cvDays = r[0]; loadConversion(); });
+    c.addEventListener('click', function () { state[key] = r[0]; loadConversion(); });
     holder.appendChild(c);
   });
 }
 
-function cvSince() {
-  if (!state.cvDays) return null;               // 0 = all time
-  const d = new Date(Date.now() - state.cvDays * 86400000);
-  return d.toISOString();
+/* The current window + its comparison window, in ms. Calendar ranges compare
+   PERIOD-TO-DATE: "this month (8 days in)" measures against the FIRST 8 days
+   of last month (prior) or of the same month last year (yoy) — never a full
+   period against a partial one. Rolling ranges compare the previous N days.
+   All-time has no comparison. */
+function cvWindow() {
+  const now = Date.now();
+  const r = state.cvRange === undefined ? 30 : state.cvRange;
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  let curStart = null;
+  if (r === 'today') curStart = d.getTime();
+  else if (r === 'week') { d.setDate(d.getDate() - d.getDay()); curStart = d.getTime(); }
+  else if (r === 'month') { d.setDate(1); curStart = d.getTime(); }
+  else if (r === 'year') { d.setMonth(0, 1); curStart = d.getTime(); }
+  else if (typeof r === 'number' && r > 0) curStart = now - r * 86400000;
+  // else 0 = all time → curStart null
+  const cmpMode = state.cvCmp === undefined ? 'prior' : state.cvCmp;
+  let cmpStart = null, cmpEnd = null, cmpLabel = '';
+  if (curStart !== null && cmpMode !== 'off') {
+    const elapsed = now - curStart;
+    if (cmpMode === 'yoy') {
+      const y = new Date(curStart); y.setFullYear(y.getFullYear() - 1);
+      cmpStart = y.getTime(); cmpLabel = 'same period last year';
+    } else {
+      if (r === 'today') cmpStart = curStart - 86400000;
+      else if (r === 'week') cmpStart = curStart - 7 * 86400000;
+      else if (r === 'month') { const m = new Date(curStart); m.setMonth(m.getMonth() - 1); cmpStart = m.getTime(); }
+      else if (r === 'year') { const y2 = new Date(curStart); y2.setFullYear(y2.getFullYear() - 1); cmpStart = y2.getTime(); }
+      else cmpStart = curStart - elapsed;
+      cmpLabel = { today: 'yesterday', week: 'last week', month: 'last month', year: 'last year' }[r] || ('prior ' + r + 'd');
+    }
+    cmpEnd = cmpStart + elapsed;   // period-to-date alignment
+  }
+  return { now: now, curStart: curStart, cmpStart: cmpStart, cmpEnd: cmpEnd, cmpLabel: cmpLabel, range: r };
 }
 
 /* One stacked bar + legend from [{label, n, color}], skipping zero segments. */
@@ -7056,32 +7113,44 @@ const CV_FUNNEL = [
 const CV_EMPH = '#B08838';   // emphasis hue (validated); the money series
 const CV_CTX = '#8b9284';    // de-emphasis context line (total/rest)
 
-/* Time buckets for the current window: daily ≤ 31 days, weekly ≤ 200, else
-   monthly. Returns { starts:[ms], labels:[str], idx(tsMs)→bucket|-1 }. */
-function cvBuckets(fromMs, toMs) {
+/* Time buckets for a window. granPick 'auto' chooses hourly ≤ 2 days, daily
+   ≤ 31, weekly ≤ 200, else monthly; an explicit View-by choice overrides —
+   auto-coarsened only if it would produce an absurd bucket count (>400).
+   Returns { starts:[ms], labels:[str], gran, idx(tsMs)→bucket|-1 }. */
+function cvBuckets(fromMs, toMs, granPick) {
   const day = 86400000, span = toMs - fromMs;
-  const gran = span <= 32 * day ? 'day' : span <= 200 * day ? 'week' : 'month';
+  const auto = span <= 2 * day ? 'hour' : span <= 32 * day ? 'day' : span <= 200 * day ? 'week' : 'month';
+  let gran = (!granPick || granPick === 'auto') ? auto : granPick;
+  const approx = { hour: span / 3600000, day: span / day, week: span / (7 * day), month: span / (30 * day), year: span / (365 * day) };
+  if (approx[gran] > 400) gran = auto;                 // an explicit pick never melts the chart
   const starts = [];
   const d = new Date(fromMs);
-  d.setHours(0, 0, 0, 0);
-  if (gran === 'week') d.setDate(d.getDate() - d.getDay());
-  if (gran === 'month') d.setDate(1);
+  if (gran === 'hour') d.setMinutes(0, 0, 0);
+  else {
+    d.setHours(0, 0, 0, 0);
+    if (gran === 'week') d.setDate(d.getDate() - d.getDay());
+    if (gran === 'month') d.setDate(1);
+    if (gran === 'year') d.setMonth(0, 1);
+  }
   while (d.getTime() <= toMs) {
     starts.push(d.getTime());
-    if (gran === 'day') d.setDate(d.getDate() + 1);
+    if (gran === 'hour') d.setHours(d.getHours() + 1);
+    else if (gran === 'day') d.setDate(d.getDate() + 1);
     else if (gran === 'week') d.setDate(d.getDate() + 7);
-    else d.setMonth(d.getMonth() + 1);
+    else if (gran === 'month') d.setMonth(d.getMonth() + 1);
+    else d.setFullYear(d.getFullYear() + 1);
   }
   const labels = starts.map(function (t) {
     const x = new Date(t);
-    return gran === 'month'
-      ? x.toLocaleDateString([], { month: 'short', year: '2-digit' })
-      : x.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (gran === 'hour') return x.toLocaleTimeString([], { hour: 'numeric' });
+    if (gran === 'month') return x.toLocaleDateString([], { month: 'short', year: '2-digit' });
+    if (gran === 'year') return String(x.getFullYear());
+    return x.toLocaleDateString([], { month: 'short', day: 'numeric' });
   });
   return {
     starts: starts, labels: labels, gran: gran,
     idx: function (t) {
-      if (t < starts[0]) return -1;
+      if (!starts.length || t < starts[0]) return -1;
       for (let i = starts.length - 1; i >= 0; i--) { if (t >= starts[i]) return i; }
       return -1;
     }
@@ -7159,13 +7228,16 @@ function cvChart(mount, opts) {
     p.setAttribute('d', 'M' + pts.join('L'));
     p.setAttribute('fill', 'none'); p.setAttribute('stroke', s.color);
     p.setAttribute('stroke-width', '2');
+    if (s.dash) p.setAttribute('stroke-dasharray', '6 4');   // comparison ghost line
     p.setAttribute('stroke-linejoin', 'round'); p.setAttribute('stroke-linecap', 'round');
     sv.appendChild(p);
-    const dot = mk('circle');
-    dot.setAttribute('cx', X(n - 1)); dot.setAttribute('cy', Y(s.values[n - 1]));
-    dot.setAttribute('r', '4'); dot.setAttribute('fill', s.color);
-    dot.setAttribute('stroke', '#1c241e'); dot.setAttribute('stroke-width', '2');
-    sv.appendChild(dot);
+    if (!s.dash) {
+      const dot = mk('circle');
+      dot.setAttribute('cx', X(n - 1)); dot.setAttribute('cy', Y(s.values[n - 1]));
+      dot.setAttribute('r', '4'); dot.setAttribute('fill', s.color);
+      dot.setAttribute('stroke', '#1c241e'); dot.setAttribute('stroke-width', '2');
+      sv.appendChild(dot);
+    }
   });
   // crosshair + unified tooltip (pointer AND keyboard)
   const ch = mk('line');
@@ -7184,6 +7256,7 @@ function cvChart(mount, opts) {
     opts.series.forEach(function (s) {
       const r = el('div', 'tr');
       const k = el('span', 'tk'); k.style.borderTopColor = s.color;
+      if (s.dash) k.style.borderTopStyle = 'dashed';
       r.appendChild(k);
       r.appendChild(document.createTextNode(s.name));
       r.appendChild(el('span', 'tv', opts.fmt(s.values[i], false)));
@@ -7218,6 +7291,7 @@ function cvChart(mount, opts) {
     opts.series.forEach(function (s) {
       const li = el('span', 'li');
       const k = el('span', 'lk'); k.style.borderTopColor = s.color;
+      if (s.dash) k.style.borderTopStyle = 'dashed';
       li.appendChild(k);
       li.appendChild(document.createTextNode(s.name));
       leg.appendChild(li);
@@ -7255,14 +7329,16 @@ const cvFmtMoney = function (v, axis) {
 const cvFmtPct = function (v) { return (Math.round(v * 10) / 10) + '%'; };
 
 async function loadConversion() {
-  if (state.cvDays === undefined) state.cvDays = 30;
-  cvRangeChips();
-  const since = cvSince();
-  const nowMs = Date.now();
-  // Fetch 2× the window in one pass, then split — the prior window feeds the
-  // per-tile deltas. All-time has no prior window (no deltas).
-  const prevSince = state.cvDays ? new Date(nowMs - 2 * state.cvDays * 86400000).toISOString() : null;
-  const fetchFrom = prevSince || null;
+  cvChipRow('cv-range', CV_RANGES, 'cvRange', 30);
+  cvChipRow('cv-gran', CV_GRANS, 'cvGran', 'auto');
+  cvChipRow('cv-compare', CV_CMPS, 'cvCmp', 'prior');
+  const win = cvWindow();
+  const nowMs = win.now;
+  // One fetch spanning back to the earliest window needed (comparison or
+  // current); everything splits client-side into the two windows.
+  const fetchFromMs = win.curStart === null ? null
+    : Math.min(win.curStart, win.cmpStart === null ? win.curStart : win.cmpStart);
+  const fetchFrom = fetchFromMs === null ? null : new Date(fetchFromMs).toISOString();
 
   let oq = sb.from('orders').select('*').order('placed_at', { ascending: false }).limit(10000);
   let cq = sb.from('concierge_conversations').select('id,sales_stage,created_at,section').limit(10000);
@@ -7280,8 +7356,15 @@ async function loadConversion() {
   if (ores.error) { fail('Conversion — orders', ores.error); return; }
   if (cres.error) { fail('Conversion — conversations', cres.error); return; }
   if (eres.error && String(eres.error.message || '').indexOf('site_events') < 0) fail('Conversion — events', eres.error);
-  const sinceMs = since ? new Date(since).getTime() : -Infinity;
-  const inCur = function (iso) { return iso && new Date(iso).getTime() >= sinceMs; };
+
+  const inWin = function (iso, s, e) {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return t >= (s === null ? -Infinity : s) && t < (e === null ? Infinity : e);
+  };
+  const inCur = function (iso) { return inWin(iso, win.curStart, null); };
+  const hasCmp = win.cmpStart !== null;
+  const inCmp = function (iso) { return hasCmp && inWin(iso, win.cmpStart, win.cmpEnd); };
 
   const allOrders = ores.data || [];
   const allConvos = cres.data || [];
@@ -7289,26 +7372,31 @@ async function loadConversion() {
   const allUserMsgs = (mres && mres.data) || [];
   const orders = allOrders.filter(function (o) { return inCur(o.placed_at); });
   const convos = allConvos.filter(function (c) { return inCur(c.created_at); });
-  const pOrders = allOrders.filter(function (o) { return !inCur(o.placed_at); });
-  const pConvos = allConvos.filter(function (c) { return !inCur(c.created_at); });
+  const pOrders = allOrders.filter(function (o) { return inCmp(o.placed_at); });
+  const pConvos = allConvos.filter(function (c) { return inCmp(c.created_at); });
   state.cvOrders = orders;   // what Export CSV on this tab downloads
 
   // Attribution tiers over KEPT (non-cancelled) commissions. An order placed
   // before chat_via existed still counts as chat-assisted via chat_session.
+  // 'identity' = signed-in buyer with a conversation ≤30d before placement,
+  // stamped server-side — catches cross-device / cross-day journeys.
   const tiers = function (list) {
     const kept = list.filter(function (o) { return o.status !== 'cancelled'; });
     const ini = kept.filter(function (o) { return o.chat_via === 'concierge'; });
-    const amb = kept.filter(function (o) { return o.chat_session && o.chat_via !== 'concierge'; });
+    const idn = kept.filter(function (o) { return o.chat_via === 'identity'; });
+    const amb = kept.filter(function (o) {
+      return o.chat_session && o.chat_via !== 'concierge' && o.chat_via !== 'identity';
+    });
     const una = kept.filter(function (o) { return !o.chat_session; });
-    return { kept: kept, ini: ini, amb: amb, una: una, attr: ini.length + amb.length };
+    return { kept: kept, ini: ini, idn: idn, amb: amb, una: una, attr: ini.length + amb.length + idn.length };
   };
   const cur = tiers(orders), prev = tiers(pOrders);
-  const kept = cur.kept, initiated = cur.ini, ambient = cur.amb, unassisted = cur.una;
+  const kept = cur.kept, initiated = cur.ini, identity = cur.idn, ambient = cur.amb, unassisted = cur.una;
   const attributed = cur.attr;
   const rateOf = function (t, cs) { return cs.length ? 100 * t.attr / cs.length : null; };
   const curRate = rateOf(cur, convos), prevRate = rateOf(prev, pConvos);
 
-  // ---- KPI tiles + deltas (vs the prior equal window; all-time has none) ----
+  // ---- KPI tiles + deltas (vs the chosen comparison window) ----
   $('cv-revenue').textContent = '$' + (kept.length * PRICE).toLocaleString('en-US');
   $('cv-orders').textContent = String(kept.length);
   $('cv-aov').textContent = '$' + PRICE.toLocaleString('en-US');
@@ -7316,16 +7404,21 @@ async function loadConversion() {
   $('cv-rate').title = attributed + ' attributed commissions ÷ ' + convos.length + ' conversations in range';
   $('cv-initiated').textContent = String(initiated.length);
   $('cv-assisted').textContent = String(ambient.length);
+  if ($('cv-identity')) $('cv-identity').textContent = String(identity.length);
   $('cv-attr-rev').textContent = '$' + (attributed * PRICE).toLocaleString('en-US');
   $('cv-convos').textContent = String(convos.length);
   $('cv-thumbs').textContent = (!fbAll.error && !fbUp.error && fbAll.count > 0)
     ? Math.round(100 * (fbUp.count || 0) / fbAll.count) + '%' : '—';
 
-  const priorName = 'prior ' + state.cvDays + 'd';
+  const priorName = win.cmpLabel;
+  const cmpDates = hasCmp
+    ? new Date(win.cmpStart).toLocaleDateString() + ' – ' + new Date(win.cmpEnd).toLocaleDateString()
+    : '';
   const setDelta = function (id, curV, prevV, goodUp) {
     const n = $(id); if (!n) return;
     n.className = 'cv-delta';
-    if (!state.cvDays) { n.textContent = ''; return; }              // all-time: no prior window
+    n.title = cmpDates ? 'Comparison window: ' + cmpDates + ' (period-to-date aligned)' : '';
+    if (!hasCmp) { n.textContent = ''; return; }   // all-time or Compare: off
     if (prevV === null || curV === null) { n.textContent = '— vs ' + priorName; return; }
     if (prevV === 0) { n.textContent = (curV > 0 ? 'new vs ' : '0 in ') + priorName; return; }
     const pct = Math.round(1000 * (curV - prevV) / prevV) / 10;
@@ -7338,6 +7431,7 @@ async function loadConversion() {
   setDelta('cv-rate-d', curRate, prevRate, true);
   setDelta('cv-initiated-d', initiated.length, prev.ini.length, true);
   setDelta('cv-assisted-d', ambient.length, prev.amb.length, true);
+  setDelta('cv-identity-d', identity.length, prev.idn.length, true);
   setDelta('cv-attr-rev-d', attributed * PRICE, prev.attr * PRICE, true);
   setDelta('cv-convos-d', convos.length, pConvos.length, true);
 
@@ -7360,15 +7454,33 @@ async function loadConversion() {
     activateTab('conversations'); loadConversations();
   }, 'Open the Conversations floor');
 
-  // ---- Time buckets over the CURRENT window ----
+  // ---- Time buckets over the CURRENT window (View-by picks the granularity) ----
   const datumsMs = orders.map(function (o) { return new Date(o.placed_at).getTime(); })
     .concat(convos.map(function (c) { return new Date(c.created_at).getTime(); }))
     .concat(allEvents.filter(function (e) { return inCur(e.created_at); })
       .map(function (e) { return new Date(e.created_at).getTime(); }))
     .filter(function (t) { return !isNaN(t); });
-  const fromMs = since ? sinceMs : (datumsMs.length ? Math.min.apply(null, datumsMs) : nowMs - 6 * 86400000);
-  const bk = cvBuckets(fromMs, nowMs);
+  const fromMs = win.curStart !== null ? win.curStart
+    : (datumsMs.length ? Math.min.apply(null, datumsMs) : nowMs - 6 * 86400000);
+  const bk = cvBuckets(fromMs, nowMs, state.cvGran);
   const zeros = function () { return bk.starts.map(function () { return 0; }); };
+
+  // Per-bucket series builder over any window — used for the current lines and
+  // the comparison ghost-lines (same granularity, aligned by bucket INDEX so
+  // "day 3 of this month" sits over "day 3 of last month").
+  const bucketize = function (b, list, tsOf, valOf) {
+    const out = b.starts.map(function () { return 0; });
+    list.forEach(function (x) {
+      const i = b.idx(new Date(tsOf(x)).getTime());
+      if (i >= 0 && i < out.length) out[i] += valOf(x);
+    });
+    return out;
+  };
+  const alignTo = function (arr, len) {
+    const out = arr.slice(0, len);
+    while (out.length < len) out.push(0);
+    return out;
+  };
 
   // Revenue per bucket — total vs attributed (emphasis: the money line leads)
   const revTotal = zeros(), revAttr = zeros(), cntAttr = zeros();
@@ -7381,22 +7493,44 @@ async function loadConversion() {
   convos.forEach(function (c) {
     const i = bk.idx(new Date(c.created_at).getTime()); if (i >= 0) convoCnt[i]++;
   });
+
+  // Comparison ghosts — the same measures over the comparison window, bucketed
+  // at the same granularity and index-aligned under the current lines.
+  let ghostRev = null, ghostRate = null;
+  if (hasCmp) {
+    const cbk = cvBuckets(win.cmpStart, win.cmpEnd, bk.gran);
+    const cKept = prev.kept;
+    const cRevAttr = bucketize(cbk, cKept.filter(function (o) { return o.chat_session; }),
+      function (o) { return o.placed_at; }, function () { return PRICE; });
+    const cAttrCnt = bucketize(cbk, cKept.filter(function (o) { return o.chat_session; }),
+      function (o) { return o.placed_at; }, function () { return 1; });
+    const cConvoCnt = bucketize(cbk, pConvos, function (c) { return c.created_at; }, function () { return 1; });
+    ghostRev = alignTo(cRevAttr, bk.starts.length);
+    ghostRate = alignTo(cbk.starts.map(function (_, i) {
+      return cConvoCnt[i] ? Math.round(1000 * cAttrCnt[i] / cConvoCnt[i]) / 10 : 0;
+    }), bk.starts.length);
+  }
+
+  const revSeries = [
+    { name: 'Total revenue', color: CV_CTX, values: revTotal, wash: false },
+    { name: 'Attributed (chat)', color: CV_EMPH, values: revAttr }
+  ];
+  if (ghostRev) revSeries.push({ name: 'Attributed · ' + win.cmpLabel, color: CV_CTX, values: ghostRev, wash: false, dash: true });
   cvChart($('cv-chart-rev'), {
     labels: bk.labels, gran: bk.gran, fmt: cvFmtMoney,
     aria: 'Revenue over time — total and attributed, per ' + bk.gran,
-    series: [
-      { name: 'Total revenue', color: CV_CTX, values: revTotal, wash: false },
-      { name: 'Attributed (chat)', color: CV_EMPH, values: revAttr }
-    ]
+    series: revSeries
   });
-  // Conversion rate per bucket (single series; tooltip carries the raw counts)
+  // Conversion rate per bucket (tooltip carries the raw counts)
   const rateVals = bk.starts.map(function (_, i) {
     return convoCnt[i] ? Math.round(1000 * cntAttr[i] / convoCnt[i]) / 10 : 0;
   });
+  const rateSeries = [{ name: 'Conversion rate', color: CV_EMPH, values: rateVals }];
+  if (ghostRate) rateSeries.push({ name: 'Rate · ' + win.cmpLabel, color: CV_CTX, values: ghostRate, wash: false, dash: true });
   cvChart($('cv-chart-rate'), {
     labels: bk.labels, gran: bk.gran, fmt: cvFmtPct,
     aria: 'Conversion rate over time, per ' + bk.gran,
-    series: [{ name: 'Conversion rate', color: CV_EMPH, values: rateVals }],
+    series: rateSeries,
     tipNote: function (i) { return cntAttr[i] + ' attributed ÷ ' + convoCnt[i] + ' chats'; }
   });
 
@@ -7530,12 +7664,12 @@ async function loadConversion() {
   } else {
     addOpp('Funnel top', 'Traffic beacons just shipped — visits and opens start counting now; check back after real traffic.');
   }
-  // 2. Rate trend
-  if (state.cvDays && curRate !== null && prevRate !== null && prevRate > 0) {
+  // 2. Rate trend (against the chosen comparison window)
+  if (hasCmp && curRate !== null && prevRate !== null && prevRate > 0) {
     const d = Math.round(10 * (curRate - prevRate)) / 10;
     addOpp('Conversion trend', d >= 0
-      ? 'Rate is up ' + d + ' pts vs the prior window — whatever changed (goals, angles, dial) is working; keep it.'
-      : 'Rate is down ' + Math.abs(d) + ' pts vs the prior window — review what changed in Tuning, and read a few lost/objection chats.');
+      ? 'Rate is up ' + d + ' pts vs ' + win.cmpLabel + ' — whatever changed (goals, angles, dial) is working; keep it.'
+      : 'Rate is down ' + Math.abs(d) + ' pts vs ' + win.cmpLabel + ' — review what changed in Tuning, and read a few lost/objection chats.');
   }
   // 3. Unassisted share
   if (kept.length >= 5 && unassisted.length / kept.length > 0.5) {
@@ -7571,6 +7705,8 @@ async function loadConversion() {
       onClick: function () { cvOpenOrders('initiated'); }, clickTitle: 'Open these orders in the register' },
     { label: 'Chat-assisted', n: ambient.length, color: '#7a915a',
       onClick: function () { cvOpenOrders('assisted'); }, clickTitle: 'Open these orders in the register' },
+    { label: 'Identity-assisted', n: identity.length, color: '#3F9FC4',
+      onClick: function () { cvOpenOrders('identity'); }, clickTitle: 'Open these orders in the register' },
     { label: 'Unassisted', n: unassisted.length, color: '#4a5560',
       onClick: function () { cvOpenOrders('unassisted'); }, clickTitle: 'Open these orders in the register' }
   ]));
@@ -7578,8 +7714,9 @@ async function loadConversion() {
   const revLine = el('p', 'micro');
   revLine.style.marginTop = '10px';
   revLine.textContent = 'Revenue at $' + PRICE.toLocaleString('en-US') + '/blanket — ✳ initiated: $' +
-    (initiated.length * PRICE).toLocaleString('en-US') + ' · assisted: $' +
-    (ambient.length * PRICE).toLocaleString('en-US') + ' · unassisted: $' +
+    (initiated.length * PRICE).toLocaleString('en-US') + ' · chat-assisted: $' +
+    (ambient.length * PRICE).toLocaleString('en-US') + ' · identity-assisted: $' +
+    (identity.length * PRICE).toLocaleString('en-US') + ' · unassisted: $' +
     (unassisted.length * PRICE).toLocaleString('en-US') +
     (cancelled ? ' · (' + cancelled + ' cancelled excluded)' : '');
   split.appendChild(revLine);
