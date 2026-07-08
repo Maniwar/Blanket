@@ -104,6 +104,22 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
   turns that into a hold and shows nothing. It must never write `[HOLD]` in reply
   to a message the visitor actually sent; the token can never reach the reader (the
   pipeline strips it on every path).
+- **Vary the door, not the words (proactive pacing).** The bot never repeats or
+  rephrases its own unanswered question on a proactive beat — the server detects
+  an unanswered trailing question and hard-forbids another question mark on that
+  beat; the prompt rotates genuinely different approaches instead (a true cloth
+  detail → a picture in their home → a service note from their register → a
+  different question). The rule is **scoped**, not a gag: it governs only the
+  bot's own unprompted follow-ups; an ambiguous reply invites a gentle clarify,
+  explicit confirmations (a cancellation, a change) are always asked, and an
+  earlier question may be re-opened once the patron speaks again or after new
+  value was offered. Persistence stays wanted; repetition is what annoys.
+- **Every proactive beat carries the full patron context.** In-panel nudges,
+  openers, and the **closed-panel re-engagement bubble** all inject the complete
+  CUSTOMER block (name, standing, orders, recency, client book, open house
+  instructions) and are told to ground the line in THIS patron — the token getter
+  also waits briefly for a remembered session, so a known patron is never greeted
+  anonymously by a beat that fired before auth finished loading.
 - **Post-purchase.** A commission is congratulated **in the transcript** the moment
   checkout closes (with the standing note — Wiederkehr/Hausfreund/Stifter — when it
   applies), whether the chat panel is open or closed. After the sale the bot leads
