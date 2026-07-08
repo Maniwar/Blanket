@@ -925,7 +925,12 @@
       para = [];
     }
 
+    /* Stall guard: no branch below should ever loop without consuming a line,
+       but if one regression slips through, a bounded iteration count turns an
+       infinite loop (a frozen page) into a truncated render. */
+    var guardIter = 0, guardMax = n * 4 + 64;
     while (i < n) {
+      if (++guardIter > guardMax) { break; }
       var line = lines[i];
       var trimmed = line.replace(/^\s+|\s+$/g, '');
 
@@ -987,24 +992,32 @@
         i++; continue;
       }
 
-      /* {{reply:...}} lines — tappable quick replies; consecutive lines group */
+      /* {{reply:...}} lines — tappable quick replies; consecutive lines group.
+         CRITICAL: every line matching the {{reply: prefix MUST be consumed,
+         well-formed or not. The old code broke out of the inner loop WITHOUT
+         advancing when a pill failed the strict pattern (e.g. a label over the
+         old 64-char cap — which the bot now produces for per-order pills), so
+         the outer loop re-tested the same line forever and froze the page. */
       if (/^\{\{reply:/.test(trimmed)) {
         flushPara();
         var pills = [];
         while (i < n) {
           var rl = lines[i].replace(/^\s+|\s+$/g, '');
-          var rm = /^\{\{reply:([^{}]{1,64})\}\}$/.exec(rl);
-          if (!rm) { break; }
-          var label = rm[1].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
-          if (label && pills.length < 6) { pills.push(label); }
-          i++;
+          if (!/^\{\{reply:/.test(rl)) { break; }
+          i++; /* consume unconditionally — malformed pills are swallowed, never rendered, never looped on */
+          var rm = /^\{\{reply:([^{}]{1,200})\}\}$/.exec(rl);
+          if (!rm) { continue; }
+          var full = rm[1].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+          if (full && pills.length < 6) {
+            pills.push({ send: full, show: full.length > 90 ? full.slice(0, 89) + '…' : full });
+          }
         }
         if (pills.length) {
           var row = el('div', 'cx-replies cx-fade-in');
           row.setAttribute('role', 'group');
           row.setAttribute('aria-label', 'Suggested replies');
-          pills.forEach(function (lbl) {
-            var pb = el('button', 'cx-reply', lbl);
+          pills.forEach(function (pill) {
+            var pb = el('button', 'cx-reply', pill.show);
             pb.type = 'button';
             pb.addEventListener('click', function () {
               if (streaming) { return; }
@@ -1012,7 +1025,7 @@
               var bs = row.querySelectorAll('button');
               for (var bi = 0; bi < bs.length; bi++) { bs[bi].disabled = true; }
               entryMode = 'pill';
-              sendMessage(lbl);
+              sendMessage(pill.send); /* the full label, even when the button shows an ellipsis */
             });
             row.appendChild(pb);
           });
