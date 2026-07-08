@@ -721,6 +721,14 @@ fallback. Full design: [`CMS.md`](CMS.md).
 
 ### 2.9 The prompt architecture — one concern, one owner
 
+![Prompt-assembly diagram](docs/prompt-assembly.svg)
+
+*How each admin control and source of truth chains into the ordered prompt — a
+cacheable prefix (Core + toggleable named sections) and a dynamic, never-cached
+suffix (LIVE STATE + goal agenda). Mirrors `assemblePromptSections()` exactly;
+the admin sees this breakdown live via Tuning → “See assembled prompt”
+(`?preview=1`).*
+
 The system prompt grew by accretion until the same rule appeared in four places
 (the selling method was stated in NEXT MOVE, SALESCRAFT, a COMMISSION BUTTON
 block, and a `sales-skill` SOP; order handling and the pills pattern each thrice)

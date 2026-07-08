@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1040" viewBox="0 0 1180 1040" font-family="'Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/>
+    </marker>
+    <style>
+      .t{fill:#2a2620}.m{fill:#6b6455}.w{fill:#f7f8f9}
+      .h{font-weight:700}
+      .cap{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+    </style>
+  </defs>
+
+  <rect width="1180" height="1040" fill="#f6f2ea"/>
+  <text x="40" y="46" class="t h" font-size="24">Concierge system-prompt assembly</text>
+  <text x="40" y="70" class="m" font-size="13">How admin controls + sources of truth chain into one prompt. Server: buildSystemPrompt → assemblePromptSections (index.ts). Order is exact.</text>
+
+  <!-- ============ LEFT: ADMIN PANEL ============ -->
+  <rect x="40" y="100" width="300" height="470" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="56" y="126" class="t h cap">Admin panel · Tuning</text>
+  <text x="56" y="146" class="m" font-size="11">editable, no deploy · versioned in history</text>
+
+  <g font-size="12.5" class="t">
+    <text x="56" y="176" class="h">Primary objective</text>
+    <text x="56" y="193" class="m" font-size="11">→ fills {{OBJECTIVE}} in Core</text>
+
+    <text x="56" y="220" class="h">Base voice</text>
+    <text x="56" y="237" class="m" font-size="11">config.voice_base → Core (else BRAND_SYSTEM)</text>
+
+    <text x="56" y="264" class="h">Tuning notes (override)</text>
+    <text x="56" y="281" class="m" font-size="11">config.voice_notes → House additions</text>
+
+    <text x="56" y="308" class="h">Section toggles</text>
+    <text x="56" y="325" class="m" font-size="11">config.prompt_sections → turn blocks on/off</text>
+
+    <text x="56" y="352" class="h">How-hard-to-sell dial</text>
+    <text x="56" y="369" class="m" font-size="11">config.assertiveness → Selling</text>
+
+    <text x="56" y="396" class="h">Selling angles / Objections</text>
+    <text x="56" y="413" class="m" font-size="11">config.hooks / config.objections → Selling</text>
+
+    <text x="56" y="440" class="h">Procedures (SOPs)</text>
+    <text x="56" y="457" class="m" font-size="11">concierge_sops, per-row audience → SOP block</text>
+
+    <text x="56" y="484" class="h">Knowledge base</text>
+    <text x="56" y="501" class="m" font-size="11">concierge_kb → fills {{KB}} in Core</text>
+
+    <text x="56" y="528" class="h">Images · Goals · Forms · Model</text>
+    <text x="56" y="545" class="m" font-size="11">→ House additions · Goal agenda · Register · which model</text>
+  </g>
+
+  <!-- data sources -->
+  <rect x="40" y="590" width="300" height="120" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
+  <text x="56" y="614" class="t h cap">Sources of truth</text>
+  <g font-size="12" class="m">
+    <text x="56" y="636">concierge_config  (key/value, 60s cache)</text>
+    <text x="56" y="656">concierge_kb  ·  concierge_sops  ·  forms</text>
+    <text x="56" y="676">goals (per-conversation agenda)</text>
+    <text x="56" y="696">LIVE STATE ← customer orders/notes (runtime)</text>
+  </g>
+
+  <!-- ============ CENTER: ASSEMBLED PROMPT ============ -->
+  <text x="500" y="118" class="t h cap">The assembled prompt — top to bottom, in order</text>
+
+  <!-- cacheable prefix band -->
+  <rect x="490" y="128" width="470" height="500" rx="12" fill="#eef6ee" stroke="#bcd8bc"/>
+  <text x="506" y="150" class="cap" fill="#3f7a46">Cacheable prefix — stable → prompt-cached</text>
+
+  <!-- 1 core -->
+  <rect x="506" y="162" width="438" height="66" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="184" class="t h" font-size="14">1 · Core constitution</text>
+  <text x="520" y="203" class="m" font-size="11">voice_base (or BRAND_SYSTEM) with {{OBJECTIVE}} + {{KB}} substituted</text>
+  <text x="520" y="219" class="m" font-size="11">always on · the constitution every reply inherits</text>
+
+  <!-- 2 recognition -->
+  <rect x="506" y="234" width="438" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="255" class="t h" font-size="14">2 · Recognition &amp; client book</text>
+  <text x="520" y="273" class="m" font-size="11">toggle: prompt_sections.recognition · standing, invisible client book</text>
+
+  <!-- 3 register -->
+  <rect x="506" y="292" width="438" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="313" class="t h" font-size="14">3 · Register desk — tools &amp; discipline</text>
+  <text x="520" y="331" class="m" font-size="11">toggle + signed-in only · adds FORMS when forms exist</text>
+
+  <!-- 4 selling -->
+  <rect x="506" y="350" width="438" height="60" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="371" class="t h" font-size="14">4 · Selling — moves, dial, angles, objections</text>
+  <text x="520" y="389" class="m" font-size="11">toggle · assertiveness dial + hooks (angles) + objections playbook</text>
+  <text x="520" y="404" class="m" font-size="11">the six moves: Ask · Recommend · Show · Advance · Reassure · Space</text>
+
+  <!-- 5 engagement -->
+  <rect x="506" y="416" width="438" height="46" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="437" class="t h" font-size="14">5 · Engagement &amp; pacing</text>
+  <text x="520" y="454" class="m" font-size="11">toggle · proactive-beat rules + the [HOLD] signal</text>
+
+  <!-- 6 sops -->
+  <rect x="506" y="468" width="438" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="489" class="t h" font-size="14">6 · Standard operating procedures</text>
+  <text x="520" y="507" class="m" font-size="11">toggle · concierge_sops filtered by audience (signed_in / anon / all)</text>
+
+  <!-- 7 house additions -->
+  <rect x="506" y="526" width="438" height="52" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="520" y="547" class="t h" font-size="14">7 · House additions</text>
+  <text x="520" y="565" class="m" font-size="11">auto (only if present) · admin images + tuning notes (voice_notes)</text>
+
+  <text x="506" y="602" class="m" font-size="11" font-style="italic">A toggled-off block — or one with no content (e.g. no matching SOPs) — is simply omitted.</text>
+
+  <!-- cache boundary -->
+  <line x1="490" y1="648" x2="960" y2="648" stroke="#c8a04a" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="500" y="642" class="cap" fill="#b07d1e">Cache boundary — everything below changes per turn, never cached</text>
+
+  <!-- dynamic suffix band -->
+  <rect x="490" y="658" width="470" height="150" rx="12" fill="#fdf3e3" stroke="#e6cfa0"/>
+  <text x="506" y="680" class="cap" fill="#b07d1e">Dynamic suffix — rebuilt every request (buildLiveTail)</text>
+
+  <rect x="506" y="690" width="438" height="52" rx="8" fill="#ffffff" stroke="#e6cfa0"/>
+  <text x="520" y="711" class="t h" font-size="14">8 · LIVE STATE  (ground truth)</text>
+  <text x="520" y="729" class="m" font-size="11">customerBlock: name · standing · orders · recency · client book · HOUSE INSTRUCTIONS</text>
+
+  <rect x="506" y="748" width="438" height="50" rx="8" fill="#ffffff" stroke="#e6cfa0"/>
+  <text x="520" y="769" class="t h" font-size="14">9 · Conversation goals</text>
+  <text x="520" y="787" class="m" font-size="11">open goals only · section-aware ordering · never announced aloud</text>
+
+  <!-- ============ RIGHT: OUTPUT ============ -->
+  <text x="1000" y="360" class="t h cap">Consumed by</text>
+  <rect x="1000" y="372" width="150" height="86" rx="10" fill="#2a2620"/>
+  <text x="1075" y="404" class="w h" font-size="14" text-anchor="middle">Claude</text>
+  <text x="1075" y="424" class="w" font-size="10.5" text-anchor="middle" opacity=".85">resolveModel(data)</text>
+  <text x="1075" y="440" class="w" font-size="10.5" text-anchor="middle" opacity=".7">config.model</text>
+
+  <rect x="1000" y="476" width="150" height="60" rx="10" fill="#eef6ee" stroke="#bcd8bc"/>
+  <text x="1075" y="502" class="t h" font-size="13" text-anchor="middle">Reply to shopper</text>
+  <text x="1075" y="520" class="m" font-size="10.5" text-anchor="middle">logged to concierge_messages</text>
+
+  <!-- arrows: admin band -> prompt band -->
+  <path d="M340 200 C 400 200, 430 195, 502 195" fill="none" stroke="#8a7a5a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M340 320 C 410 320, 440 260, 502 258" fill="none" stroke="#8a7a5a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M340 360 C 420 360, 445 375, 502 378" fill="none" stroke="#8a7a5a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M340 450 C 420 470, 450 492, 502 492" fill="none" stroke="#8a7a5a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M340 650 C 420 690, 450 714, 502 716" fill="none" stroke="#8a7a5a" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- prompt -> model -->
+  <path d="M960 400 C 978 405, 985 410, 998 412" fill="none" stroke="#8a7a5a" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M1075 458 L 1075 474" fill="none" stroke="#8a7a5a" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- footer -->
+  <text x="40" y="860" class="t h cap">Where to see it live</text>
+  <text x="40" y="882" class="m" font-size="12">Admin → Tuning → “See assembled prompt” (?preview=1) returns this exact section breakdown; the Prompt-tuner (?promptreview=1) critiques it.</text>
+  <text x="40" y="902" class="m" font-size="12">Grader (config.grader_model) and Prompt-tuner (config.promptreview_model) can run on their own models, independent of the reply model.</text>
+
+  <!-- legend -->
+  <rect x="40" y="928" width="16" height="12" fill="#eef6ee" stroke="#bcd8bc"/>
+  <text x="62" y="939" class="m" font-size="11.5">cacheable prefix (stable)</text>
+  <rect x="230" y="928" width="16" height="12" fill="#fdf3e3" stroke="#e6cfa0"/>
+  <text x="252" y="939" class="m" font-size="11.5">dynamic suffix (per turn)</text>
+  <rect x="420" y="928" width="16" height="12" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="442" y="939" class="m" font-size="11.5">admin control</text>
+  <rect x="540" y="928" width="16" height="12" fill="#eceae4" stroke="#d3cdbf"/>
+  <text x="562" y="939" class="m" font-size="11.5">source of truth</text>
+</svg>
