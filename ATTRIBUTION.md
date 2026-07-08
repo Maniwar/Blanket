@@ -108,6 +108,12 @@ the previous N days for rolling ranges) or **Same period last year**, or Off.
 Calendar comparisons are **period-to-date aligned** — "this month, 8 days in"
 compares against the *first 8 days* of last month, never a full period against
 a partial one. Ghost lines align by bucket index (day 3 over day 3).
+**Week starts** — the configurable first day of the week
+(`concierge_config.week_start`, set on the Conversion tab, shared by all
+admins): drives the This-week range, weekly chart buckets, and WoW alignment.
+Note the division of labor: **the delta follows the Range; View-by only
+re-buckets the charts** — to get WoW/MoM/YoY on the tiles, pick the matching
+calendar Range.
 
 | Metric | Formula | Date basis | Exclusions |
 |---|---|---|---|
