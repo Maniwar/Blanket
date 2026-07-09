@@ -1752,7 +1752,7 @@
     otpRow.appendChild(otpInput);
     otpRow.appendChild(otpBtn);
     var otpLabel = el('p', 'ck-notice',
-      'The letter also carries the key’s figures — copy them here and the lock turns without leaving this page. If your letter shows one long key instead, paste the whole thing.');
+      'The letter also carries the key’s figures — copy them here and the lock turns without leaving this page.');
     box.appendChild(otpLabel);
     box.appendChild(otpRow);
     box.appendChild(sysline);
