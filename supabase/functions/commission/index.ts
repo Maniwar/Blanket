@@ -928,12 +928,44 @@ Deno.serve(async (req: Request) => {
     const serial = typeof fb.serial === "number" ? Math.floor(fb.serial) : NaN;
     const status = typeof fb.status === "string" ? fb.status : "";
     const trackingRaw = typeof fb.tracking === "string" ? fb.tracking.trim().slice(0, 120) : null;
-    const ALLOWED = ["placed", "weaving", "finishing", "shipped", "delivered", "returned"];
+    const ALLOWED = ["placed", "weaving", "finishing", "shipped", "delivered", "returned", "cancelled"];
     if (!Number.isFinite(serial) || !ALLOWED.includes(status)) {
       return jsonError(req, 400, "serial (number) and a valid status are required.");
     }
     const before = await fetchOrder(serial);
     if (!before) return jsonError(req, 404, `No order Nº ${serial} on the register.`);
+    // TRUE cancellation — only before the loom starts. The number is released
+    // back to the edition's pool (atomic strike-and-release RPC: serial →
+    // cancelled_serial, a lapsed hold frees the number for the next visitor),
+    // and the buyer is emailed. Once weaving has begun the number is woven
+    // into cloth and cannot return to the pool — strike those as 'returned'.
+    if (status === "cancelled") {
+      if (before.status !== "placed") {
+        return jsonError(req, 409,
+          `Nº ${serial} is '${before.status}' — once the loom starts, the number is woven into the cloth ` +
+          `and can't return to the pool. Mark it 'returned' instead (refund; the number stays on the record).`);
+      }
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/cancel_order_return`, {
+        method: "POST",
+        headers: {
+          "apikey": SERVICE_KEY,
+          "Authorization": `Bearer ${SERVICE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ p_serial: serial, p_user_id: null, p_email: before.email }),
+      });
+      const verdict = rpcRes.ok ? (await rpcRes.json().catch(() => null)) : null;
+      if (verdict !== "ok") {
+        return jsonError(req, 502, `The register declined the cancellation${
+          typeof verdict === "string" ? ` — ${verdict}` : ""}. Nothing was changed.`);
+      }
+      const struck = new Date().toISOString();
+      const mail = orderEmail("cancelled", { ...before, cancelled_at: struck });
+      const p = sendEmail(before.email, mail.subject, mail.html, { kind: "cancelled", serial });
+      const er = (globalThis as { EdgeRuntime?: { waitUntil?: (x: Promise<unknown>) => void } }).EdgeRuntime;
+      if (typeof er?.waitUntil === "function") er.waitUntil(p); else p.catch(() => {});
+      return jsonResponse(req, 200, { ok: true, serial, status: "cancelled" });
+    }
     const patch: Record<string, unknown> = { status };
     if (trackingRaw !== null) patch.tracking = trackingRaw || null;
     // Stamp the strike time on a return (if not already struck) so the note shows it.

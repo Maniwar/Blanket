@@ -1710,7 +1710,7 @@ need to ask my partner | Of course — the hold keeps their number while they ta
         <input type="date" id="cust-from" title="Ordered from">
         <input type="date" id="cust-to" title="Ordered to">
         <input type="text" id="cust-search" placeholder="Search name, email, or IP…" style="max-width:220px;">
-        <select id="cust-status" title="Order status">
+        <span class="info-badge" title="The loom's journey: placed → weaving → finishing → shipped → delivered. Two strikes, deliberately different: CANCELLED = struck while still 'placed' — the Nº is released back to the edition's pool. RETURNED = the cloth was already weaving or out the door — refunded, and the Nº stays on the record because it's woven into the cloth. The buyer is emailed either way; neither counts as revenue or standing.">i</span> <select id="cust-status" title="Order status">
           <option value="">Any status</option>
           <option value="placed">placed</option>
           <option value="weaving">weaving</option>
@@ -1886,8 +1886,8 @@ need to ask my partner | Of course — the hold keeps their number while they ta
 
       <!-- Commerce KPIs — range-scoped, each with a definition and a delta vs the prior equal window -->
       <div class="metrics" id="cv-tiles">
-        <div class="stat"><span class="micro">Revenue<span class="info-badge" title="Kept (non-cancelled) commissions placed in the range × the register price (Edition &amp; access → Register price). Date basis: order date (placed_at).">i</span></span><div class="val" id="cv-revenue">—</div><div class="cv-delta" id="cv-revenue-d"></div></div>
-        <div class="stat"><span class="micro">Commissions<span class="info-badge" title="Orders placed in the range that were not cancelled. Date basis: order date (placed_at). Click to open them in the register.">i</span></span><div class="val" id="cv-orders">—</div><div class="cv-delta" id="cv-orders-d"></div></div>
+        <div class="stat"><span class="micro">Revenue<span class="info-badge" title="Kept commissions placed in the range (cancelled and returned excluded) × the register price (Edition &amp; access → Register price). Date basis: order date (placed_at).">i</span></span><div class="val" id="cv-revenue">—</div><div class="cv-delta" id="cv-revenue-d"></div></div>
+        <div class="stat"><span class="micro">Commissions<span class="info-badge" title="Orders placed in the range that were not cancelled or returned. Date basis: order date (placed_at). Click to open them in the register.">i</span></span><div class="val" id="cv-orders">—</div><div class="cv-delta" id="cv-orders-d"></div></div>
         <div class="stat"><span class="micro">Avg order value<span class="info-badge" title="Revenue ÷ kept commissions. In this demo every commission is one blanket at the register price, so AOV equals the price until multi-item or variable pricing exists.">i</span></span><div class="val" id="cv-aov">—</div><div class="cv-delta" id="cv-aov-d"></div></div>
         <div class="stat"><span class="micro">Conversion rate<span class="info-badge" title="Attributed kept commissions (✳ + chat-assisted, by order date) ÷ conversations started in the range (by conversation start date). Cross-basis: a chat late in the window can convert after it — treat the tail as approximate. Click to open the commissioned chats.">i</span></span><div class="val" id="cv-rate">—</div><div class="cv-delta" id="cv-rate-d"></div></div>
       </div>
@@ -5947,7 +5947,7 @@ async function loadCustomers(more) {
     if (!c.user_id && o.user_id) c.user_id = o.user_id;
   });
   state.customers = [...byKey.values()].map(function (c) {
-    const active = c.orders.filter(function (o) { return o.status !== 'cancelled'; }).length;
+    const active = c.orders.filter(function (o) { return o.status !== 'cancelled' && o.status !== 'returned'; }).length;
     return {
       email: c.email, name: c.name || '—', user_id: c.user_id || null, orders: c.orders,
       notes: notesByKey.get((c.email || 'unknown').toLowerCase()) || [],
@@ -6053,14 +6053,25 @@ function bulkAdvance(target) {
   }, true);
 }
 function bulkStrike() {
-  // "returned" is how the register strikes a live order — it emails the buyer a
-  // cancellation and returns the number to the edition.
+  // Two different strikes, routed by where the order is in the loom's journey:
+  // CANCELLED (placed only — the Nº is released back to the edition's pool) vs
+  // RETURNED (weaving or later — refund; the Nº is woven and stays on record).
+  // The confirm spells out exactly which happens to which orders — the point
+  // is that the operator always knows what will happen and why.
   const sel = selectedOrders().filter(function (o) {
     return o.serial != null && o.status !== 'cancelled' && o.status !== 'returned';
   });
-  bulkRunOn(sel, 'Cancel (strike Nº)', function (o) {
-    return fulfillOrder(o.serial, 'returned', o.tracking || '');
-  }, true);
+  if (!sel.length) { toast('No strikeable orders in the selection', true); return; }
+  const toCancel = sel.filter(function (o) { return o.status === 'placed'; });
+  const toReturn = sel.filter(function (o) { return o.status !== 'placed'; });
+  const lines = [];
+  if (toCancel.length) lines.push('• ' + toCancel.length + ' placed → CANCELLED — struck before the loom; the Nº returns to the edition’s pool.');
+  if (toReturn.length) lines.push('• ' + toReturn.length + ' weaving-or-later → RETURNED — refunded; the Nº is already woven, so it stays on the record.');
+  if (!window.confirm('Strike ' + sel.length + ' order' + (sel.length === 1 ? '' : 's') + '?\n\n' +
+      lines.join('\n') + '\n\nThe buyer receives a cancellation email either way. Neither counts as revenue.')) return;
+  bulkRunOn(sel, 'Strike', function (o) {
+    return fulfillOrder(o.serial, o.status === 'placed' ? 'cancelled' : 'returned', o.tracking || '');
+  }, false);
 }
 function bulkResend() {
   const sel = selectedOrders().filter(function (o) { return orderNo(o); });
@@ -6383,14 +6394,23 @@ function openOrderDrawer(o) {
   }
   dw.appendChild(pC);
 
-  // Fulfillment (advance + tracking), only for live orders
+  // Fulfillment (advance + tracking), only for live orders. The two strikes are
+  // labeled with their consequences so the operator always knows which is which:
+  // 'cancelled' only offered while placed (the Nº can still return to the pool);
+  // 'returned' for a cloth that is woven or out the door (refund, Nº stays).
   if (o.serial != null && o.status !== 'cancelled') {
     const ff = drawerSection('Fulfillment');
     const ctl = el('div', 'fulfill');
     const sel = document.createElement('select'); sel.className = 'ffsel';
-    ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 'returned'].forEach(function (s) {
+    const FF_LABELS = {
+      returned: 'returned — refund; Nº stays on the woven cloth',
+      cancelled: 'cancelled — strike; Nº returns to the pool'
+    };
+    const opts = ['placed', 'weaving', 'finishing', 'shipped', 'delivered', 'returned'];
+    if (o.status === 'placed') opts.push('cancelled');
+    opts.forEach(function (s) {
       const opt = document.createElement('option');
-      opt.value = s; opt.textContent = s;
+      opt.value = s; opt.textContent = FF_LABELS[s] || s;
       if (s === o.status) opt.selected = true;
       sel.appendChild(opt);
     });
@@ -8174,7 +8194,7 @@ async function loadConversion() {
   // 'identity' = signed-in buyer with a conversation ≤30d before placement,
   // stamped server-side — catches cross-device / cross-day journeys.
   const tiers = function (list) {
-    const kept = list.filter(function (o) { return o.status !== 'cancelled'; });
+    const kept = list.filter(function (o) { return o.status !== 'cancelled' && o.status !== 'returned'; });
     const ini = kept.filter(function (o) { return o.chat_via === 'concierge'; });
     const idn = kept.filter(function (o) { return o.chat_via === 'identity'; });
     const amb = kept.filter(function (o) {

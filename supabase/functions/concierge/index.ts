@@ -643,7 +643,7 @@ async function customerBlock(customer: Customer, opening = true): Promise<string
       summary = `${head} — by cloth: ${tally}. Most recent: ${orders.slice(0, 2).map(fmt).join("; ")}. ` +
         `(Do NOT enumerate or count their orders from this summary — call get_my_orders for the full, current list.)`;
     }
-    const active = orders.filter((o) => o.status !== "cancelled").length;
+    const active = orders.filter((o) => o.status !== "cancelled" && o.status !== "returned").length;
     const tier = active >= 5
       ? "Stifter"
       : active >= 3
@@ -2373,7 +2373,7 @@ async function buildSalesLedger(
   pendingAsk: boolean,
 ): Promise<SalesLedger> {
   const orders = await pgSelect<OrderRow>(
-    `orders?select=serial,status,colorway,city,address,placed_at,is_gift&status=neq.cancelled&${
+    `orders?select=serial,status,colorway,city,address,placed_at,is_gift&status=not.in.(cancelled,returned)&${
       ownershipFilter(customer)}&order=placed_at.desc&limit=100`,
   ) ?? [];
   const count = (s: string) => orders.filter((o) => o.status === s).length;

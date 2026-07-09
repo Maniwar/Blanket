@@ -98,7 +98,26 @@ turns }`; each turn has a `user` line and optional `checks`. Check kinds:
 Keep judge criteria **concrete and binary**. Prefer a deterministic check whenever
 the behavior is mechanically observable — reserve the judge for genuine judgment.
 
+Proactive-beat turns: `{ beat: { seconds, count }, checks }` POSTs the
+conversation with `context.nudge` — exactly what the widget sends when a
+follow-up fires — and `{ held: true|false }` asserts the beat stayed silent /
+spoke. Seed the conversation first with `{ user: "...", seed: true }` and
+`{ assistant: "..." }` turns (added to the transcript, not sent).
+
+## Config conformance (the "did my settings take effect?" report)
+The behavior deck tests what the concierge *says*; **`conformance.mjs`** tests
+that the admin's knobs are *connected*. It reads the live `?config=1` payload,
+boots the real widget headless against production under a metrics-excluded
+`qa-` session key, and checks parameter by parameter that the widget's
+effective values (`status()`) and observed timings (opener delay, first
+follow-up) match what was configured — dial scaling included. Run it from
+**Actions → Config Conformance** after changing Engagement settings (it also
+runs weekly); the PASS/FAIL table lands in the job summary and as an artifact.
+A FAIL row names the configured value and what the live widget actually ran —
+paste the table back to the assistant to diagnose.
+
 ## Files
 - `scenarios.mjs` — the behavior deck
 - `run.mjs` — replay + report (and `--selftest`)
 - `judge.mjs` — the pinned binary LLM judge
+- `conformance.mjs` — configured ↔ live parameter conformance report
