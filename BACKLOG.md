@@ -59,5 +59,18 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 - **Multi-judge goal scoring.** Goal scoring and client-book summaries are single
   async LLM calls; an adversarial / multi-judge pass would raise confidence.
-- **Auto cache invalidation.** Stale semantic-cache answers aren't auto-evicted
-  when the knowledge changes; an admin clears them. Tie eviction to KB/SOP edits.
+  (Proactive *reach-outs* now do get a second reading — the reach-out judge —
+  but goal grading remains single-judge.)
+- **[Shipped] Auto cache invalidation.** Any save to `concierge_kb`,
+  `concierge_config`, or `concierge_sops` now flushes the semantic answer
+  cache via a Postgres statement trigger (it re-warms from live traffic), and
+  a polarity guard refuses a cached hit whose negation signature differs from
+  the incoming question's. See SCHEMA.md → `concierge_cache`.
+
+## Deferred by choice
+
+- **Lifecycle beats package.** Weave-milestone updates, post-delivery
+  check-ins, and days-scale ownership follow-ups (WEAVE_MILESTONE,
+  POST_DELIVERY_CHECKIN, REASSURE_OWNERSHIP rules for the Action Table).
+  Designed during the engagement program; the merchant deferred it — the
+  post-sale window covers the near-term need.

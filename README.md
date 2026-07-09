@@ -34,11 +34,16 @@ when it's software?*
   forms, conversation goals, **behavior-eval scenarios**, and even the **model**
   (with a configurable fallback) are database rows editable in an admin studio —
   live, no redeploy.
-- **Tested behavior, not vibes.** A behavior-eval deck replays scripted
-  conversations against the live concierge and reports a **pass rate** per
-  behavior (deterministic checks + a pinned binary LLM judge), so a prompt or
-  model change can't silently regress a fixed bug. Runnable from the CLI or the
-  admin **Evals** tab.
+- **Tested behavior, not vibes.** Four layers: a behavior-eval deck replays
+  scripted conversations against the live concierge and reports a **pass
+  rate** per behavior (deterministic checks + a pinned binary LLM judge, run
+  in the deploy gauntlet); a **Config Conformance** workflow boots the real
+  widget headless against production and proves parameter-by-parameter that
+  the admin's settings are what the widget actually runs; **Persona Evals**
+  have a model play distinct shoppers for multi-turn live conversations,
+  graded whole; and at runtime a **reach-out judge** reviews every unprompted
+  line before the visitor sees it (vetoes are logged with the killed line and
+  reason). All runnable on demand from Actions or the admin **Evals** tab.
 - **No server to run.** Static site (GitHub Pages) + two Deno edge functions +
   managed Postgres, with Row-Level Security as the authorization boundary and a
   documented [security review](SECURITY.md).
@@ -60,7 +65,7 @@ passwordless email auth.
 | **[supabase/README.md](supabase/README.md)** | Backend reference — the edge functions, wire contracts (SSE frames, endpoints), rate limits. |
 | **[supabase/SCHEMA.md](supabase/SCHEMA.md)** | Data model — every table, column, RPC, and what reads/writes it. |
 | **[ATTRIBUTION.md](ATTRIBUTION.md)** | Revenue attribution & conversion tracking — the three attribution tiers (✳ concierge-initiated / chat-assisted / unassisted), how every Conversion-tab number is computed, honest limits, and the levers that raise conversion. |
-| **[evals/README.md](evals/README.md)** | Behavior evals — how the concierge is regression-tested (deterministic checks + a pinned binary LLM judge, reported as a pass rate), runnable from the CLI or the admin **Evals** tab. |
+| **[evals/README.md](evals/README.md)** | The test surface — behavior evals (deterministic checks + a pinned binary LLM judge, reported as a pass rate), the **config-conformance** report (configured ↔ live widget, dial scaling and observed timings included), and **persona evals** (multi-turn simulated shoppers, graded whole). CLI, admin **Evals** tab, or GitHub Actions. |
 | **[SECURITY.md](SECURITY.md)** | Security review — CISSP/OWASP-framed audit (injection, XSS, access control, RLS, secrets): what was found and fixed, residual risks, and the path to a formal certification. |
 | **[PRIVACY_REVIEW.md](PRIVACY_REVIEW.md)** | Privacy compliance check of the published notice against GDPR + CCPA/CPRA — required-disclosure gap analysis, factual corrections, and what still needs counsel. |
 | **[SCALING.md](SCALING.md)** | Scaling review — what holds at millions of users, what was hardened, what's next. |

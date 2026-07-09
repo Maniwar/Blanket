@@ -227,7 +227,7 @@ email** below).
 | --- | --- |
 | `POST ?hold=1` | Reserve this visit's serial (`hold_serial`), returns `{serial, expires_at}`. |
 | `GET ?next=1` | Live edition figures: `{next_serial, run_size, remaining}` (drives the storefront ticker). |
-| `GET ?recent=1` | A few recent real orders for the ticker. |
+| `GET ?recent=1` | A few recent real orders for the ticker — **kept entries only** (a cancelled order's serial returned to the pool; returned orders are struck; neither is shown). |
 | `GET ?me=1` | Signed-in buyer's orders + shipping, for checkout prefill (JWT required). |
 | `POST ?fulfill=1` | **Admin only.** Advance an order's `status` and set `tracking`. |
 
@@ -240,8 +240,14 @@ email** below).
 ```
 
 `status` must be one of `placed`, `weaving`, `finishing`, `shipped`,
-`delivered`, `returned`. On `shipped` (with tracking) or `returned` the buyer
-is emailed. This is what the admin studio's per-order fulfillment control calls.
+`delivered`, `returned`, `cancelled`. The two strikes are deliberately
+different: **`cancelled`** is accepted only while the order is still `placed`
+(the true cancel — the strike-and-release RPC frees the Nº back to the
+edition's pool; later than that it answers `409` explaining to use `returned`
+instead), while **`returned`** covers weaving-or-later strikes (refund; the
+Nº stays woven into the cloth). On `shipped` (with tracking), `returned`, or
+`cancelled` the buyer is emailed. This is what the admin studio's per-order
+fulfillment control and bulk Strike button call.
 
 ### Transactional email
 

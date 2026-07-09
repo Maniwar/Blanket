@@ -870,10 +870,25 @@ happening.** Stories with acceptance criteria:
 - **As a shopper, a proactive line only reaches me when it's worth my
   attention.**
   *Accepted when:* a beat with nothing new to say emits nothing (the model
-  answers `[HOLD]`, the client shows no text); a beat that speaks carries at
-  least one concrete, previously-unmentioned fact (register entry, goal step,
-  house note) in **one–two plain sentences**; no beat invents facts — every
-  count, cloth, city, and number matches the register verbatim.
+  sets the typed `beat_line` tool's `speak` field to false — no sentinel
+  token exists to leak); a beat that speaks carries at least one concrete,
+  previously-unmentioned fact (register entry, goal step, house note) in
+  **one–two plain sentences**; no beat invents facts — every count, cloth,
+  city, and number matches the register verbatim; and every spoken line
+  passes a second, stricter reading (the **reach-out judge**) before I see
+  it — a line that keeps score of my silence, invents a discount, or leaks
+  internal wording is killed and logged, never shown.
+- **As a shopper, I'm never interrupted mid-paragraph.**
+  *Accepted when:* the first follow-up after a reply is floored to that
+  reply's reading time (~300ms/word, capped at 90s), and past 80 words the
+  server itself stands the "keep the thread moving" push down — one short
+  fresh step or silence, never prose stacked on unread prose.
+- **As a shopper, an edited fact reaches me immediately — and a negated
+  question never gets the opposite answer.**
+  *Accepted when:* any save to the knowledge base, SOPs, or configuration
+  flushes the anonymous answer cache (a Postgres trigger — it re-warms from
+  traffic), and a cached answer is refused when my question's polarity
+  differs from the cached one's ("does it shed?" vs "does it never shed?").
 - **As a shopper, I'm never re-asked a question I've ignored.**
   *Accepted when:* while any question of the bot's sits unanswered (checked
   across the whole trailing run of its unprompted lines, not just the last),
@@ -920,8 +935,47 @@ happening.** Stories with acceptance criteria:
   look the same.
 - **As the merchant, I can diagnose the live widget without guessing.**
   *Accepted when:* `FeierabendConcierge.status()` reports the *effective*
-  caps/timers (after config + dial) and `lastSkip` names the exact gate that
-  stopped the last beat, per [`BEHAVIOR.md`](BEHAVIOR.md).
+  caps/timers (after config + dial), `lastSkip` names the exact gate that
+  stopped the last beat, and `nudgeArmedMs`/`nudgeArmedWhy` record the full
+  arithmetic of the armed follow-up (rung, base, dial, reading-time floor,
+  overrides), per [`BEHAVIOR.md`](BEHAVIOR.md).
+- **As the merchant, I can PROVE my settings are what the live widget runs —
+  automatically.**
+  *Accepted when:* the **Config Conformance** workflow (on demand + weekly)
+  boots the real widget headless against production under a metrics-excluded
+  `qa-` session key and reports parameter-by-parameter PASS/FAIL — configured
+  vs effective values and *observed* timings, dial scaling included; a FAIL
+  row names the configured value and what the widget actually did, written
+  to be pasted back for diagnosis.
+- **As the merchant, my reach-outs are reviewed before they send — and the
+  outcomes are numbers.**
+  *Accepted when:* the reach-out judge (default ON, Engagement → House rules)
+  vetoes only clear defects (plumbing leaks, scorekeeping, invented commerce,
+  pressure, broken output), fails open on any API error, writes a `beat_veto`
+  row carrying the killed line + reason, never marks the decided action
+  spent, and the Actions tab shows the 7-day **spoke · held · vetoed**
+  scoreboard with each count filtering the log.
+- **As the merchant, the concierge is exercised like a real shopper would —
+  not only with scripted turns.**
+  *Accepted when:* the **Persona Evals** workflow (on demand + weekly) has a
+  model play distinct shoppers (hesitant comparer, hurried gift buyer, happy
+  post-purchase browser) against production for several turns, grades the
+  whole conversation (mechanical checks + a binary conversation-level judge),
+  and prints the failing transcript inline — advisory, never a gate.
+- **As the merchant, I hear about a rule that fights the constitution when I
+  write it, not when the concierge gets weird.**
+  *Accepted when:* saving a *changed* prompt text (voice, client-book policy,
+  engagement rulebook, selling method, worked examples, beat notes) runs the
+  advisory honesty lint (`?lint=1`), which flags only clear conflicts
+  (invention, discounts, pressure, revealing the book, deception) as a
+  heads-up — never style/tone/pacing, and never blocking the save.
+- **As the merchant, an order strike does what its name says.**
+  *Accepted when:* **cancelled** is only offered while an order is `placed`
+  (the true cancel: the Nº returns to the edition's pool) and **returned**
+  covers weaving-or-later strikes (refund; the Nº stays woven into the
+  cloth); the bulk Strike button routes each order to the right strike with
+  a confirm that spells out the consequences; returned orders never count as
+  revenue, kept orders, standing, or ledger totals.
 
 **The measures to build to** (all merchant-visible):
 
@@ -930,7 +984,10 @@ happening.** Stories with acceptance criteria:
 | Quantitative | ✳ concierge-initiated revenue & share, chat→commission rate, AOV | Conversion tab (definitions in [`ATTRIBUTION.md`](ATTRIBUTION.md)) |
 | Quantitative | Conversion by **entry beat** (typed / opener / outreach / nudge) | Conversion tab, "what converts" |
 | Quantitative | **Hold rate** — held ÷ (held + spoken) proactive beats | Actions tab (`beat_hold`) vs transcript beat lines |
+| Quantitative | **Veto rate** — judge-killed reach-outs (line + reason per row) | Actions tab (`beat_veto`; spoke · held · vetoed strip) |
+| Quantitative | **Config conformance** — configured ↔ live PASS/FAIL per parameter | Actions → Config Conformance (weekly + on demand) |
 | Quantitative | Reply rate to proactive beats; unacked-pause frequency | Transcripts; `status()` during QA |
+| Qualitative | **Persona conversations** — multi-turn live grades + transcripts | Actions → Persona Evals (advisory, weekly + on demand) |
 | Quantitative | Goal outcomes (met / partial / unmet) per conversation | Goals grading, Conversations tab |
 | Qualitative | Per-conversation grade with cited evidence | Grader (Conversations drawer) |
 | Qualitative | Gap flags (odd replies auto-flagged) & transcript drill-in | Conversations tab |
@@ -1635,6 +1692,22 @@ the new one propagates.) The open transcript exports to CSV for a record.
 
 ### Recently shipped
 
+- **The engagement-quality program (four batches).** (1) The proactive beat
+  brain extracted to pure, unit-tested code (`beats.ts` — the Action Table,
+  escalating proposal cool-offs, the detectors; `deno test` gates every
+  deploy) with typed `{speak, line}` decisions replacing the `[HOLD]`
+  sentinel. (2) The selling method and worked examples as editable, versioned
+  prompt bases (`selling_base`, `exemplars_base`), with speech as the default
+  posture and give-first `KEEP_WARM` before any silence. (3) The reach-out
+  judge (every spoken proactive line reviewed before it ships; `beat_veto`
+  audit + the spoke · held · vetoed strip), register-grounded companion/gift
+  briefs (`byCloth`, `bookFacts` + the never-reveal reminder), reading-time
+  pacing, and persona-simulated multi-turn evals. (4) The honest cache
+  (flush-on-edit triggers + polarity guard), the advisory honesty lint on
+  rule saves (`?lint=1`), and the closed-panel bubble carrying the house
+  voice. Alongside: the **Config Conformance** and **Persona Evals**
+  workflows, judge-graded behavior evals in the deploy gauntlet, and
+  intuitive order strikes (true *cancelled* vs *returned*, counted honestly).
 - **Order fulfillment progression.** The admin's Customers view now carries a
   per-order control to advance status (`placed → weaving → finishing → shipped →
   delivered`, plus `returned`) and attach a tracking number. Writes go through an

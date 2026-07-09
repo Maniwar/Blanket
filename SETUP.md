@@ -131,7 +131,12 @@ It prints a report. Confirm:
 - [ ] **SMTP** configured; a test **Sign in** email arrives in seconds
 - [ ] **Auth → URL Configuration** has the site + redirect URLs above
 - [ ] **Actions → Deploy Concierge** last run succeeded
-- [ ] GitHub secret **`ANTHROPIC_API_KEY`** exists (the deploy sets it on the function)
+- [ ] GitHub secret **`ANTHROPIC_API_KEY`** exists — the deploy sets it on the
+  function, and it also powers the judge-graded checks in the deploy's
+  behavior-evals step and the **Persona Evals** workflow (without it those
+  judge checks SKIP silently)
+- [ ] **Actions → Config Conformance** run once after tuning Engagement — every
+  row PASS proves your settings are what the live widget runs
 
 ### Quick behavior smoke test
 - [ ] Open the chat → the concierge greets/engages (persistent, not one message)
