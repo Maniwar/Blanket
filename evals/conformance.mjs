@@ -160,22 +160,24 @@ async function main() {
       const t0 = Date.now();
       let measured = -1;
       try {
+        // The widget's own diagnostics name each lifecycle event: a fired rung
+        // logs "nudge: FIRED (#1)"; anything else that shows up first is a gate.
         await page.waitForFunction(
           (since) => {
             const s = window.FeierabendConcierge.status();
             const fresh = (s.recentSkips || []).slice(0, 3).join(" ");
-            return /beat: FIRED|nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(fresh) &&
+            return /nudge: FIRED|nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(fresh) &&
               Date.now() >= since;
           },
           t0, { timeout: expected + 20000, polling: 150 },
         );
-        const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
+        const fresh = await page.evaluate(() => (window.FeierabendConcierge.status().recentSkips || []).slice(0, 3));
         measured = Date.now() - t0;
-        const fired = /beat: FIRED/.test(skip);
-        const ok = fired && approx(measured, expected, Math.max(3000, expected * 0.5));
+        const firedEntry = fresh.find((s) => /nudge: FIRED \(#1\)/.test(s));
+        const ok = !!firedEntry && approx(measured, expected, Math.max(3000, expected * 0.5));
         row("First follow-up after typed reply (ms)", expected + " (nudge1 × dial " + mult.toFixed(2) + ")",
-          (fired ? "~" + measured : "gated: " + skip.slice(0, 110)), ok,
-          fired ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
+          (firedEntry ? "~" + measured : "gated: " + String(fresh[0] || "").slice(0, 110)), ok,
+          firedEntry ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
       } catch {
         const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
         row("First follow-up after typed reply (ms)", expected, "no beat within " + (expected + 20000) + "ms", false,
