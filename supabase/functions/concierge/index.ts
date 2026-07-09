@@ -2156,7 +2156,9 @@ const ENGAGEMENT_BASE =
     "fact verbatim from the register or customer block (counts, cloths, cities, numbers); if you find " +
     "yourself describing what a blanket 'asks for' or 'holds', rewrite it as something a clerk would " +
     "actually say, or hold. An order's STATUS WORD is authoritative: 'placed' has not arrived — never " +
-    "speak of a cloth as settled in, arrived, or in use unless the register says it was delivered.\n" +
+    "speak of a cloth as settled in, arrived, or in use unless the register says it was delivered. " +
+    "And never ANNOUNCE work on a proactive line ('let me pull your order details…') — a promise with " +
+    "no result is noise; speak what you already know from the context above, do the thing, or hold.\n" +
     "- PLAIN IS NOT BLUNT (all replies): dropping poetry never means dropping warmth or courtesy. Never " +
     "curt, never interrogating ('what's the actual ask?'), never scorekeeping ('you already did — seven " +
     "times'). And when a patron who already owns pieces asks why they should buy, there is always a true " +
@@ -2191,6 +2193,45 @@ function engagementBlock(data: ConciergeData): string {
   const custom = data.config?.engagement_base;
   const body = typeof custom === "string" && custom.trim() ? custom : ENGAGEMENT_BASE;
   return "\nENGAGEMENT & PACING\n" + body + (body.endsWith("\n") ? "" : "\n");
+}
+
+/** Cross-surface memory for proactive beats: the shopper hears ONE concierge,
+ * but panel beats compose from the client transcript while bubbles compose
+ * from goals — each surface re-raised what the other already said. The server
+ * log holds BOTH; this reads the signed-in patron's recent lines across their
+ * last conversations so a subject spent anywhere is spent everywhere.
+ * Best-effort — a failure returns empty and the beat still speaks. */
+async function crossSurfaceRecall(
+  req: Request,
+): Promise<{ lines: string[]; pendingAsk: boolean; note: string }> {
+  const out = { lines: [] as string[], pendingAsk: false, note: "" };
+  try {
+    const customer = await verifyUser(req);
+    if (!customer) return out;
+    const convs = await pgSelect<{ id: string }>(
+      `concierge_conversations?select=id&user_id=eq.${customer.id}&order=created_at.desc&limit=3`,
+    );
+    const ids = convs ? convs.map((c) => c.id) : [];
+    if (!ids.length) return out;
+    const prior = await pgSelect<{ role: string; content: string }>(
+      `concierge_messages?select=role,content&conversation_id=in.(${ids.join(",")})&order=created_at.desc&limit=10`,
+    );
+    if (!prior || !prior.length) return out;
+    out.lines = prior.filter((m) => m.role === "assistant")
+      .map((m) => String(m.content)).slice(0, 6);
+    for (const m of prior) {
+      if (m.role !== "assistant") break;
+      if (/\?\s*["'”’]?\s*$/.test(String(m.content).trim())) { out.pendingAsk = true; break; }
+    }
+    if (out.lines.length) {
+      out.note = " YOUR RECENT LINES ACROSS ALL SURFACES (in-panel and closed-panel bubbles — the " +
+        "shopper hears ONE concierge; newest first): " +
+        out.lines.map((l, i) => `[${i + 1}] ${l.slice(0, 140)}`).join("  ") +
+        ". Any subject or question above is SPENT until the shopper answers it — do not raise it " +
+        "again in ANY wording.";
+    }
+  } catch { /* best-effort */ }
+  return out;
 }
 
 /** Admin's standing instructions for proactive beats (config.beat_notes) —
@@ -3294,8 +3335,11 @@ async function handleChatPost(req: Request): Promise<Response> {
     let runStart = validated.messages.length;
     while (runStart > 0 && validated.messages[runStart - 1].role === "assistant") runStart--;
     const trailingRun = validated.messages.slice(runStart);
-    const unansweredAsk = trailingRun.some((m) =>
+    const unansweredAskLocal = trailingRun.some((m) =>
       typeof m.content === "string" && /\?\s*["'”’]?\s*$/.test(m.content.trim()));
+    const recall = await crossSurfaceRecall(req);
+    const unansweredAsk = unansweredAskLocal || recall.pendingAsk;
+    const crossNote = recall.note;
     // NOTE: the guard must never offer holding as the easy out — a hold leaves
     // the unanswered question as the trailing line, so the guard would re-fire
     // on every later beat and the bot would fall silent entirely (a hold loop).
@@ -3384,7 +3428,7 @@ async function handleChatPost(req: Request): Promise<Response> {
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${askGuard}${doorNote}${groundNote} ${decision}${houseNote}${emailNote}${beatNotes} ` +
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${crossNote}${askGuard}${doorNote}${groundNote} ${decision}${houseNote}${emailNote}${beatNotes} ` +
         `Do not greet them again as if they just arrived.]`,
     });
   }
@@ -3397,6 +3441,15 @@ async function handleChatPost(req: Request): Promise<Response> {
   const isOpener = opener === "reengage" || opener === "greet";
   if (isOpener && !isNudge) {
     const openerNotes = beatNotesClause((await loadConciergeData()).config);
+    // The opener gets the cross-surface memory too — a re-engage opener
+    // composed from identical inputs used to repeat itself verbatim on every
+    // page refresh; seeing its own recent lines (plus the client-side opener
+    // cooldown) breaks that loop.
+    const openerRecall = await crossSurfaceRecall(req);
+    const openerCross = openerRecall.note
+      ? openerRecall.note + " If your last opener already said something like this, open a DIFFERENT " +
+        "door or pick the thread up mid-sentence without any greeting at all."
+      : "";
     validated.messages.push({
       role: "user",
       content: (opener === "greet"
@@ -3423,7 +3476,7 @@ async function handleChatPost(req: Request): Promise<Response> {
           "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
           "mention this note. One or two sentences ending in a light question. NEVER reply [HOLD] on " +
           "this opening beat — they just walked back in and their attention is at its peak; even with " +
-          "nothing new to sell, a clerk acknowledges the return. The hold is for LATER check-ins.]") + openerNotes,
+          "nothing new to sell, a clerk acknowledges the return. The hold is for LATER check-ins.]") + openerCross + openerNotes,
     });
   }
 

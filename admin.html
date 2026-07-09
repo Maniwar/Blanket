@@ -1144,6 +1144,9 @@
             <input type="number" id="cfg-opener-reengage" class="mono-field" min="0" step="0.1" placeholder="1.1"></div>
           <div><label class="micro" for="cfg-opener-follow">Attention beat after opening (tapped bubble)</label>
             <input type="number" id="cfg-opener-follow" class="mono-field" min="0" step="0.5" placeholder="8"></div>
+          <div><label class="micro" for="cfg-opener-cooldown">Opener cooldown (minutes)</label>
+            <input type="number" id="cfg-opener-cooldown" class="mono-field" min="0" step="1" placeholder="10">
+            <p class="note" style="margin-top:4px;">While the bot's last line is younger than this, a re-opened panel lets the thread stand instead of re-greeting — stops "every refresh repeats the welcome".</p></div>
           <div><label class="micro" for="cfg-bubble-withdraw">Bubble withdraws after</label>
             <input type="number" id="cfg-bubble-withdraw" class="mono-field" min="3" step="1" placeholder="22"></div>
         </div>
@@ -3003,6 +3006,7 @@ async function loadConfig() {
   $('cfg-opener-anon').value = ms2sDec(o.openerAnonMs);
   $('cfg-opener-reengage').value = ms2sDec(o.openerReengageMs);
   $('cfg-opener-follow').value = ms2sDec(o.openerFollowMs);
+  $('cfg-opener-cooldown').value = (typeof o.openerCooldownMs === 'number' && o.openerCooldownMs >= 0) ? Math.round(o.openerCooldownMs / 60000) : '';
   $('cfg-inline-sections').value = Array.isArray(o.inlineSections) ? o.inlineSections.join(', ') : '';
   $('cfg-chip-cap').value = (typeof o.chipCap === 'number') ? o.chipCap : '';
   $('cfg-chip-linger').value = ms2s(o.chipLingerMs);
@@ -3106,6 +3110,8 @@ async function saveEngagement() {
   const opA = s2msZ('cfg-opener-anon'); if (opA !== null) o.openerAnonMs = opA;
   const opR = s2msZ('cfg-opener-reengage'); if (opR !== null) o.openerReengageMs = opR;
   const opF = s2msZ('cfg-opener-follow'); if (opF !== null) o.openerFollowMs = opF;
+  const opC = Number($('cfg-opener-cooldown').value);
+  if ($('cfg-opener-cooldown').value !== '' && Number.isFinite(opC) && opC >= 0) o.openerCooldownMs = Math.round(opC * 60000);
   const inl = $('cfg-inline-sections').value.split(',').map(s => s.trim().toLowerCase()).filter(s => /^[a-z0-9_-]{1,32}$/.test(s));
   if (inl.length) o.inlineSections = inl;
   const ccap = Number($('cfg-chip-cap').value);

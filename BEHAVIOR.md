@@ -304,10 +304,22 @@ follow-up loop is armed in its place.
   context chip's budget is tunable too: `chipCap` per page view,
   `chipLingerMs` on screen, and `chipRepeatMs` to let a section's chip
   reappear after a while instead of the default once-per-view.
-- **The opening beat of a panel session never holds.** The substance gate
-  governs later check-ins; opening the panel is peak attention, so the opener
-  (greet or re-engage) always produces one short warm line — even when the
-  register holds nothing new, the return itself is acknowledged.
+- **The opening beat of a panel session never holds — but it does cool down.**
+  The substance gate governs later check-ins; opening the panel is peak
+  attention, so the opener (greet or re-engage) always produces one short warm
+  line — even when the register holds nothing new, the return itself is
+  acknowledged. The **opener cooldown** (`outreach.openerCooldownMs`, default
+  10 min) is the other half of the design: while the bot's last line is still
+  fresh and unanswered, a re-opened or refreshed panel lets the restored
+  thread *stand* instead of re-greeting — without it, every refresh replayed
+  the same welcome (same transcript + same register in → same line out).
+- **One concierge, one memory (cross-surface recall).** In-panel beats and
+  openers used to compose from the client transcript while closed-panel
+  bubbles composed from goals — each surface re-raised what the other had
+  already said. Every proactive brief (nudge, opener, bubble) now carries the
+  patron's recent assistant lines read back from the server log, which holds
+  both surfaces: a subject or question spent anywhere is spent everywhere, and
+  a pending question on any surface suppresses question marks on all of them.
 - For a **signed-in** patron the widget leads with **personalized** starters from
   `?starters=1` — built deterministically from their real orders (where's my Nº,
   change the cloth, update the gift card, care guide, show all orders) — then tops

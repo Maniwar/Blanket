@@ -103,7 +103,8 @@ before resting), opener delays `openerSignedMs`/`openerAnonMs`/
 `openerReengageMs` (anon default 3s — panel-open is the visit's
 highest-attention moment), `openerFollowMs` (the attention beat after opening
 via a tapped bubble; default 8s, replaces the first ladder delay for that
-open), `dwellMs`/`dwell2Ms` (closed-panel reach-out delays),
+open), `openerCooldownMs` (while the bot's last line is younger than this, a
+re-opened panel lets the thread stand instead of re-greeting; default 10 min), `dwellMs`/`dwell2Ms` (closed-panel reach-out delays),
 `draftMs` (half-written-order nudge), `idleReach` (bool), `maxAmbient` (max
 closed-panel reach-outs), `bubbleWithdrawMs` (how long the outreach bubble
 lingers), *on-page beats:* `inlineSections` (array of section keys where the

@@ -2703,6 +2703,19 @@
     var oo = orCfg();
     var kind = '', delay = 1100;
     if (last && last.role === 'assistant' && hadUser) {
+      /* Opener COOLDOWN — the design fix for "every refresh repeats the same
+         greeting": the restored transcript already ends with the bot's line,
+         unanswered, on their screen. While that line is still fresh, a
+         re-open lets the thread STAND (the quick attention follow-up is
+         armed instead, and it is substance-gated). A clerk doesn't re-greet
+         someone who glanced away for a minute. */
+      var cool = (typeof oo.openerCooldownMs === 'number' && oo.openerCooldownMs >= 0) ? oo.openerCooldownMs : 600000;
+      if (last.ts && (Date.now() - last.ts) < cool) {
+        reengagedThisOpen = true;
+        noteSkip('opener: my last line is still fresh (' + Math.round((Date.now() - last.ts) / 1000) +
+          's old, cooldown ' + Math.round(cool / 60000) + 'min) — the restored thread stands, no re-greeting');
+        return;
+      }
       kind = 'reengage';                         /* came back to a live thread — pick it up now */
       delay = (typeof oo.openerReengageMs === 'number' && oo.openerReengageMs >= 0) ? oo.openerReengageMs : 1100;
     } else if (!history.length) {
@@ -3703,6 +3716,14 @@
       } else if (document.visibilityState === 'visible') {
         if (hiddenWrapTimer) { clearTimeout(hiddenWrapTimer); hiddenWrapTimer = null; }
         noteActivity();                        /* they came back — a sign of life */
+        /* If the away-wrap ran while the panel stayed OPEN, every timer was
+           cleared and no click can restart them (Ask-the-mill on an open panel
+           is a no-op) — the bot was structurally mute. Returning to an open,
+           wound-down panel re-engages exactly like a re-open. */
+        if (panelOpen && wrappedUp && !streaming) {
+          reengagedThisOpen = false;
+          maybeOpenerOnOpen();
+        }
       }
     });
     /* Presence signals — any of these means the visitor is here and could see a
