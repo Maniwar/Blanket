@@ -201,6 +201,15 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   so the Actions tab shows deliberate silence and hold rate is a real metric.
   The product-level user stories, acceptance criteria, and the full
   quantitative/qualitative measure set live in [`DESIGN.md`](DESIGN.md) §2.10.
+- **Opening the panel earns an immediate goal beat.** The open is the visit's
+  highest-attention moment, so the goal-directed opener lands while the
+  visitor is actually looking: ~1.2s for a signed-in patron, ~3s for an
+  anonymous visitor (after the house greeting), ~1.1s when returning to a
+  live thread — and when the panel opens via a **tapped outreach bubble**
+  (where the tapped line itself is the opener), the first follow-up comes at
+  the quick `openerFollowMs` (default 8s) instead of the normal ladder. All
+  four timings are admin config (Engagement pace); the substance gate still
+  applies to every one of these beats.
 - **Every proactive beat carries the full patron context.** In-panel nudges,
   openers, and the **closed-panel re-engagement bubble** all inject the complete
   CUSTOMER block (name, standing, orders, recency, client book, open house

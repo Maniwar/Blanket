@@ -100,7 +100,10 @@ in Tuning → Engagement pace: the in-chat follow-up ladder `nudge1Ms`–`nudge5
 (the fifth repeats), `nudgeCap` (max in-chat follow-ups), `unackedCap` (pause
 after N unacknowledged reach-outs), `holdBudget` (consecutive silent holds
 before resting), opener delays `openerSignedMs`/`openerAnonMs`/
-`openerReengageMs`, `dwellMs`/`dwell2Ms` (closed-panel reach-out delays),
+`openerReengageMs` (anon default 3s — panel-open is the visit's
+highest-attention moment), `openerFollowMs` (the attention beat after opening
+via a tapped bubble; default 8s, replaces the first ladder delay for that
+open), `dwellMs`/`dwell2Ms` (closed-panel reach-out delays),
 `draftMs` (half-written-order nudge), `idleReach` (bool), `maxAmbient` (max
 closed-panel reach-outs), `bubbleWithdrawMs` (how long the outreach bubble
 lingers), `substanceGate` (bool, default true — a proactive beat must have

@@ -20,9 +20,9 @@
   <text x="40" y="110" class="cap t h">1 · Three beats can start a line</text>
   <rect x="40" y="114" width="350" height="92" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
   <text x="56" y="137" class="t h" font-size="13.5">Opener — panel just opened</text>
-  <text x="56" y="156" class="m" font-size="11.5">Speaks first, once per panel session. Signed-in greet</text>
-  <text x="56" y="171" class="m" font-size="11.5">1.2s · anonymous 16s · returning to a live thread 1.1s</text>
-  <text x="56" y="189" class="m mono" font-size="10.5">openerSignedMs · openerAnonMs · openerReengageMs</text>
+  <text x="56" y="156" class="m" font-size="11.5">Speaks first — the open is peak attention. Signed-in 1.2s ·</text>
+  <text x="56" y="171" class="m" font-size="11.5">anon 3s · live thread 1.1s · tapped-bubble follow-up 8s</text>
+  <text x="56" y="189" class="m mono" font-size="10.5">openerSignedMs · openerAnonMs · openerReengageMs · openerFollowMs</text>
 
   <rect x="415" y="114" width="350" height="92" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
   <text x="431" y="137" class="t h" font-size="13.5">Idle nudge — panel open, visitor quiet</text>

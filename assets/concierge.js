@@ -2603,7 +2603,7 @@
     var o = orCfg();
     return (typeof o.holdBudget === 'number' && o.holdBudget >= 0) ? o.holdBudget : HOLD_BUDGET;
   }
-  function scheduleNudge(spacious) {
+  function scheduleNudge(spacious, quickMs) {
     clearNudge();
     if (isDemo()) { noteSkip('nudge: demo mode'); return; }
     if (!panelOpen) { noteSkip('nudge: panel is closed'); return; }
@@ -2634,6 +2634,9 @@
     if (idx >= 4 && typeof o.nudge5Ms === 'number') { wait = o.nudge5Ms; }
     wait = Math.round(wait * assertDelayMult());          /* assertiveness scales the pace */
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
+    /* an attention beat (panel just opened) overrides the ladder — absolute,
+       not dial-scaled: the moment is now either way */
+    if (typeof quickMs === 'number' && quickMs >= 0) { wait = quickMs; }
     nudgeTimer = setTimeout(function () {
       if (streaming || !panelOpen || quietMode) { return; }
       /* never speak over someone mid-sentence — wait and try again shortly */
@@ -2659,8 +2662,15 @@
        start the light-presence loop. This covers the tapped-outreach path —
        the tapped line IS the opener, but before this fallback nothing ever
        armed the follow-ups, so the bot went mute until the visitor typed.
-       scheduleNudge applies all its own gates (demo/quiet/caps/anonymous). */
-    if (panelOpen && !nudgeTimer && !streaming) { scheduleNudge(); }
+       And because an open panel is the visit's highest-attention moment,
+       this first follow-up comes QUICKLY (openerFollowMs, default 8s) — a
+       goal beat while they're actually looking, not 20s later. scheduleNudge
+       still applies all its own gates (demo/quiet/caps/anonymous). */
+    if (panelOpen && !nudgeTimer && !streaming) {
+      var oa = orCfg();
+      var quick = (typeof oa.openerFollowMs === 'number' && oa.openerFollowMs >= 0) ? oa.openerFollowMs : 8000;
+      scheduleNudge(false, quick);
+    }
   }
   function openerOnOpenCore() {
     if (isDemo()) { noteSkip('opener: demo mode'); return; }
@@ -2683,12 +2693,14 @@
       delay = (typeof oo.openerReengageMs === 'number' && oo.openerReengageMs >= 0) ? oo.openerReengageMs : 1100;
     } else if (!history.length) {
       kind = 'greet';
-      /* a known patron is greeted personally right away; a fresh/anonymous
-         visitor gets a warm follow-up on the house greeting after an idle beat,
-         so they're never left in an open, silent panel */
+      /* Opening the panel is the visit's highest-attention moment — the goal
+         beat lands while they're actually looking. A known patron is greeted
+         personally almost at once; an anonymous visitor gets the goal-directed
+         follow-up shortly after the house greeting (was 16s — attention has
+         moved on by then). Both admin-tunable. */
       delay = authEmail
         ? ((typeof oo.openerSignedMs === 'number' && oo.openerSignedMs >= 0) ? oo.openerSignedMs : 1200)
-        : ((typeof oo.openerAnonMs === 'number' && oo.openerAnonMs >= 0) ? oo.openerAnonMs : 16000);
+        : ((typeof oo.openerAnonMs === 'number' && oo.openerAnonMs >= 0) ? oo.openerAnonMs : 3000);
     }
     if (!kind) { noteSkip('opener: last word is the visitor\'s — the bot replies rather than re-opens'); return; }
     reengagedThisOpen = true;
