@@ -246,6 +246,11 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
 
 ## Chat panel & composer (client UX)
+- **The register sheet is sacred ground.** While the checkout panel is open,
+  no proactive beat fires anywhere — nudge, opener, or bubble (they share the
+  same screen space on desktop, and a bot line mid-order-form is the most
+  expensive interruption there is). Every such skip names itself, and
+  `status()` reports `checkoutOpen`.
 - **"That's all for now" is a visible control, not a hidden menu item.** Once a
   real exchange exists (one visitor turn + one bot turn), a small chip rides in
   the message flow under the bot's latest reply — no chrome, no extra row; it

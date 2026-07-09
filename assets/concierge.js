@@ -1432,6 +1432,7 @@
      their own budget (re-engagement). */
   function showOutreach(kind, text, exempt, repeatable) {
     if (!text || panelOpen) { return false; }
+    if (checkoutOpen()) { noteSkip('bubble(' + kind + '): the register sheet is open — never interrupt an order'); return false; }
     if (outreachEl) { noteSkip('bubble(' + kind + '): another outreach bubble is already on screen'); return false; }
     if (quietMode) { noteSkip('bubble(' + kind + '): QUIET MODE is on for this tab'); return false; }
     if (!repeatable && orSeen(kind)) { noteSkip('bubble(' + kind + '): already shown this visit — one-time bubbles never repeat'); return false; }
@@ -2196,6 +2197,7 @@
     if (quietMode) { noteSkip('reengage: QUIET MODE — pauses for ' + Math.round(effQuietMs() / 60000) + 'min; lifts by itself, on reload, or when you type'); return; }
     if (streaming) { noteSkip('reengage: a reply is streaming'); return; }
     if (outreachEl) { noteSkip('reengage: an outreach bubble is already on screen (it withdraws by itself after ~22s)'); return; }
+    if (checkoutOpen()) { noteSkip('reengage: the register sheet is open — never interrupt an order'); return; }
     var pc = reengagePostCfg();
     var pa = purchaseAgeMs();
     if (pa !== null && pa < pc.graceMs) {                        /* fresh sale — congrats owns it */
@@ -2634,11 +2636,21 @@
     var o = orCfg();
     return (typeof o.holdBudget === 'number' && o.holdBudget >= 0) ? o.holdBudget : HOLD_BUDGET;
   }
+  /* The register sheet is sacred ground: while the checkout panel is open,
+     NO proactive beat fires anywhere — a bot line mid-order-form is the most
+     expensive interruption there is (they share the same space on desktop). */
+  function checkoutOpen() {
+    try {
+      var p = document.querySelector('.ck-panel.ck-open');
+      return !!p;
+    } catch (eCk) { return false; }
+  }
   function scheduleNudge(spacious, quickMs) {
     clearNudge();
     if (isDemo()) { noteSkip('nudge: demo mode'); return; }
     if (!panelOpen) { noteSkip('nudge: panel is closed'); return; }
     if (quietMode) { noteSkip('nudge: QUIET MODE — pauses for ' + Math.round(effQuietMs() / 60000) + 'min; lifts by itself, on reload, or when you type'); return; }
+    if (checkoutOpen()) { noteSkip('nudge: the register sheet is open — never interrupt an order'); return; }
     var o = orCfg();
     /* Effective caps scale with assertiveness: a more driving concierge circles
        back a couple more times; admin nudgeCap overrides entirely. */
@@ -2670,6 +2682,7 @@
     if (typeof quickMs === 'number' && quickMs >= 0) { wait = quickMs; }
     nudgeTimer = setTimeout(function () {
       if (streaming || !panelOpen || quietMode) { return; }
+      if (checkoutOpen()) { noteSkip('nudge: the register sheet is open — never interrupt an order'); scheduleNudge(true); return; }
       /* never speak over someone mid-sentence — wait and try again shortly */
       if (composing()) { scheduleNudge(spacious); return; }
       if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
@@ -2758,6 +2771,7 @@
       if (!panelOpen) { noteSkip('opener(' + kind + '): panel closed before it fired'); return; }
       if (streaming) { noteSkip('opener(' + kind + '): a reply is streaming'); return; }
       if (quietMode) { noteSkip('opener(' + kind + '): QUIET MODE is on for this tab'); return; }
+      if (checkoutOpen()) { noteSkip('opener(' + kind + '): the register sheet is open — never interrupt an order'); return; }
       /* if they engaged during the wait (tapped a pill, typed), let them lead */
       if (kind === 'greet' && history.length) { noteSkip('opener(greet): visitor engaged during the wait — they lead'); return; }
       /* don't open over someone already typing — hold the thought a beat */
@@ -3804,6 +3818,7 @@
         signedIn: !!authEmail,
         email: authEmail || null,
         panelOpen: panelOpen,
+        checkoutOpen: checkoutOpen(),
         quietMode: quietMode,
         quietRemainingMs: quietMode ? Math.max(0, quietUntil - Date.now()) : 0,
         wrappedUp: wrappedUp,

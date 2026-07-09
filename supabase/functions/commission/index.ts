@@ -1138,8 +1138,20 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(req, 200, { ok: true });
   }
 
-  // Rate limit: 10 commissions / 10 minutes per x-forwarded-for IP.
-  if (await rateLimited(ip, 10)) {
+  // Rate limit. The wall exists because this is a public endpoint where every
+  // accepted order consumes a scarce serial from the edition, sends real
+  // email, and writes rows — unthrottled, a script could drain serials and
+  // the mail quota in minutes. But an email-verified signed-in buyer is not
+  // anonymous traffic: they get their own, far roomier window keyed to their
+  // user id (seen live: a heavy demo day tripped the shared IP wall and
+  // blocked a real signed-in purchase — the worst failure a register can have).
+  const buyer = await verifyUser(req);
+  if (buyer) {
+    if (await rateLimited("u:" + buyer.id, 30)) {
+      return jsonError(req, 429,
+        "Too many requests. The register takes a short pause — try again in a few minutes.");
+    }
+  } else if (await rateLimited(ip, 10)) {
     return jsonError(req, 429,
       "Too many requests. The register takes a short pause — try again in a few minutes.");
   }
