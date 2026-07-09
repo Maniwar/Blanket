@@ -125,8 +125,8 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   ledger HOLD soften there to "offer the single most natural next step" (more
   depth, a choice, the register). Holding on that beat is allowed only when
   the patron clearly closed the conversation themselves. Keeps the post-reply
-  silence inside the first ladder rung (default 20s × dial, tunable via
-  "1st follow-up").
+  silence inside the first ladder rung (default 8s × dial — the ladder leads
+  fast and backs off: 8s→30s→90s→3m→5m; tunable via the follow-up fields).
 - **Sell, don't just report.** The substance gate is not a license to become a
   status board: on every spoken beat the bot prefers the line that moves
   *toward the register* — an open goal's next step, a companion cloth for

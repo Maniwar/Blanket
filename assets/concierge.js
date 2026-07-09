@@ -2632,7 +2632,10 @@
      circles back a couple of times with substance, then settles into occasional
      "still here whenever you need me" check-ins at growing intervals, the way a
      good clerk lingers nearby without hovering. Quiet mode stops it entirely. */
-  var NUDGE_DELAYS = [20000, 45000, 90000, 180000, 300000]; /* last value repeats */
+  /* First rung leads FAST — the moments after a customer's message are the
+     hottest in the conversation, and dead air there loses them; later rungs
+     back off. All overridable (nudge1Ms…nudge5Ms), all scaled by the dial. */
+  var NUDGE_DELAYS = [8000, 30000, 90000, 180000, 300000]; /* last value repeats */
   var NUDGE_CAP = 6;            /* total proactive check-ins before it fully rests */
   var UNACKED_CAP = 2;          /* stop after this many reach-outs with no sign of life */
   var HOLD_BUDGET = 4;          /* consecutive silent holds before the bot rests */
