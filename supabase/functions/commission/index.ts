@@ -775,9 +775,12 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("recent")) {
     // Public: the latest register entries — serial, city/state, time only.
+    // KEPT entries only: a cancelled order carries a NULL serial (the Nº went
+    // back to the pool) and a returned one is struck — neither belongs in the
+    // homepage's "recent claims", and a null serial crashed the nav ticker.
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/orders?select=serial,city,state,placed_at&order=placed_at.desc&limit=3`,
+        `${SUPABASE_URL}/rest/v1/orders?select=serial,city,state,placed_at&serial=not.is.null&status=not.in.(cancelled,returned)&order=placed_at.desc&limit=3`,
         { headers: { "apikey": SERVICE_KEY, "Authorization": `Bearer ${SERVICE_KEY}` } },
       );
       const rows = res.ok ? await res.json() as unknown[] : [];

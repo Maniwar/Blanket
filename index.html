@@ -1255,7 +1255,9 @@ footer{
   var claimedEls = Array.prototype.slice.call(document.querySelectorAll('.claimedCt'));
   var remainEls  = Array.prototype.slice.call(document.querySelectorAll('.remainCt'));
   var allocFill  = document.getElementById('allocFill');
-  function fmtN(n){ return n.toLocaleString('en-US'); }
+  /* Null-safe: a struck register entry carries no serial (the Nº returned to
+     the pool) — never let one crash the ticker. */
+  function fmtN(n){ return (n == null || typeof n.toLocaleString !== 'function') ? '—' : n.toLocaleString('en-US'); }
   function syncAlloc(pulse){
     slotEls.forEach(function(el){
       el.textContent = soldOut ? 'next free' : fmtN(heldSerial !== null ? heldSerial : claimed + 1);
@@ -1364,9 +1366,11 @@ footer{
   }
   var recentOrders = [];
   function renderClaims(list){
-    recentOrders = (list || []).slice(0, 3);
+    /* only rows with a real Nº — a struck entry (serial null) is not a claim */
+    list = (list || []).filter(function(o){ return o && typeof o.serial === 'number'; });
+    recentOrders = list.slice(0, 3);
     var ul = document.querySelector('.claims');
-    if(!ul || !list || !list.length) return;
+    if(!ul || !list.length) return;
     while(ul.firstChild) ul.removeChild(ul.firstChild);
     for(var i = 0; i < list.length && i < 3; i++){
       var o = list[i];
