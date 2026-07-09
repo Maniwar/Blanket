@@ -142,11 +142,21 @@ async function main() {
         null, { timeout: 30000, polling: 250 },
       ).catch(() => {});
       const before = await page.evaluate(() => window.FeierabendConcierge.status().historyTurns);
+      // A real reader MOVES — acknowledge the opener like a human would.
+      // Headless JS injection produces no pointer/key events, so without this
+      // the widget correctly stacks its reach-outs as "unacknowledged" and
+      // pauses the ladder at the unacked cap (an artificial state no live
+      // visitor produces).
+      await page.mouse.move(400, 300);
+      await page.mouse.move(430, 330);
       await page.evaluate(() => window.FeierabendConcierge.open("Which cloth suits a bright room?"));
       await page.waitForFunction(
         (n) => { const s = window.FeierabendConcierge.status(); return s.historyTurns > n + 1 && s.lastRole === "assistant"; },
         before, { timeout: 60000, polling: 250 },
       );
+      // Acknowledge the reply too (a reader who got an answer is looking at it).
+      await page.mouse.move(410, 350);
+      await page.mouse.move(390, 310);
       const t0 = Date.now();
       let measured = -1;
       try {
@@ -154,7 +164,7 @@ async function main() {
           (since) => {
             const s = window.FeierabendConcierge.status();
             const fresh = (s.recentSkips || []).slice(0, 3).join(" ");
-            return /beat: FIRED|nudge: stood down|the register HELD|beat: request FAILED/.test(fresh) &&
+            return /beat: FIRED|nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(fresh) &&
               Date.now() >= since;
           },
           t0, { timeout: expected + 20000, polling: 150 },
