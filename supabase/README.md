@@ -93,16 +93,19 @@ supabase secrets set MODEL="claude-haiku-4-5-20251001"
 `ALLOWED_ORIGINS` (set by the workflow to the site origins —
 `https://feier-abend.co,https://www.feier-abend.co,https://maniwar.github.io`)
 restricts which **browsers** may call the function via CORS — it does not
-stop direct `curl` calls. Abuse is bounded by the built-in rate limit
-(**20 requests per 10 minutes per IP**) and the `max_tokens: 1024` cap on
-each response. Watch your Anthropic usage dashboard; if usage looks wrong,
+stop direct `curl` calls. Abuse is bounded by the built-in rate limit —
+**buyer-aware**: anonymous traffic gets 20 requests per 10 minutes per IP,
+a signed-in email-verified patron gets their own window keyed by user id
+(default 60; both admin-tunable via `chat_rate_anon` / `chat_rate_signed`
+in Tuning → Engagement pace → Service limits) — and the `max_tokens: 1024`
+cap on each response. Watch your Anthropic usage dashboard; if usage looks wrong,
 rotate the API key (create a new one, update the `ANTHROPIC_API_KEY` repo
 secret, re-run the deploy, then revoke the old key).
 
 ## v2 — config, knowledge base, logging, accounts
 
 v2 keeps the entire v1 wire contract (`data: {"t":...}` chunks, `data: [DONE]`,
-CORS via `ALLOWED_ORIGINS`, the 20 req / 10 min rate limit) and layers a
+CORS via `ALLOWED_ORIGINS`, the buyer-aware rate limit above) and layers a
 database on top. The schema lives in **`supabase/migrations/0001_concierge.sql`**
 — apply it with the Supabase MCP server or `supabase db push` before deploying
 the v2 function. The function reads the DB with the service-role key over raw
@@ -207,9 +210,10 @@ Success — `200`:
 ```
 
 Errors are JSON `{"error": "..."}` with CORS headers: `400` (specific
-validation message), `405` (non-POST), `429` (rate limit — **10 requests per
-10 minutes per IP**), `502` ("The register is briefly unavailable. Nothing
-was recorded — try again.") when the RPC fails.
+validation message), `405` (non-POST), `429` (rate limit — **buyer-aware**:
+10 orders per 10 minutes per anonymous IP; a signed-in email-verified buyer
+gets their own window of 30 keyed by user id), `502` ("The register is
+briefly unavailable. Nothing was recorded — try again.") when the RPC fails.
 
 Optionally send `Authorization: Bearer <Supabase user JWT>` to link the order
 to the signed-in account (the bare anon key does not count; invalid tokens
