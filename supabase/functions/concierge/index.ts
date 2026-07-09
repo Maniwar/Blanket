@@ -2134,8 +2134,10 @@ function sellingBlock(data: ConciergeData): string {
 }
 
 // ENGAGEMENT & PACING — the single owner of proactive follow-ups and the [HOLD] signal.
-function engagementBlock(): string {
-  return "\nENGAGEMENT & PACING\n" +
+// The rule text itself is an editable BASE (config.engagement_base, versioned in
+// concierge_edit_history like every config key; ?defaults=1 serves this built-in
+// for "Load built-in to edit"). Blank config = this text.
+const ENGAGEMENT_BASE =
     "- You may receive a proactive follow-up prompt when the shopper falls quiet. Each time, DECIDE: " +
     "speak or give space. The test is SUBSTANCE: speak only when you have something NEW and CONCRETE — a " +
     "register fact not yet mentioned, a real answer to something they raised, an open goal's next step, a " +
@@ -2184,6 +2186,21 @@ function engagementBlock(): string {
     "prompt where silence is kinder. NEVER write [HOLD] (or the bare word 'hold') in reply to a message the " +
     "visitor actually sent — to anything they type, including a bare 'hey', always give real, warm words. The " +
     "token must never appear in what the customer reads.\n";
+
+function engagementBlock(data: ConciergeData): string {
+  const custom = data.config?.engagement_base;
+  const body = typeof custom === "string" && custom.trim() ? custom : ENGAGEMENT_BASE;
+  return "\nENGAGEMENT & PACING\n" + body + (body.endsWith("\n") ? "" : "\n");
+}
+
+/** Admin's standing instructions for proactive beats (config.beat_notes) —
+ * appended to every beat brief (nudge, opener, closed-panel bubble), so the
+ * merchant can steer beat behavior directly, versioned like any config key. */
+function beatNotesClause(config: ConciergeData["config"]): string {
+  const n = config?.beat_notes;
+  return typeof n === "string" && n.trim()
+    ? " ADMIN BEAT NOTES (follow these): " + n.trim().slice(0, 1200)
+    : "";
 }
 
 // SOP text filtered by audience: 'signed_in' rows only for signed-in shoppers, 'anon'
@@ -2260,7 +2277,7 @@ function assemblePromptSections(
     recognition: () => recognitionBlock(),
     register: () => registerBlock(data),
     selling: () => sellingBlock(data),
-    engagement: () => engagementBlock(),
+    engagement: () => engagementBlock(data),
     procedures: () => {
       const t = sopTextForAudience(data, signedIn);
       return t ? "\nSTANDARD OPERATING PROCEDURES (follow the one that matches your task, exactly)\n" + t + "\n" : "";
@@ -2502,6 +2519,7 @@ async function handleDefaultsGet(req: Request): Promise<Response> {
     clientbook_base: CLIENTBOOK_BASE,
     greeting_base: GREETING_DEFAULT,
     objective_base: PRIMARY_OBJECTIVE_DEFAULT,
+    engagement_base: ENGAGEMENT_BASE,
     // The toggleable sections, so the admin UI can render the on/off switches without
     // hardcoding the list (kept in sync with PROMPT_SECTIONS here on the server).
     sections: PROMPT_SECTIONS.map((s) => ({ key: s.key, label: s.label, signedInOnly: !!s.signedInOnly })),
@@ -3310,8 +3328,10 @@ async function handleChatPost(req: Request): Promise<Response> {
     // Admin control: Tuning → Engagement pace → "Substance gate" (default ON).
     // Off restores the older always-say-something bias for merchants who prefer
     // constant presence over held beats. (60s-cached read — effectively free.)
-    const beatOutreach = (await loadConciergeData()).config?.outreach as Record<string, unknown> | undefined;
+    const beatCfg = (await loadConciergeData()).config;
+    const beatOutreach = beatCfg?.outreach as Record<string, unknown> | undefined;
     const substanceGate = beatOutreach?.substanceGate !== false;
+    const beatNotes = beatNotesClause(beatCfg);
     let decision: string;
     if (cnt <= 2) {
       // First couple: engage — but only with substance. The old "SPEAK now (do
@@ -3364,7 +3384,7 @@ async function handleChatPost(req: Request): Promise<Response> {
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${askGuard}${doorNote}${groundNote} ${decision}${houseNote}${emailNote} ` +
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${askGuard}${doorNote}${groundNote} ${decision}${houseNote}${emailNote}${beatNotes} ` +
         `Do not greet them again as if they just arrived.]`,
     });
   }
@@ -3376,9 +3396,10 @@ async function handleChatPost(req: Request): Promise<Response> {
   const opener = (validated.context as Record<string, unknown>)?.opener;
   const isOpener = opener === "reengage" || opener === "greet";
   if (isOpener && !isNudge) {
+    const openerNotes = beatNotesClause((await loadConciergeData()).config);
     validated.messages.push({
       role: "user",
-      content: opener === "greet"
+      content: (opener === "greet"
         ? "[Context note, not the shopper's words: they just opened the concierge and have not " +
           "spoken yet. They already see a brief house greeting, so do NOT repeat a generic hello. " +
           "Add ONE warm, specific line that opens toward a conversation goal. If CUSTOMER is present, " +
@@ -3398,7 +3419,7 @@ async function handleChatPost(req: Request): Promise<Response> {
           "by the team, weave it into this line in your OWN voice; you need no tool and do NOT resolve it here " +
           "(the house checks it off for you). " + HOUSE_NOTE_GUARD + " This is a plain spoken line: do NOT use any " +
           "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
-          "mention this note. One or two sentences ending in a light question.]",
+          "mention this note. One or two sentences ending in a light question.]") + openerNotes,
     });
   }
 
@@ -4161,7 +4182,7 @@ async function handleReengage(req: Request): Promise<Response> {
         "register card in another name, " + askOrStatement +
         (signed ? "They are a signed-in patron." : "They are an anonymous visitor.") +
         " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line." +
-        houseClause + repeatGuard;
+        houseClause + repeatGuard + beatNotesClause(data.config);
     } else {
       const open = goalStatus
         ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
@@ -4175,7 +4196,8 @@ async function handleReengage(req: Request): Promise<Response> {
         "them: " + goal.label + " — " + goal.description + ". Warm, specific, " + askOrStatement +
         (signed ? "They are a signed-in patron; a small nod to that is welcome." :
         "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
-        "{{tokens}}, no greeting boilerplate. Just the line." + houseClause + repeatGuard;
+        "{{tokens}}, no greeting boilerplate. Just the line." + houseClause + repeatGuard +
+        beatNotesClause(data.config);
     }
     const started = Date.now();
     const res = await fetch("https://api.anthropic.com/v1/messages", {

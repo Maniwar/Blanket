@@ -110,6 +110,15 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   turns that into a hold and shows nothing. It must never write `[HOLD]` in reply
   to a message the visitor actually sent; the token can never reach the reader (the
   pipeline strips it on every path).
+- **The guardrails themselves are editable and versioned.** The entire
+  ENGAGEMENT & PACING rule block is an editable base
+  (`concierge_config.engagement_base` — Tuning → Engagement pace, with "Load
+  built-in to edit" and History ⟲ rollback like the voice base; blank = the
+  built-in text below). `beat_notes` additionally appends the admin's own
+  standing instructions to **every** proactive beat brief (nudges, openers,
+  the closed-panel bubble) without replacing the base. Every save lands in
+  `concierge_edit_history`. The bullets that follow describe the **built-in**
+  defaults.
 - **Sell, don't just report.** The substance gate is not a license to become a
   status board: on every spoken beat the bot prefers the line that moves
   *toward the register* — an open goal's next step, a companion cloth for

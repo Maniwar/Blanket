@@ -115,6 +115,14 @@ device-kept transcript survives a closed tab; default 7 days). The client reads
 these via `?config=1`; blank/absent keys fall back to built-in defaults scaled
 by `assertiveness`.
 
+*Engagement guardrails as editable text* (versioned like every config key via
+`concierge_edit_history`, History ⟲ in admin): `engagement_base` — the full
+ENGAGEMENT & PACING rule block (substance-or-silence, sell-don't-report, plain
+speech, never-re-ask, `[HOLD]`); blank = the built-in, `?defaults=1` serves the
+built-in for "Load built-in to edit". `beat_notes` — the admin's standing
+instructions appended to every proactive beat brief (in-chat nudges, openers,
+and the closed-panel bubble) on top of the base.
+
 *Reporting & retention keys* (Conversion tab / Edition & access — see
 [`ATTRIBUTION.md`](../ATTRIBUTION.md)): `unit_price` (USD behind every revenue
 figure; $589 fallback), `week_start` (0 = Sunday, 1 = Monday — drives the

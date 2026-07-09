@@ -1155,6 +1155,22 @@
           <input type="number" id="cfg-quiet-mins" class="mono-field" min="1" step="1" placeholder="30" style="max-width:120px;">
           <p class="note" style="margin-top:4px;">How long "That's all for now" / "Don't message me" silences every proactive beat. It's a <strong>time-boxed pause, not a switch</strong>: it lifts by itself after this window, on a page reload (deliberately not persisted), or the moment the visitor types — whichever comes first.</p>
         </div>
+
+        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--line, #2a2f27);">
+          <label class="micro" for="cfg-engagement-base"><strong>Engagement rules — base (the guardrails themselves)</strong></label>
+          <p class="note" style="margin:6px 0;">The exact ENGAGEMENT &amp; PACING rules the model follows on proactive beats — substance-or-silence, sell-don't-report, plain speech, never re-ask, the [HOLD] signal. Blank = the built-in. Every save is <strong>versioned</strong> (History ⟲ restores any prior version). This REPLACES the built-in when set — press "Load built-in to edit" to start from the current default.</p>
+          <textarea id="cfg-engagement-base" rows="10" placeholder="Blank = the built-in engagement &amp; pacing rules. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="cfg-links">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-engagement-base" data-default="engagement_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="engagement_base">History ⟲</button>
+          </div>
+          <label class="micro" for="cfg-beat-notes" style="margin-top:12px;display:block;"><strong>Beat notes (added on top)</strong></label>
+          <p class="note" style="margin:6px 0;">Your standing instructions appended to <em>every</em> proactive beat — in-chat follow-ups, openers, and the closed-panel bubble — without replacing the base rules. E.g. "Always steer toward the gift option in December." Versioned like every setting.</p>
+          <textarea id="cfg-beat-notes" rows="3" placeholder="Blank = nothing added. One or two plain sentences work best."></textarea>
+          <div class="cfg-links">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_notes">History ⟲</button>
+          </div>
+        </div>
         <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="cfg-idlereach">
           <span class="micro">Reach out to an idle visitor even before they scroll</span>
@@ -2974,6 +2990,8 @@ async function loadConfig() {
   $('cfg-bubble-withdraw').value = ms2s(o.bubbleWithdrawMs);
   $('cfg-history-keep').value = (typeof o.historyKeepMs === 'number' && o.historyKeepMs > 0) ? Math.round(o.historyKeepMs / 86400000) : '';
   $('cfg-quiet-mins').value = (typeof o.quietMs === 'number' && o.quietMs > 0) ? Math.round(o.quietMs / 60000) : '';
+  if ($('cfg-engagement-base')) $('cfg-engagement-base').value = (typeof cfg.engagement_base === 'string') ? cfg.engagement_base : '';
+  if ($('cfg-beat-notes')) $('cfg-beat-notes').value = (typeof cfg.beat_notes === 'string') ? cfg.beat_notes : '';
   $('cfg-dwell').value = ms2s(o.dwellMs);
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
@@ -3094,6 +3112,8 @@ async function saveEngagement() {
   if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin >= 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * 3600000);
   o.reengagePostSaleEnabled = $('cfg-reengage-postsale').checked;
   const rows = [{ key: 'outreach', value: o, updated_at: nowIso() }];
+  rows.push({ key: 'engagement_base', value: $('cfg-engagement-base').value, updated_at: nowIso() });
+  rows.push({ key: 'beat_notes', value: $('cfg-beat-notes').value, updated_at: nowIso() });
   const gr = Number($('cfg-goalrate').value);
   if ($('cfg-goalrate').value !== '' && Number.isFinite(gr) && gr >= 0 && gr <= 1) {
     rows.push({ key: 'goal_sample_rate', value: gr, updated_at: nowIso() });
