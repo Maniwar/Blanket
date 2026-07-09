@@ -2577,6 +2577,16 @@
     }
     shell.done();
     content = shell.getText();
+    /* The model's own wind-down signal: a typed "that's all" earns a warm
+       send-off carrying {{action:snooze}} — honoring it enters quiet mode and
+       records the wrap exactly as if they'd tapped the chip. The token is
+       stripped before the transcript keeps the line. */
+    var snoozed = false;
+    if (content && content.indexOf('{{action:snooze}}') !== -1) {
+      snoozed = true;
+      content = content.replace(/[ \t]*\{\{action:snooze\}\}[ \t]*/g, '')
+        .replace(/\n{3,}/g, '\n\n').replace(/^\s+|\s+$/g, '');
+    }
     if (content) {
       if (shell.proactive) { holdAttempts = 0; } /* it spoke — refresh the give-space budget */
       history.push({ role: 'assistant', content: content, ts: Date.now() });
@@ -2589,7 +2599,15 @@
       addFeedback(shell.turn, shell.mid);
     }
     setStreaming(false);
-    scheduleNudge();
+    if (snoozed) {
+      /* the send-off in the reply IS the goodbye — no extra system line */
+      setQuiet(true);
+      orDismissAll();
+      doWrapup('quiet');
+      noteSkip('snooze: the bot wound the visit down on the patron\'s cue — quiet for the configured window');
+    } else {
+      scheduleNudge();
+    }
     updateWrapPill();
   }
 
@@ -2709,7 +2727,11 @@
          re-open lets the thread STAND (the quick attention follow-up is
          armed instead, and it is substance-gated). A clerk doesn't re-greet
          someone who glanced away for a minute. */
-      var cool = (typeof oo.openerCooldownMs === 'number' && oo.openerCooldownMs >= 0) ? oo.openerCooldownMs : 600000;
+      /* default 90s: enough to stop rapid-refresh greeting spam, short enough
+         that a genuine return gets spoken to (set 0 to speak on EVERY open —
+         the opener now sees its own recent lines and varies instead of
+         repeating, so frequent openers no longer echo) */
+      var cool = (typeof oo.openerCooldownMs === 'number' && oo.openerCooldownMs >= 0) ? oo.openerCooldownMs : 90000;
       if (last.ts && (Date.now() - last.ts) < cool) {
         reengagedThisOpen = true;
         noteSkip('opener: my last line is still fresh (' + Math.round((Date.now() - last.ts) / 1000) +

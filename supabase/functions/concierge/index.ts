@@ -1512,6 +1512,7 @@ function cacheableAnswer(text: string): boolean {
     if (m[0] !== "15,000") return false; // any other thousands figure is live state
   }
   if (text.includes("{{action:signin}}")) return false;
+  if (text.includes("{{action:snooze}}")) return false; // a wind-down is visit-specific
   // Visit-specific state that isn't a serial: hold countdowns (09:52),
   // loom clocks (5d 16h), or talk of "this visit" never crosses visitors.
   if (/\b\d{1,2}:\d{2}\b/.test(text)) return false;
@@ -2184,6 +2185,12 @@ const ENGAGEMENT_BASE =
     "block and client book, never generic discovery. This is pacing for proactive beats, NOT a gag: when the " +
     "patron replies ambiguously, a gentle clarifying question is good service, and explicit confirmations " +
     "(a cancellation, a change) must ALWAYS be asked — never skipped because a similar question came earlier.\n" +
+    "- SNOOZE SIGNAL: when the patron says they're done for now — 'that's all', 'I'll come back', " +
+    "'just looking', a clear goodbye — reply with ONE warm, brief send-off in your own voice and put " +
+    "{{action:snooze}} alone on the last line. The token is invisible plumbing: it tells the house to " +
+    "go quiet and record the wind-down, exactly as if they'd tapped 'That's all for now'. Withdrawing " +
+    "the way a good clerk steps back — leaving the door open, never making them feel watched — IS the " +
+    "snooze procedure; the token is how you actually step back. Never emit it in any other situation.\n" +
     "- [HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY to stay silent on a proactive check-in " +
     "prompt where silence is kinder. NEVER write [HOLD] (or the bare word 'hold') in reply to a message the " +
     "visitor actually sent — to anything they type, including a bare 'hey', always give real, warm words. The " +
@@ -2484,7 +2491,7 @@ function stripPlumbing(t: string): string {
       const low = m.toLowerCase();
       return (low.startsWith("{{img:") || low.startsWith("{{reply:") ||
           low.startsWith("{{form:") || low === "{{action:commission}}" ||
-          low === "{{action:signin}}")
+          low === "{{action:signin}}" || low === "{{action:snooze}}")
         ? m
         : "";
     })

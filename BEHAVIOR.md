@@ -135,8 +135,13 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   to **plain speech** (one or two clerk-plain sentences, at most one image,
   every fact verbatim from the register — never invented rituals, meanings, or
   tallies).
-- **Quiet mode is a time-boxed pause, not a switch.** "That's all for now" (the
-  in-flow chip or ⋯ menu) and "Don't message me until I write back" both enter
+- **Quiet mode is a time-boxed pause, not a switch.** Three entrances: "That's
+  all for now" (the in-flow chip or ⋯ menu), "Don't message me until I write
+  back", and — the snooze procedure — a **typed** wind-down ("that's all",
+  "I'll come back", a clear goodbye), which the model answers with one warm
+  send-off carrying `{{action:snooze}}` on its last line; the client honors
+  the token by entering quiet and recording the wrap exactly like the chip
+  (the token never renders, and the send-off itself is the goodbye). All enter
   quiet mode, which silences **every** proactive beat — in-panel nudges,
   openers, and the closed-panel bubble. It lifts three ways, whichever comes
   first: (1) **by itself** after the quiet window (`outreach.quietMs`, default
