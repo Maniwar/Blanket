@@ -577,12 +577,14 @@
       '.cx-send:disabled{opacity:.35;cursor:default;}',
       '.cx-send:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
 
-      /* ---------- visible wrap-up pill (the visitor's own "we're done" signal) ---------- */
-      '.cx-wraprow{display:flex;justify-content:flex-end;margin:0 0 .4rem;}',
+      /* ---------- visible wrap-up chip (the visitor's own "we're done" signal) ----------
+         Rides in the message flow after the bot's latest reply, like a
+         suggestion chip — scrolls with the conversation, costs no chrome. */
+      '.cx-wrapend{display:flex;justify-content:flex-end;margin:.4rem 0 .15rem;}',
       '.cx-wrapbtn{background:transparent;border:1px solid var(--cx-hair);border-radius:999px;',
-      'color:var(--cx-brass-soft);font-family:"IBM Plex Mono",monospace;font-size:.6rem;',
-      'letter-spacing:.14em;text-transform:uppercase;padding:.34rem .85rem;cursor:pointer;',
-      'transition:border-color .25s ease,color .25s ease,background .25s ease;}',
+      'color:var(--cx-brass-soft);font-family:"IBM Plex Mono",monospace;font-size:.58rem;',
+      'letter-spacing:.13em;text-transform:uppercase;padding:.3rem .75rem;cursor:pointer;',
+      'white-space:nowrap;transition:border-color .25s ease,color .25s ease,background .25s ease;}',
       '.cx-wrapbtn:hover{border-color:var(--cx-brass-soft);color:var(--cx-ink);background:rgba(196,155,91,.08);}',
       '.cx-wrapbtn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
 
@@ -1286,21 +1288,6 @@
       hideNewPill();
     });
     compose.appendChild(newPill);
-
-    /* The visitor's own "we're done" signal, made visible: a small pill above
-       the composer once a real exchange exists. One tap wraps the conversation
-       (quiet mode, register wrap-up, warm goodbye) — the same act the ⋯ menu
-       offers, but discoverable. Hidden until there's something to wrap. */
-    wrapRow = el('div', 'cx-wraprow');
-    var wrapBtn = el('button', 'cx-wrapbtn', 'That’s all for now ✓');
-    wrapBtn.type = 'button';
-    wrapBtn.setAttribute('aria-label', 'Wrap up this conversation — the concierge stays quiet until you write again');
-    wrapBtn.title = 'Wrap up — the concierge stays quiet until you write again';
-    wrapBtn.addEventListener('click', function () { wrapUpByCustomer(); });
-    wrapRow.appendChild(wrapBtn);
-    wrapRow.style.display = 'none';
-    compose.appendChild(wrapRow);
-
     var row = el('div', 'cx-inputrow');
     inputEl = document.createElement('textarea');
     inputEl.className = 'cx-input';
@@ -2249,11 +2236,23 @@
     updateWrapPill();
   }
 
-  /* The wrap-up pill shows exactly when there is something to wrap: a real
-     exchange, not already wrapped, not in quiet mode. */
+  /* The wrap-up chip rides at the end of the message flow — shown exactly when
+     there is something to wrap (a real exchange, not already wrapped, not in
+     quiet mode, nothing streaming). Rebuilt after each reply so it always sits
+     under the latest line; it is presentation only, never part of history. */
   function updateWrapPill() {
-    if (!wrapRow) { return; }
-    wrapRow.style.display = (!wrappedUp && !quietMode && hasRealExchange()) ? 'flex' : 'none';
+    if (!msgsEl) { return; }
+    var old = msgsEl.querySelector('.cx-wrapend');
+    if (old && old.parentNode) { old.parentNode.removeChild(old); }
+    if (wrappedUp || quietMode || streaming || !hasRealExchange()) { return; }
+    var rowEnd = el('div', 'cx-wrapend');
+    var btn = el('button', 'cx-wrapbtn', 'That’s all for now ✓');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Wrap up this conversation — the concierge stays quiet until you write again');
+    btn.title = 'Wrap up — the concierge stays quiet until you write again';
+    btn.addEventListener('click', function () { wrapUpByCustomer(); });
+    rowEnd.appendChild(btn);
+    msgsEl.appendChild(rowEnd);
   }
 
   /* A real exchange = at least one visitor turn AND one bot turn. Only then is
@@ -2536,6 +2535,9 @@
       if (shell.proactive) { holdAttempts = 0; } /* it spoke — refresh the give-space budget */
       history.push({ role: 'assistant', content: content, ts: Date.now() });
       saveHistory();
+      /* a line landed — if this conversation had been recorded as wound down
+         (auto-wrap on close), it has audibly resumed: eligible to wrap again */
+      wrappedUp = false;
     }
     if (content && shell.mid != null && hasSupabase()) {
       addFeedback(shell.turn, shell.mid);
