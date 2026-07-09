@@ -125,6 +125,13 @@ device-kept transcript survives a closed tab; default 7 days). The client reads
 these via `?config=1`; blank/absent keys fall back to built-in defaults scaled
 by `assertiveness`.
 
+*The Action Table* (`beat_actions`, object — versioned like every key):
+per-rule overrides for the deterministic beat decision, e.g.
+`{"PROPOSE_GIFT":{"enabled":false}}`. The rules run in fixed order
+(`FIX_BLOCKED_ORDER`, `PROPOSE_COMPANION`, `PROPOSE_GIFT`,
+`ADVANCE_GOAL:<slug>`, else `HOLD`) over the computed Sales Ledger; each
+spoken action is spent for 24h via its `beat_action` audit row.
+
 *Engagement guardrails as editable text* (versioned like every config key via
 `concierge_edit_history`, History ⟲ in admin): `engagement_base` — the full
 ENGAGEMENT & PACING rule block (substance-or-silence, sell-don't-report, plain
@@ -354,7 +361,7 @@ post-purchase behavior. **Written by:** admin (Procedures tab). **Read by:**
 | `id` | bigint identity PK | Row id. |
 | `conversation_id` | uuid → conversations | Where it happened. |
 | `user_id`,`email` | — | Who. |
-| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resolve_admin_note`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …) — plus non-tool audit rows: `attribution_qa` (QA run evidence) and `beat_hold` (a proactive beat that chose silence under the substance gate; payload carries the beat kind, so hold rate is measurable). |
+| `action` | text | Tool name (`get_my_orders`, `recall_context`, `update_colorway`, `cancel_order`, `remember_customer`, `resolve_admin_note`, `resend_confirmation`, `request_mending`, `update_gift_details`, `get_care_guide`, `track_shipment`, …) — plus non-tool audit rows: `attribution_qa` (QA run evidence), `beat_hold` (a proactive beat that chose silence; payload carries the beat kind and, when a ledger ran, the decision with rule trace), and `beat_action` (a beat that SPOKE its Action-Table decision; payload = `{action, beat, ledger, trace, outcome}` — the diagnostic trail, and what marks the action spent for 24h). |
 | `serial` | int | Affected order, if any. |
 | `payload` | jsonb | The tool input. |
 | `result` | text | Outcome summary. |

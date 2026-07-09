@@ -126,6 +126,23 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   the doorway, never the destination. A pure status line is right only when
   service genuinely needs it (a blocked order, a delivery), and only once — a
   service fact already raised is spent, not substance.
+- **Beats decide by numbers — the Sales Ledger and Action Table.** For a
+  signed-in patron, a proactive beat's job is no longer the model's guess: the
+  server computes a **Sales Ledger** (orders by status, days since last order,
+  placeholder-address anomalies, post-sale window, unmet goals, pending
+  questions, actions already taken in 24h) and runs it through an ordered
+  **Action Table** — `FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT →
+  ADVANCE_GOAL → HOLD` — choosing the ONE action the beat performs. "Once" is
+  state, not exhortation: a spoken action writes a `beat_action` audit row
+  that marks it spent for 24h. A HOLD decision on the closed-panel bubble
+  short-circuits *before* the model call. **Every decision is diagnosable**:
+  the `beat_action`/`beat_hold` rows in the Actions tab carry the ledger
+  snapshot and the rule-by-rule trace ("PROPOSE_COMPANION: outside the
+  post-sale window") — "why did it say that?" is a lookup, never a guess.
+  Rules can be disabled per-key via `config.beat_actions` (Engagement pace →
+  Action table overrides, versioned). Signed-out visitors (no register to
+  compute from) fall back to the prompt's own judgment under the same
+  guardrails.
 - **Substance or silence (proactive beats).** A proactive beat may speak only
   when it has something **new and concrete** — a register fact not yet
   mentioned, an open goal's next step, a house instruction. Nothing new →

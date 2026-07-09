@@ -2210,11 +2210,12 @@ function engagementBlock(data: ConciergeData): string {
  * Best-effort — a failure returns empty and the beat still speaks. */
 async function crossSurfaceRecall(
   req: Request,
-): Promise<{ lines: string[]; pendingAsk: boolean; note: string }> {
-  const out = { lines: [] as string[], pendingAsk: false, note: "" };
+): Promise<{ lines: string[]; pendingAsk: boolean; note: string; customer: Customer | null }> {
+  const out = { lines: [] as string[], pendingAsk: false, note: "", customer: null as Customer | null };
   try {
     const customer = await verifyUser(req);
     if (!customer) return out;
+    out.customer = customer;
     const convs = await pgSelect<{ id: string }>(
       `concierge_conversations?select=id&user_id=eq.${customer.id}&order=created_at.desc&limit=3`,
     );
@@ -2239,6 +2240,130 @@ async function crossSurfaceRecall(
     }
   } catch { /* best-effort */ }
   return out;
+}
+
+// ── The Sales Ledger + Action Table — beats decide by NUMBERS, not guessing ──
+// The rest of the system is deterministic (attribution is a stamped value,
+// standing is computed LTV); the beat decision was the last place an LLM read
+// raw context and guessed — the root of repetition, orbiting, and fact-without-
+// motion. Now: a computed ledger → an ordered rule table → ONE chosen action
+// the model merely performs. Every decision is audited (beat_action /
+// beat_hold payload carries the ledger snapshot + rule trace), so "why did it
+// say that?" is a lookup in the Actions tab, never a guess.
+
+interface SalesLedger {
+  totalOrders: number;
+  placed: number; weaving: number; delivered: number;
+  lastOrderDays: number | null;
+  blockedSerials: number[];   // placeholder/test addresses — real service anomaly
+  postSaleWindow: boolean;    // recently bought → companion/gift territory
+  goalUnmetSlug: string | null;
+  goalUnmetLabel: string | null;
+  pendingAsk: boolean;
+  section: string;
+  spentActions: string[];     // actions already taken for this patron (24h audit read-back)
+}
+
+const PLACEHOLDER_ADDR = /\b(fake|test|placeholder|sample|asdf|xxx)\b/i;
+
+async function buildSalesLedger(
+  customer: Customer, data: ConciergeData, section: string,
+  goalStatus: Record<string, { status?: string }> | null,
+  pendingAsk: boolean,
+): Promise<SalesLedger> {
+  const orders = await pgSelect<OrderRow>(
+    `orders?select=serial,status,colorway,city,address,placed_at,is_gift&status=neq.cancelled&${
+      ownershipFilter(customer)}&order=placed_at.desc&limit=100`,
+  ) ?? [];
+  const count = (s: string) => orders.filter((o) => o.status === s).length;
+  const newest = orders[0]?.placed_at ? Date.parse(String(orders[0].placed_at)) : NaN;
+  const lastOrderDays = Number.isFinite(newest)
+    ? Math.floor((Date.now() - newest) / 86400000) : null;
+  const blockedSerials = orders
+    .filter((o) => o.status === "placed" &&
+      (PLACEHOLDER_ADDR.test(o.city ?? "") || PLACEHOLDER_ADDR.test(o.address ?? "")))
+    .map((o) => o.serial).filter((s): s is number => typeof s === "number").slice(0, 5);
+  const oc = data.config?.outreach as Record<string, unknown> | undefined;
+  const windowMs = typeof oc?.reengagePostSaleWindowMs === "number" && oc.reengagePostSaleWindowMs > 0
+    ? oc.reengagePostSaleWindowMs : 48 * 3600000;
+  const postSaleWindow = Number.isFinite(newest) && (Date.now() - newest) < windowMs;
+  // First unmet goal, section-matched first — the same preference the bubble uses.
+  const open = data.goals.filter((g) => (goalStatus?.[g.slug]?.status ?? "unmet") !== "met");
+  const goal = open.find((g) => !!section && goalSections(g).includes(section)) || open[0] || null;
+  // Actions already taken for this patron in the last 24h — read back from the
+  // audit log, so "once" is state, not exhortation.
+  let spentActions: string[] = [];
+  try {
+    const since = new Date(Date.now() - 24 * 3600000).toISOString();
+    const rows = await pgSelect<{ payload: { action?: string } | null }>(
+      `concierge_actions?select=payload&action=eq.beat_action&user_id=eq.${customer.id}&created_at=gt.${since}&limit=40`,
+    );
+    if (rows) {
+      spentActions = rows.map((r) => r.payload?.action).filter((a): a is string => typeof a === "string");
+    }
+  } catch { /* audit read is best-effort */ }
+  return {
+    totalOrders: orders.length,
+    placed: count("placed"), weaving: count("weaving"), delivered: count("delivered"),
+    lastOrderDays, blockedSerials, postSaleWindow,
+    goalUnmetSlug: goal?.slug ?? null, goalUnmetLabel: goal ? `${goal.label} — ${goal.description}` : null,
+    pendingAsk, section, spentActions,
+  };
+}
+
+interface BeatDecision { action: string; detail: string; trace: string[] }
+
+/** The Action Table: ordered rules over the ledger. Admin can disable rules
+ * via config.beat_actions = { RULE: { enabled: false } } (versioned like every
+ * config key). Returns the ONE action this beat performs — or HOLD. */
+function chooseBeatAction(
+  l: SalesLedger, overrides: Record<string, { enabled?: boolean }> | undefined,
+): BeatDecision {
+  const trace: string[] = [];
+  const enabled = (k: string) => !(overrides && overrides[k] && overrides[k].enabled === false);
+  const spent = (k: string) => l.spentActions.includes(k);
+  const pick = (action: string, detail: string): BeatDecision => {
+    trace.push(`${action}: SELECTED`);
+    return { action, detail, trace };
+  };
+  const fail = (k: string, why: string) => trace.push(`${k}: ${why}`);
+
+  if (!enabled("FIX_BLOCKED_ORDER")) fail("FIX_BLOCKED_ORDER", "disabled by admin");
+  else if (!l.blockedSerials.length) fail("FIX_BLOCKED_ORDER", "no placed order carries a placeholder address");
+  else if (spent("FIX_BLOCKED_ORDER")) fail("FIX_BLOCKED_ORDER", "already raised in the last 24h");
+  else {
+    return pick("FIX_BLOCKED_ORDER",
+      `Nº ${l.blockedSerials.join(", Nº ")} still carry placeholder addresses — offer ONCE to take the real ones before the loom starts`);
+  }
+
+  if (!enabled("PROPOSE_COMPANION")) fail("PROPOSE_COMPANION", "disabled by admin");
+  else if (!l.totalOrders) fail("PROPOSE_COMPANION", "no kept orders");
+  else if (!l.postSaleWindow) fail("PROPOSE_COMPANION", "outside the post-sale window");
+  else if (spent("PROPOSE_COMPANION")) fail("PROPOSE_COMPANION", "already proposed in the last 24h");
+  else {
+    return pick("PROPOSE_COMPANION",
+      "they bought recently — invite a companion cloth for ANOTHER room (never re-sell the one they have)");
+  }
+
+  if (!enabled("PROPOSE_GIFT")) fail("PROPOSE_GIFT", "disabled by admin");
+  else if (!l.totalOrders) fail("PROPOSE_GIFT", "no kept orders");
+  else if (spent("PROPOSE_GIFT")) fail("PROPOSE_GIFT", "already proposed in the last 24h");
+  else {
+    return pick("PROPOSE_GIFT",
+      "invite a blanket sent as a GIFT — the register card can carry another name");
+  }
+
+  if (!l.goalUnmetSlug) fail("ADVANCE_GOAL", "no unmet goal");
+  else if (!enabled("ADVANCE_GOAL")) fail("ADVANCE_GOAL", "disabled by admin");
+  else if (spent("ADVANCE_GOAL:" + l.goalUnmetSlug)) fail("ADVANCE_GOAL", `goal '${l.goalUnmetSlug}' already advanced in the last 24h`);
+  else {
+    const d: BeatDecision = pick("ADVANCE_GOAL:" + l.goalUnmetSlug,
+      `advance this open goal, tied to the '${l.section || "page"}' section: ${l.goalUnmetLabel}`);
+    return d;
+  }
+
+  trace.push("HOLD: no rule qualified — nothing new and true to say");
+  return { action: "HOLD", detail: "every qualified subject is spent or absent", trace };
 }
 
 /** Admin's standing instructions for proactive beats (config.beat_notes) —
@@ -3329,6 +3454,11 @@ async function handleChatPost(req: Request): Promise<Response> {
   const isNudge = !!nudge &&
     validated.messages.length > 0 &&
     validated.messages[validated.messages.length - 1].role === "assistant";
+  // The beat decision's audit record (ledger snapshot + rule trace) — written
+  // with the beat's outcome: beat_action when it speaks, folded into the
+  // beat_hold payload when it holds. This is the "run the diagnostic and see
+  // why" trail.
+  let beatAudit: Record<string, unknown> | null = null;
   if (isNudge) {
     const secs = typeof nudge!.seconds === "number" ? Math.round(nudge!.seconds) : 40;
     const cnt = typeof nudge!.count === "number" ? nudge!.count : 1;
@@ -3347,6 +3477,39 @@ async function handleChatPost(req: Request): Promise<Response> {
     const recall = await crossSurfaceRecall(req);
     const unansweredAsk = unansweredAskLocal || recall.pendingAsk;
     const crossNote = recall.note;
+    // The Sales Ledger decides this beat's action — numbers, not guessing.
+    // Signed-out or any failure → null → the prompt's own judgment applies.
+    let beatDecision: BeatDecision | null = null;
+    try {
+      if (recall.customer) {
+        const dataForBeat = await loadConciergeData();
+        const beatSection = (validated.context && typeof validated.context === "object" &&
+          typeof (validated.context as Record<string, unknown>).section === "string")
+          ? String((validated.context as Record<string, unknown>).section).toLowerCase() : "";
+        const sk = validated.sessionKey ?? "";
+        let gs: Record<string, { status?: string }> | null = null;
+        if (sk) {
+          const rows = await pgSelect<{ goal_status: Record<string, { status?: string }> | null }>(
+            `concierge_conversations?select=goal_status&session_key=eq.${encodeURIComponent(sk)}&order=created_at.desc&limit=1`,
+          );
+          if (rows && rows[0]) gs = rows[0].goal_status;
+        }
+        const ledger = await buildSalesLedger(recall.customer, dataForBeat, beatSection, gs, unansweredAsk);
+        beatDecision = chooseBeatAction(
+          ledger,
+          dataForBeat.config?.beat_actions as Record<string, { enabled?: boolean }> | undefined,
+        );
+        beatAudit = { action: beatDecision.action, beat: "nudge", ledger, trace: beatDecision.trace };
+      }
+    } catch { /* ledger is best-effort — the beat falls back to prompt judgment */ }
+    const actionBrief = beatDecision
+      ? (beatDecision.action === "HOLD"
+        ? " THE HOUSE HAS DECIDED THIS BEAT: HOLD — " + beatDecision.detail + ". Reply exactly [HOLD]."
+        : " THE HOUSE HAS DECIDED THIS BEAT'S ACTION — computed from the register, not guessed: " +
+          beatDecision.action + ". " + beatDecision.detail + ". Perform EXACTLY this in one warm, " +
+          "plain line — every guardrail above still binds (no question mark if one of yours is " +
+          "pending), and do not substitute a different subject.")
+      : "";
     // NOTE: the guard must never offer holding as the easy out — a hold leaves
     // the unanswered question as the trailing line, so the guard would re-fire
     // on every later beat and the bot would fall silent entirely (a hold loop).
@@ -3435,7 +3598,7 @@ async function handleChatPost(req: Request): Promise<Response> {
       role: "user",
       content:
         `[Context note, not the shopper's words: they have been quiet about ${secs} seconds ` +
-        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${crossNote}${askGuard}${doorNote}${groundNote} ${decision}${houseNote}${emailNote}${beatNotes} ` +
+        `(check-in #${cnt}). Follow your ENGAGEMENT & PACING procedure.${crossNote}${askGuard}${doorNote}${groundNote} ${decision}${actionBrief}${houseNote}${emailNote}${beatNotes} ` +
         `Do not greet them again as if they just arrived.]`,
     });
   }
@@ -3739,7 +3902,7 @@ async function handleChatPost(req: Request): Promise<Response> {
             pgInsert("concierge_actions", {
               conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
               action: "beat_hold", serial: null,
-              payload: { kind: isNudge ? "nudge" : "opener" },
+              payload: { kind: isNudge ? "nudge" : "opener", decision: beatAudit ?? undefined },
               result: "beat held — nothing new to say",
             }).catch(() => { /* audit failures never break the chat */ });
           } else {
@@ -3760,6 +3923,16 @@ async function handleChatPost(req: Request): Promise<Response> {
             scheduleConsolidate(customer, apiKey, model);
             const meta = await logAssistantTurn(cid, finalText, model, Date.now() - startedAt);
             if (meta) { try { controller.enqueue(encoder.encode(`data: ${meta}\n\n`)); } catch { /* gone */ } }
+            // The beat SPOKE its decided action — the audit row is what makes
+            // it "spent" for the next 24h (and diagnosable in the Actions tab).
+            if (beatAudit && isNudge) {
+              pgInsert("concierge_actions", {
+                conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
+                action: "beat_action", serial: null,
+                payload: { ...beatAudit, outcome: "spoke" },
+                result: String(beatAudit.action ?? ""),
+              }).catch(() => { /* audit failures never break the chat */ });
+            }
           }
         } catch { /* fall through to [DONE] */ }
         try {
@@ -4216,6 +4389,36 @@ async function handleReengage(req: Request): Promise<Response> {
       ? "as one plain statement with NO question mark. "
       : "ending in one light question. ";
 
+    // The Sales Ledger decides the bubble's action too — and a HOLD decision
+    // short-circuits BEFORE the model call (no tokens spent saying nothing).
+    // The decision (ledger + rule trace) is audited either way.
+    let bubbleDecision: BeatDecision | null = null;
+    let bubbleAudit: Record<string, unknown> | null = null;
+    if (customer) {
+      try {
+        const ledger = await buildSalesLedger(customer, data, section, goalStatus, pendingAsk);
+        bubbleDecision = chooseBeatAction(
+          ledger,
+          data.config?.beat_actions as Record<string, { enabled?: boolean }> | undefined,
+        );
+        bubbleAudit = { action: bubbleDecision.action, beat: "bubble", ledger, trace: bubbleDecision.trace };
+        if (bubbleDecision.action === "HOLD") {
+          pgInsert("concierge_actions", {
+            conversation_id: cid, user_id: customer.id, email: customer.email,
+            action: "beat_hold", serial: null,
+            payload: { kind: "bubble", decision: bubbleAudit },
+            result: "beat held — the action table found nothing new",
+          }).catch(() => { /* audit is best-effort */ });
+          return jsonResponse(req, 200, { text: null, hold: true });
+        }
+      } catch { /* ledger is best-effort — fall back to the goal path */ }
+    }
+    const bubbleBrief = bubbleDecision
+      ? " THE HOUSE HAS DECIDED THIS LINE'S ACTION — computed from the register, not guessed: " +
+        bubbleDecision.action + " — " + bubbleDecision.detail + ". Perform exactly this; do not " +
+        "substitute a different subject."
+      : "";
+
     // FULL patron context for a signed-in shopper — this outreach line must be
     // able to welcome them back warmly by name, standing, orders, and client
     // book, and honour any open house instruction (customerBlock carries the
@@ -4246,22 +4449,28 @@ async function handleReengage(req: Request): Promise<Response> {
         "register card in another name, " + askOrStatement +
         (signed ? "They are a signed-in patron." : "They are an anonymous visitor.") +
         " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line." +
-        houseClause + repeatGuard + beatNotesClause(data.config);
+        houseClause + repeatGuard + bubbleBrief + beatNotesClause(data.config);
     } else {
       const open = goalStatus
         ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
         : data.goals;
-      if (open.length === 0) return fallback();               // all met — don't push
+      // A ledger decision supersedes the goal check (e.g. a blocked order is
+      // worth a line even when every goal is met); without one, all-met still
+      // means don't push.
+      if (!bubbleDecision && open.length === 0) return fallback();
       const goal = open.find((g) => !!section && goalSections(g).includes(section)) || open[0];
+      const advanceLine = bubbleDecision
+        ? bubbleDecision.detail
+        : (goal!.label + " — " + goal!.description);
       sys =
         "You are the Mill Concierge for Feierabend, a numbered German wool blanket. Write ONE short " +
         "outreach line (max 30 words) to a shopper who is reading the '" + (section || "page") +
-        "' section and has paused with the chat closed. Advance THIS goal, tied to what's in front of " +
-        "them: " + goal.label + " — " + goal.description + ". Warm, specific, " + askOrStatement +
+        "' section and has paused with the chat closed. Your task, tied to what's in front of " +
+        "them: " + advanceLine + ". Warm, specific, " + askOrStatement +
         (signed ? "They are a signed-in patron; a small nod to that is welcome." :
         "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
         "{{tokens}}, no greeting boilerplate. Just the line." + houseClause + repeatGuard +
-        beatNotesClause(data.config);
+        bubbleBrief + beatNotesClause(data.config);
     }
     const started = Date.now();
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -4320,6 +4529,16 @@ async function handleReengage(req: Request): Promise<Response> {
             text, apiKey, model,
           );
         }
+      }
+      // The bubble SPOKE its decided action — the audit row makes it spent
+      // for 24h and diagnosable (ledger + rule trace) in the Actions tab.
+      if (bubbleAudit && customer) {
+        pgInsert("concierge_actions", {
+          conversation_id: cid, user_id: customer.id, email: customer.email,
+          action: "beat_action", serial: null,
+          payload: { ...bubbleAudit, outcome: "spoke" },
+          result: String(bubbleAudit.action ?? ""),
+        }).catch(() => { /* audit is best-effort */ });
       }
     } catch { /* logging is best-effort; the shopper still gets their line */ }
 

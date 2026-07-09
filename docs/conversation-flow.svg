@@ -133,9 +133,9 @@
   <text x="70" y="875" class="m" font-size="11">must open a subject not yet offered (care · another piece · the workshop); doors spent → hold, never invention</text>
 
   <rect x="56" y="896" width="658" height="64" rx="8" fill="#fdf3e3" stroke="#e6cfa0"/>
-  <text x="70" y="917" class="t h" font-size="13">SUBSTANCE GATE  <tspan class="m mono" font-size="10.5">outreach.substanceGate (admin toggle, default ON)</tspan></text>
-  <text x="70" y="935" class="m" font-size="11">something NEW and CONCRETE from the context above? — an unmentioned register fact · an open goal's next step · a house instruction</text>
-  <text x="70" y="951" class="m" font-size="11">yes → speak plainly · no → [HOLD]. A goal is fuel for a beat once; it is not a license to orbit one topic.</text>
+  <text x="70" y="917" class="t h" font-size="13">SALES LEDGER → ACTION TABLE  <tspan class="m mono" font-size="10.5">beat_actions overrides · substanceGate</tspan></text>
+  <text x="70" y="935" class="m" font-size="11">signed-in: computed numbers (orders · anomalies · post-sale window · unmet goals · spent actions) run ordered rules —</text>
+  <text x="70" y="951" class="m" font-size="11">FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT → ADVANCE_GOAL → HOLD. Decision + trace audited (beat_action).</text>
 
   <!-- outcome arrows -->
   <path d="M730 830 C 760 815, 775 800, 800 790" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>

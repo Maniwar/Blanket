@@ -1188,6 +1188,12 @@
           <div class="cfg-links">
             <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_notes">History ⟲</button>
           </div>
+          <label class="micro" for="cfg-beat-actions" style="margin-top:12px;display:block;"><strong>Action table overrides (JSON)</strong></label>
+          <p class="note" style="margin:6px 0;">Each proactive beat's job is chosen by ordered rules over the <strong>Sales Ledger</strong> (computed order/goal/anomaly numbers — not the model guessing): FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT → ADVANCE_GOAL → HOLD, each once per 24h. Disable a rule here, e.g. <code>{"PROPOSE_GIFT":{"enabled":false}}</code>. Every decision is audited in the Actions tab (<code>beat_action</code> / <code>beat_hold</code>) with the ledger snapshot and rule-by-rule trace — "why did it say that?" is a lookup.</p>
+          <textarea id="cfg-beat-actions" rows="2" placeholder='Blank = all rules enabled.'></textarea>
+          <div class="cfg-links">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_actions">History ⟲</button>
+          </div>
         </div>
         <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="cfg-idlereach">
@@ -3020,6 +3026,7 @@ async function loadConfig() {
   $('cfg-quiet-mins').value = (typeof o.quietMs === 'number' && o.quietMs > 0) ? Math.round(o.quietMs / 60000) : '';
   if ($('cfg-engagement-base')) $('cfg-engagement-base').value = (typeof cfg.engagement_base === 'string') ? cfg.engagement_base : '';
   if ($('cfg-beat-notes')) $('cfg-beat-notes').value = (typeof cfg.beat_notes === 'string') ? cfg.beat_notes : '';
+  if ($('cfg-beat-actions')) $('cfg-beat-actions').value = (cfg.beat_actions && typeof cfg.beat_actions === 'object' && Object.keys(cfg.beat_actions).length) ? JSON.stringify(cfg.beat_actions) : '';
   $('cfg-dwell').value = ms2s(o.dwellMs);
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
@@ -3154,6 +3161,13 @@ async function saveEngagement() {
   const rows = [{ key: 'outreach', value: o, updated_at: nowIso() }];
   rows.push({ key: 'engagement_base', value: $('cfg-engagement-base').value, updated_at: nowIso() });
   rows.push({ key: 'beat_notes', value: $('cfg-beat-notes').value, updated_at: nowIso() });
+  const baRaw = $('cfg-beat-actions').value.trim();
+  let baVal = {};
+  if (baRaw) {
+    try { baVal = JSON.parse(baRaw); } catch (e) { fail('Save engagement', new Error('Action table overrides: not valid JSON')); return; }
+    if (typeof baVal !== 'object' || baVal === null || Array.isArray(baVal)) { fail('Save engagement', new Error('Action table overrides must be a JSON object')); return; }
+  }
+  rows.push({ key: 'beat_actions', value: baVal, updated_at: nowIso() });
   const gr = Number($('cfg-goalrate').value);
   if ($('cfg-goalrate').value !== '' && Number.isFinite(gr) && gr >= 0 && gr <= 1) {
     rows.push({ key: 'goal_sample_rate', value: gr, updated_at: nowIso() });
