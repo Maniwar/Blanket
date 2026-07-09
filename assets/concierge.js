@@ -100,8 +100,16 @@
   var lastSkip = '';            /* why the last proactive beat did NOT fire — surfaced
                                    by FeierabendConcierge.status() so "the bot is
                                    quiet" is diagnosable instead of a mystery */
+  var skipLog = [];             /* the last few skip notes, oldest first — checking the
+                                   console is itself page activity (it resets the idle
+                                   clock), so one snapshot must tell the WHOLE story,
+                                   not just the gate hit while you were looking */
   function noteSkip(why) {
     lastSkip = why + ' (' + new Date().toLocaleTimeString() + ')';
+    if (skipLog[skipLog.length - 1] !== lastSkip) {
+      skipLog.push(lastSkip);
+      if (skipLog.length > 8) { skipLog.shift(); }
+    }
     try { if (window.FEIER_CX_DEBUG) { console.debug('[concierge] skip:', lastSkip); } } catch (eNS) { /* ignore */ }
   }
   var lastSentAt = 0;           /* silence gap between the visitor's messages */
@@ -1072,6 +1080,13 @@
         flushPara();
         var fdef = remoteForms[fm[1]];
         if (fdef) { frag.appendChild(buildChatForm(fm[1], parseInt(fm[2], 10), fdef)); }
+        else {
+          /* Unknown or disabled form slug: never drop the line silently — a
+             reply that is ONLY this token would land as a blank bubble
+             wearing feedback arrows. Ask for the details in words instead. */
+          frag.appendChild(el('p', '',
+            'The register can’t raise that card right now — tell me the details here and I’ll enter them by hand.'));
+        }
         i++; continue;
       }
 
@@ -2112,7 +2127,15 @@
      the "unacknowledged" count so the concierge resumes a light presence, and
      if it had gone quiet (paused), it picks the thread back up. It also stamps
      the activity clock the closed-panel re-engagement watches. */
-  function noteActivity() {
+  var lastActivitySrc = '';     /* WHAT last reset the idle clock (tap/key/scroll/…) */
+  var maxIdleMs = 0;            /* longest idle span this visit — proves whether the
+                                   re-engage threshold was ever actually reached */
+  function noteActivity(src) {
+    if (hadActivity && lastActivityTs) {
+      var span = Date.now() - lastActivityTs;
+      if (span > maxIdleMs) { maxIdleMs = span; }
+    }
+    lastActivitySrc = (typeof src === 'string' && src) ? src : 'activity';
     lastActivityTs = Date.now();
     hadActivity = true;
     activeSinceReengage = true;
@@ -2215,6 +2238,15 @@
       noteSkip('reengage: fresh commission — congrats grace window, ' + Math.ceil((pc.graceMs - pa) / 1000) + 's left');
       return;
     }
+    /* Recently purchased with the post-sale beat switched OFF in admin: the
+       bubble stays quiet for the WHOLE window (default 48h). This used to be
+       the only unnamed gate in the path — a buyer could hit it for two days
+       straight with no diagnostic. */
+    if (pa !== null && pa < pc.windowMs && !pc.enabled) {
+      var agoTxt = pa < 5400000 ? Math.max(1, Math.round(pa / 60000)) + 'min' : Math.round(pa / 3600000) + 'h';
+      noteSkip('reengage: commissioned ' + agoTxt + ' ago and the post-sale second-sale beat is OFF in admin (Engagement pace → "Re-engage for a second sale after a purchase") — quiet for the remaining ' + Math.max(1, Math.ceil((pc.windowMs - pa) / 3600000)) + 'h of the ' + Math.round(pc.windowMs / 3600000) + 'h window');
+      return;
+    }
     if (!hadActivity) { noteSkip('reengage: no page activity seen yet this visit — scroll/tap/move first (console use doesn\'t count)'); return; }
     if (!activeSinceReengage) { noteSkip('reengage: waiting for FRESH activity since the last reach-out (so someone who truly left isn\'t nagged)'); return; }
     var c = reengageCfg();
@@ -2222,17 +2254,13 @@
     if (reengageCount >= c.max) { noteSkip('reengage: budget spent (' + reengageCount + '/' + c.max + ' this visit)'); return; }
     var idleFor = Date.now() - lastActivityTs;
     if (idleFor < c.idleMs) {                                    /* not idle long enough yet */
-      noteSkip('reengage: not idle long enough — fires after ' + Math.round(c.idleMs / 1000) + 's still; last activity ' + Math.round(idleFor / 1000) + 's ago (moving the mouse resets the clock)');
+      noteSkip('reengage: not idle long enough — fires after ' + Math.round(c.idleMs / 1000) + 's still; last activity ' + Math.round(idleFor / 1000) + 's ago via ' + (lastActivitySrc || 'page activity') + ' (any tap, key, scroll or mouse-move resets the clock — checking the console counts too)');
       return;
     }
     /* Past the grace but recently purchased → re-engage for a SECOND sale
-       (companion cloth / gift), not "still eyeing" — unless the admin turned the
-       post-sale beat off, in which case stay quiet through the window. */
-    var postSale = false;
-    if (pa !== null && pa < pc.windowMs) {
-      if (!pc.enabled) { return; }
-      postSale = true;
-    }
+       (companion cloth / gift), not "still eyeing". The beat-off case already
+       returned above, with its name. */
+    var postSale = pa !== null && pa < pc.windowMs;
     reengageBusy = true;
     fetchReengageLine(postSale, function (line) {
       reengageBusy = false;
@@ -2245,9 +2273,16 @@
         return;
       }
       /* re-check — state may have changed while the line was being composed */
-      if (panelOpen || quietMode || streaming || outreachEl) { return; }
+      if (panelOpen || quietMode || streaming || outreachEl) {
+        noteSkip('reengage: the line was ready but the moment passed while composing (' +
+          (panelOpen ? 'panel opened' : quietMode ? 'quiet mode began' : streaming ? 'a reply started streaming' : 'another bubble appeared') + ') — dropped');
+        return;
+      }
       var c2 = reengageCfg();
-      if (!c2.enabled || reengageCount >= c2.max) { return; }
+      if (!c2.enabled || reengageCount >= c2.max) {
+        noteSkip('reengage: the line was ready but config changed while composing (' + (!c2.enabled ? 'turned off' : 'budget spent') + ') — dropped');
+        return;
+      }
       if (showOutreach('reengage-' + reengageCount, line, true, true)) {
         reengageCount++;
         activeSinceReengage = false;                             /* require fresh activity before the next */
@@ -2582,9 +2617,25 @@
       return;
     }
     var content = shell.getText();
-    if (!content && !shell.proactive) {
-      /* the reply came back empty (a bare tool call, or a stray hold) — never
-         leave the visitor's message hanging; acknowledge and stay present */
+    /* Probe what the visitor will actually SEE. A reply can be non-empty as
+       text yet render to nothing (plumbing-only: a stray action token, markup
+       the renderer drops). A blank bubble wearing feedback arrows is worse
+       than silence — so check the render, not the raw string. */
+    var probe = mdRender(content || '');
+    var visiblyBlank = !((probe.textContent || '').replace(/\s+/g, '')) &&
+      !(probe.querySelector && probe.querySelector('.cx-form,.cx-actions,.cx-reply,img,button'));
+    if (visiblyBlank && shell.proactive) {
+      /* a proactive line with nothing to show — withdraw the bubble entirely
+         and treat it like a hold: quiet now, circle back spaciously */
+      if (shell.turn && shell.turn.parentNode) { shell.turn.parentNode.removeChild(shell.turn); }
+      noteSkip('beat: the line rendered EMPTY (plumbing-only reply) — bubble withdrawn (' + entryMode + ')');
+      setStreaming(false);
+      scheduleNudge(true);
+      return;
+    }
+    if (visiblyBlank) {
+      /* the reply came back with nothing visible (a bare tool call, a stray
+         hold) — never leave the visitor's message hanging; stay present */
       content = 'Of course — I’m right here whenever you need anything at all.';
       shell.append(content);
     }
@@ -3775,7 +3826,7 @@
         }
       } else if (document.visibilityState === 'visible') {
         if (hiddenWrapTimer) { clearTimeout(hiddenWrapTimer); hiddenWrapTimer = null; }
-        noteActivity();                        /* they came back — a sign of life */
+        noteActivity('tab-return');            /* they came back — a sign of life */
         /* If the away-wrap ran while the panel stayed OPEN, every timer was
            cleared and no click can restart them (Ask-the-mill on an open panel
            is a no-op) — the bot was structurally mute. Returning to an open,
@@ -3789,14 +3840,14 @@
     /* Presence signals — any of these means the visitor is here and could see a
        message, so they acknowledge the concierge's reach-outs and resume it. */
     var actOpts = { passive: true };
-    document.addEventListener('pointerdown', noteActivity, actOpts);
-    document.addEventListener('keydown', noteActivity, actOpts);
-    document.addEventListener('touchstart', noteActivity, actOpts);
-    document.addEventListener('scroll', noteActivity, actOpts);
+    document.addEventListener('pointerdown', function () { noteActivity('tap'); }, actOpts);
+    document.addEventListener('keydown', function () { noteActivity('key'); }, actOpts);
+    document.addEventListener('touchstart', function () { noteActivity('touch'); }, actOpts);
+    document.addEventListener('scroll', function () { noteActivity('scroll'); }, actOpts);
     var lastMove = 0;
     document.addEventListener('pointermove', function () {
       var now = Date.now();
-      if (now - lastMove > 4000) { lastMove = now; noteActivity(); }
+      if (now - lastMove > 4000) { lastMove = now; noteActivity('mouse-move'); }
     }, actOpts);
     updateLauncher();
     /* Resolve any signed-in session early (and collect a magic-link redirect if
@@ -3866,13 +3917,27 @@
             max: c.max,
             firesAfterIdleMs: c.idleMs,
             idleForMs: hadActivity ? (Date.now() - lastActivityTs) : null,
+            maxIdleMsThisVisit: maxIdleMs,
+            lastActivitySource: lastActivitySrc || null,
             hadPageActivity: hadActivity,
             freshActivitySinceLast: activeSinceReengage,
             bubbleOnScreen: !!outreachEl,
             postSaleGraceActive: pa !== null && pa < pc.graceMs
           };
         })(),
-        lastSkip: lastSkip || '(no proactive beat has been skipped yet)'
+        postSale: (function () {
+          var pc = reengagePostCfg(), pa = purchaseAgeMs();
+          return {
+            purchasedAgoMs: pa,
+            graceMs: pc.graceMs,
+            graceActive: pa !== null && pa < pc.graceMs,
+            windowMs: pc.windowMs,
+            windowActive: pa !== null && pa < pc.windowMs,
+            secondSaleBeatEnabled: pc.enabled
+          };
+        })(),
+        lastSkip: lastSkip || '(no proactive beat has been skipped yet)',
+        recentSkips: skipLog.slice().reverse()
       };
     }
   };

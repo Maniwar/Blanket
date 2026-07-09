@@ -119,8 +119,13 @@ something new and concrete or it holds; held beats are logged as
 "don't message me" pauses every proactive beat; default 30 min — time-boxed,
 never persisted, lifted early by typing or reload), re-engagement keys (`reengageEnabled`,
 `reengageIdleAnonMs`/`reengageMaxAnon`, `reengageIdleSignedMs`/
-`reengageMaxSigned`, `reengageGraceMs`, `reengagePostSaleWindowMs`,
-`reengagePostSaleEnabled`), and `historyKeepMs` (how long a signed-in patron's
+`reengageMaxSigned`, `reengageGraceMs` — congrats quiet right after a purchase,
+entered in *seconds* in the admin, default 4 min; `reengagePostSaleWindowMs` —
+how long after a purchase the bubble pivots to second-sale framing, entered in
+*hours* in the admin because it is a days-scale horizon, default 48 h;
+`reengagePostSaleEnabled` — bool, default on; **off silences the closed-panel
+bubble for the entire post-sale window**, named in `status().lastSkip` and
+visible in `status().postSale`), and `historyKeepMs` (how long a signed-in patron's
 device-kept transcript survives a closed tab; default 7 days). The client reads
 these via `?config=1`; blank/absent keys fall back to built-in defaults scaled
 by `assertiveness`.

@@ -2042,10 +2042,17 @@ function registerBlock(data: ConciergeData): string {
     "and report THAT result back verbatim in substance. Never claim a change happened unless the tool confirmed " +
     "it. (This 'report the result' rule is only for changes the owner requested; silent internal tools like " +
     "resolve_admin_note and remember_customer are never mentioned to the patron — see the client book.)\n" +
-    "- ADDRESSES GO THROUGH THE FORM. You have no tool to type an address. Confirm which order, then emit " +
-    "{{form:address-change:<serial>}} on its own line so the owner types each field themselves. NEVER " +
-    "compose or 'correct' street/city/state/ZIP yourself — mistyping one field is exactly what the form " +
-    "prevents.\n" +
+    (data.forms.some((f) => f.slug === "address-change")
+      ? "- ADDRESSES GO THROUGH THE FORM. You have no tool to type an address. Confirm which order, then emit " +
+        "{{form:address-change:<serial>}} on its own line so the owner types each field themselves. NEVER " +
+        "compose or 'correct' street/city/state/ZIP yourself — mistyping one field is exactly what the form " +
+        "prevents.\n"
+      // The address form is disabled/absent: emitting its token anyway would
+      // render NOTHING client-side (a blank line in the reply). Route address
+      // fixes to the studio instead, in words.
+      : "- ADDRESSES: you have no tool and no form to change an address right now. Confirm the correction in " +
+        "words, record it with remember_customer, and tell the owner the studio will enter it before the loom " +
+        "starts. NEVER emit a {{form:...}} token that is not in your catalog — it renders as nothing.\n") +
     "- ALWAYS LEAVE A TAP. When more than one order could be meant, list the eligible ones (led by the " +
     "cloth and what distinguishes it — placed date, gift recipient, destination — not the Nº alone) and " +
     "give one {{reply:...}} pill per order. More than six? Narrow with a few pills first (by cloth, or the " +

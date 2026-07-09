@@ -251,9 +251,28 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   applies), whether the chat panel is open or closed. After the sale the bot leads
   with reassurance (grace window), then may re-engage for a companion cloth/gift —
   never "still eyeing it." Timings are admin-tunable (`outreach.reengageGraceMs`,
-  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
+  seconds in the admin UI; `reengagePostSaleWindowMs`, **hours** in the admin UI
+  because it is a days-scale horizon, default 48 h; `reengagePostSaleEnabled`).
+- **Turning the post-sale beat OFF silences the bubble for the whole window.**
+  The Engagement-pace checkbox *"Re-engage for a second sale after a purchase"*
+  is a strong switch: unchecked, a visitor who just bought gets **no
+  closed-panel bubble at all** for the entire post-sale window (default 48
+  hours) — the alternative would be re-engaging a fresh buyer with nothing
+  appropriate to say. This state names itself in `status().lastSkip`
+  (*"commissioned 2h ago and the post-sale second-sale beat is OFF in admin —
+  quiet for the remaining 46h of the 48h window"*), and `status().postSale`
+  shows the purchase age, window, and switch at a glance.
 
 ## Chat panel & composer (client UX)
+- **A blank bubble never ships.** Before a reply is committed, the client
+  probes what will actually be *visible* after rendering. A reply that is only
+  plumbing (e.g. a form token the register can't build, a stray action token)
+  used to land as an empty bubble wearing ↑/↓ feedback arrows. Now: an unknown
+  or disabled `{{form:…}}` token renders a spoken fallback ("The register can't
+  raise that card right now — tell me the details here and I'll enter them by
+  hand") instead of vanishing; any *other* reply that still renders empty is
+  **withdrawn** if proactive (named in `lastSkip`) or replaced with a graceful
+  presence line if it answered a typed message.
 - **The register sheet is sacred ground.** While the checkout panel is open,
   no proactive beat fires anywhere — nudge, opener, or bubble (they share the
   same screen space on desktop, and a bot line mid-order-form is the most
@@ -301,20 +320,33 @@ diagnostics on any page where it's mounted — open the browser console and run:
   has typed, nudge count vs. effective cap, unacknowledged reach-outs vs. cap,
   hold attempts, history length and last speaker, `entryMode` (how this
   conversation began: typed / opener / nudge / tapped outreach),
-  `nudgeTimerArmed` (a follow-up is scheduled right now), and a `reengage`
+  `nudgeTimerArmed` (a follow-up is scheduled right now), a `reengage`
   object for the closed-panel bubble (enabled, count vs. max, fires-after-idle
-  threshold vs. how long you've actually been idle, whether page activity has
-  been seen, whether a bubble is on screen, post-sale grace).
+  threshold vs. how long you've actually been idle, the **longest idle span
+  reached this visit** (`maxIdleMsThisVisit` — proves whether the threshold was
+  ever actually crossed), **what last reset the idle clock**
+  (`lastActivitySource`: tap / key / scroll / mouse-move / touch / tab-return),
+  whether a bubble is on screen, post-sale grace), and a `postSale` object
+  (how long since the last purchase on this device, the congrats grace, the
+  post-sale window, and whether the second-sale beat is enabled — see below).
 - **`status().lastSkip`** — the headline field: names, in plain language with a
   timestamp, the exact gate that stopped the **most recent** proactive beat
   (e.g. *"reengage: not idle long enough — fires after 30s still; last activity
-  4s ago (moving the mouse resets the clock)"*). It covers the **whole
-  lifecycle**, not just gates: when a beat's timer fires it records *"beat:
-  FIRED — requesting the line now"*; if the register decides silence it becomes
-  *"beat: the register HELD …"*; and if the network request itself dies (offline,
-  rate limit, server error) it becomes *"beat: request FAILED — network error or
-  rate limit; nothing was shown"* and a spacious retry is armed. A proactive
-  beat can therefore never vanish without a trace — silence always has a name.
+  4s ago via mouse-move"*). It covers the **whole lifecycle**, not just gates:
+  when a beat's timer fires it records *"beat: FIRED — requesting the line
+  now"*; if the register decides silence it becomes *"beat: the register HELD
+  …"*; if the network request itself dies (offline, rate limit, server error)
+  it becomes *"beat: request FAILED — network error or rate limit; nothing was
+  shown"* and a spacious retry is armed; and if a line arrives but renders to
+  nothing visible it is withdrawn as *"beat: the line rendered EMPTY
+  (plumbing-only reply) — bubble withdrawn"*. A proactive beat can therefore
+  never vanish without a trace — silence always has a name.
+- **`status().recentSkips`** — the last eight skip notes, newest first.
+  Checking the console is itself page activity (moving the mouse to it resets
+  the idle clock), so the single `lastSkip` you see while looking is often just
+  "not idle long enough" — the observer effect. `recentSkips` shows what the
+  widget was deciding **before** you looked, so one snapshot tells the whole
+  story.
 - **`window.FEIER_CX_DEBUG = true`** — from then on, every skipped beat also
   logs live to the console (`[concierge] skip: …`) as it happens.
 - **`FeierabendConcierge.open()` / `.close()`** — programmatic panel control
