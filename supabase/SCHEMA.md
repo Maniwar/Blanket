@@ -96,7 +96,7 @@ hard to sell; scales the prompt guidance and the client nudge/outreach budget),
 `objections` (array of `{trigger, response}` for the Reassure move).
 
 *Engagement pacing* lives under the `outreach` key (object), all admin-editable
-in Tuning → Engagement pace: the in-chat follow-up ladder `nudge1Ms`–`nudge5Ms`
+in Tuning → Engagement (laid out as the visitor's journey): the in-chat follow-up ladder `nudge1Ms`–`nudge5Ms`
 (the fifth repeats), `nudgeCap` (max in-chat follow-ups), `unackedCap` (pause
 after N unacknowledged reach-outs), `holdBudget` (consecutive silent holds
 before resting), opener delays `openerSignedMs`/`openerAnonMs`/
@@ -164,7 +164,7 @@ of policy, not a schedule; nothing deletes automatically). Every change to any
 config key lands in `concierge_edit_history` (who/when/what), so reporting
 settings are themselves auditable.
 
-**Written by:** admin portal (Tuning tab — Config, Engagement pace, Selling
+**Written by:** admin portal (Tuning tab — Config, Engagement, Selling
 style, Bot images). **Read by:** `handleConfigGet` (`GET ?config=1`),
 `handleChatPost` (every reply). **Seeded by:** `setup.sql` (`enabled`, `model`,
 `max_tokens`, `greeting`, `voice_notes`, `assertiveness`, `hooks`, `objections`).

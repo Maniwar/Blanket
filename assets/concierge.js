@@ -2280,7 +2280,7 @@
        the path — a buyer could hit it for two days straight with no
        diagnostic. */
     if (pa !== null && pa < pc.windowMs && pc.mode === 'quiet') {
-      noteSkip('reengage: commissioned ' + fmtDur(pa) + ' ago and the post-sale mode is QUIET in admin (Engagement pace → after a purchase) — silent for the remaining ' + fmtDur(pc.windowMs - pa) + ' of the ' + fmtDur(pc.windowMs) + ' window');
+      noteSkip('reengage: commissioned ' + fmtDur(pa) + ' ago and the post-sale mode is QUIET in admin (Tuning → Engagement → ⑤ After they buy) — silent for the remaining ' + fmtDur(pc.windowMs - pa) + ' of the ' + fmtDur(pc.windowMs) + ' window');
       return;
     }
     if (!hadActivity) { noteSkip('reengage: no page activity seen yet this visit — scroll/tap/move first (console use doesn\'t count)'); return; }
@@ -2784,7 +2784,7 @@
        patron we already know earns a proactive follow-up even before they type. */
     var spoke = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
-    if (!spoke && !authEmail && o.anonNudges !== true) { noteSkip('nudge: anonymous visitor has not typed yet — the bot waits for them (default; enable "Follow up with anonymous visitors" in Engagement pace to change)'); return; }
+    if (!spoke && !authEmail && o.anonNudges !== true) { noteSkip('nudge: anonymous visitor has not typed yet — the bot waits for them (default; enable "Follow up with guests before they’ve typed" in Tuning â Engagement â â¢ to change)'); return; }
     var idx = Math.min(nudgeCount, NUDGE_DELAYS.length - 1);
     var wait = NUDGE_DELAYS[idx];
     if (idx === 0 && typeof o.nudge1Ms === 'number') { wait = o.nudge1Ms; }

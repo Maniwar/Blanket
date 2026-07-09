@@ -189,7 +189,7 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   reaches out — the in-chat follow-up delays, the idle reach-out when the widget
   is closed, and whether it engages a visitor who hasn't scrolled — so that I can
   dial engagement from attentive to restrained without a deploy. *(Tuning tab:
-  Engagement pace → `outreach` config, delivered to the widget via `?config=1`.)*
+  Tuning → Engagement → `outreach` config, delivered to the widget via `?config=1`.)*
 - **As the merchant**, I want to edit the knowledge base and the selling
   procedures (SOPs) that the concierge follows, so that policy and pitch are mine
   to control. *(Knowledge tab + Procedures tab; injected into the system prompt.)*
@@ -902,7 +902,7 @@ happening.** Stories with acceptance criteria:
 **Merchant-facing**
 
 - **As the merchant, every pacing number is mine to tune, without a deploy.**
-  *Accepted when:* Tuning → Engagement pace exposes the full in-chat ladder
+  *Accepted when:* Tuning → Engagement exposes the full in-chat ladder
   (`nudge1Ms`–`nudge5Ms`), both rest counts (`nudgeCap`, `unackedCap`), the
   hold budget, opener timings (`openerSignedMs`/`openerAnonMs`/
   `openerReengageMs`), closed-panel idle/max per audience, bubble linger

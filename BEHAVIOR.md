@@ -112,7 +112,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   pipeline strips it on every path).
 - **The guardrails themselves are editable and versioned.** The entire
   ENGAGEMENT & PACING rule block is an editable base
-  (`concierge_config.engagement_base` — Tuning → Engagement pace, with "Load
+  (`concierge_config.engagement_base` — Tuning → Engagement → The written rules, with "Load
   built-in to edit" and History ⟲ rollback like the voice base; blank = the
   built-in text below). `beat_notes` additionally appends the admin's own
   standing instructions to **every** proactive beat brief (nudges, openers,
@@ -147,8 +147,8 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   the `beat_action`/`beat_hold` rows in the Actions tab carry the ledger
   snapshot and the rule-by-rule trace ("PROPOSE_COMPANION: outside the
   post-sale window") — "why did it say that?" is a lookup, never a guess.
-  Rules can be disabled per-key via `config.beat_actions` (Engagement pace →
-  Action table overrides, versioned). Signed-out visitors (no register to
+  Rules can be disabled per-key via `config.beat_actions` (Tuning → Engagement
+  → The written rules, versioned). Signed-out visitors (no register to
   compute from) fall back to the prompt's own judgment under the same
   guardrails.
 - **Substance or silence (proactive beats).** A proactive beat may speak only
@@ -170,7 +170,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   quiet mode, which silences **every** proactive beat — in-panel nudges,
   openers, and the closed-panel bubble. It lifts three ways, whichever comes
   first: (1) **by itself** after the quiet window (`outreach.quietMs`, default
-  30 minutes, Tuning → Engagement pace), after which the bot resumes a *light*
+  30 minutes, Tuning → Engagement → House rules), after which the bot resumes a *light*
   presence rather than staying dark; (2) **on page reload** — the pause is
   deliberately not persisted, so a fresh page never inherits an old silence;
   (3) **the moment the visitor types** — their message always reopens play.
@@ -214,7 +214,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   not just the current one — a wrap-up or quiet-window expiry opens a fresh
   conversation row, and a guard scoped to the new (empty) row let the same
   subject return 45 minutes later.
-- **Every pacing number is admin-tunable** (Tuning → Engagement pace, stored on
+- **Every pacing number is admin-tunable** (Tuning → Engagement — laid out as the visitor's journey, stored on
   the `outreach` config key, no deploy): the five-step in-chat follow-up ladder
   (`nudge1Ms`–`nudge5Ms`, last repeats), `nudgeCap`, `unackedCap` (pause after
   N unacknowledged reach-outs), `holdBudget` (consecutive silent holds before
@@ -238,7 +238,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   live thread — and when the panel opens via a **tapped outreach bubble**
   (where the tapped line itself is the opener), the first follow-up comes at
   the quick `openerFollowMs` (default 8s) instead of the normal ladder. All
-  four timings are admin config (Engagement pace); the substance gate still
+  four timings are admin config (Tuning → Engagement → ②); the substance gate still
   applies to every one of these beats.
 - **Every proactive beat carries the full patron context.** In-panel nudges,
   openers, and the **closed-panel re-engagement bubble** all inject the complete
@@ -255,7 +255,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   picker — hours, minutes, or seconds** — days-scale in production, default
   48 h, seconds-scale when testing; `reengagePostSaleEnabled`).
 - **The post-sale window sets a duration; a separate mode picks what happens
-  inside it.** Engagement pace → *"after a purchase, the concierge should…"*
+  inside it.** Tuning → Engagement → ⑤ After they buy → *"after a purchase, the concierge should…"*
   offers three modes (`outreach.postSaleMode`): **upsell** (default — re-engage
   for a second sale: companion cloth / gift), **presence** (keep the normal
   warm check-ins with no selling frame), or **quiet** (no closed-panel bubble
@@ -285,7 +285,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   plausibly on the patron's mind: once the bot has begun following up on its
   own (a proactive beat is exactly what the chip answers), or once the exchange
   runs deep (default: 3 patron turns) — never parked under the very first
-  reply. Both triggers are admin-tunable (Engagement pace →
+  reply. Both triggers are admin-tunable (Tuning → Engagement → ③ A polite way out:
   `outreach.wrapChipMinTurns`, 0 = always; `wrapChipOnFollowup`). When shown,
   it rides in the message flow under the bot's latest reply — no chrome, no
   extra row; it scrolls with the conversation and is rebuilt after each reply.
@@ -376,8 +376,7 @@ follow-up loop is armed in its place.
 - The suggestion chips (and the on-page inline starters) are the admin's
   configured starters **topped up** with the baked KB defaults, per section — so a
   section left blank or only partly filled still offers a few, never one or none.
-- **Where the on-page beats appear is admin-configurable** (Engagement pace →
-  On-page beats): `outreach.inlineSections` lists the sections that carry an
+- **Where the on-page beats appear is admin-configurable** (Tuning → Engagement → ① Woven into the page itself): `outreach.inlineSections` lists the sections that carry an
   inline "Ask the mill ✳" starter (default the five content sections; add
   `hero` for the title page — its DOM id is `top`, mapped internally, which is
   why checking hero in the starters alone never showed one). The floating

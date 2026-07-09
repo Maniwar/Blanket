@@ -794,6 +794,49 @@
     .convo-list{ max-height:38vh; }
     .msg{ max-width:92%; }
   }
+
+  /* ---- Engagement page: journey stages, dial feedback, ladder picture ---- */
+  .eng-dial{ border:1px solid rgba(196,155,91,.35); background:rgba(196,155,91,.06);
+    padding:10px 12px; border-radius:3px; }
+  .eng-journey{ display:flex; flex-wrap:wrap; align-items:center; gap:0; margin:12px 0 4px;
+    border-bottom:1px solid rgba(196,155,91,.25); padding-bottom:10px; }
+  .eng-journey button{ background:none; border:none; cursor:pointer; color:var(--brass,#c49b5b);
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; padding:4px 10px; position:relative; }
+  .eng-journey button + button::before{ content:""; position:absolute; left:0; top:8px; bottom:8px;
+    width:1px; background:rgba(196,155,91,.3); }
+  .eng-journey button:hover{ text-decoration:underline; }
+  details.stage{ border:1px solid var(--line,#2a2f27); border-radius:3px; margin-top:14px;
+    padding:0 14px 14px; }
+  details.stage > summary{ cursor:pointer; list-style:none; padding:12px 0;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--brass,#c49b5b); user-select:none; }
+  details.stage > summary::-webkit-details-marker{ display:none; }
+  details.stage > summary::after{ content:"▾"; float:right; opacity:.5; transition:transform .2s; }
+  details.stage:not([open]) > summary::after{ transform:rotate(-90deg); }
+  details.stage:not([open]){ padding-bottom:0; }
+  details.stage.flash{ outline:1px solid var(--brass,#c49b5b); outline-offset:2px; }
+  .eng-sub{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--wool-faint,#8b9285); margin:18px 0 6px;
+    border-top:1px dashed rgba(196,155,91,.2); padding-top:12px; font-weight:400; }
+  .eng-dialmark{ color:var(--brass,#c49b5b); cursor:help; }
+  .eng-ladrow{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .eng-ladstrip{ position:relative; height:34px; margin:10px 2px 0;
+    border-bottom:1px solid rgba(196,155,91,.3); }
+  .eng-ladstrip .tick{ position:absolute; bottom:-1px; transform:translateX(-50%); text-align:center;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--wool-faint,#8b9285); }
+  .eng-ladstrip .tick i{ display:block; width:1px; height:8px; background:var(--brass,#c49b5b);
+    margin:2px auto 0; }
+  .eng-digest{ margin-top:12px; border-top:1px dashed rgba(196,155,91,.2); padding-top:8px; }
+  .eng-foot{ position:sticky; bottom:0; background:var(--card,#20261f);
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding-top:12px; margin-top:16px; border-top:1px solid var(--line,#2a2f27); z-index:2; }
+  .unit-wrap{ position:relative; display:block; }
+  .unit-wrap .unit{ position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--wool-faint,#8b9285);
+    pointer-events:none; opacity:.7; }
+  .unit-wrap input{ padding-right:44px; width:100%; box-sizing:border-box; }
+  #eng-reengage-grid.dim{ opacity:.45; }
 </style>
 </head>
 <body>
@@ -1101,141 +1144,171 @@
       </div>
 
       <div class="tsub" data-tsub="engagement">
-      <section class="card">
+      <section class="card" id="engagement-card">
         <div class="card-head">
-          <h3>Engagement pace</h3>
-          <span class="micro">How quickly the concierge reaches out</span>
+          <h3>Engagement</h3>
+          <span class="micro">when the concierge speaks first — laid out as the visitor's journey</span>
         </div>
-        <p class="note">All values in <strong>seconds</strong>. These control the proactive follow-ups inside an open chat and the reach-out bubble when the widget is closed. Leave a field blank to use the built-in default.</p>
-        <div class="ed-grid">
-          <div><label class="micro" for="cfg-nudge1">First follow-up (in chat)</label>
-            <input type="number" id="cfg-nudge1" class="mono-field" min="3" step="1" placeholder="8"></div>
-          <div><label class="micro" for="cfg-nudge2">Second follow-up (in chat)</label>
-            <input type="number" id="cfg-nudge2" class="mono-field" min="3" step="1" placeholder="30"></div>
-          <div><label class="micro" for="cfg-nudge3">Third follow-up (in chat)</label>
-            <input type="number" id="cfg-nudge3" class="mono-field" min="3" step="1" placeholder="90"></div>
-          <div><label class="micro" for="cfg-nudge4">Fourth follow-up (in chat)</label>
-            <input type="number" id="cfg-nudge4" class="mono-field" min="3" step="1" placeholder="180"></div>
-          <div><label class="micro" for="cfg-nudge5">5th &amp; every later follow-up (up to the cap)</label>
-            <input type="number" id="cfg-nudge5" class="mono-field" min="3" step="1" placeholder="300"></div>
-          <div><label class="micro" for="cfg-dwell">Reach out when idle (widget closed)</label>
-            <input type="number" id="cfg-dwell" class="mono-field" min="5" step="1" placeholder="45"></div>
-          <div><label class="micro" for="cfg-draft">Nudge a half-written order</label>
-            <input type="number" id="cfg-draft" class="mono-field" min="5" step="1" placeholder="25"></div>
-        </div>
-        <p class="note" style="margin:14px 0 6px;">These are <strong>counts</strong>, not seconds — how many times the concierge may reach out before it rests.</p>
-        <div class="ed-grid">
-          <div><label class="micro" for="cfg-nudgecap">Max in-chat follow-ups</label>
-            <input type="number" id="cfg-nudgecap" class="mono-field" min="0" step="1" placeholder="6"></div>
-          <div><label class="micro" for="cfg-maxambient">Max reach-outs (widget closed)</label>
-            <input type="number" id="cfg-maxambient" class="mono-field" min="0" step="1" placeholder="2"></div>
-          <div><label class="micro" for="cfg-unackedcap">Pause after unacknowledged reach-outs</label>
-            <input type="number" id="cfg-unackedcap" class="mono-field" min="0" step="1" placeholder="2"></div>
-          <div><label class="micro" for="cfg-holdbudget">Consecutive silent holds before resting</label>
-            <input type="number" id="cfg-holdbudget" class="mono-field" min="0" step="1" placeholder="4"></div>
-        </div>
-        <p class="note" style="margin:14px 0 6px;"><strong>Openers &amp; bubble</strong> — how fast the concierge speaks first when the panel opens, and how long the closed-panel bubble lingers. Seconds; decimals allowed (e.g. 1.2).</p>
-        <div class="ed-grid">
-          <div><label class="micro" for="cfg-opener-signed">Opener · signed-in greet</label>
-            <input type="number" id="cfg-opener-signed" class="mono-field" min="0" step="0.1" placeholder="1.2"></div>
-          <div><label class="micro" for="cfg-opener-anon">Opener · anonymous follow-up</label>
-            <input type="number" id="cfg-opener-anon" class="mono-field" min="0" step="0.1" placeholder="3"></div>
-          <div><label class="micro" for="cfg-opener-reengage">Opener · returning to a live thread</label>
-            <input type="number" id="cfg-opener-reengage" class="mono-field" min="0" step="0.1" placeholder="1.1"></div>
-          <div><label class="micro" for="cfg-opener-follow">Attention beat after opening (tapped bubble)</label>
-            <input type="number" id="cfg-opener-follow" class="mono-field" min="0" step="0.5" placeholder="8"></div>
-          <div><label class="micro" for="cfg-opener-cooldown">Opener cooldown (minutes)</label>
-            <input type="number" id="cfg-opener-cooldown" class="mono-field" min="0" step="1" placeholder="10">
-            <p class="note" style="margin-top:4px;">While the bot's last line is younger than this, a re-opened panel lets the thread stand instead of re-greeting — stops "every refresh repeats the welcome".</p></div>
-          <div><label class="micro" for="cfg-bubble-withdraw">Bubble withdraws after</label>
-            <input type="number" id="cfg-bubble-withdraw" class="mono-field" min="3" step="1" placeholder="22"></div>
-        </div>
-        <p class="note" style="margin:14px 0 6px;"><strong>Service limits</strong> — chat calls allowed per 10 minutes (proactive beats count too; this bounds the model bill). Signed-in patrons are keyed by identity, anonymous by IP.</p>
-        <div class="ed-grid">
-          <div><label class="micro" for="cfg-rate-signed">Signed-in · chat calls / 10 min</label>
-            <input type="number" id="cfg-rate-signed" class="mono-field" min="5" step="5" placeholder="60"></div>
-          <div><label class="micro" for="cfg-rate-anon">Anonymous · chat calls / 10 min</label>
-            <input type="number" id="cfg-rate-anon" class="mono-field" min="5" step="5" placeholder="20"></div>
-        </div>
-        <p class="note" style="margin:14px 0 6px;"><strong>On-page beats</strong> — the inline "Ask the mill ✳" starters woven into page sections, and the floating context chip that appears as the visitor scrolls.</p>
-        <div class="ed-grid">
-          <div style="grid-column:1 / -1;"><label class="micro" for="cfg-inline-sections">Inline starters appear in (section keys, comma-separated)</label>
-            <input type="text" id="cfg-inline-sections" class="mono-field" placeholder="why, wool, label, ritual, arrival">
-            <p class="note" style="margin-top:4px;">Valid keys: <code>hero</code>, <code>why</code>, <code>wool</code>, <code>label</code>, <code>ritual</code>, <code>arrival</code>, <code>reserve</code>. Blank = the default five. Add <code>hero</code> to show one on the title page.</p></div>
-          <div><label class="micro" for="cfg-chip-cap">Context chips per page view (count)</label>
-            <input type="number" id="cfg-chip-cap" class="mono-field" min="0" step="1" placeholder="5"></div>
-          <div><label class="micro" for="cfg-chip-linger">Chip stays on screen (seconds)</label>
-            <input type="number" id="cfg-chip-linger" class="mono-field" min="2" step="1" placeholder="9"></div>
-          <div><label class="micro" for="cfg-chip-repeat">Chip may reappear after (minutes)</label>
-            <input type="number" id="cfg-chip-repeat" class="mono-field" min="1" step="1" placeholder="blank = once per view">
-            <p class="note" style="margin-top:4px;">By default each section's chip shows once per page view — this lets it return after a while.</p></div>
-        </div>
-        <div style="margin-top:12px;">
-          <label class="micro" for="cfg-history-keep">Kept transcript window (days)</label>
-          <input type="number" id="cfg-history-keep" class="mono-field" min="0" step="1" placeholder="7" style="max-width:120px;">
-          <p class="note" style="margin-top:4px;">A <strong>signed-in</strong> patron's chat transcript survives closing the tab (kept on their device, keyed to their identity, wiped on sign-out). Older than this window, it starts fresh. Anonymous chats always stay per-tab.</p>
-        </div>
-        <div style="margin-top:12px;">
-          <label class="micro" for="cfg-quiet-mins">Quiet-mode pause (minutes)</label>
-          <input type="number" id="cfg-quiet-mins" class="mono-field" min="1" step="1" placeholder="30" style="max-width:120px;">
-          <p class="note" style="margin-top:4px;">How long "That's all for now" / "Don't message me" silences every proactive beat. It's a <strong>time-boxed pause, not a switch</strong>: it lifts by itself after this window, on a page reload (deliberately not persisted), or the moment the visitor types — whichever comes first.</p>
+        <p class="note">On this page, a <strong>reach-out</strong> is any line the concierge speaks without being asked — a bubble beside the closed chat, a hello when the panel opens, or a follow-up mid-conversation. One word, used everywhere below.</p>
+        <p class="note eng-dial" id="eng-dial-banner"></p>
+        <div class="eng-journey" id="eng-journey" role="navigation" aria-label="Jump to a stage">
+          <button type="button" data-stage="stage-browse">① Browsing</button>
+          <button type="button" data-stage="stage-open">② The panel opens</button>
+          <button type="button" data-stage="stage-talk">③ Talking</button>
+          <button type="button" data-stage="stage-register">④ The register</button>
+          <button type="button" data-stage="stage-postsale">⑤ After the sale</button>
+          <button type="button" data-stage="stage-house">House rules</button>
         </div>
 
-        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--line, #2a2f27);">
-          <label class="micro" for="cfg-engagement-base"><strong>Engagement rules — base (the guardrails themselves)</strong></label>
-          <p class="note" style="margin:6px 0;">The exact ENGAGEMENT &amp; PACING rules the model follows on proactive beats — substance-or-silence, sell-don't-report, plain speech, never re-ask, the [HOLD] signal. Blank = the built-in. Every save is <strong>versioned</strong> (History ⟲ restores any prior version). This REPLACES the built-in when set — press "Load built-in to edit" to start from the current default.</p>
-          <textarea id="cfg-engagement-base" rows="10" placeholder="Blank = the built-in engagement &amp; pacing rules. Press “Load built-in to edit”, tweak, and Save."></textarea>
-          <div class="cfg-links">
-            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-engagement-base" data-default="engagement_base">Load built-in to edit</button>
-            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="engagement_base">History ⟲</button>
+        <details class="stage" id="stage-browse" open>
+          <summary>① While they browse — chat closed</summary>
+          <p class="note">Until someone opens the chat, the concierge has two quiet voices: a small bubble beside the chat button, and short "Ask the mill ✳" prompts woven into the page. Everything here answers one question — how present is the house while they simply look?</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-dwell">First bubble after they've been reading for (seconds)</label>
+              <input type="number" id="cfg-dwell" class="mono-field" data-unit="s" min="5" step="1" placeholder="45">
+              <p class="note" style="margin-top:4px;">The small offer beside the closed chat button. This one timing is exact — the selling dial doesn't move it — though at dial 3+ a second, later bubble may follow.</p></div>
+            <div><label class="micro" for="cfg-bubble-withdraw">An ignored bubble fades away after (seconds)</label>
+              <input type="number" id="cfg-bubble-withdraw" class="mono-field" data-unit="s" min="3" step="1" placeholder="22"></div>
+            <div><label class="micro" for="cfg-maxambient">Bubbles per visit, at most (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-maxambient" class="mono-field" data-unit="×" data-dial="default-only" data-fx="dial≥4 ? 3 : 2" min="0" step="1" placeholder="2">
+              <div class="cfg-state" id="cfg-maxambient-fx"></div></div>
+            <div><label class="micro" for="cfg-unackedcap">Give up after this many ignored reach-outs (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-unackedcap" class="mono-field" data-unit="×" data-dial="default-only" data-fx="dial≥4 ? 3 : 2" min="0" step="1" placeholder="2">
+              <div class="cfg-state" id="cfg-unackedcap-fx"></div>
+              <p class="note" style="margin-top:4px;">If this many reach-outs pass with no sign of life — no scroll, tap, or typing — the concierge stops trying until the visitor stirs. This brake covers every surface, bubble and chat alike.</p></div>
           </div>
-          <label class="micro" for="cfg-beat-notes" style="margin-top:12px;display:block;"><strong>Beat notes (added on top)</strong></label>
-          <p class="note" style="margin:6px 0;">Your standing instructions appended to <em>every</em> proactive beat — in-chat follow-ups, openers, and the closed-panel bubble — without replacing the base rules. E.g. "Always steer toward the gift option in December." Versioned like every setting.</p>
-          <textarea id="cfg-beat-notes" rows="3" placeholder="Blank = nothing added. One or two plain sentences work best."></textarea>
-          <div class="cfg-links">
-            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_notes">History ⟲</button>
-          </div>
-          <label class="micro" for="cfg-beat-actions" style="margin-top:12px;display:block;"><strong>Action table overrides (JSON)</strong></label>
-          <p class="note" style="margin:6px 0;">Each proactive beat's job is chosen by ordered rules over the <strong>Sales Ledger</strong> (computed order/goal/anomaly numbers — not the model guessing): FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT → ADVANCE_GOAL → HOLD, each once per 24h. Disable a rule here, e.g. <code>{"PROPOSE_GIFT":{"enabled":false}}</code>. Every decision is audited in the Actions tab (<code>beat_action</code> / <code>beat_hold</code>) with the ledger snapshot and rule-by-rule trace — "why did it say that?" is a lookup.</p>
-          <textarea id="cfg-beat-actions" rows="2" placeholder='Blank = all rules enabled.'></textarea>
-          <div class="cfg-links">
-            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_actions">History ⟲</button>
-          </div>
-        </div>
-        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-          <input type="checkbox" id="cfg-idlereach">
-          <span class="micro">Reach out to an idle visitor even before they scroll</span>
-        </label>
-        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-          <input type="checkbox" id="cfg-anon-nudges">
-          <span class="micro"><strong>Follow up with anonymous visitors before they type</strong> — by default the bot gives one opener and then waits for a signed-out visitor to speak first. On = the in-chat follow-up ladder runs for them too (the substance gate still applies).</span>
-        </label>
-        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-          <input type="checkbox" id="cfg-substance-gate">
-          <span class="micro"><strong>Substance gate</strong> — a proactive beat may speak only when it has something <em>new and concrete</em> (an unmentioned register fact, a goal step, a house note); otherwise it holds. Held beats are logged in the Actions tab as <code>beat_hold</code>, so silence stays measurable. Off = the older bias toward always saying something.</span>
-        </label>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+            <input type="checkbox" id="cfg-idlereach">
+            <span class="micro"><strong>Also greet visitors who pause before ever scrolling.</strong> Off = the bubble waits for a first scroll, so it only greets people who've shown they're reading.</span>
+          </label>
 
-        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--line, #2a2f27);">
+          <h4 class="eng-sub">If they go quiet on the page</h4>
+          <p class="note">They were reading, then stopped — chat still closed. The concierge may return with one fresh, relevant line. Blank timing fields follow the selling dial; type a number to pin it exactly.</p>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;">
             <input type="checkbox" id="cfg-reengage-enabled">
-            <span class="micro"><strong>Re-engage after idle</strong> — when the visitor was active (scrolled) then paused with the widget closed, reach out again.</span>
+            <span class="micro"><strong>Return to a visitor who went quiet.</strong></span>
           </label>
-          <p class="note" style="margin:8px 0 6px;">Cadence follows the <strong>Assertiveness</strong> slider (Selling style) by default — leave a field blank to use that. Fill a field to override it. Tuned separately for anonymous vs. signed-in visitors. Idle is in <strong>seconds</strong>; max is a <strong>count</strong>.</p>
-          <div class="ed-grid">
-            <div><label class="micro" for="cfg-reengage-anon-idle">Anonymous · idle before re-engage</label>
-              <input type="number" id="cfg-reengage-anon-idle" class="mono-field" min="5" step="1" placeholder="40"></div>
-            <div><label class="micro" for="cfg-reengage-anon-max">Anonymous · max re-engagements</label>
-              <input type="number" id="cfg-reengage-anon-max" class="mono-field" min="0" step="1" placeholder="2"></div>
-            <div><label class="micro" for="cfg-reengage-signed-idle">Signed-in · idle before re-engage</label>
-              <input type="number" id="cfg-reengage-signed-idle" class="mono-field" min="5" step="1" placeholder="30"></div>
-            <div><label class="micro" for="cfg-reengage-signed-max">Signed-in · max re-engagements</label>
-              <input type="number" id="cfg-reengage-signed-max" class="mono-field" min="0" step="1" placeholder="3"></div>
+          <div class="ed-grid" id="eng-reengage-grid" style="margin-top:8px;">
+            <div><label class="micro" for="cfg-reengage-anon-idle">Guests · quiet this long before returning (seconds) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-reengage-anon-idle" class="mono-field" data-unit="s" data-dial="default-only" data-fx="40s × dial" min="5" step="1" placeholder="40">
+              <div class="cfg-state" id="cfg-reengage-anon-idle-fx"></div></div>
+            <div><label class="micro" for="cfg-reengage-anon-max">Guests · returns per visit, at most (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-reengage-anon-max" class="mono-field" data-unit="×" data-dial="default-only" data-fx="2 + (dial−3)" min="0" step="1" placeholder="2">
+              <div class="cfg-state" id="cfg-reengage-anon-max-fx"></div></div>
+            <div><label class="micro" for="cfg-reengage-signed-idle">Signed-in · quiet this long before returning (seconds) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-reengage-signed-idle" class="mono-field" data-unit="s" data-dial="default-only" data-fx="30s × dial" min="5" step="1" placeholder="30">
+              <div class="cfg-state" id="cfg-reengage-signed-idle-fx"></div></div>
+            <div><label class="micro" for="cfg-reengage-signed-max">Signed-in · returns per visit, at most (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-reengage-signed-max" class="mono-field" data-unit="×" data-dial="default-only" data-fx="3 + (dial−3)" min="0" step="1" placeholder="3">
+              <div class="cfg-state" id="cfg-reengage-signed-max-fx"></div></div>
           </div>
-          <p class="note" style="margin:10px 0 6px;">After a <strong>sale</strong>: stay quiet briefly (congrats owns the moment), then re-engage for a <em>second</em> blanket — a companion cloth or a gift — rather than "still eyeing it".</p>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <input type="checkbox" id="cfg-reengage-regrade">
+            <span class="micro"><strong>Re-check this patron's goals just before returning</strong> — the returning line then speaks from the freshest read of their goals, at one extra model call per return. Off = use the last saved read.</span>
+          </label>
+
+          <h4 class="eng-sub">Woven into the page itself</h4>
+          <p class="note">The concierge's quietest voice: "Ask the mill ✳" starters inside page sections, and a small chip that follows the scroll.</p>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-reengage-grace">Quiet grace after a sale (seconds)</label>
-              <input type="number" id="cfg-reengage-grace" class="mono-field" min="0" step="1" placeholder="240"></div>
-            <div><label class="micro" for="cfg-reengage-postwindow">Post-sale upsell window</label>
+            <div style="grid-column:1 / -1;"><label class="micro" for="cfg-inline-sections">Show "Ask the mill ✳" starters in these sections</label>
+              <input type="text" id="cfg-inline-sections" class="mono-field" placeholder="why, wool, label, ritual, arrival">
+              <p class="note" style="margin-top:4px;">Valid keys: <code>hero</code>, <code>why</code>, <code>wool</code>, <code>label</code>, <code>ritual</code>, <code>arrival</code>, <code>reserve</code>. Blank = the default five. Add <code>hero</code> to show one on the title page.</p></div>
+            <div><label class="micro" for="cfg-chip-cap">Scroll chips per page view, at most (count)</label>
+              <input type="number" id="cfg-chip-cap" class="mono-field" data-unit="×" min="0" step="1" placeholder="5"></div>
+            <div><label class="micro" for="cfg-chip-linger">A chip stays on screen for (seconds)</label>
+              <input type="number" id="cfg-chip-linger" class="mono-field" data-unit="s" min="2" step="1" placeholder="9"></div>
+            <div><label class="micro" for="cfg-chip-repeat">A section's chip may return after (minutes)</label>
+              <input type="number" id="cfg-chip-repeat" class="mono-field" data-unit="min" min="1" step="1" placeholder="blank = once per view">
+              <p class="note" style="margin-top:4px;">Blank = each section's chip appears once per page view.</p></div>
+          </div>
+          <div class="cfg-state eng-digest" id="eng-live-browse"></div>
+        </details>
+
+        <details class="stage" id="stage-open" open>
+          <summary>② The moment they open the panel</summary>
+          <p class="note">The open is the visit's highest-attention moment, so the concierge speaks first — a beat sooner or later depending on who arrived. Seconds, decimals allowed; the selling dial does not touch these — the moment is now either way.</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-opener-signed">Greet a signed-in patron after (seconds)</label>
+              <input type="number" id="cfg-opener-signed" class="mono-field" data-unit="s" min="0" step="0.1" placeholder="1.2"></div>
+            <div><label class="micro" for="cfg-opener-anon">Speak to a guest, after the house greeting (seconds)</label>
+              <input type="number" id="cfg-opener-anon" class="mono-field" data-unit="s" min="0" step="0.1" placeholder="3"></div>
+            <div><label class="micro" for="cfg-opener-reengage">Pick a live conversation back up after (seconds)</label>
+              <input type="number" id="cfg-opener-reengage" class="mono-field" data-unit="s" min="0" step="0.1" placeholder="1.1"></div>
+            <div><label class="micro" for="cfg-opener-follow">They tapped the bubble — first follow-up after (seconds)</label>
+              <input type="number" id="cfg-opener-follow" class="mono-field" data-unit="s" min="0" step="0.5" placeholder="8">
+              <p class="note" style="margin-top:4px;">The tapped bubble already said hello, so the next line comes quickly.</p></div>
+            <div><label class="micro" for="cfg-opener-cooldown">Don't repeat the hello within (minutes)</label>
+              <input type="number" id="cfg-opener-cooldown" class="mono-field" data-unit="min" min="0" step="1" placeholder="10">
+              <p class="note" style="margin-top:4px;">If the concierge spoke this recently, a re-opened panel picks the thread back up instead of greeting again — a refresh never repeats the welcome.</p></div>
+          </div>
+          <div class="cfg-state eng-digest" id="eng-live-open"></div>
+        </details>
+
+        <details class="stage" id="stage-talk" open>
+          <summary>③ During the conversation — the follow-up ladder</summary>
+          <p class="note">When the visitor goes quiet mid-chat, the concierge follows up on a ladder — quickly at first, then more and more patiently — and only when it has something new to say. <strong>The selling dial paces every rung, even numbers you type.</strong></p>
+          <div class="eng-ladrow">
+            <div><label class="micro" for="cfg-nudge1">1st, after <span class="eng-dialmark">⚡</span></label>
+              <input type="number" id="cfg-nudge1" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="8"></div>
+            <div><label class="micro" for="cfg-nudge2">2nd <span class="eng-dialmark">⚡</span></label>
+              <input type="number" id="cfg-nudge2" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="30"></div>
+            <div><label class="micro" for="cfg-nudge3">3rd <span class="eng-dialmark">⚡</span></label>
+              <input type="number" id="cfg-nudge3" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="90"></div>
+            <div><label class="micro" for="cfg-nudge4">4th <span class="eng-dialmark">⚡</span></label>
+              <input type="number" id="cfg-nudge4" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="180"></div>
+            <div><label class="micro" for="cfg-nudge5">5th &amp; later <span class="eng-dialmark">⚡</span></label>
+              <input type="number" id="cfg-nudge5" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="300"></div>
+          </div>
+          <div class="eng-ladstrip" id="eng-ladder-strip" aria-hidden="true"></div>
+          <div class="ed-grid" style="margin-top:12px;">
+            <div><label class="micro" for="cfg-nudgecap">Follow-ups per conversation, at most (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+              <input type="number" id="cfg-nudgecap" class="mono-field" data-unit="×" data-dial="default-only" data-fx="6 + (dial−3)" min="0" step="1" placeholder="6">
+              <div class="cfg-state" id="cfg-nudgecap-fx"></div></div>
+            <div><label class="micro" for="cfg-holdbudget">Rest after this many turns with nothing new to say (count)</label>
+              <input type="number" id="cfg-holdbudget" class="mono-field" data-unit="×" min="0" step="1" placeholder="4">
+              <p class="note" style="margin-top:4px;">When a follow-up's moment arrives but there's nothing new worth saying, the concierge holds — silently, and the hold is logged under Actions. After this many silent holds in a row it rests until the visitor speaks or moves.</p></div>
+          </div>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+            <input type="checkbox" id="cfg-anon-nudges">
+            <span class="micro"><strong>Follow up with guests before they've typed.</strong> Off = a guest hears one opener and the concierge then waits for them to speak first. On = the ladder above runs for guests too — still only with something new to say.</span>
+          </label>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+            <input type="checkbox" id="cfg-substance-gate">
+            <span class="micro"><strong>Only speak when there's something new to say (recommended).</strong> A follow-up must carry a fresh, concrete fact — an order update, a next step, a house note. Otherwise it stays silent, and the silence is logged under Actions so restraint stays measurable. Off = the older habit of always filling the pause.</span>
+          </label>
+
+          <h4 class="eng-sub">A polite way out</h4>
+          <p class="note">A small "That's all for now" chip gives the visitor a graceful way to end the conversation — and quiets the concierge when tapped. Never shown under the very first reply.</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-wrapchip-turns">Offer it once the visitor has sent this many messages (count)</label>
+              <input type="number" id="cfg-wrapchip-turns" class="mono-field" data-unit="×" min="0" step="1" placeholder="3">
+              <p class="note" style="margin-top:4px;">0 = offer it from the start.</p></div>
+          </div>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <input type="checkbox" id="cfg-wrapchip-followup" checked>
+            <span class="micro"><strong>Also offer it whenever the concierge has just followed up on its own</strong> — being chatted at is exactly when someone wants a polite way out.</span>
+          </label>
+          <div class="cfg-state eng-digest" id="eng-live-talk"></div>
+          <p class="micro" style="margin-top:4px;opacity:.6;">Assumes the visitor stays silent; quiet mode, an open order sheet, or a hold can still still any of these.</p>
+        </details>
+
+        <details class="stage" id="stage-register" open>
+          <summary>④ At the register</summary>
+          <p class="note">One moment with its own clock: the order sheet is open but unfinished. While the sheet is actively worked, the concierge never interrupts.</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-draft">Remind about a half-written order after (seconds)</label>
+              <input type="number" id="cfg-draft" class="mono-field" data-unit="s" min="5" step="1" placeholder="25">
+              <p class="note" style="margin-top:4px;">They opened the order sheet, began, then drifted. One gentle reminder.</p></div>
+          </div>
+        </details>
+
+        <details class="stage" id="stage-postsale" open>
+          <summary>⑤ After they buy</summary>
+          <p class="note">A purchase changes the tone: first a quiet moment — the congratulations owns it — then a window where you choose the concierge's manner. "Still thinking it over?" lines never appear after a sale.</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-reengage-grace">Stay quiet right after the sale for (seconds)</label>
+              <input type="number" id="cfg-reengage-grace" class="mono-field" data-unit="s" min="0" step="1" placeholder="240"></div>
+            <div><label class="micro" for="cfg-reengage-postwindow">Then, for the next…</label>
               <div style="display:flex;gap:6px;">
                 <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="0" step="any" placeholder="48" style="flex:1;min-width:0;">
                 <select id="cfg-reengage-postwindow-unit" class="mono-field" style="max-width:110px;">
@@ -1243,37 +1316,69 @@
                   <option value="60000">minutes</option>
                   <option value="1000">seconds</option>
                 </select>
-              </div></div>
+              </div>
+              <p class="note" style="margin-top:4px;">How long your chosen manner lasts. Hours-scale in production (say 48); switch the unit to seconds when testing.</p></div>
           </div>
           <div style="margin-top:8px;">
-            <label class="micro" for="cfg-postsale-mode">Within that window, after a purchase, the concierge should…</label>
+            <label class="micro" for="cfg-postsale-mode">…the concierge should</label>
             <select id="cfg-postsale-mode" class="mono-field">
               <option value="upsell">Re-engage for a second sale (companion cloth / gift)</option>
               <option value="presence">Stay present — check in warmly, without selling</option>
               <option value="quiet">Stay quiet through the whole window</option>
             </select>
-            <p class="note" style="margin-top:4px;">The window above always sets the duration; this picks what happens inside it. "Quiet" names itself in <code>status().lastSkip</code> so it never looks like a bug. (The ledger-driven bubble can still propose a companion via its own Action Table rule — govern that under Beat actions.)</p>
+            <p class="note" style="margin-top:4px;">Quiet announces itself in the widget's status readout, so silence never looks like a bug. The page bubble can still propose a companion via its own rule — govern that under <em>The written rules</em>.</p>
           </div>
-          <p class="note" style="margin:10px 0 6px;">The <strong>"That's all for now" chip</strong> appears when ending is plausibly on the patron's mind — once the bot has begun following up on its own, or once the exchange runs deep — never under the very first reply.</p>
+          <div class="cfg-state eng-digest" id="eng-live-postsale"></div>
+        </details>
+
+        <details class="stage" id="stage-house" open>
+          <summary>House rules — always on</summary>
+          <p class="note">Limits that hold at every stage of the visit: a visitor's request for quiet, the model bill, and how long anything is remembered.</p>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-wrapchip-turns">Wrap chip · patron turns before it appears</label>
-              <input type="number" id="cfg-wrapchip-turns" class="mono-field" min="0" step="1" placeholder="3"></div>
+            <div><label class="micro" for="cfg-quiet-mins">"That's all for now" silences everything for (minutes)</label>
+              <input type="number" id="cfg-quiet-mins" class="mono-field" data-unit="min" min="1" step="1" placeholder="30">
+              <p class="note" style="margin-top:4px;">A time-boxed pause, not a switch: it lifts by itself after this window, on a page reload, or the moment the visitor types — whichever comes first.</p></div>
+            <div><label class="micro" for="cfg-history-keep">A signed-in patron's transcript is kept for (days)</label>
+              <input type="number" id="cfg-history-keep" class="mono-field" data-unit="days" min="0" step="1" placeholder="7">
+              <p class="note" style="margin-top:4px;">Kept on their device, keyed to their identity, wiped on sign-out; older than this window, the chat starts fresh. Guest chats always stay per-tab.</p></div>
+            <div><label class="micro" for="cfg-rate-signed">Signed-in · replies allowed per 10 minutes (count)</label>
+              <input type="number" id="cfg-rate-signed" class="mono-field" data-unit="×" min="5" step="5" placeholder="60">
+              <p class="note" style="margin-top:4px;">A spending brake, not a pacing tool — reach-outs count too, so this bounds the model bill. Signed-in patrons are keyed by identity.</p></div>
+            <div><label class="micro" for="cfg-rate-anon">Guests · replies allowed per 10 minutes (count)</label>
+              <input type="number" id="cfg-rate-anon" class="mono-field" data-unit="×" min="5" step="5" placeholder="20">
+              <p class="note" style="margin-top:4px;">Guests are keyed by IP.</p></div>
+            <div><label class="micro" for="cfg-goalrate">Score goals on this share of conversations (0–1)</label>
+              <input type="number" id="cfg-goalrate" class="mono-field" data-unit="0–1" min="0" max="1" step="0.05" placeholder="1">
+              <p class="note" style="margin-top:4px;">1 = every conversation, 0.2 = one in five. Lower it to cut model cost at scale; the analytics stay representative.</p></div>
           </div>
-          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-            <input type="checkbox" id="cfg-wrapchip-followup" checked>
-            <span class="micro">Also show the chip whenever a proactive follow-up has fired (it's the natural answer to being chatted up). 0 turns above = always show, as before.</span>
-          </label>
-        </div>
-        <div style="margin-top:12px;">
-          <label class="micro" for="cfg-goalrate">Goal-scoring sample rate (0–1)</label>
-          <input type="number" id="cfg-goalrate" class="mono-field" min="0" max="1" step="0.05" placeholder="1" style="max-width:120px;">
-          <p class="note" style="margin-top:4px;">How often to run the (background LLM) goal grader — 1 = every conversation, 0.2 = one in five. Lower it to cut model cost at scale; analytics stay representative.</p>
-        </div>
-        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:12px;">
-          <input type="checkbox" id="cfg-reengage-regrade">
-          <span class="micro">Re-grade goals right before a closed-panel re-engagement — freshest possible status in the outreach line, at one extra model call per reach-out. Off by default (uses the latest already-graded status).</span>
-        </label>
-        <div class="card-foot">
+        </details>
+
+        <details class="stage" id="stage-rules">
+          <summary>The written rules — advanced</summary>
+          <p class="note">Everything above decides <em>when</em> the concierge may speak; these three decide <em>what it's allowed to say</em> when it does. Most shops never open this — every save is versioned, and History ⟲ restores any prior one.</p>
+          <label class="micro" for="cfg-beat-notes"><strong>Your standing note (added on top)</strong></label>
+          <p class="note" style="margin:6px 0;">One or two plain sentences added to every reach-out — bubble, opener, and follow-up alike — without replacing the rulebook. E.g. "Always steer toward the gift option in December."</p>
+          <textarea id="cfg-beat-notes" rows="3" placeholder="Blank = nothing added. One or two plain sentences work best."></textarea>
+          <div class="cfg-links">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_notes">History ⟲</button>
+          </div>
+          <label class="micro" for="cfg-engagement-base" style="margin-top:12px;display:block;"><strong>The rulebook (replaces the built-in when set)</strong></label>
+          <p class="note" style="margin:6px 0;">The exact rules every reach-out obeys — say something new or stay silent, sell rather than report, plain speech, never re-ask. Press "Load built-in to edit" to start from the current rules.</p>
+          <textarea id="cfg-engagement-base" rows="10" placeholder="Blank = the built-in engagement &amp; pacing rules. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="cfg-links">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-engagement-base" data-default="engagement_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="engagement_base">History ⟲</button>
+          </div>
+          <label class="micro" for="cfg-beat-actions" style="margin-top:12px;display:block;"><strong>Switch off specific reach-out jobs (JSON)</strong></label>
+          <p class="note" style="margin:6px 0;">Each reach-out picks one job from ordered rules over your real order numbers — fix a blocked order → propose a companion → propose a gift → advance a goal → hold — each at most once per day, never guessed. Paste <code>{"PROPOSE_GIFT":{"enabled":false}}</code> to switch one off. Every decision is traced in the Actions tab.</p>
+          <textarea id="cfg-beat-actions" rows="2" placeholder='Blank = all rules enabled.'></textarea>
+          <div class="cfg-links">
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="beat_actions">History ⟲</button>
+          </div>
+        </details>
+
+        <div class="card-foot eng-foot">
+          <span class="micro" style="opacity:.65;">Saves every stage above at once — open sections and closed alike.</span>
           <button id="save-engagement" class="btn primary">Save engagement</button>
         </div>
       </section>
@@ -2523,7 +2628,7 @@ function refreshCfgState(f) {
     st.appendChild(document.createTextNode('Blank → using ' + f.dflt + '.'));
   }
 }
-function refreshAllCfgStates() { CFG_FIELDS.forEach(refreshCfgState); }
+function refreshAllCfgStates() { CFG_FIELDS.forEach(refreshCfgState); if (typeof renderEngFx === 'function') renderEngFx(); }
 
 /* Built-in base texts (?defaults=1, admin-gated) — fetched once and cached so
    "Load built-in to edit" can fill a base box with the current default. */
@@ -3118,7 +3223,147 @@ const ASSERT_LABELS = {
 function renderAssertLabel() {
   const v = Number($('cfg-assert').value) || 3;
   $('cfg-assert-label').textContent = ASSERT_LABELS[v] || ASSERT_LABELS[3];
+  if (typeof renderEngFx === 'function') renderEngFx();
 }
+
+/* ---------- Engagement page: live feedback ----------------------------------
+   One dial (Selling → How hard to sell) paces the Engagement tab. The numbers
+   below MIRROR the widget engine — update together with assets/concierge.js:
+   DIAL_MULT = assertDelayMult(); blank-default formulas cited per field. */
+const DIAL_MULT = [1.5, 1.25, 1, 0.8, 0.65];
+function engDial() { const v = Number($('cfg-assert') && $('cfg-assert').value); return (Number.isFinite(v) && v >= 1 && v <= 5) ? Math.round(v) : 3; }
+function engMult() { return DIAL_MULT[engDial() - 1]; }
+function engVal(id, dflt) {
+  const el = $(id); if (!el || el.value === '') return { v: dflt, typed: false };
+  const n = Number(el.value); return Number.isFinite(n) ? { v: n, typed: true } : { v: dflt, typed: false };
+}
+function engFmt(s) {
+  if (s < 90) { return (Math.round(s * 10) / 10) + ' s'; }
+  if (s < 5400) { const m = Math.floor(s / 60), r = Math.round(s % 60); return r ? m + ' m ' + String(r).padStart(2, '0') + ' s' : m + ' m'; }
+  return (Math.round(s / 360) / 10) + ' hours';
+}
+function renderEngFx() {
+  const card = $('engagement-card'); if (!card) return;
+  const d = engDial(), mult = engMult();
+  const label = (ASSERT_LABELS[d] || '').split(' — ')[0] || d;
+  /* dial banner */
+  const banner = $('eng-dial-banner');
+  if (banner) {
+    banner.innerHTML = 'One dial sets the pace. <strong>How hard to sell</strong> (Selling tab) is at <strong>' + label +
+      '</strong> — timings marked ⚡ below run at <strong>×' + mult.toFixed(2) + '</strong> of their shown value. ' +
+      'Push it up and they shrink (×0.80, ×0.65); ease it down and they stretch (×1.25, ×1.50). ' +
+      '<button type="button" class="cfg-linkbtn" id="eng-goto-dial">Adjust on the Selling tab →</button>';
+    const go = $('eng-goto-dial');
+    if (go) go.onclick = function () {
+      const t = document.querySelector('[data-tsub="selling"].tsub-tab, .tsub-tab[data-tsub="selling"]');
+      if (t) t.click();
+      const a = $('cfg-assert'); if (a) { a.focus(); a.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    };
+  }
+  /* selling-tab echo under the dial's own label */
+  const al = $('cfg-assert-label');
+  if (al) {
+    let echo = $('assert-eng-echo');
+    if (!echo) { echo = document.createElement('p'); echo.id = 'assert-eng-echo'; echo.className = 'note'; echo.style.marginTop = '6px'; al.parentNode.insertBefore(echo, al.nextSibling); }
+    const first = engVal('cfg-nudge1', 8).v * mult;
+    echo.textContent = 'This dial also paces the whole Engagement tab — every in-chat follow-up runs sooner or later with it, and blank timing fields there take their defaults from it. Right now the first follow-up lands at about ' + engFmt(first) + '.';
+  }
+  /* per-field Effect readouts: 'always' = engine scales even typed values;
+     'default-only' = blank follows the dial, a typed number is pinned */
+  card.querySelectorAll('input[data-dial]').forEach(function (inp) {
+    const fx = $(inp.id + '-fx'); if (!fx && inp.getAttribute('data-dial') === 'default-only') return;
+    const dflt = Number(inp.placeholder) || 0;
+    if (inp.getAttribute('data-dial') === 'default-only' && fx) {
+      const isCount = inp.getAttribute('data-unit') === '×';
+      if (inp.value === '') {
+        if (isCount) {
+          const formula = inp.getAttribute('data-fx') || '';
+          let n = dflt;
+          if (/dial≥4/.test(formula)) { n = d >= 4 ? 3 : 2; }
+          else if (/\(dial−3\)/.test(formula)) { n = dflt + (d - 3); }
+          fx.textContent = 'Effect: blank → the dial decides: ' + Math.max(0, n);
+        } else {
+          fx.textContent = 'Effect: blank → the dial decides: ' + engFmt(dflt) + ' × ' + mult.toFixed(2) + ' ≈ ' + engFmt(dflt * mult);
+        }
+      } else {
+        fx.textContent = 'Effect: exactly ' + (isCount ? inp.value : engFmt(Number(inp.value))) + ' — pinned; the dial won’t touch it.';
+      }
+    }
+  });
+  /* ladder strip — CUMULATIVE effective times ("when is the third one?") */
+  const strip = $('eng-ladder-strip');
+  if (strip) {
+    const rungs = ['cfg-nudge1', 'cfg-nudge2', 'cfg-nudge3', 'cfg-nudge4', 'cfg-nudge5']
+      .map(function (id, i) { return engVal(id, [8, 30, 90, 180, 300][i]).v * mult; });
+    let cum = 0; const cums = rungs.map(function (r) { cum += r; return cum; });
+    const maxT = cums[cums.length - 1];
+    strip.innerHTML = '';
+    cums.forEach(function (t, i) {
+      const x = Math.sqrt(t / maxT) * 92 + 4;   /* sqrt scale, 4–96% */
+      const tick = document.createElement('span');
+      tick.className = 'tick'; tick.style.left = x + '%';
+      tick.innerHTML = 'at ' + engFmt(t).replace(/ /g, ' ') + '<i></i>';
+      strip.appendChild(tick);
+    });
+  }
+  /* live digests — one sentence per stage, value-or-default driven */
+  const dw = engVal('cfg-dwell', 45).v, bw = engVal('cfg-bubble-withdraw', 22).v;
+  const ma = engVal('cfg-maxambient', d >= 4 ? 3 : 2), uc = engVal('cfg-unackedcap', d >= 4 ? 3 : 2);
+  const lb = $('eng-live-browse');
+  if (lb) lb.textContent = 'Effect: a visitor who reads for ' + engFmt(dw) + ' gets one bubble; it fades after ' + engFmt(bw) +
+    '; at most ' + ma.v + ' per visit, and ' + uc.v + ' ignored reach-outs end the offers.';
+  const lo = $('eng-live-open');
+  if (lo) lo.textContent = 'Effect: panel opens → a signed-in patron is greeted after ' + engFmt(engVal('cfg-opener-signed', 1.2).v) +
+    ', a guest after ' + engFmt(engVal('cfg-opener-anon', 3).v) + '; a tapped bubble gets its follow-up at ' + engFmt(engVal('cfg-opener-follow', 8).v) +
+    '; no re-greeting within ' + engVal('cfg-opener-cooldown', 10).v + ' min.';
+  const lt = $('eng-live-talk');
+  if (lt) {
+    const rungs2 = ['cfg-nudge1', 'cfg-nudge2', 'cfg-nudge3', 'cfg-nudge4', 'cfg-nudge5']
+      .map(function (id, i) { return engFmt(engVal(id, [8, 30, 90, 180, 300][i]).v * mult); });
+    const cap = engVal('cfg-nudgecap', 6 + (d - 3)).v, hb = engVal('cfg-holdbudget', 4).v;
+    const gate = $('cfg-substance-gate') && $('cfg-substance-gate').checked;
+    lt.textContent = 'Effect at dial ' + label + ': follow-ups at ' + rungs2.join(' → ') + '…, stopping after ' + cap +
+      ' follow-ups, ' + uc.v + ' ignored ones, or ' + hb + ' silent holds — whichever trips first' +
+      (gate ? ', and only with something new to say.' : '.');
+  }
+  const lp = $('eng-live-postsale');
+  if (lp) {
+    const grace = engVal('cfg-reengage-grace', 240).v;
+    const wv = engVal('cfg-reengage-postwindow', 48).v;
+    const wu = Number(($('cfg-reengage-postwindow-unit') || {}).value) || 3600000;
+    const mode = $('cfg-postsale-mode');
+    const phrase = mode && mode.value === 'quiet' ? 'stay quiet — and say so in the status readout'
+      : mode && mode.value === 'presence' ? 'stay present without selling'
+      : 'invite a second entry — a companion cloth or a gift';
+    lp.textContent = 'Effect: sale closes → ' + engFmt(grace) + ' of congratulations-quiet, then for ' + engFmt(wv * wu / 1000) +
+      ' it will ' + phrase + '. After the window: normal presence.';
+  }
+  /* re-engage dimming */
+  const rg = $('eng-reengage-grid'), re = $('cfg-reengage-enabled');
+  if (rg && re) rg.classList.toggle('dim', !re.checked);
+}
+/* unit suffixes inside inputs + wiring (runs once; the script sits below the DOM) */
+(function engInit() {
+  const card = $('engagement-card'); if (!card) return;
+  card.querySelectorAll('input[data-unit]').forEach(function (inp) {
+    if (inp.parentNode.classList && inp.parentNode.classList.contains('unit-wrap')) return;
+    const wrap = document.createElement('span'); wrap.className = 'unit-wrap';
+    inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp);
+    const u = document.createElement('span'); u.className = 'unit'; u.textContent = inp.getAttribute('data-unit');
+    wrap.appendChild(u);
+  });
+  card.addEventListener('input', renderEngFx);
+  card.addEventListener('change', renderEngFx);
+  const jr = $('eng-journey');
+  if (jr) jr.addEventListener('click', function (e) {
+    const b = e.target.closest('button[data-stage]'); if (!b) return;
+    const st = $(b.getAttribute('data-stage')); if (!st) return;
+    st.open = true;
+    st.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    st.classList.add('flash'); setTimeout(function () { st.classList.remove('flash'); }, 1200);
+  });
+  renderEngFx();
+})();
 
 /* objections config <-> textarea. Stored as [{trigger,response}]; shown one per
    line as "trigger | response" (a line with no pipe is a bare response). */
