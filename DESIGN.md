@@ -750,7 +750,10 @@ rather than merely reacting:
   undecided. The `?reengage=1` endpoint has a `post_sale` branch for this; the
   grace, the post-sale window length, and whether to re-engage at all after a
   sale are admin-tunable (`outreach.reengageGraceMs`,
-  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
+  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`). Note the enabled
+  flag is a **strong switch**: off, a recent buyer gets *no* closed-panel
+  bubble for the entire window (default 48 h) — the state names itself in
+  `status().lastSkip` and is visible in `status().postSale`.
 - **Journey-aware goals.** Each goal can carry one or more `sections` (page/journey
   stages), edited as checkboxes in the admin; `buildSystemPrompt` flags the open goals that match where the visitor is and
   tells the concierge to lead with them, so the agenda tracks the shopper's path

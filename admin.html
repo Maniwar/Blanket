@@ -1236,11 +1236,20 @@
             <div><label class="micro" for="cfg-reengage-grace">Quiet grace after a sale (seconds)</label>
               <input type="number" id="cfg-reengage-grace" class="mono-field" min="0" step="1" placeholder="240"></div>
             <div><label class="micro" for="cfg-reengage-postwindow">Post-sale upsell window (hours)</label>
-              <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="0" step="1" placeholder="48"></div>
+              <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="1" step="1" placeholder="48"></div>
           </div>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
             <input type="checkbox" id="cfg-reengage-postsale">
-            <span class="micro">Re-engage for a second sale after a purchase (companion cloth / gift). Off = stay quiet through the post-sale window.</span>
+            <span class="micro">Re-engage for a second sale after a purchase (companion cloth / gift). Off = stay quiet through the post-sale window (the whole window — the widget names this in <code>status().lastSkip</code> when active).</span>
+          </label>
+          <p class="note" style="margin:10px 0 6px;">The <strong>"That's all for now" chip</strong> appears when ending is plausibly on the patron's mind — once the bot has begun following up on its own, or once the exchange runs deep — never under the very first reply.</p>
+          <div class="ed-grid">
+            <div><label class="micro" for="cfg-wrapchip-turns">Wrap chip · patron turns before it appears</label>
+              <input type="number" id="cfg-wrapchip-turns" class="mono-field" min="0" step="1" placeholder="3"></div>
+          </div>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <input type="checkbox" id="cfg-wrapchip-followup" checked>
+            <span class="micro">Also show the chip whenever a proactive follow-up has fired (it's the natural answer to being chatted up). 0 turns above = always show, as before.</span>
           </label>
         </div>
         <div style="margin-top:12px;">
@@ -3052,6 +3061,8 @@ async function loadConfig() {
   $('cfg-reengage-grace').value = (typeof o.reengageGraceMs === 'number') ? Math.round(o.reengageGraceMs / 1000) : '';
   $('cfg-reengage-postwindow').value = (typeof o.reengagePostSaleWindowMs === 'number') ? Math.round(o.reengagePostSaleWindowMs / 3600000) : '';
   $('cfg-reengage-postsale').checked = o.reengagePostSaleEnabled !== false;
+  $('cfg-wrapchip-turns').value = (typeof o.wrapChipMinTurns === 'number') ? o.wrapChipMinTurns : '';
+  $('cfg-wrapchip-followup').checked = o.wrapChipOnFollowup !== false;
   $('cfg-reengage-regrade').checked = cfg.reengage_regrade === true;
 
   // Behavior & selling style
@@ -3165,8 +3176,14 @@ async function saveEngagement() {
   const rGrace = Number($('cfg-reengage-grace').value);
   if ($('cfg-reengage-grace').value !== '' && Number.isFinite(rGrace) && rGrace >= 0) o.reengageGraceMs = Math.round(rGrace * 1000);
   const rPostWin = Number($('cfg-reengage-postwindow').value);
-  if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin >= 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * 3600000);
+  // > 0, not >= 0: the widget requires a positive window, so a saved 0 would
+  // silently fall back to the 48h default — worse than rejecting it here.
+  if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin > 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * 3600000);
   o.reengagePostSaleEnabled = $('cfg-reengage-postsale').checked;
+  const wcT = Number($('cfg-wrapchip-turns').value);
+  if ($('cfg-wrapchip-turns').value !== '' && Number.isFinite(wcT) && wcT >= 0) o.wrapChipMinTurns = Math.round(wcT);
+  else delete o.wrapChipMinTurns;
+  o.wrapChipOnFollowup = $('cfg-wrapchip-followup').checked;
   const rows = [{ key: 'outreach', value: o, updated_at: nowIso() }];
   rows.push({ key: 'engagement_base', value: $('cfg-engagement-base').value, updated_at: nowIso() });
   rows.push({ key: 'beat_notes', value: $('cfg-beat-notes').value, updated_at: nowIso() });

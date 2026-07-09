@@ -278,13 +278,18 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   same screen space on desktop, and a bot line mid-order-form is the most
   expensive interruption there is). Every such skip names itself, and
   `status()` reports `checkoutOpen`.
-- **"That's all for now" is a visible control, not a hidden menu item.** Once a
-  real exchange exists (one visitor turn + one bot turn), a small chip rides in
-  the message flow under the bot's latest reply — no chrome, no extra row; it
-  scrolls with the conversation and is rebuilt after each reply. One tap wraps
-  the conversation: quiet mode on, the register records the wrap, a warm
-  goodbye, and the panel closes. It hides while there's nothing to wrap (fresh
-  chat, already wrapped, quiet, mid-stream). The ⋯ menu keeps both signals
+- **"That's all for now" is a visible control, not a hidden menu item — and it
+  appears when it's needed, not always.** The chip shows up when ending is
+  plausibly on the patron's mind: once the bot has begun following up on its
+  own (a proactive beat is exactly what the chip answers), or once the exchange
+  runs deep (default: 3 patron turns) — never parked under the very first
+  reply. Both triggers are admin-tunable (Engagement pace →
+  `outreach.wrapChipMinTurns`, 0 = always; `wrapChipOnFollowup`). When shown,
+  it rides in the message flow under the bot's latest reply — no chrome, no
+  extra row; it scrolls with the conversation and is rebuilt after each reply.
+  One tap wraps the conversation: quiet mode on, the register records the
+  wrap, a warm goodbye, and the panel closes. It hides while there's nothing
+  to wrap (fresh chat, already wrapped, quiet, mid-stream). The ⋯ menu keeps both signals
   ("Don't message me until I write back" and "That's all for now") for
   completeness; typing again always lifts the quiet and starts a fresh
   conversation. A bot line that lands on a wound-down thread (a re-engagement)

@@ -3820,10 +3820,32 @@ async function handleChatPost(req: Request): Promise<Response> {
         // can only write the call as text. Scrub that before anything sees it.
         text = stripPlumbing(text);
 
-        const held = text.length === 0 || /^\[?hold\]?\.?$/i.test(text) ||
+        // Normalize the silence token before deciding: a trailing "[HOLD]"
+        // after real content is dropped (the content speaks for itself), and a
+        // reply that is ONLY the hold — however decorated (**[HOLD]**, [hold].)
+        // — holds. The old start-anchored regexes let decorated holds leak to
+        // the transcript as literal text.
+        if (!/^\s*\[hold\]/i.test(text)) {
+          text = text.replace(/\s*\[hold\]\.?\s*$/i, "").trim();
+        }
+        const bare = text.replace(/[*_`\s.!]/g, "").toLowerCase();
+        const held = text.length === 0 || bare === "[hold]" || bare === "hold" ||
           /^\[hold\]/i.test(text);
         if (held) {
           send({ hold: 1 });
+          // A held beat is invisible in the transcript by design — record it so
+          // hold rate is measurable (Actions tab, action='beat_hold'). Without
+          // this row, silence and breakage look identical. (This write MUST live
+          // here: this toolless fast path is where every nudge/opener runs.)
+          try {
+            const cid = await conversationPromise;
+            pgInsert("concierge_actions", {
+              conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
+              action: "beat_hold", serial: null,
+              payload: { kind: isNudge ? "nudge" : "opener", decision: beatAudit ?? undefined },
+              result: "beat held — nothing new to say",
+            }).catch(() => { /* audit failures never break the chat */ });
+          } catch { /* skip audit */ }
         } else {
           for (const piece of chunked(text)) send({ t: piece });
           try {
@@ -3833,6 +3855,19 @@ async function handleChatPost(req: Request): Promise<Response> {
             // A proactive beat has no tools, so if it honoured a one-time house
             // instruction it could not resolve it here — reconcile in the background.
             scheduleDirectiveReconcile(cid, customer, validated.messages, text, apiKey, model);
+            // The beat SPOKE its decided action — this row is what marks the
+            // action "spent" for the next 24h (chooseBeatAction reads it back),
+            // and what the Actions tab shows. It was previously written only in
+            // the signed-in tool loop, which nudges never reach — so actions
+            // never went spent and "offer ONCE" re-fired every beat.
+            if (beatAudit && isNudge) {
+              pgInsert("concierge_actions", {
+                conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
+                action: "beat_action", serial: null,
+                payload: { ...beatAudit, outcome: "spoke" },
+                result: String(beatAudit.action ?? ""),
+              }).catch(() => { /* audit failures never break the chat */ });
+            }
           } catch { /* skip meta */ }
         }
         try {

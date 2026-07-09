@@ -1583,7 +1583,7 @@
     var doneKey = 'feier_checkin_' + (mark.serial || 'x');
     try { if (window.localStorage.getItem(doneKey) === '1') { return; } } catch (e2) { /* ignore */ }
     setTimeout(function () {
-      if (panelOpen || quietMode) { return; }
+      if (panelOpen || quietMode) { noteSkip('post-purchase check-in: stood down (' + (panelOpen ? 'panel open' : 'quiet mode') + ') — stays un-marked, a later reload retries'); return; }
       var no = mark.serial ? 'Nº ' + Number(mark.serial).toLocaleString('en-US') : 'your number';
       var line = 'Welcome back — ' + no + ' is safely in the Webbuch. Before anything else: is ' +
         'there anything you still need from me? A shipping detail, a companion cloth for another ' +
@@ -1601,12 +1601,12 @@
   (function () {
     var dwellMs = typeof orCfg().dwellMs === 'number' ? orCfg().dwellMs : 45000;
     setTimeout(function () {
-      if (panelOpen || history.length) { return; }
+      if (panelOpen || history.length) { noteSkip('dwell opener: stood down — ' + (panelOpen ? 'the panel is open' : 'a conversation already exists') + ' (one-shot, will not retry)'); return; }
       /* Reach out to an idle visitor even if they haven't scrolled — the dwell
          time is itself the "they're here and lingering" signal. Admins can turn
          this off (idleReach:false) to require a scroll first, as before. */
       var y = window.scrollY || window.pageYOffset || 0;
-      if (orCfg().idleReach === false && y < window.innerHeight * 0.5) { return; }
+      if (orCfg().idleReach === false && y < window.innerHeight * 0.5) { noteSkip('dwell opener: idleReach is OFF in admin and the page has not been scrolled past half a screen (one-shot, will not retry)'); return; }
       var sec = currentSection();
       var lines = {
         wool: 'Guten Abend. The cloth you\u2019re reading about \u2014 I can tell you which of the three would suit the room you have in mind.',
@@ -1626,10 +1626,13 @@
     var dwellMs = typeof orCfg().dwellMs === 'number' ? orCfg().dwellMs : 45000;
     var dwell2Ms = typeof orCfg().dwell2Ms === 'number' ? orCfg().dwell2Ms : Math.round(dwellMs * 2.4);
     setTimeout(function () {
-      if (panelOpen || history.length || orSeen('dwell2') || assertLevel() < 3) { return; }
+      if (panelOpen || history.length || orSeen('dwell2') || assertLevel() < 3) {
+        noteSkip('dwell2 beat: stood down — ' + (panelOpen ? 'panel open' : history.length ? 'conversation exists' : orSeen('dwell2') ? 'already shown this visit' : 'assertiveness below Warm (3) in admin') + ' (one-shot, will not retry)');
+        return;
+      }
       if (orCfg().idleReach === false) {
         var y = window.scrollY || window.pageYOffset || 0;
-        if (y < window.innerHeight * 0.5) { return; }
+        if (y < window.innerHeight * 0.5) { noteSkip('dwell2 beat: idleReach is OFF in admin and the page has not been scrolled past half a screen (one-shot, will not retry)'); return; }
       }
       var sec = currentSection();
       var lines = {
@@ -2096,7 +2099,14 @@
         msgsEl.appendChild(el('div', 'cx-turn cx-turn-user', t.content));
       } else {
         var turn = el('div', 'cx-turn cx-turn-assistant');
-        turn.appendChild(mdRender(t.content));
+        var rendered = mdRender(t.content);
+        /* a legacy plumbing-only line already persisted before the blank-bubble
+           guard existed would re-render as an empty bubble forever — skip it */
+        if (!((rendered.textContent || '').replace(/\s+/g, '')) &&
+            !(rendered.querySelector && rendered.querySelector('.cx-form,.cx-actionrow,.cx-replies,img,button'))) {
+          continue;
+        }
+        turn.appendChild(rendered);
         msgsEl.appendChild(turn);
       }
     }
@@ -2188,6 +2198,7 @@
     return a[sec] || 'Guten Abend — I’m the mill’s concierge. Tell me the room it’s for and I’ll tell you the cloth.';
   }
   var reengageBusy = false;
+  var reengageBusyAt = 0;       /* watchdog: a hung compose must never mute the bubble */
   /* Ask the server for a goal + journey aware line (it reads the open goals and
      the section the visitor is in). Falls back to the client line on any failure
      so the beat still fires offline / if the endpoint is unavailable. */
@@ -2227,7 +2238,16 @@
   function reengageTick() {
     /* panel open / demo are not diagnostic — stay silent so lastSkip keeps
        the in-panel story; everything below names its gate. */
-    if (isDemo() || panelOpen || reengageBusy) { return; }
+    if (isDemo() || panelOpen) { return; }
+    if (reengageBusy) {
+      /* composing is momentary — but a hung request must never mute the
+         bubble forever. Abandon a stuck compose and name it. */
+      if (Date.now() - reengageBusyAt > 45000) {
+        reengageBusy = false;
+        noteSkip('reengage: a stuck line request was abandoned after 45s — resuming normal checks');
+      }
+      return;
+    }
     if (quietMode) { noteSkip('reengage: QUIET MODE — pauses for ' + Math.round(effQuietMs() / 60000) + 'min; lifts by itself, on reload, or when you type'); return; }
     if (streaming) { noteSkip('reengage: a reply is streaming'); return; }
     if (outreachEl) { noteSkip('reengage: an outreach bubble is already on screen (it withdraws by itself after ~22s)'); return; }
@@ -2262,6 +2282,7 @@
        returned above, with its name. */
     var postSale = pa !== null && pa < pc.windowMs;
     reengageBusy = true;
+    reengageBusyAt = Date.now();
     fetchReengageLine(postSale, function (line) {
       reengageBusy = false;
       /* the server held — nothing new to say. Treat it like a spoken beat for
@@ -2338,6 +2359,19 @@
     var old = msgsEl.querySelector('.cx-wrapend');
     if (old && old.parentNode) { old.parentNode.removeChild(old); }
     if (wrappedUp || quietMode || streaming || !hasRealExchange()) { return; }
+    /* Contextual, not constant: the chip appears when ending is plausibly on
+       the visitor's mind — once the bot has begun following up on its own
+       (that's what "that's all for now" answers), or once the exchange runs
+       deep — never parked under the very first reply. Admin-tunable:
+       outreach.wrapChipMinTurns (patron turns before it appears, default 3;
+       0 = always) and wrapChipOnFollowup (show it whenever a follow-up beat
+       has fired, default on). */
+    var oWrap = orCfg();
+    var minTurns = (typeof oWrap.wrapChipMinTurns === 'number' && oWrap.wrapChipMinTurns >= 0) ? oWrap.wrapChipMinTurns : 3;
+    var onFollowup = oWrap.wrapChipOnFollowup !== false;
+    var userTurns = 0, wi;
+    for (wi = 0; wi < history.length; wi++) { if (history[wi].role === 'user') { userTurns++; } }
+    if (!((onFollowup && (nudgeCount > 0 || unacked > 0)) || userTurns >= minTurns)) { return; }
     var rowEnd = el('div', 'cx-wrapend');
     var btn = el('button', 'cx-wrapbtn', 'That’s all for now ✓');
     btn.type = 'button';
@@ -2623,7 +2657,7 @@
        than silence — so check the render, not the raw string. */
     var probe = mdRender(content || '');
     var visiblyBlank = !((probe.textContent || '').replace(/\s+/g, '')) &&
-      !(probe.querySelector && probe.querySelector('.cx-form,.cx-actions,.cx-reply,img,button'));
+      !(probe.querySelector && probe.querySelector('.cx-form,.cx-actionrow,.cx-replies,img,button'));
     if (visiblyBlank && shell.proactive) {
       /* a proactive line with nothing to show — withdraw the bubble entirely
          and treat it like a hold: quiet now, circle back spaciously */
@@ -2746,11 +2780,18 @@
        not dial-scaled: the moment is now either way */
     if (typeof quickMs === 'number' && quickMs >= 0) { wait = quickMs; }
     nudgeTimer = setTimeout(function () {
-      if (streaming || !panelOpen || quietMode) { return; }
+      nudgeTimer = null;   /* this arm is consumed — !nudgeTimer checks stay honest */
+      if (streaming || !panelOpen || quietMode) {
+        noteSkip('nudge: stood down at fire time — ' + (streaming ? 'a reply is streaming' : !panelOpen ? 'the panel closed while waiting' : 'quiet mode began while waiting'));
+        return;
+      }
       if (checkoutOpen()) { noteSkip('nudge: the register sheet is open — never interrupt an order'); scheduleNudge(true); return; }
       /* never speak over someone mid-sentence — wait and try again shortly */
       if (composing()) { scheduleNudge(spacious); return; }
-      if (!history.length || history[history.length - 1].role !== 'assistant') { return; }
+      if (!history.length || history[history.length - 1].role !== 'assistant') {
+        noteSkip('nudge: stood down at fire time — the visitor spoke last (their reply resets the ladder)');
+        return;
+      }
       nudgeCount++;
       unacked++;                 /* this reach-out is unacknowledged until they show a sign of life */
       entryMode = 'nudge';
@@ -2780,6 +2821,8 @@
       var oa = orCfg();
       var quick = (typeof oa.openerFollowMs === 'number' && oa.openerFollowMs >= 0) ? oa.openerFollowMs : 8000;
       scheduleNudge(false, quick);
+    } else if (panelOpen && !streaming) {
+      noteSkip('opener follow-up: not armed — an opener/follow-up timer is already pending (it will speak in its own time)');
     }
   }
   function openerOnOpenCore() {
@@ -2980,8 +3023,13 @@
         /* If a newer turn already superseded this one (the visitor typed over a
            proactive line), just drop this shell — don't touch the live stream
            state or we'd unlock the composer mid-reply. */
-        if (currentAbort !== ac) { shell.done(); return; }
+        if (currentAbort !== ac) {
+          if (shell.proactive) { noteSkip('beat: superseded — the visitor typed while the line was composing (their turn wins)'); }
+          shell.done();
+          return;
+        }
         /* panel closed mid-stream: keep what we have quietly */
+        if (shell.proactive) { noteSkip('beat: the stream was cut mid-line (panel closed or navigation) — partial text kept in the transcript'); }
         shell.done();
         var partial = shell.getText();
         if (partial) {

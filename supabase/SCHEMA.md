@@ -125,7 +125,10 @@ how long after a purchase the bubble pivots to second-sale framing, entered in
 *hours* in the admin because it is a days-scale horizon, default 48 h;
 `reengagePostSaleEnabled` — bool, default on; **off silences the closed-panel
 bubble for the entire post-sale window**, named in `status().lastSkip` and
-visible in `status().postSale`), and `historyKeepMs` (how long a signed-in patron's
+visible in `status().postSale`), wrap-chip visibility (`wrapChipMinTurns` —
+patron turns before the "That's all for now" chip appears, default 3, 0 =
+always; `wrapChipOnFollowup` — bool, default on: also show it whenever a
+proactive follow-up has fired), and `historyKeepMs` (how long a signed-in patron's
 device-kept transcript survives a closed tab; default 7 days). The client reads
 these via `?config=1`; blank/absent keys fall back to built-in defaults scaled
 by `assertiveness`.
