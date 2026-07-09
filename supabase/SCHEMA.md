@@ -424,7 +424,14 @@ by:** admin (read-only policy).
 Engages **only** for anonymous, single-turn, short questions (signed-in and
 multi-turn answers depend on private/context state and are never cached).
 **Written by:** the chat path after a cacheable answer (`embed` +
-insert). **Matched by:** `match_cached_answer` RPC. **Diagnosed by:**
+insert). **Matched by:** `match_cached_answer` RPC — with a **polarity guard**
+at the call site: an embedding puts "does it shed?" and "does it never shed?"
+nearly on top of each other, so a hit whose negation signature differs from
+the incoming question's is refused and the model answers live. **Flushed by:**
+the `flush_cache` statement triggers on `concierge_kb`, `concierge_config`,
+and `concierge_sops` — the cache memorizes ANSWERS and those tables are their
+SOURCE, so any edit empties it (it re-warms from live traffic; an edited fact
+never keeps serving its stale cached answer). **Diagnosed by:**
 `GET ?cachecheck=1`. **Read by:** admin (Cache tab).
 
 ### `concierge_flags` — knowledge gaps
@@ -719,6 +726,7 @@ allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
 | `GET ?export=1` | `handleExportGet` | **admin** | **Streaming** transcript export: keyset-paginates conversations and streams a CSV (one row per message, `user` pseudonymized unless `?pii=1`; `?from`/`?to` date bounds). Columns include the conversation's `section`, `sales_stage`, `goals_met`, `goals_total`, the full `goal_status` JSON (repeated per message row), and each message's `rating` (up/down) + `rating_note` from `concierge_feedback`, so grades, funnel, and thumbs travel with the transcript. Bounded memory on both ends — the scalable export tier (see note below). |
 | `GET ?cachecheck=1` | inline | **admin** | Self-diagnosis of the semantic cache round-trip (writes+deletes a probe row, so admin-gated). |
 | `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
+| `POST ?lint=1` | `handleLintPost` | **admin** | Advisory honesty lint on admin-authored rule text: `{text, label}` → `{findings:[{quote, why}]}`. Flags only clear constitution conflicts (invention, discounts, pressure, revealing the book, deception) — never style/tone/pacing. Fail-open (errors return zero findings); the studio calls it after a changed prompt-text saves and shows findings as a heads-up — the save is never blocked. |
 | `POST ?regrade=1` | `handleRegradePost` | **admin** | Re-run **goal grading** on demand for `{conversation_id}` or `{ids:[…]}` (≤30) — the Conversations panel's "Re-grade goals" / "Re-grade shown" buttons, so grading isn't only the sampled async pass. Returns `{graded, requested, empty, failed}`: `graded` counts real scorecard writes (`evaluateGoals` returns a success boolean), `empty` = chats with no messages, `failed` = judge ran but wrote nothing (transient). The per-chat button auto-retries once on `failed`. |
 | `POST ?consolidate=1` | `handleConsolidatePost` | **admin** | Force-regenerate one patron's rolling **client summary** (`kind='summary'` note). Body `{email?, user_id?}`. Runs `consolidateClientBook(..., {force:true})` and returns `{ok, summary}` — the drawer's **Regenerate** button. (The same helper also runs automatically in the background after a signed-in turn once ~8 new notes have accrued.) |
 

@@ -52,6 +52,14 @@ pennies per hundred reach-outs. Held beats skip it (nothing to review), and it
 fails open, so a judge outage costs quality review, never availability. Turn
 it off in Engagement → House rules if even that margin matters.
 
+The semantic answer cache now **flushes on every knowledge/config/SOP save**
+(a Postgres trigger — an edited fact must never keep serving its stale cached
+answer). The cost is a brief re-warm: the first anonymous asker of each common
+question after a save pays a live model call instead of a cache hit. At this
+traffic that's noise; it is the honest trade. The advisory honesty lint
+(`?lint=1`) is one Haiku call per **changed prompt-text save** — admin-only
+and effectively free.
+
 #### How Claude's prompt cache actually works (the mechanism)
 
 This is Anthropic's server-side **prompt caching**, not something we store. What we

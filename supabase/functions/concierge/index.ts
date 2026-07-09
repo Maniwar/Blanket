@@ -1501,6 +1501,16 @@ async function embed(text: string): Promise<number[] | null> {
 
 const vecLiteral = (e: number[]) => `[${e.join(",")}]`;
 
+/** The one semantic axis cosine similarity is worst at: polarity. An embedding
+ * puts "does it shed?" and "does it never shed?" nearly on top of each other,
+ * so a cached answer can be served to a question that asks the OPPOSITE. If
+ * the negation signature of the incoming question differs from the cached
+ * question's, the hit is refused and the model answers live. */
+function hasNegation(q: string): boolean {
+  return /\b(not|no|never|none|neither|nor|isn'?t|aren'?t|wasn'?t|doesn'?t|don'?t|didn'?t|won'?t|can'?t|cannot|couldn'?t|shouldn'?t|without|nicht|kein(?:e|en|em|er)?|niemals|ohne)\b/i
+    .test(q);
+}
+
 interface CacheHit { id: string; question: string; answer_md: string; similarity: number }
 
 async function cacheLookup(embedding: number[]): Promise<CacheHit | null> {
@@ -3201,6 +3211,86 @@ async function handleJudgePost(req: Request): Promise<Response> {
   }
 }
 
+// ── POST ?lint=1 — advisory honesty lint on admin-authored rule text ─────────
+// When the admin saves a changed prompt-text (voice base, selling method,
+// engagement rulebook, beat notes…), the studio sends it here and shows any
+// findings as a heads-up. ADVISORY only — the save has already happened and
+// nothing blocks; the lint exists because a rule that fights the constitution
+// doesn't fail loudly at runtime, it just makes the concierge weirder. Flags
+// ONLY clear conflicts with HONESTY & SCOPE; style/tone/pacing are the
+// admin's to tune and are never flagged. Fail-open: an error returns zero
+// findings with the error named.
+const LINT_SYSTEM =
+  "You review RULE TEXT an administrator wrote for injection into a sales concierge's system " +
+  "prompt. List ONLY clear conflicts with the house constitution: (1) instructions to invent, " +
+  "fabricate, guess, or pretend facts about products, orders, or people; (2) discounts, coupons, " +
+  "promotions, or price cuts (the house never discounts — the numbered edition's scarcity is the " +
+  "only true urgency); (3) manufactured pressure ('last chance', fake countdowns, guilt); " +
+  "(4) revealing, quoting, or citing the client book / internal notes to the shopper; " +
+  "(5) instructions to deceive or impersonate. Do NOT flag selling assertiveness, tone, pacing, " +
+  "brevity, or style choices — those are legitimately the administrator's. If the text is clean, " +
+  "return an empty list. Reply with a single tool call.";
+async function handleLintPost(req: Request): Promise<Response> {
+  if (!(await requireAdmin(req))) return jsonError(req, 403, "Administrators only.");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  let body: { text?: unknown; label?: unknown };
+  try { body = await req.json(); } catch { return jsonError(req, 400, "Bad JSON."); }
+  const text = typeof body.text === "string" ? body.text.slice(0, 20000) : "";
+  const label = typeof body.label === "string" ? body.label.slice(0, 80) : "rule text";
+  if (!text.trim()) return jsonResponse(req, 200, { findings: [] });
+  if (!apiKey) return jsonResponse(req, 200, { findings: [], error: "no API key — lint skipped" });
+  const model = Deno.env.get("EVAL_JUDGE_MODEL") || "claude-haiku-4-5-20251001";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model, max_tokens: 600,
+        system: LINT_SYSTEM,
+        tool_choice: { type: "tool", name: "lint_findings" },
+        tools: [{
+          name: "lint_findings",
+          description: "The conflicts found (empty when clean).",
+          input_schema: {
+            type: "object",
+            properties: {
+              findings: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    quote: { type: "string", description: "the shortest verbatim excerpt that carries the conflict" },
+                    why: { type: "string", description: "one short clause naming the constitution rule it fights" },
+                  },
+                  required: ["quote", "why"],
+                },
+              },
+            },
+            required: ["findings"],
+          },
+        }],
+        messages: [{ role: "user", content: "FIELD: " + label + "\n\nRULE TEXT:\n" + text }],
+      }),
+    });
+    if (!res.ok) {
+      return jsonResponse(req, 200, { findings: [], error: `lint model error ${res.status}` });
+    }
+    // deno-lint-ignore no-explicit-any
+    const j = await res.json() as any;
+    // deno-lint-ignore no-explicit-any
+    const tool = (j.content || []).find((b: any) => b.type === "tool_use" && b.name === "lint_findings");
+    const raw = Array.isArray(tool?.input?.findings) ? tool.input.findings : [];
+    const findings = raw.slice(0, 8)
+      // deno-lint-ignore no-explicit-any
+      .filter((f: any) => f && typeof f.quote === "string" && typeof f.why === "string")
+      // deno-lint-ignore no-explicit-any
+      .map((f: any) => ({ quote: f.quote.slice(0, 160), why: f.why.slice(0, 200) }));
+    return jsonResponse(req, 200, { findings, model });
+  } catch (e) {
+    return jsonResponse(req, 200, { findings: [], error: "lint error: " + (e instanceof Error ? e.message : String(e)) });
+  }
+}
+
 // ── GET ?secrets=1 — server-secret STATUS for the admin panel (admin only) ───
 // Returns ONLY booleans (is each secret present) plus the model in effect — never
 // a value. Lets the studio show a live "what's configured" readout so setup isn't
@@ -3933,7 +4023,12 @@ async function handleChatPost(req: Request): Promise<Response> {
   if (cacheEligible && lastUser) {
     queryEmbedding = await embed(lastUser.content);
     if (queryEmbedding) {
-      const hit = await cacheLookup(queryEmbedding);
+      let hit = await cacheLookup(queryEmbedding);
+      // Polarity guard: a near-identical embedding can still ask the OPPOSITE
+      // question. Mismatched negation signature → answer live, don't serve.
+      if (hit && hasNegation(lastUser.content) !== hasNegation(hit.question)) {
+        hit = null;
+      }
       if (hit) {
         const stream = new ReadableStream<Uint8Array>({
           async start(controller) {
@@ -4732,6 +4827,18 @@ async function handleReengage(req: Request): Promise<Response> {
       } catch { /* context is best-effort — the line still goes out */ }
     }
 
+    // The closed-panel bubble is composed by a bare prompt with no constitution
+    // behind it — the ONE surface that didn't sound like the house. It now
+    // carries the distilled VOICE paragraph (a 30-word line doesn't need the
+    // full prompt registry) plus the admin's voice notes when set.
+    const bubbleVoice =
+      " HOUSE VOICE: calm, precise, a dry wit and German understatement — short sentences, American " +
+      "English, no emoji, no exclamation marks, never pushy. Warm like a good clerk, not a help " +
+      "desk. Never invent prices, dates, discounts, or urgency: the price never moves, and the " +
+      "numbered edition's real scarcity is the only true urgency." +
+      (typeof data.config?.voice_notes === "string" && data.config.voice_notes.trim()
+        ? " House voice notes: " + data.config.voice_notes.trim().slice(0, 400)
+        : "");
     let sys: string;
     if (postSale) {
       // They JUST commissioned — never "still eyeing it". Congratulate lightly if
@@ -4745,7 +4852,7 @@ async function handleReengage(req: Request): Promise<Response> {
         "register card in another name, " + askOrStatement +
         (signed ? "They are a signed-in patron." : "They are an anonymous visitor.") +
         " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line." +
-        houseClause + repeatGuard + bubbleBrief + beatNotesClause(data.config);
+        bubbleVoice + houseClause + repeatGuard + bubbleBrief + beatNotesClause(data.config);
     } else {
       const open = goalStatus
         ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
@@ -4765,8 +4872,8 @@ async function handleReengage(req: Request): Promise<Response> {
         "them: " + advanceLine + ". Warm, specific, " + askOrStatement +
         (signed ? "They are a signed-in patron; a small nod to that is welcome." :
         "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
-        "{{tokens}}, no greeting boilerplate. Just the line." + houseClause + repeatGuard +
-        bubbleBrief + beatNotesClause(data.config);
+        "{{tokens}}, no greeting boilerplate. Just the line." + bubbleVoice + houseClause +
+        repeatGuard + bubbleBrief + beatNotesClause(data.config);
     }
     const started = Date.now();
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -4981,6 +5088,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "POST" && new URL(req.url).searchParams.get("judge")) {
     return await handleJudgePost(req);
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("lint")) {
+    return await handleLintPost(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("selftest")) {
     return await handleSelfTest(req);

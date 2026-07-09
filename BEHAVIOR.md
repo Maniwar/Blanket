@@ -127,6 +127,31 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   — ranking below the honesty rules. Every save lands in
   `concierge_edit_history`. The bullets that follow describe the **built-in**
   defaults.
+- **Edited rules get a second reading — the advisory honesty lint.** When a
+  changed prompt-text saves (voice, client-book policy, engagement rulebook,
+  selling method, worked examples, beat notes), the studio sends it to the
+  admin-gated `?lint=1` reviewer, which flags only clear conflicts with the
+  constitution — instructions to invent, discounts (the house never
+  discounts), manufactured pressure, revealing the client book, deception.
+  Findings surface as a heads-up toast (full list in the console); **the save
+  is never blocked** — a conflicting rule doesn't fail loudly at runtime, it
+  just makes the concierge weirder, so the point is hearing about it at the
+  moment of writing it. Style, tone, and pacing are never flagged: those are
+  the merchant's to tune.
+- **An edited fact never keeps serving its stale cached answer.** The
+  anonymous semantic cache memorizes *answers*; the knowledge base, SOPs, and
+  configuration are their *source* — so any save to those tables flushes the
+  cache (a Postgres trigger; it re-warms from live traffic). And a cached
+  answer is refused when the incoming question's **polarity** differs from
+  the cached one's ("does it shed?" vs "does it never shed?" sit almost on
+  top of each other in embedding space — the one axis similarity search is
+  worst at), so a negated question always gets a live answer.
+- **The closed-panel bubble speaks in the house voice.** The bubble line is
+  composed by its own compact prompt (a 30-word line doesn't need the full
+  registry), which now carries the distilled VOICE paragraph — calm, precise,
+  dry wit, no pressure, no invented urgency — plus the admin's voice notes,
+  so the one surface without the constitution behind it no longer sounds like
+  a different clerk.
 - **A live exchange never goes dead on the first beat.** The first check-in
   after the patron just spoke (check-in #1, within ~30s of their message) is a
   hot conversation, not idle re-engagement — the substance gate and even a

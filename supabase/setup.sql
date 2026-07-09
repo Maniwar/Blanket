@@ -552,6 +552,28 @@ begin
 end; $$;
 revoke execute on function public.match_cached_answer(extensions.vector, float) from public, anon, authenticated;
 
+-- The semantic answer cache memorizes ANSWERS; the knowledge base, the SOPs,
+-- and the prompt configuration are their SOURCE. Any edit to a source table
+-- invalidates whatever the cache memorized from it — an edited fact must never
+-- keep serving its stale cached answer until someone notices. Statement-level:
+-- one admin save = one flush; the cache re-warms from live traffic. (Seed
+-- statements in this file fire it too — a deploy is also a source change.)
+create or replace function public.flush_concierge_cache() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from public.concierge_cache where true;
+  return null;
+end; $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['concierge_kb','concierge_config','concierge_sops'] loop
+    execute format('drop trigger if exists flush_cache on public.%I', t);
+    execute format(
+      'create trigger flush_cache after insert or update or delete on public.%I for each statement execute function public.flush_concierge_cache()', t);
+  end loop;
+end $$;
+
 -- Order audit trigger: full row on create, field-level diffs on update.
 create or replace function public.log_order_event() returns trigger
 language plpgsql security definer set search_path = '' as $$

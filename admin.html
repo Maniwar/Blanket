@@ -2745,6 +2745,52 @@ async function loadBuiltinInto(targetId, key) {
   } catch (e) { fail('Load built-in', e); }
 }
 
+/* Advisory honesty lint (?lint=1, admin-gated). After a prompt-text SAVES,
+   any field that actually changed is sent for a second reading against the
+   house constitution (invention, discounts, pressure, revealing the book).
+   Findings surface as a heads-up toast + console detail — the save already
+   happened and is never blocked: a rule that fights the constitution doesn't
+   fail loudly at runtime, it just makes the concierge weirder, so the point
+   is to hear about it at the moment of writing it. */
+const PROMPT_LINT_LABELS = {
+  voice_base: 'Voice — base', voice_notes: 'Voice — tuning notes',
+  clientbook_base: 'Client book — base', clientbook_policy: 'Client book — policy',
+  engagement_base: 'Engagement rulebook', beat_notes: 'Standing reach-out note',
+  selling_base: 'Selling method', exemplars_base: 'Worked examples'
+};
+let _lintSnapshot = {};
+function snapshotPromptTexts(cfg) {
+  Object.keys(PROMPT_LINT_LABELS).forEach(function (k) {
+    _lintSnapshot[k] = (typeof cfg[k] === 'string') ? cfg[k] : '';
+  });
+}
+function lintPromptTexts(pairs) {
+  try {
+    const token = state.session && state.session.access_token;
+    if (!token) return;
+    pairs.forEach(function (p) {
+      const key = p[0], cur = String(p[1] || '');
+      if (cur.trim() === String(_lintSnapshot[key] || '').trim()) return; // unchanged — no lint
+      _lintSnapshot[key] = cur;
+      if (!cur.trim()) return;
+      const label = PROMPT_LINT_LABELS[key] || key;
+      fetch(SUPABASE_URL + '/functions/v1/concierge?lint=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ text: cur, label: label })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || !Array.isArray(j.findings) || !j.findings.length) return;
+          console.warn('[honesty lint] ' + label + ':', j.findings);
+          const f = j.findings[0];
+          toast('⚠ ' + label + ': “' + String(f.quote).slice(0, 60) + '” — ' + f.why +
+            (j.findings.length > 1 ? ' (+' + (j.findings.length - 1) + ' more in the console)' : '') +
+            '. Saved anyway — the constitution wins at runtime.', true);
+        })['catch'](function () { /* advisory — never bothers the save */ });
+    });
+  } catch (e) { /* advisory only */ }
+}
+
 /* Admin-gated GET against the concierge function (returns parsed JSON). */
 async function adminGet(query) {
   const token = state.session && state.session.access_token;
@@ -3294,6 +3340,7 @@ async function loadConfig() {
   $('cfg-objections').value = objectionsToText(cfg.objections);
   if ($('cfg-selling-base')) $('cfg-selling-base').value = (typeof cfg.selling_base === 'string') ? cfg.selling_base : '';
   if ($('cfg-exemplars-base')) $('cfg-exemplars-base').value = (typeof cfg.exemplars_base === 'string') ? cfg.exemplars_base : '';
+  snapshotPromptTexts(cfg);   // the honesty lint only reads fields that CHANGE from here
   refreshAllCfgStates();   // "Effect" readouts + revert links reflect the loaded config
   renderSectionToggles(cfg.prompt_sections);   // per-section on/off switches
   populateModelPickers();  // live model dropdown (fire-and-forget)
@@ -3716,6 +3763,7 @@ async function saveEngagement() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save engagement', res.error); return; }
   toast('Engagement saved');
+  lintPromptTexts([['engagement_base', $('cfg-engagement-base').value], ['beat_notes', $('cfg-beat-notes').value]]);
 }
 
 async function saveSelling() {
@@ -3735,6 +3783,7 @@ async function saveSelling() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save behavior & selling style', res.error); return; }
   toast('Behavior & selling style saved');
+  lintPromptTexts([['selling_base', $('cfg-selling-base').value], ['exemplars_base', $('cfg-exemplars-base').value]]);
 }
 
 /* ============================================================
@@ -4234,6 +4283,7 @@ async function saveVoice() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save voice', res.error); return; }
   toast('Voice saved');
+  lintPromptTexts([['voice_base', base], ['voice_notes', $('cfg-voice').value]]);
 }
 
 async function saveClientbook() {
@@ -4246,6 +4296,7 @@ async function saveClientbook() {
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save client book', res.error); return; }
   toast('Client book settings saved');
+  lintPromptTexts([['clientbook_base', $('cfg-clientbook-base').value.trim()], ['clientbook_policy', $('cfg-clientbook').value.trim()]]);
 }
 
 async function saveStarters() {
