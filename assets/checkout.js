@@ -1777,7 +1777,19 @@
       }).then(function (res) {
         otpBtn.disabled = false;
         if (!res) { say(ERR_LINE); return; }
-        if (res.error) { say('That key does not turn the lock — check it once more, or resend the key.'); return; }
+        if (res.error) {
+          /* say WHY it failed — a key works once, only the newest key counts,
+             and they expire; the generic line hid all of that */
+          var em = (res.error && res.error.message) ? String(res.error.message) : '';
+          if (/expired|invalid/i.test(em)) {
+            say('That key has expired or was already used — each key works once, and only the newest one counts. Resend and paste the fresh figures.');
+          } else if (em) {
+            say('The lock didn’t turn: ' + em + ' — resend the key and try the fresh figures.');
+          } else {
+            say('That key does not turn the lock — resend and paste the newest figures.');
+          }
+          return;
+        }
         showAct(3, 1);
       })['catch'](function () { otpBtn.disabled = false; say(ERR_LINE); });
     }
