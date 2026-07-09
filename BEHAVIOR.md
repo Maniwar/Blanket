@@ -130,7 +130,7 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   (3) **the moment the visitor types** — their message always reopens play.
   Diagnosable live: `FeierabendConcierge.status()` reports `quietMode` and
   `quietRemainingMs`, and `lastSkip` names the quiet window when it's the gate.
-- **Plain is not blunt; the book is background; status words are law.** Three
+- **Plain is not blunt; the book is background; status words are law.** Four
   guardrails on the plain-speech correction: (1) dropping poetry never means
   dropping warmth — no curtness, no interrogation, no scorekeeping; a patron
   asking "why buy?" always gets the true service answer (another room, a gift,
@@ -138,7 +138,13 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   line once — an old note (a room, a light) is background, never the recurring
   agenda, and never a current fact. (3) An order's register status is
   authoritative: `placed` has not arrived — the bot never describes a cloth as
-  settled in or in use unless the register says delivered.
+  settled in or in use unless the register says delivered. (4) The book is
+  **invisible at the point of data**: the discipline line rides with the book
+  content itself on every beat (not only in the toggleable Recognition
+  section) — never name the book, never cite "notes/records" as a source, and
+  never describe the patron's own preferences or communication style back to
+  them ("the client book notes you prefer direct data…" is a service failure;
+  a style note changes *how* the bot speaks, never what it says).
 - **Vary the door, not the words (proactive pacing).** The bot never repeats or
   rephrases its own unanswered question on a proactive beat. The server scans
   the **whole trailing run** of its own unprompted lines (not just the last

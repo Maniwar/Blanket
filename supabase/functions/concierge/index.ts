@@ -669,8 +669,17 @@ async function customerBlock(customer: Customer, opening = true): Promise<string
     const parts: string[] = [];
     if (events.length) parts.push(`WHAT YOU'VE DONE FOR THEM (reference naturally if relevant): ${events.map(d).join(" | ")}`);
     if (facts.length) parts.push(`WHAT YOU KNOW ABOUT THEM (weave in, never recite): ${facts.map(d).join(" | ")}`);
-    if (reflections.length) parts.push(`TO SERVE THEM BETTER (private — act on these, do NOT quote them back): ${reflections.map((n) => n.note).join(" | ")}`);
+    if (reflections.length) parts.push(`TO SERVE THEM BETTER (private coaching for YOU — silently change how you speak and serve; never quote or mention these): ${reflections.map((n) => n.note).join(" | ")}`);
     if (parts.length) book = " CLIENT BOOK — " + parts.join("  ·  ");
+  }
+  // The invisibility contract rides WITH the book, on every beat — the section
+  // that also states it (Recognition) is toggleable, and a live line once cited
+  // the book to the patron's face ("The client book notes you prefer…").
+  if (book) {
+    book += "  ·  BOOK DISCIPLINE: this book is invisible. Never name it, never cite notes or " +
+      "records as your source, and never describe the patron's own habits, preferences, or " +
+      "communication style back to them — a style note changes HOW you speak, it is never " +
+      "something you SAY. Memory shows up only as better service.";
   }
 
   // First name (from their most recent order) — for warm, natural address.
