@@ -1194,6 +1194,10 @@
           <span class="micro">Reach out to an idle visitor even before they scroll</span>
         </label>
         <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <input type="checkbox" id="cfg-anon-nudges">
+          <span class="micro"><strong>Follow up with anonymous visitors before they type</strong> — by default the bot gives one opener and then waits for a signed-out visitor to speak first. On = the in-chat follow-up ladder runs for them too (the substance gate still applies).</span>
+        </label>
+        <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="cfg-substance-gate">
           <span class="micro"><strong>Substance gate</strong> — a proactive beat may speak only when it has something <em>new and concrete</em> (an unmentioned register fact, a goal step, a house note); otherwise it holds. Held beats are logged in the Actions tab as <code>beat_hold</code>, so silence stays measurable. Off = the older bias toward always saying something.</span>
         </label>
@@ -3020,6 +3024,7 @@ async function loadConfig() {
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
   $('cfg-substance-gate').checked = o.substanceGate !== false; // default: gated
+  $('cfg-anon-nudges').checked = o.anonNudges === true; // default: off
   $('cfg-goalrate').value = (typeof cfg.goal_sample_rate === 'number') ? cfg.goal_sample_rate : '';
   $('cfg-nudgecap').value = (typeof o.nudgeCap === 'number') ? o.nudgeCap : '';
   $('cfg-maxambient').value = (typeof o.maxAmbient === 'number') ? o.maxAmbient : '';
@@ -3128,6 +3133,7 @@ async function saveEngagement() {
   const dr = s2ms('cfg-draft'); if (dr) o.draftMs = dr;
   o.idleReach = $('cfg-idlereach').checked;
   o.substanceGate = $('cfg-substance-gate').checked;
+  o.anonNudges = $('cfg-anon-nudges').checked;
   const cap = Number($('cfg-nudgecap').value);
   if ($('cfg-nudgecap').value !== '' && Number.isFinite(cap) && cap >= 0) o.nudgeCap = Math.round(cap);
   const amb = Number($('cfg-maxambient').value);

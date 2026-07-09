@@ -111,7 +111,9 @@ lingers), *on-page beats:* `inlineSections` (array of section keys where the
 inline "Ask the mill ✳" starters render; default `why,wool,label,ritual,
 arrival`; `hero` maps to the title header), `chipCap`/`chipLingerMs`/
 `chipRepeatMs` (context-chip budget per page view, on-screen time, and an
-optional re-show window — blank = once per section per view), `substanceGate` (bool, default true — a proactive beat must have
+optional re-show window — blank = once per section per view), `anonNudges` (bool, default false — run the in-chat follow-up ladder for
+signed-out visitors who haven't typed yet; off = one opener, then wait),
+`substanceGate` (bool, default true — a proactive beat must have
 something new and concrete or it holds; held beats are logged as
 `concierge_actions.action='beat_hold'`), `quietMs` (how long "that's all" /
 "don't message me" pauses every proactive beat; default 30 min — time-boxed,

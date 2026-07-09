@@ -2655,7 +2655,7 @@
        patron we already know earns a proactive follow-up even before they type. */
     var spoke = false, i;
     for (i = 0; i < history.length; i++) { if (history[i].role === 'user') { spoke = true; break; } }
-    if (!spoke && !authEmail) { noteSkip('nudge: anonymous visitor has not typed yet — by design the bot waits for them (signed-in patrons get follow-ups before typing)'); return; }
+    if (!spoke && !authEmail && o.anonNudges !== true) { noteSkip('nudge: anonymous visitor has not typed yet — the bot waits for them (default; enable "Follow up with anonymous visitors" in Engagement pace to change)'); return; }
     var idx = Math.min(nudgeCount, NUDGE_DELAYS.length - 1);
     var wait = NUDGE_DELAYS[idx];
     if (idx === 0 && typeof o.nudge1Ms === 'number') { wait = o.nudge1Ms; }
