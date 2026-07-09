@@ -121,7 +121,9 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   woven into service rather than quoted back. See §4.13.)*
 - **As someone who's done for now**, I want to say "that's all" or "don't message
   me until I write back" and have it respected, so that I'm in control.
-  *(Customer-signalled close / quiet mode + auto wind-down.)*
+  *(Customer-signalled close / quiet mode + auto wind-down. The quiet is a
+  time-boxed pause — `outreach.quietMs`, default 30 min — that lifts by itself,
+  on reload, or the moment I type; acceptance criteria in §2.10.)*
 - **As a customer who just purchased**, I want a warm acknowledgement now and a
   welcome-back next time, so that the relationship continues past the sale.
   *(Post-purchase check-in + re-engagement.)*
@@ -1089,7 +1091,10 @@ A luxury associate lingers nearby without hovering. Encoding that:
   unacknowledged lines it **pauses** — it's talking to no one — and any sign of
   life resumes it. A reply always counts.
 - **Customer control** — an explicit "that's all for now" or "don't message me
-  until I write back" (quiet mode) always wins over the automatic behavior.
+  until I write back" (quiet mode) always wins over the automatic behavior —
+  for a **time-boxed window** (`outreach.quietMs`, default 30 min), never
+  persisted across a reload; it lifts by itself, on reload, or the moment they
+  type, so an old "leave me alone" can't read as a broken bot days later.
 - **Substance gate** — beats fire on timers, but timers don't create new facts:
   a model *ordered* to speak on schedule fills the gap with atmosphere and
   invented color once the true facts are spent. So the beat prompts demand

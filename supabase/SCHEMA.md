@@ -700,10 +700,12 @@ Closing/snoozing a conversation is driven by **both** the customer's own
 signal and the bot winding down — recorded through the one `?wrapup=1`
 endpoint:
 
-1. **Customer-explicit** (client `assets/concierge.js`): the header `⋯` menu
-   offers *"Don't message me until I write back"* (→ `enterQuietMode`, reason
-   `quiet`, sets in-tab **quiet mode** that suppresses all nudges/outreach) and
-   *"That's all for now"* (→ `wrapUpByCustomer`, reason `close`).
+1. **Customer-explicit** (client `assets/concierge.js`): the composer `⋯` menu
+   and the in-flow chip offer *"Don't message me until I write back"*
+   (→ `enterQuietMode`, reason `quiet`) and *"That's all for now"*
+   (→ `wrapUpByCustomer`, reason `close`). Both enter **quiet mode**, a
+   time-boxed pause on all nudges/outreach (`outreach.quietMs`, default
+   30 min; in-memory only — lifts by itself, on reload, or when they type).
 2. **Bot-automatic**: dismissing the panel or leaving the tab after a real
    exchange fires `doWrapup('auto')`.
 
