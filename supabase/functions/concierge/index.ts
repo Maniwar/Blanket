@@ -2143,6 +2143,12 @@ function engagementBlock(): string {
     "is a hold, not a performance — filling silence with restatements or atmosphere reads as noise, and " +
     "inventing color (rituals, habits, meanings, tallies not in the register) is lying. Silence is service " +
     "too.\n" +
+    "- SELL, don't just report. You are the mill's salesperson on every beat, not a status board: when " +
+    "you speak, prefer the line that moves TOWARD the register — an open goal's next step, a companion " +
+    "cloth for another room, a gift with the card in another name — using at most one register fact as " +
+    "the doorway, never as the destination. A pure status line is right only when service genuinely " +
+    "needs it (a blocked order, a delivery on its way), and only ONCE — a service fact already raised " +
+    "is spent, not substance.\n" +
     "- PLAIN SPEECH on proactive lines: one or two short, concrete sentences, the way a good clerk speaks. " +
     "At most one image, and only if it earns its place — never stacked metaphors, never 'poetic'. Every " +
     "fact verbatim from the register or customer block (counts, cloths, cities, numbers); if you find " +
@@ -3312,12 +3318,14 @@ async function handleChatPost(req: Request): Promise<Response> {
       // not hold)" ordered content on a timer; with nothing new to say the
       // model complied by inventing atmosphere. Substance or silence.
       decision = substanceGate
-        ? "If you have one NEW, CONCRETE thing for THIS shopper — a register fact not yet " +
-          "mentioned, the room or person they brought up, an open goal's next step — send ONE warm, " +
+        ? "If you have one NEW, CONCRETE thing for THIS shopper — an open goal's next step, a natural " +
+          "next sale (a companion cloth for another room, a gift with the card in another name), the " +
+          "room or person they brought up, or a register fact that needs ACTION — send ONE warm, " +
           "plain line built on it (one or two short sentences, a clerk's speech, no stacked imagery). " +
-          "If you have nothing new and true, reply exactly [HOLD] — do not restate what they can " +
-          "already see, and never invent detail. Don't re-ask or rephrase a question they haven't " +
-          "answered. Persistence is fine; repetition and filler are what annoy."
+          "Prefer motion toward the register over a status report — a fact is a doorway, not the " +
+          "destination. If you have nothing new and true, reply exactly [HOLD] — do not restate what " +
+          "they can already see, and never invent detail. Don't re-ask or rephrase a question they " +
+          "haven't answered. Persistence is fine; repetition and filler are what annoy."
         : "SPEAK now (do not hold). Send one warm, specific, PLAIN line drawn from THIS " +
           "conversation and what you know of them — one or two short sentences, a clerk's speech, " +
           "every fact verbatim from the register, never invented color. Don't re-ask or rephrase " +
@@ -4077,18 +4085,34 @@ async function handleReengage(req: Request): Promise<Response> {
     // the in-panel beats follow: spent subjects, no re-asks, hold when dry.
     let recentLines: string[] = [];
     let pendingAsk = false;
-    if (cid) {
-      const prior = await pgSelect<{ role: string; content: string }>(
-        `concierge_messages?select=role,content&conversation_id=eq.${cid}&order=created_at.desc&limit=8`,
-      );
-      if (prior && prior.length) {
-        recentLines = prior.filter((m) => m.role === "assistant")
-          .map((m) => String(m.content)).slice(0, 5);
-        // pending = any line in the trailing assistant run (nothing from the
-        // visitor since) still ends in a question mark
-        for (const m of prior) {
-          if (m.role !== "assistant") break;
-          if (/\?\s*["'”’]?\s*$/.test(String(m.content).trim())) { pendingAsk = true; break; }
+    {
+      // Scope the guard to the PATRON, not just the current conversation: a
+      // wrap-up or quiet-window expiry opens a fresh conversation row, and a
+      // guard that only read the new (empty) one let the same subject return
+      // 45 minutes later. For a signed-in patron, read across their recent
+      // conversations; anonymous falls back to the current session's.
+      let ids: string[] = [];
+      if (customer) {
+        const convs = await pgSelect<{ id: string }>(
+          `concierge_conversations?select=id&user_id=eq.${customer.id}&order=created_at.desc&limit=3`,
+        );
+        if (convs) ids = convs.map((c) => c.id);
+      }
+      if (cid && !ids.includes(cid)) ids.unshift(cid);
+      ids = ids.slice(0, 3);
+      if (ids.length) {
+        const prior = await pgSelect<{ role: string; content: string }>(
+          `concierge_messages?select=role,content&conversation_id=in.(${ids.join(",")})&order=created_at.desc&limit=10`,
+        );
+        if (prior && prior.length) {
+          recentLines = prior.filter((m) => m.role === "assistant")
+            .map((m) => String(m.content)).slice(0, 6);
+          // pending = any line in the trailing assistant run (nothing from the
+          // visitor since) still ends in a question mark
+          for (const m of prior) {
+            if (m.role !== "assistant") break;
+            if (/\?\s*["'”’]?\s*$/.test(String(m.content).trim())) { pendingAsk = true; break; }
+          }
         }
       }
     }

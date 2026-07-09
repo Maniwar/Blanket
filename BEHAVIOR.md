@@ -110,6 +110,13 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   turns that into a hold and shows nothing. It must never write `[HOLD]` in reply
   to a message the visitor actually sent; the token can never reach the reader (the
   pipeline strips it on every path).
+- **Sell, don't just report.** The substance gate is not a license to become a
+  status board: on every spoken beat the bot prefers the line that moves
+  *toward the register* — an open goal's next step, a companion cloth for
+  another room, a gift in another name — using at most one register fact as
+  the doorway, never the destination. A pure status line is right only when
+  service genuinely needs it (a blocked order, a delivery), and only once — a
+  service fact already raised is spent, not substance.
 - **Substance or silence (proactive beats).** A proactive beat may speak only
   when it has something **new and concrete** — a register fact not yet
   mentioned, an open goal's next step, a house instruction. Nothing new →
@@ -160,11 +167,14 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   and a pending question may be returned to once the patron speaks again.
   Persistence stays wanted; repetition is what annoys. **The closed-panel
   bubble follows the same rules**: `?reengage=1` composes each line fresh, so
-  it is shown its own recent lines (bubbles are logged to the conversation)
-  and bound to the same contract — spent subjects, no re-asks while a question
-  is pending, and an explicit hold (`{hold:true}`) when nothing new is left,
-  which the client honors with silence (no canned fallback line) until the
-  patron shows fresh activity.
+  it is shown its own recent lines and bound to the same contract — spent
+  subjects, no re-asks while a question is pending, and an explicit hold
+  (`{hold:true}`) when nothing new is left, which the client honors with
+  silence (no canned fallback line) until the patron shows fresh activity.
+  For a signed-in patron the guard reads across their **recent conversations**,
+  not just the current one — a wrap-up or quiet-window expiry opens a fresh
+  conversation row, and a guard scoped to the new (empty) row let the same
+  subject return 45 minutes later.
 - **Every pacing number is admin-tunable** (Tuning → Engagement pace, stored on
   the `outreach` config key, no deploy): the five-step in-chat follow-up ladder
   (`nudge1Ms`–`nudge5Ms`, last repeats), `nudgeCap`, `unackedCap` (pause after
