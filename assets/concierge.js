@@ -2132,6 +2132,7 @@
   var nudgeTimer = null;        /* silence timer while the panel is open */
   var nudgeArmedMs = 0;         /* the wait the CURRENT timer was armed with (diagnostics) */
   var nudgeArmedAt = 0;         /* when it was armed (ms epoch) */
+  var nudgeArmedWhy = '';       /* the arithmetic of that arm (rung, dial, floor, overrides) */
   var nudgeCount = 0;           /* proactive follow-ups since the visitor last spoke */
   var pendingNudge = null;      /* {seconds,count} carried into the next request */
   var pendingOpener = null;     /* 'reengage' | 'greet' — carried into the next request */
@@ -2808,13 +2809,15 @@
     if (idx >= 4 && typeof o.nudge5Ms === 'number') { wait = o.nudge5Ms; }
     wait = Math.round(wait * assertDelayMult());          /* assertiveness scales the pace */
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
+    var armBase = wait;    /* rung base after config, before dial (diagnostics) */
     /* Reading-time floor (first rung only): a long reply earns its reading
        time — the first follow-up must never land while they're mid-paragraph.
        ~300ms per word, capped at 90s so one long reply can't stall the ladder.
        Exposed as readFloorMs in status() so the conformance harness expects
        the same number the widget enforces. */
+    var rfl = 0;
     if (idx === 0) {
-      var rfl = readFloorMs();
+      rfl = readFloorMs();
       if (rfl > wait) { wait = rfl; }
     }
     /* an attention beat (panel just opened) overrides the ladder — absolute,
@@ -2822,6 +2825,12 @@
     if (typeof quickMs === 'number' && quickMs >= 0) { wait = quickMs; }
     nudgeArmedMs = wait;   /* status() reports it — the armed wait is a lookup, not a guess */
     nudgeArmedAt = Date.now();
+    /* the full arithmetic of THIS arm, so a surprising fire time is a lookup */
+    nudgeArmedWhy = 'rung#' + (idx + 1) + ' base ' + armBase + ' × dial ' + assertDelayMult().toFixed(2) +
+      (spacious ? ' × 1.5 spacious' : '') +
+      (idx === 0 ? ' | floor ' + rfl + ' (' + (history.length ? 'last-assistant words counted' : 'no history') + ')' : '') +
+      ((typeof quickMs === 'number' && quickMs >= 0) ? ' | quick override ' + quickMs : '') +
+      ' → ' + wait;
     nudgeTimer = setTimeout(function () {
       nudgeTimer = null;   /* this arm is consumed — !nudgeTimer checks stay honest */
       if (streaming || !panelOpen || quietMode) {
@@ -4002,6 +4011,7 @@
         nudgeTimerArmed: !!nudgeTimer,
         nudgeArmedMs: nudgeArmedMs,
         nudgeArmedAgoMs: nudgeArmedAt ? (Date.now() - nudgeArmedAt) : null,
+        nudgeArmedWhy: nudgeArmedWhy,
         readFloorMs: readFloorMs(),
         reengage: (function () {
           var c = reengageCfg(), pc = reengagePostCfg(), pa = purchaseAgeMs();
