@@ -2162,7 +2162,13 @@
     activeSinceReengage = true;
     if (unacked !== 0) {
       unacked = 0;
-      if (panelOpen && !streaming && !quietMode && !nudgeTimer) { scheduleNudge(); }
+      if (panelOpen && !streaming && !quietMode && !nudgeTimer) {
+        /* re-opening a RESTED loop is a new chapter — the silent-hold streak
+           starts over, so the "N/4 holds" readout never exceeds its budget
+           (movement mid-streak doesn't get here: a timer is already armed) */
+        holdAttempts = 0;
+        scheduleNudge();
+      }
     }
   }
 
@@ -2375,7 +2381,8 @@
         quietMode = false;
         quietUntil = 0;
         updateWrapPill();
-        if (panelOpen && !streaming && !nudgeTimer) { scheduleNudge(); }
+        /* the quiet window ending is a new chapter too — fresh hold streak */
+        if (panelOpen && !streaming && !nudgeTimer) { holdAttempts = 0; scheduleNudge(); }
       }, win);
     } else {
       quietUntil = 0;
