@@ -97,6 +97,14 @@ function deterministic(check, reply, statuses) {
     const hit = statuses.some((s) => s.toLowerCase().includes(check.toolCalled.toLowerCase()));
     return { ok: hit, label: `tool ran ("${check.toolCalled}")`, detail: hit ? "" : `statuses: ${statuses.join(" | ") || "none"}` };
   }
+  if ("held" in check) {
+    // A proactive beat's hold frame ({hold:1}) — check.held true = the beat must
+    // stay silent; false = it must speak. Either way an empty non-hold reply fails.
+    const wasHeld = statuses.includes("[hold]");
+    const spoke = reply.trim().length > 0;
+    const ok = check.held ? wasHeld : spoke;
+    return { ok, label: check.held ? "beat holds (silent)" : "beat speaks", detail: `held=${wasHeld} reply="${reply.slice(0, 60)}"` };
+  }
   return null; // not deterministic (judge)
 }
 
@@ -109,13 +117,30 @@ function transcriptFor(messages, reply) {
 // ── main ─────────────────────────────────────────────────────────────────────
 async function runScenario(sc, agg) {
   for (let rep = 0; rep < REPS; rep++) {
-    const sessionKey = "eval-" + crypto.randomUUID();
+    // "qa-" prefix: excluded from engagement metrics, same convention as the
+    // deploy workflow's live smoke.
+    const sessionKey = "qa-eval-" + crypto.randomUUID();
     const messages = [];
     for (const turn of sc.turns) {
-      messages.push({ role: "user", content: turn.user });
+      // Seed turns build the conversation without a request:
+      //   { user: "..." , seed: true }      — a scripted shopper line
+      //   { assistant: "..." }              — a scripted concierge line (for beat tests)
+      if (turn.assistant) { messages.push({ role: "assistant", content: turn.assistant }); continue; }
+      if (turn.seed) { messages.push({ role: "user", content: turn.user }); continue; }
+      // A beat turn POSTs the messages as-is (trailing assistant line) with
+      // nudge/opener context — exactly what the widget sends when a proactive
+      // beat fires. No user message is appended.
+      let context = sc.context || {};
+      if (turn.beat) {
+        context = { ...context, nudge: { seconds: turn.beat.seconds ?? 40, count: turn.beat.count ?? 1, ...(turn.beat.signedIn ? { signedIn: true } : {}) } };
+      } else if (turn.opener) {
+        context = { ...context, opener: turn.opener };
+      } else {
+        messages.push({ role: "user", content: turn.user });
+      }
       let out;
       try {
-        out = await postTurn(messages, sc.context || {}, sessionKey);
+        out = await postTurn(messages, context, sessionKey);
       } catch (e) {
         console.error(`  ! ${sc.name} rep ${rep + 1}: request failed — ${e.message}`);
         // count all this turn's checks as failures for this rep
@@ -123,20 +148,22 @@ async function runScenario(sc, agg) {
         break;
       }
       const assistant = out.reply.trim();
-      // evaluate checks (last content is what the judge sees)
+      // evaluate checks (last content is what the judge sees; a held beat is
+      // shown to the judge as an explicit silence, not an empty string)
+      const judged = assistant || (out.statuses.includes("[hold]") ? "(the concierge chose to stay silent — a hold)" : assistant);
       for (const c of (turn.checks || [])) {
         const a = key(agg, sc.name, describe(c));
         a.total++;
         const det = deterministic(c, assistant, out.statuses);
         if (det) { if (det.ok) a.pass++; else a.lastFail = det.detail || assistant.slice(0, 100); }
         else if ("judge" in c) {
-          const v = await judge(c.judge, transcriptFor(messages, assistant));
+          const v = await judge(c.judge, transcriptFor(messages, judged));
           if (v.error) { a.skipped = v.error; a.total--; }
           else if (v.pass) a.pass++;
-          else a.lastFail = v.reason || assistant.slice(0, 100);
+          else a.lastFail = v.reason || judged.slice(0, 100);
         }
       }
-      messages.push({ role: "assistant", content: assistant });
+      if (assistant) messages.push({ role: "assistant", content: assistant });
     }
   }
 }
@@ -226,6 +253,10 @@ function selftest() {
     [deterministic({ maxQuestions: 1 }, reply, statuses).ok, "maxQuestions 1 (reply has 1 '?')"],
     [!deterministic({ maxQuestions: 0 }, reply, statuses).ok, "maxQuestions 0 (should fail)"],
     [reply === "You have 6 Loden. Shall I open the register? {{action:commission}}", "reply reassembled"],
+    [deterministic({ held: false }, reply, statuses).ok, "held:false passes when the beat spoke"],
+    [!deterministic({ held: true }, reply, statuses).ok, "held:true fails when the beat spoke"],
+    [deterministic({ held: true }, "", ["[hold]"]).ok, "held:true passes on a hold frame"],
+    [!deterministic({ held: false }, "", ["[hold]"]).ok, "held:false fails on a hold frame"],
   ];
   let ok = 0;
   for (const [pass, name] of cases) { console.log(`  ${pass ? "PASS" : "FAIL"}  ${name}`); if (pass) ok++; }

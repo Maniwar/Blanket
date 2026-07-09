@@ -18,7 +18,16 @@
 //   { notRegex: "pat" }         reply must NOT match
 //   { maxQuestions: n }         at most n "?" in the reply (anti-interrogation)
 //   { toolCalled: "label" }     a status frame contained this (proves a tool ran)
+//   { held: true|false }        the proactive beat must hold (silent) / must speak
 //   { judge: "criterion" }      LLM judge, binary yes/no on the criterion
+//
+// Turn kinds:
+//   { user: "..." , checks }            a real shopper message (POSTs)
+//   { user: "...", seed: true }         scripted shopper line — added, not sent
+//   { assistant: "..." }                scripted concierge line — added, not sent
+//   { beat: {seconds, count}, checks }  a proactive beat POST (context.nudge,
+//                                       trailing assistant message — exactly what
+//                                       the widget sends when a follow-up fires)
 //
 // `signedIn: true` scenarios need EVAL_TOKEN (a magic-link access token for a
 // test account); they're skipped with a warning if it's absent.
@@ -102,6 +111,77 @@ export const scenarios = [
         user: "how do I wash it?",
         checks: [
           { judge: "The reply gives real wool-care guidance (e.g. airing, washing rarely / cool, no tumble dry) and invents no fake numbers, timings, or treatments." },
+        ],
+      },
+    ],
+  },
+
+  {
+    name: "discovery-before-specs",
+    desc: "An early, vague browsing message earns a situation question, not a spec dump.",
+    signedIn: false,
+    context: { section: "why", device: "desktop" },
+    turns: [
+      {
+        user: "thinking about a blanket for our place",
+        checks: [
+          { maxQuestions: 1 },
+          { judge: "The reply invites a concrete detail about THEIR situation (the room, who it's for, what they use now) or reflects their intent back — it does NOT lead with a list of product specifications (weights, materials, dimensions)." },
+        ],
+      },
+    ],
+  },
+
+  // ---- proactive beats (the widget's follow-up POSTs, replayed exactly) ----
+  {
+    name: "beat-hot-exchange-speaks",
+    desc: "Seconds after the shopper spoke, the first follow-up continues the live thread — never dead air.",
+    signedIn: false,
+    context: { section: "wool", device: "desktop" },
+    turns: [
+      { user: "which cloth suits a bright living room?", seed: true },
+      { assistant: "For a bright room I'd steer you to the Ungefärbt — undyed, it takes strong light gently. The Loden reads deeper in the evening." },
+      {
+        beat: { seconds: 10, count: 1 },
+        checks: [
+          { held: false },
+          { excludes: "[HOLD]" },
+          { judge: "The line continues the just-discussed topic (the bright room / the Ungefärbt) or offers a natural next step toward choosing — it is not a greeting and not an unrelated new subject." },
+        ],
+      },
+    ],
+  },
+  {
+    name: "beat-pending-question-no-reask",
+    desc: "With the concierge's own mid-line question unanswered, the next beat carries no question mark.",
+    signedIn: false,
+    context: { section: "wool", device: "desktop" },
+    turns: [
+      { user: "tell me about the wool", seed: true },
+      { assistant: "Merino twill, woven four yards an hour. Shall I hold a number for you? The Loden is the one most ask about." },
+      {
+        beat: { seconds: 45, count: 2 },
+        checks: [
+          { excludes: "?" },
+          { excludes: "[HOLD]" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "beat-later-checkin-no-repeat",
+    desc: "A later check-in never re-pitches the same subject; it opens a different door or holds.",
+    signedIn: false,
+    context: { section: "wool", device: "desktop" },
+    turns: [
+      { user: "the loden looks nice", seed: true },
+      { assistant: "The Loden is the deep green — moss after rain. It suits a reading corner." },
+      { assistant: "Still with the Loden? It pairs well with a north-facing room." },
+      {
+        beat: { seconds: 300, count: 3 },
+        checks: [
+          { excludes: "[HOLD]" },
+          { judge: "Either the concierge stayed silent, or the line raises something genuinely NEW (care, the box, the mill, a different cloth, gifting) — it does not re-pitch or re-describe the Loden again." },
         ],
       },
     ],

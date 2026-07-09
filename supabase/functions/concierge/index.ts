@@ -30,6 +30,15 @@
  */
 
 import { BRAND_SYSTEM, KB_MARKDOWN } from "./kb.ts";
+import {
+  type BeatDecision,
+  chooseBeatAction,
+  extractSubjects,
+  hasPendingAsk,
+  PLACEHOLDER_ADDR,
+  proposalRestHoursFrom,
+  type SalesLedger,
+} from "./beats.ts";
 
 // Editable built-in bases. The admin can override each via a concierge_config key
 // (voice_base is BRAND_SYSTEM in kb.ts); these two live here and are surfaced for
@@ -2147,12 +2156,13 @@ function sellingBlock(data: ConciergeData): string {
 // for "Load built-in to edit"). Blank config = this text.
 const ENGAGEMENT_BASE =
     "- You may receive a proactive follow-up prompt when the shopper falls quiet. Each time, DECIDE: " +
-    "speak or give space. The test is SUBSTANCE: speak only when you have something NEW and CONCRETE — a " +
+    "speak or give space. The test is SUBSTANCE: speak when you have something NEW and CONCRETE — a " +
     "register fact not yet mentioned, a real answer to something they raised, an open goal's next step, a " +
-    "house instruction. If every true thing has already been said, reply [HOLD]. A beat with nothing new " +
-    "is a hold, not a performance — filling silence with restatements or atmosphere reads as noise, and " +
-    "inventing color (rituals, habits, meanings, tallies not in the register) is lying. Silence is service " +
-    "too.\n" +
+    "house instruction, one unoffered piece of house expertise. The default is to speak; hold (stay " +
+    "silent) only when every true thing has already been said. A beat with nothing new is a hold, not a " +
+    "performance — filling silence with restatements or atmosphere reads as noise, and inventing color " +
+    "(rituals, habits, meanings, tallies not in the register) is lying. But silence is the LAST resort, " +
+    "not the safe default: when in doubt between a modest true line and silence, speak the modest line.\n" +
     "- SELL, don't just report. You are the mill's salesperson on every beat, not a status board: when " +
     "you speak, prefer the line that moves TOWARD the register — an open goal's next step, a companion " +
     "cloth for another room, a gift with the card in another name — using at most one register fact as " +
@@ -2198,10 +2208,11 @@ const ENGAGEMENT_BASE =
     "go quiet and record the wind-down, exactly as if they'd tapped 'That's all for now'. Withdrawing " +
     "the way a good clerk steps back — leaving the door open, never making them feel watched — IS the " +
     "snooze procedure; the token is how you actually step back. Never emit it in any other situation.\n" +
-    "- [HOLD] RULE: '[HOLD]' is an internal signal you may use ONLY to stay silent on a proactive check-in " +
-    "prompt where silence is kinder. NEVER write [HOLD] (or the bare word 'hold') in reply to a message the " +
-    "visitor actually sent — to anything they type, including a bare 'hey', always give real, warm words. The " +
-    "token must never appear in what the customer reads.\n";
+    "- HOLD RULE: staying silent is ONLY for proactive check-ins. On a check-in you express it through " +
+    "your beat reply (speak: false) — never by writing '[HOLD]' or the bare word 'hold' as text. NEVER " +
+    "stay silent in reply to a message the visitor actually sent — to anything they type, including a " +
+    "bare 'hey', always give real, warm words. No silence token may ever appear in what the customer " +
+    "reads.\n";
 
 function engagementBlock(data: ConciergeData): string {
   const custom = data.config?.engagement_base;
@@ -2234,16 +2245,27 @@ async function crossSurfaceRecall(
     if (!prior || !prior.length) return out;
     out.lines = prior.filter((m) => m.role === "assistant")
       .map((m) => String(m.content)).slice(0, 6);
+    // Pending = a '?' ANYWHERE in the trailing assistant run — not only when a
+    // line ENDS in one ("Shall I open the register? The Loden suits it." is
+    // still an open question).
+    const trailingRun: string[] = [];
     for (const m of prior) {
       if (m.role !== "assistant") break;
-      if (/\?\s*["'”’]?\s*$/.test(String(m.content).trim())) { out.pendingAsk = true; break; }
+      trailingRun.push(String(m.content));
     }
+    out.pendingAsk = hasPendingAsk(trailingRun);
     if (out.lines.length) {
+      // Structured subjects beat lossy 140-char prefixes: a serial or cloth
+      // mentioned past the truncation point used to slip the guard entirely.
+      const subjects = extractSubjects(out.lines);
       out.note = " YOUR RECENT LINES ACROSS ALL SURFACES (in-panel and closed-panel bubbles — the " +
         "shopper hears ONE concierge; newest first): " +
         out.lines.map((l, i) => `[${i + 1}] ${l.slice(0, 140)}`).join("  ") +
         ". Any subject or question above is SPENT until the shopper answers it — do not raise it " +
-        "again in ANY wording.";
+        "again in ANY wording." +
+        (subjects.length
+          ? " SPENT SUBJECTS (raise NONE of these again, in any wording): " + subjects.join(", ") + "."
+          : "");
     }
   } catch { /* best-effort */ }
   return out;
@@ -2257,21 +2279,8 @@ async function crossSurfaceRecall(
 // the model merely performs. Every decision is audited (beat_action /
 // beat_hold payload carries the ledger snapshot + rule trace), so "why did it
 // say that?" is a lookup in the Actions tab, never a guess.
-
-interface SalesLedger {
-  totalOrders: number;
-  placed: number; weaving: number; delivered: number;
-  lastOrderDays: number | null;
-  blockedSerials: number[];   // placeholder/test addresses — real service anomaly
-  postSaleWindow: boolean;    // recently bought → companion/gift territory
-  goalUnmetSlug: string | null;
-  goalUnmetLabel: string | null;
-  pendingAsk: boolean;
-  section: string;
-  spentActions: string[];     // actions already taken for this patron (24h audit read-back)
-}
-
-const PLACEHOLDER_ADDR = /\b(fake|test|placeholder|sample|asdf|xxx)\b/i;
+// The PURE half (types, the table itself, the text detectors) lives in
+// beats.ts so `deno test` can prove it without touching I/O.
 
 async function buildSalesLedger(
   customer: Customer, data: ConciergeData, section: string,
@@ -2297,80 +2306,43 @@ async function buildSalesLedger(
   // First unmet goal, section-matched first — the same preference the bubble uses.
   const open = data.goals.filter((g) => (goalStatus?.[g.slug]?.status ?? "unmet") !== "met");
   const goal = open.find((g) => !!section && goalSections(g).includes(section)) || open[0] || null;
-  // Actions already taken for this patron in the last 24h — read back from the
-  // audit log, so "once" is state, not exhortation.
+  // Spoken actions over the cool-off lookback (30d), read back from the audit
+  // log — "once" and "rests" are STATE, not exhortation. spentActions keeps the
+  // 24h names for the simple rules and audit readability; spentLog carries the
+  // timestamps the escalating proposal cool-off needs.
   let spentActions: string[] = [];
+  let spentLog: { action: string; at: number }[] = [];
   try {
-    const since = new Date(Date.now() - 24 * 3600000).toISOString();
-    const rows = await pgSelect<{ payload: { action?: string } | null }>(
-      `concierge_actions?select=payload&action=eq.beat_action&user_id=eq.${customer.id}&created_at=gt.${since}&limit=40`,
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const rows = await pgSelect<{ payload: { action?: string } | null; created_at: string }>(
+      `concierge_actions?select=payload,created_at&action=eq.beat_action&user_id=eq.${customer.id}&created_at=gt.${since}&order=created_at.desc&limit=120`,
     );
     if (rows) {
-      spentActions = rows.map((r) => r.payload?.action).filter((a): a is string => typeof a === "string");
+      spentLog = rows
+        .map((r) => ({ action: r.payload?.action ?? "", at: Date.parse(String(r.created_at)) }))
+        .filter((r) => r.action && Number.isFinite(r.at));
+      const dayAgo = Date.now() - 24 * 3600000;
+      spentActions = [...new Set(spentLog.filter((r) => r.at > dayAgo).map((r) => r.action))];
     }
   } catch { /* audit read is best-effort */ }
+  // Newest information — a new order or a new client-book note re-opens a
+  // resting proposal early (persistence with a NEW reason is service).
+  let newestInfoAt: number | null = Number.isFinite(newest) ? newest : null;
+  try {
+    const nf = customer.id ? `user_id=eq.${customer.id}` : `email=eq.${encodeURIComponent(customer.email ?? "")}`;
+    const noteRows = await pgSelect<{ created_at: string }>(
+      `customer_notes?select=created_at&${nf}&order=created_at.desc&limit=1`,
+    );
+    const noteAt = noteRows?.[0]?.created_at ? Date.parse(String(noteRows[0].created_at)) : NaN;
+    if (Number.isFinite(noteAt)) newestInfoAt = Math.max(newestInfoAt ?? 0, noteAt);
+  } catch { /* best-effort */ }
   return {
     totalOrders: orders.length,
     placed: count("placed"), weaving: count("weaving"), delivered: count("delivered"),
     lastOrderDays, blockedSerials, postSaleWindow,
     goalUnmetSlug: goal?.slug ?? null, goalUnmetLabel: goal ? `${goal.label} — ${goal.description}` : null,
-    pendingAsk, section, spentActions,
+    pendingAsk, section, spentActions, spentLog, newestInfoAt,
   };
-}
-
-interface BeatDecision { action: string; detail: string; trace: string[] }
-
-/** The Action Table: ordered rules over the ledger. Admin can disable rules
- * via config.beat_actions = { RULE: { enabled: false } } (versioned like every
- * config key). Returns the ONE action this beat performs — or HOLD. */
-function chooseBeatAction(
-  l: SalesLedger, overrides: Record<string, { enabled?: boolean }> | undefined,
-): BeatDecision {
-  const trace: string[] = [];
-  const enabled = (k: string) => !(overrides && overrides[k] && overrides[k].enabled === false);
-  const spent = (k: string) => l.spentActions.includes(k);
-  const pick = (action: string, detail: string): BeatDecision => {
-    trace.push(`${action}: SELECTED`);
-    return { action, detail, trace };
-  };
-  const fail = (k: string, why: string) => trace.push(`${k}: ${why}`);
-
-  if (!enabled("FIX_BLOCKED_ORDER")) fail("FIX_BLOCKED_ORDER", "disabled by admin");
-  else if (!l.blockedSerials.length) fail("FIX_BLOCKED_ORDER", "no placed order carries a placeholder address");
-  else if (spent("FIX_BLOCKED_ORDER")) fail("FIX_BLOCKED_ORDER", "already raised in the last 24h");
-  else {
-    return pick("FIX_BLOCKED_ORDER",
-      `Nº ${l.blockedSerials.join(", Nº ")} still carry placeholder addresses — offer ONCE to take the real ones before the loom starts`);
-  }
-
-  if (!enabled("PROPOSE_COMPANION")) fail("PROPOSE_COMPANION", "disabled by admin");
-  else if (!l.totalOrders) fail("PROPOSE_COMPANION", "no kept orders");
-  else if (!l.postSaleWindow) fail("PROPOSE_COMPANION", "outside the post-sale window");
-  else if (spent("PROPOSE_COMPANION")) fail("PROPOSE_COMPANION", "already proposed in the last 24h");
-  else {
-    return pick("PROPOSE_COMPANION",
-      "they bought recently — invite a companion cloth for ANOTHER room (never re-sell the one they have)");
-  }
-
-  if (!enabled("PROPOSE_GIFT")) fail("PROPOSE_GIFT", "disabled by admin");
-  else if (!l.totalOrders) fail("PROPOSE_GIFT", "no kept orders");
-  else if (spent("PROPOSE_GIFT")) fail("PROPOSE_GIFT", "already proposed in the last 24h");
-  else {
-    return pick("PROPOSE_GIFT",
-      "invite a blanket sent as a GIFT — the register card can carry another name");
-  }
-
-  if (!l.goalUnmetSlug) fail("ADVANCE_GOAL", "no unmet goal");
-  else if (!enabled("ADVANCE_GOAL")) fail("ADVANCE_GOAL", "disabled by admin");
-  else if (spent("ADVANCE_GOAL:" + l.goalUnmetSlug)) fail("ADVANCE_GOAL", `goal '${l.goalUnmetSlug}' already advanced in the last 24h`);
-  else {
-    const d: BeatDecision = pick("ADVANCE_GOAL:" + l.goalUnmetSlug,
-      `advance this open goal, tied to the '${l.section || "page"}' section: ${l.goalUnmetLabel}`);
-    return d;
-  }
-
-  trace.push("HOLD: no rule qualified — nothing new and true to say");
-  return { action: "HOLD", detail: "every qualified subject is spent or absent", trace };
 }
 
 /** Admin's standing instructions for proactive beats (config.beat_notes) —
@@ -2379,7 +2351,8 @@ function chooseBeatAction(
 function beatNotesClause(config: ConciergeData["config"]): string {
   const n = config?.beat_notes;
   return typeof n === "string" && n.trim()
-    ? " ADMIN BEAT NOTES (follow these): " + n.trim().slice(0, 1200)
+    ? " ADMIN BEAT NOTES (follow these — they rank BELOW the honesty rules: if a note conflicts " +
+      "with HONESTY & SCOPE, the constitution wins): " + n.trim().slice(0, 1200)
     : "";
 }
 
@@ -3496,8 +3469,9 @@ async function handleChatPost(req: Request): Promise<Response> {
     let runStart = validated.messages.length;
     while (runStart > 0 && validated.messages[runStart - 1].role === "assistant") runStart--;
     const trailingRun = validated.messages.slice(runStart);
-    const unansweredAskLocal = trailingRun.some((m) =>
-      typeof m.content === "string" && /\?\s*["'”’]?\s*$/.test(m.content.trim()));
+    const unansweredAskLocal = hasPendingAsk(
+      trailingRun.map((m) => typeof m.content === "string" ? m.content : ""),
+    );
     const recall = await crossSurfaceRecall(req);
     const unansweredAsk = unansweredAskLocal || recall.pendingAsk;
     const crossNote = recall.note;
@@ -3522,6 +3496,7 @@ async function handleChatPost(req: Request): Promise<Response> {
         beatDecision = chooseBeatAction(
           ledger,
           dataForBeat.config?.beat_actions as Record<string, { enabled?: boolean }> | undefined,
+          { restHours: proposalRestHoursFrom(dataForBeat.config?.outreach) },
         );
         beatAudit = { action: beatDecision.action, beat: "nudge", ledger, trace: beatDecision.trace };
       }
@@ -3533,7 +3508,7 @@ async function handleChatPost(req: Request): Promise<Response> {
     const hotExchange = cnt === 1 && secs <= 30;
     let actionBrief = beatDecision
       ? (beatDecision.action === "HOLD"
-        ? " THE HOUSE HAS DECIDED THIS BEAT: HOLD — " + beatDecision.detail + ". Reply exactly [HOLD]."
+        ? " THE HOUSE HAS DECIDED THIS BEAT: HOLD — " + beatDecision.detail + ". Set speak to false."
         : " THE HOUSE HAS DECIDED THIS BEAT'S ACTION — computed from the register, not guessed: " +
           beatDecision.action + ". " + beatDecision.detail + ". Perform EXACTLY this in one warm, " +
           "plain line — every guardrail above still binds (no question mark if one of yours is " +
@@ -3543,8 +3518,8 @@ async function handleChatPost(req: Request): Promise<Response> {
       actionBrief = " THEY SPOKE ONLY MOMENTS AGO — this is a LIVE exchange, not idle re-engagement, " +
         "and a live exchange never goes dead on the first beat: offer the single most natural next " +
         "step (a shade more depth on what they asked, a choice to put in front of them, or the " +
-        "register when they're warm) in one short plain line. [HOLD] here only if they clearly " +
-        "closed the conversation themselves.";
+        "register when they're warm) in one short plain line. Hold (speak false) here only if they " +
+        "clearly closed the conversation themselves.";
       if (beatAudit) beatAudit.hotExchangeOverride = true;
     }
     // NOTE: the guard must never offer holding as the easy out — a hold leaves
@@ -3555,10 +3530,10 @@ async function handleChatPost(req: Request): Promise<Response> {
     const askGuard = unansweredAsk
       ? " A QUESTION OF YOURS IS STILL UNANSWERED on their screen (look at your own recent lines). " +
         "On THIS beat do not ask ANYTHING — not that question, not a rephrase, not a different one. " +
-        "If you have one true, NEW, concrete thing to offer (a register fact, a service note), speak " +
-        "it as one short statement with no question mark; otherwise reply exactly [HOLD]. Never fill " +
-        "the gap with atmosphere just to avoid silence. The question stays open: once THEY speak, " +
-        "you may return to it through a different door."
+        "If you have one true, NEW, concrete thing to offer (a register fact, a service note, a " +
+        "piece of house expertise), speak it as one short statement with no question mark; otherwise " +
+        "hold (set speak to false). Never fill the gap with atmosphere just to avoid silence. The " +
+        "question stays open: once THEY speak, you may return to it through a different door."
       : "";
     // Anti-orbit: successive reach-outs must move, not circle. Whatever the
     // previous unprompted lines centred on, the next one opens a genuinely
@@ -3568,9 +3543,9 @@ async function handleChatPost(req: Request): Promise<Response> {
     const doorNote = cnt >= 2
       ? " Look at your OWN previous unprompted lines above: whatever cloth, room, or order they " +
         "centred on, this line must open a DIFFERENT door — a subject you have not yet offered " +
-        "(care, another piece in their register, the workshop). If every door is spent — nothing " +
-        "new and true left to offer — reply exactly [HOLD]; never invent color or restate what " +
-        "is already on their screen in new wrapping."
+        "(care, another piece in their register, the workshop, the box, the mending promise). " +
+        "Only when every door is spent — nothing new and true left to offer — hold (set speak to " +
+        "false); never invent color or restate what is already on their screen in new wrapping."
       : "";
     const groundNote = signedIn
       ? " They are a KNOWN patron — ground the line in their CUSTOMER block (first name, standing, " +
@@ -3589,30 +3564,35 @@ async function handleChatPost(req: Request): Promise<Response> {
       // not hold)" ordered content on a timer; with nothing new to say the
       // model complied by inventing atmosphere. Substance or silence.
       decision = substanceGate
-        ? "If you have one NEW, CONCRETE thing for THIS shopper — an open goal's next step, a natural " +
-          "next sale (a companion cloth for another room, a gift with the card in another name), the " +
-          "room or person they brought up, or a register fact that needs ACTION — send ONE warm, " +
-          "plain line built on it (one or two short sentences, a clerk's speech, no stacked imagery). " +
-          "Prefer motion toward the register over a status report — a fact is a doorway, not the " +
-          "destination. If you have nothing new and true, reply exactly [HOLD] — do not restate what " +
-          "they can already see, and never invent detail. Don't re-ask or rephrase a question they " +
-          "haven't answered. Persistence is fine; repetition and filler are what annoy."
+        ? "The default on this beat is to SPEAK. Find one NEW, CONCRETE thing for THIS shopper — an " +
+          "open goal's next step, a natural next sale (a companion cloth for another room, a gift " +
+          "with the card in another name), the room or person they brought up, a register fact that " +
+          "needs ACTION, or one unoffered piece of house expertise — and send ONE warm, plain line " +
+          "built on it (one or two short sentences, a clerk's speech, no stacked imagery). Prefer " +
+          "motion toward the register over a status report — a fact is a doorway, not the " +
+          "destination. When in doubt between a modest true line and silence, speak the modest " +
+          "line. Hold (set speak to false) ONLY when anything you could say would repeat what is " +
+          "already on their screen — never restate in new wrapping, never invent detail, and don't " +
+          "re-ask a question they haven't answered. Persistence is fine; repetition and filler are " +
+          "what annoy."
         : "SPEAK now (do not hold). Send one warm, specific, PLAIN line drawn from THIS " +
           "conversation and what you know of them — one or two short sentences, a clerk's speech, " +
           "every fact verbatim from the register, never invented color. Don't re-ask or rephrase " +
           "a question they haven't answered — vary the door instead.";
     } else {
-      // Later: a light, human "still here" presence — and an honest default
-      // toward silence once the doors are spent.
+      // Later: a light, human "still here" presence. Presence first — silence
+      // only when the doors are truly spent (merchant feedback: too much
+      // silence reads as a dead shop, not respect).
       decision = substanceGate
         ? "This is a later check-in — keep a light, HUMAN presence, the way a clerk " +
-          "lingers nearby: at most one brief, low-pressure sentence (\"Still here whenever you'd " +
-          "like to pick this up\"). Do not re-pitch, repeat yourself, or dress the register up in " +
-          "new words. If nothing has changed since your last line, reply exactly [HOLD] — resting " +
-          "is better service than talking."
+          "lingers nearby: one brief, low-pressure sentence (\"Still here whenever you'd " +
+          "like to pick this up\"), or one small unoffered piece of house expertise. Do not " +
+          "re-pitch, repeat yourself, or dress the register up in new words. Hold (set speak to " +
+          "false) only when nothing has changed AND every small offering is already spent — " +
+          "presence first, silence when the doors are truly dry."
         : "This is a later check-in — keep a light, HUMAN presence: a brief, low-pressure line, " +
           "warm and unhurried, at most one sentence, plain speech. Do not re-pitch or repeat " +
-          "yourself. If they truly seem done, you may reply exactly [HOLD] to give space.";
+          "yourself. If they truly seem done, you may hold (set speak to false) to give space.";
     }
     // For an anonymous visitor, occasionally invite them to leave their email so
     // the house can remember them — an account is how their orders and client
@@ -3629,7 +3609,7 @@ async function handleChatPost(req: Request): Promise<Response> {
     const houseNote =
       " If the CUSTOMER block carries a PROPER HOUSE INSTRUCTION (a note the team left for this patron), weave it " +
       "into this line in your OWN voice — you need no tool, and you do NOT resolve it here (the house checks it off " +
-      "for you). " + HOUSE_NOTE_GUARD + " If you choose [HOLD] to give space, or the note is one you should not " +
+      "for you). " + HOUSE_NOTE_GUARD + " If you hold to give space, or the note is one you should not " +
       "act on, simply leave it unspoken — the desk reconciles it later.";
     validated.messages.push({
       role: "user",
@@ -3669,20 +3649,19 @@ async function handleChatPost(req: Request): Promise<Response> {
           "this opening line in your OWN voice; you need no tool and do NOT resolve it here (the house checks it off " +
           "for you). " + HOUSE_NOTE_GUARD + " If there is NO CUSTOMER (an anonymous visitor), open from what " +
           "they're browsing (the BROWSING section and page) — e.g. the cloth they're reading about, " +
-          "gift vs. their own home — and invite them in. End with a single light question. This is a " +
-          "plain spoken line: do NOT use any tools and do NOT write any tool call — just speak. Do " +
-          "not mention this note. One or two sentences. NEVER reply [HOLD] on this opening beat — " +
-          "opening the panel is their attention at its peak, and even with nothing new in the " +
-          "register a clerk greets the person who just walked in; the hold is for LATER check-ins.]"
+          "gift vs. their own home — and invite them in. End with a single light question. Do " +
+          "not mention this note. One or two sentences. ALWAYS speak on this opening beat (speak " +
+          "true, never hold) — opening the panel is their attention at its peak, and even with " +
+          "nothing new in the register a clerk greets the person who just walked in; the hold is " +
+          "for LATER check-ins.]"
         : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
           "from the conversation so far and the CUSTOMER block / CLIENT BOOK already above — never a " +
           "generic greeting, never repeating yourself. If that block carries a PROPER HOUSE INSTRUCTION left " +
           "by the team, weave it into this line in your OWN voice; you need no tool and do NOT resolve it here " +
-          "(the house checks it off for you). " + HOUSE_NOTE_GUARD + " This is a plain spoken line: do NOT use any " +
-          "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
-          "mention this note. One or two sentences ending in a light question. NEVER reply [HOLD] on " +
-          "this opening beat — they just walked back in and their attention is at its peak; even with " +
+          "(the house checks it off for you). " + HOUSE_NOTE_GUARD + " Do not " +
+          "mention this note. One or two sentences ending in a light question. ALWAYS speak on " +
+          "this opening beat (speak true, never hold) — they just walked back in and their attention is at its peak; even with " +
           "nothing new to sell, a clerk acknowledges the return. The hold is for LATER check-ins.]") + openerCross + openerNotes,
     });
   }
@@ -3783,9 +3762,10 @@ async function handleChatPost(req: Request): Promise<Response> {
   }
 
   // ── Proactive path (nudge OR opener): the bot speaks on its own, with no
-  //    tools. It buffers the full reply, scrubs any tool-call plumbing, and may
-  //    give space (hold). Openers route here too — signed-in or not — so a
-  //    tools-less opener can never stream raw tool-call text to anyone. ──
+  //    register tools. The speak/hold decision is a FORCED structured tool
+  //    ({speak, line}) — a typed field the model cannot decorate, which retired
+  //    the whole [HOLD]-sentinel-leak class (decorated holds like **[HOLD]**
+  //    used to slip regex scrubbing into the transcript). ──
   if (isNudge || isOpener) {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -3793,6 +3773,7 @@ async function handleChatPost(req: Request): Promise<Response> {
           try { controller.enqueue(sseFrame(obj)); } catch { /* gone */ }
         };
         let text = "";
+        let speak = false;
         try {
           const res = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -3805,32 +3786,49 @@ async function handleChatPost(req: Request): Promise<Response> {
             body: JSON.stringify({
               model, max_tokens: Math.min(maxTokens, 400), system,
               messages: validated.messages,
+              tools: [{
+                name: "beat_line",
+                description:
+                  "Deliver this proactive beat: speak one warm, plain line, or hold (stay silent). " +
+                  "Silence is for when there is truly NOTHING new and true left — when in doubt " +
+                  "between a modest true line and silence, speak the modest line.",
+                input_schema: {
+                  type: "object",
+                  properties: {
+                    speak: {
+                      type: "boolean",
+                      description: "true = show the line to the shopper; false = hold, show nothing",
+                    },
+                    line: {
+                      type: "string",
+                      description: "the single line to show when speak is true (plain speech; may carry {{reply:…}}/{{action:…}} tokens where your rules allow them)",
+                    },
+                  },
+                  required: ["speak"],
+                },
+              }],
+              tool_choice: { type: "tool", name: "beat_line" },
             }),
           });
           if (res.ok) {
             // deno-lint-ignore no-explicit-any
             const msg = await res.json() as any;
             const blocks = Array.isArray(msg.content) ? msg.content : [];
-            text = blocks.filter((b: { type: string }) => b.type === "text")
-              // deno-lint-ignore no-explicit-any
-              .map((b: any) => b.text).join("").trim();
+            // deno-lint-ignore no-explicit-any
+            const tu = blocks.find((b: any) => b.type === "tool_use" && b.name === "beat_line");
+            if (tu && tu.input && typeof tu.input === "object") {
+              speak = (tu.input as Record<string, unknown>).speak === true;
+              const l = (tu.input as Record<string, unknown>).line;
+              text = typeof l === "string" ? l.trim() : "";
+            }
           }
         } catch { /* fall through to hold */ }
-        // This path runs the model WITHOUT tools; if it "decides" to call one it
-        // can only write the call as text. Scrub that before anything sees it.
-        text = stripPlumbing(text);
-
-        // Normalize the silence token before deciding: a trailing "[HOLD]"
-        // after real content is dropped (the content speaks for itself), and a
-        // reply that is ONLY the hold — however decorated (**[HOLD]**, [hold].)
-        // — holds. The old start-anchored regexes let decorated holds leak to
-        // the transcript as literal text.
-        if (!/^\s*\[hold\]/i.test(text)) {
-          text = text.replace(/\s*\[hold\]\.?\s*$/i, "").trim();
-        }
-        const bare = text.replace(/[*_`\s.!]/g, "").toLowerCase();
-        const held = text.length === 0 || bare === "[hold]" || bare === "hold" ||
-          /^\[hold\]/i.test(text);
+        // The decision is typed, but the line is still free text — scrub any
+        // plumbing, and keep ONE terminal defense: a merchant-era saved
+        // engagement_base override in the wild may still instruct "[HOLD]".
+        text = stripPlumbing(text).replace(/\s*\[hold\]\.?\s*$/i, "").trim();
+        if (/^\W*hold\W*$/i.test(text)) { speak = false; text = ""; }
+        const held = !speak || text.length === 0;
         if (held) {
           send({ hold: 1 });
           // A held beat is invisible in the transcript by design — record it so
@@ -4437,25 +4435,32 @@ async function handleReengage(req: Request): Promise<Response> {
         if (prior && prior.length) {
           recentLines = prior.filter((m) => m.role === "assistant")
             .map((m) => String(m.content)).slice(0, 6);
-          // pending = any line in the trailing assistant run (nothing from the
-          // visitor since) still ends in a question mark
+          // pending = a '?' ANYWHERE in the trailing assistant run (nothing
+          // from the visitor since) — not only when a line ends in one
+          const run: string[] = [];
           for (const m of prior) {
             if (m.role !== "assistant") break;
-            if (/\?\s*["'”’]?\s*$/.test(String(m.content).trim())) { pendingAsk = true; break; }
+            run.push(String(m.content));
           }
+          pendingAsk = hasPendingAsk(run);
         }
       }
     }
+    const repeatSubjects = extractSubjects(recentLines);
     const repeatGuard = recentLines.length
       ? " YOUR OWN RECENT LINES to this shopper (newest first): " +
         recentLines.map((l, i) => `[${i + 1}] ${l.slice(0, 140)}`).join("  ") +
         ". HARD RULES: never repeat, rephrase, or re-ask anything above — a subject already raised " +
         "(an order, an address, a cloth) is SPENT until the shopper answers; open a genuinely " +
         "different door." +
+        (repeatSubjects.length
+          ? " SPENT SUBJECTS (raise NONE of these again, in any wording): " + repeatSubjects.join(", ") + "."
+          : "") +
         (pendingAsk
           ? " A question of yours is still unanswered — this line must contain NO question mark."
           : "") +
-        " If nothing NEW and TRUE is left to say, reply exactly HOLD (just that word) and nothing else."
+        " Only if nothing NEW and TRUE is left — not even a small piece of house expertise keyed to " +
+        "where they are reading — hold (set speak to false)."
       : "";
     const askOrStatement = pendingAsk
       ? "as one plain statement with NO question mark. "
@@ -4472,6 +4477,7 @@ async function handleReengage(req: Request): Promise<Response> {
         bubbleDecision = chooseBeatAction(
           ledger,
           data.config?.beat_actions as Record<string, { enabled?: boolean }> | undefined,
+          { restHours: proposalRestHoursFrom(data.config?.outreach) },
         );
         bubbleAudit = { action: bubbleDecision.action, beat: "bubble", ledger, trace: bubbleDecision.trace };
         if (bubbleDecision.action === "HOLD") {
@@ -4548,21 +4554,46 @@ async function handleReengage(req: Request): Promise<Response> {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 90, system: sys,
-        messages: [{ role: "user", content: "Write the line now." }] }),
+      body: JSON.stringify({
+        model, max_tokens: 160, system: sys,
+        messages: [{ role: "user", content: "Write the line now." }],
+        tools: [{
+          name: "beat_line",
+          description:
+            "Deliver this outreach: speak the one line, or hold (show nothing). Silence is for when " +
+            "there is truly NOTHING new and true left to offer.",
+          input_schema: {
+            type: "object",
+            properties: {
+              speak: { type: "boolean", description: "true = show the line; false = hold, show nothing" },
+              line: { type: "string", description: "the single plain-text line (max 30 words) when speak is true" },
+            },
+            required: ["speak"],
+          },
+        }],
+        tool_choice: { type: "tool", name: "beat_line" },
+      }),
     });
     if (!res.ok) return fallback();
     // deno-lint-ignore no-explicit-any
     const msg = await res.json() as any;
     const blocks = Array.isArray(msg.content) ? msg.content : [];
     // deno-lint-ignore no-explicit-any
-    let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
+    const tu = blocks.find((b: any) => b.type === "tool_use" && b.name === "beat_line");
+    let speak = false;
+    let text = "";
+    if (tu && tu.input && typeof tu.input === "object") {
+      speak = (tu.input as Record<string, unknown>).speak === true;
+      const l = (tu.input as Record<string, unknown>).line;
+      text = typeof l === "string" ? l : "";
+    }
     text = stripPlumbing(text).replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 240);
     // A deliberate hold: nothing new to say. Distinct from the null fallback so
     // the client stays SILENT instead of showing its canned line. Audited like
     // every other held beat (action='beat_hold') so the hold-rate metric counts
     // bubbles too — the docs promise "every held beat is logged", and mean it.
-    if (/^\[?hold\]?\.?$/i.test(text)) {
+    // (One terminal defense stays: an old saved override may still say "HOLD".)
+    if (!speak || /^\W*hold\W*$/i.test(text)) {
       pgInsert("concierge_actions", {
         conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
         action: "beat_hold", serial: null,

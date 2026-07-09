@@ -27,6 +27,11 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      # Unit tests FIRST: the Action Table's ordering, the escalating proposal
+      # cool-off, and the pending-question/subject detectors are pure functions
+      # (beats.ts) — provable, and proved on every deploy.
+      - name: Unit-test the beat brain
+        run: deno test supabase/functions/concierge/beats_test.ts
       - name: Type-check edge functions
         run: |
           deno check supabase/functions/concierge/index.ts
@@ -135,6 +140,51 @@ jobs:
             exit 1
           fi
           echo "All live smoke checks passed — production endpoints are answering correctly."
+
+      # Behavior deck against PRODUCTION — advisory for now (a judge misfire at
+      # 1 rep must not block a deploy; promotion to a hard gate happens once the
+      # committed baseline proves the deck stable). 1 rep keeps the run inside
+      # the anonymous rate limit alongside the smoke test above. qa- session
+      # keys keep these out of the engagement metrics.
+      - name: Behavior evals (advisory — full results in the job summary)
+        continue-on-error: true
+        env:
+          EVAL_ENDPOINT: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/concierge
+          EVAL_REPS: "1"
+        run: |
+          node evals/run.mjs 2>&1 | tee eval-results.txt
+          {
+            echo "## Behavior evals (1 rep, advisory)"
+            echo '```'
+            cat eval-results.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The selling-quality trend the merchant asked for: silence and speech as
+      # NUMBERS. Hold rate creeping up = the concierge going quiet; the action
+      # mix shows what it actually proposes. Best-effort — never blocks.
+      - name: Beat trend (7-day hold rate & action mix)
+        if: env.SUPABASE_DB_URL != ''
+        continue-on-error: true
+        run: |
+          command -v psql >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          {
+            echo "## Beat trend — last 7 days"
+            echo ""
+            echo "| outcome | count |"
+            echo "| --- | --- |"
+            psql "$SUPABASE_DB_URL" -t -A -F'|' -c \
+              "select action, count(*) from concierge_actions where action in ('beat_action','beat_hold') and created_at > now() - interval '7 days' group by action order by action;" \
+              | awk -F'|' '{print "| " $1 " | " $2 " |"}'
+            echo ""
+            echo "Spoken-action mix:"
+            echo ""
+            echo "| action | count |"
+            echo "| --- | --- |"
+            psql "$SUPABASE_DB_URL" -t -A -F'|' -c \
+              "select coalesce(payload->>'action','?'), count(*) from concierge_actions where action='beat_action' and created_at > now() - interval '7 days' group by 1 order by 2 desc limit 10;" \
+              | awk -F'|' '{print "| " $1 " | " $2 " |"}'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Print endpoint
         run: |

@@ -144,8 +144,14 @@ bill; signed-in keyed by user id, anonymous by IP).
 per-rule overrides for the deterministic beat decision, e.g.
 `{"PROPOSE_GIFT":{"enabled":false}}`. The rules run in fixed order
 (`FIX_BLOCKED_ORDER`, `PROPOSE_COMPANION`, `PROPOSE_GIFT`,
-`ADVANCE_GOAL:<slug>`, else `HOLD`) over the computed Sales Ledger; each
-spoken action is spent for 24h via its `beat_action` audit row.
+`ADVANCE_GOAL:<slug>`, `KEEP_WARM:<section>` — give-first house expertise
+before any silence — else `HOLD`) over the computed Sales Ledger. The table is
+pure code (`functions/concierge/beats.ts`), unit-tested by `deno test` in the
+deploy workflow. Simple rules are spent for 24h via their `beat_action` audit
+row; the two *proposals* rest on an **escalating ladder** instead —
+`outreach.proposalRestHours` (default `[24, 72, 168]`: a day, three days, a
+week after each unanswered repeat; a new order or client-book note re-opens
+early). Edited in Engagement → ⑤ After they buy → Fine-tune.
 
 *Engagement guardrails as editable text* (versioned like every config key via
 `concierge_edit_history`, History ⟲ in admin): `engagement_base` — the full

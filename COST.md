@@ -40,6 +40,11 @@ instead of 100%. Realistically a 70–90% cut on input tokens.
 Implementation notes: live state was moved out of `BRAND_SYSTEM` (kb.ts) to the
 dynamic tail so the prefix is stable; the three chat call sites send `system` as a
 two-block array and carry the `anthropic-beta: prompt-caching-2024-07-31` header.
+One caveat since the structured beat decisions: the proactive nudge/opener call
+carries a `tools: [beat_line]` block, and tools precede `system` in the cached
+prefix — so proactive beats and plain anonymous chat now form **separate cache
+lineages**. Beats still cache against each other (the beat tool is byte-stable);
+the loss is only the cross-path reuse, minor at this traffic.
 
 #### How Claude's prompt cache actually works (the mechanism)
 

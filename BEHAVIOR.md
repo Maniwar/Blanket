@@ -138,28 +138,52 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   signed-in patron, a proactive beat's job is no longer the model's guess: the
   server computes a **Sales Ledger** (orders by status, days since last order,
   placeholder-address anomalies, post-sale window, unmet goals, pending
-  questions, actions already taken in 24h) and runs it through an ordered
+  questions, the 30-day spoken-action log) and runs it through an ordered
   **Action Table** — `FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT →
-  ADVANCE_GOAL → HOLD` — choosing the ONE action the beat performs. "Once" is
-  state, not exhortation: a spoken action writes a `beat_action` audit row
-  that marks it spent for 24h. A HOLD decision on the closed-panel bubble
-  short-circuits *before* the model call. **Every decision is diagnosable**:
-  the `beat_action`/`beat_hold` rows in the Actions tab carry the ledger
-  snapshot and the rule-by-rule trace ("PROPOSE_COMPANION: outside the
-  post-sale window") — "why did it say that?" is a lookup, never a guess.
-  Rules can be disabled per-key via `config.beat_actions` (Tuning → Engagement
-  → The written rules, versioned). Signed-out visitors (no register to
-  compute from) fall back to the prompt's own judgment under the same
-  guardrails.
-- **Substance or silence (proactive beats).** A proactive beat may speak only
-  when it has something **new and concrete** — a register fact not yet
-  mentioned, an open goal's next step, a house instruction. Nothing new →
-  `[HOLD]`. This inverts the old "SPEAK now (do not hold)" bias, which ordered
-  content on a timer and made the model fill the gap with atmosphere and
-  invented color once the real facts were spent. Proactive lines are also held
-  to **plain speech** (one or two clerk-plain sentences, at most one image,
-  every fact verbatim from the register — never invented rituals, meanings, or
-  tallies).
+  ADVANCE_GOAL → KEEP_WARM → HOLD` — choosing the ONE action the beat performs.
+  The table lives in `beats.ts` as pure functions and is **unit-tested on every
+  deploy** (`deno test` gates the workflow before the type-check). "Once" is
+  state, not exhortation: a spoken action writes a `beat_action` audit row.
+  A HOLD decision on the closed-panel bubble short-circuits *before* the model
+  call. **Every decision is diagnosable**: the `beat_action`/`beat_hold` rows
+  in the Actions tab carry the ledger snapshot and the rule-by-rule trace
+  ("PROPOSE_GIFT: in cool-off — proposed 2× before, rests 3d") — "why did it
+  say that?" is a lookup, never a guess. Rules can be disabled per-key via
+  `config.beat_actions` (Tuning → Engagement → The written rules, versioned).
+  Signed-out visitors (no register to compute from) fall back to the prompt's
+  own judgment under the same guardrails.
+- **A repeated proposal rests on an escalating ladder — a "no" is remembered.**
+  `PROPOSE_COMPANION` and `PROPOSE_GIFT` no longer re-qualify every 24 hours
+  forever: after each unanswered proposal the SAME proposal rests longer —
+  default 24h → 3 days → 7 days (`outreach.proposalRestHours`, editable in
+  Engagement → ⑤ After they buy → Fine-tune; set it in fractions of an hour
+  when testing). A **new order or a new client-book note re-opens it early** —
+  persistence with a new reason is service; the same ask on a timer is
+  pestering. The cool-off is per-proposal: a resting gift never silences the
+  companion, a goal, or the give-first line.
+- **Give-first before silence — `KEEP_WARM`.** When every sales door is spent
+  or resting, the beat does not simply go quiet: the table's last rule before
+  HOLD offers one small, **unasked piece of true house expertise** keyed to the
+  section the visitor is reading (a care fact, the provenance, the box, the
+  mending promise) — warm, brief, no ask. Once per section per day; then, and
+  only then, HOLD. This answers the observed failure "too much silence, not
+  enough attempts to engage" without re-opening the invention door.
+- **The speak/hold decision is a typed field, not a magic word.** Every
+  proactive call (in-panel beats and the closed-panel bubble) forces a
+  structured `beat_line` tool — `{speak: boolean, line: string}` — so the old
+  `[HOLD]` sentinel class (decorated holds like `**[HOLD]**` slipping regex
+  scrubbing into the transcript) is structurally impossible. One terminal
+  scrub remains as defense-in-depth against old saved rule overrides.
+- **Substance or silence — with speech as the default posture.** A proactive
+  beat speaks when it has something **new and concrete** — a register fact not
+  yet mentioned, an open goal's next step, a house instruction, an unoffered
+  piece of house expertise. Silence is the *last resort*, not the safe
+  default: when in doubt between a modest true line and silence, the rule is
+  to speak the modest line. What silence still protects against is unchanged —
+  restating what's on screen in new wrapping, atmosphere as filler, invented
+  color. Proactive lines are also held to **plain speech** (one or two
+  clerk-plain sentences, at most one image, every fact verbatim from the
+  register).
 - **Quiet mode is a time-boxed pause, not a switch.** Three entrances: "That's
   all for now" (the in-flow chip or ⋯ menu), "Don't message me until I write
   back", and — the snooze procedure — a **typed** wind-down ("that's all",
