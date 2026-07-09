@@ -1150,6 +1150,13 @@
           <div><label class="micro" for="cfg-bubble-withdraw">Bubble withdraws after</label>
             <input type="number" id="cfg-bubble-withdraw" class="mono-field" min="3" step="1" placeholder="22"></div>
         </div>
+        <p class="note" style="margin:14px 0 6px;"><strong>Service limits</strong> — chat calls allowed per 10 minutes (proactive beats count too; this bounds the model bill). Signed-in patrons are keyed by identity, anonymous by IP.</p>
+        <div class="ed-grid">
+          <div><label class="micro" for="cfg-rate-signed">Signed-in · chat calls / 10 min</label>
+            <input type="number" id="cfg-rate-signed" class="mono-field" min="5" step="5" placeholder="60"></div>
+          <div><label class="micro" for="cfg-rate-anon">Anonymous · chat calls / 10 min</label>
+            <input type="number" id="cfg-rate-anon" class="mono-field" min="5" step="5" placeholder="20"></div>
+        </div>
         <p class="note" style="margin:14px 0 6px;"><strong>On-page beats</strong> — the inline "Ask the mill ✳" starters woven into page sections, and the floating context chip that appears as the visitor scrolls.</p>
         <div class="ed-grid">
           <div style="grid-column:1 / -1;"><label class="micro" for="cfg-inline-sections">Inline starters appear in (section keys, comma-separated)</label>
@@ -3027,6 +3034,8 @@ async function loadConfig() {
   if ($('cfg-engagement-base')) $('cfg-engagement-base').value = (typeof cfg.engagement_base === 'string') ? cfg.engagement_base : '';
   if ($('cfg-beat-notes')) $('cfg-beat-notes').value = (typeof cfg.beat_notes === 'string') ? cfg.beat_notes : '';
   if ($('cfg-beat-actions')) $('cfg-beat-actions').value = (cfg.beat_actions && typeof cfg.beat_actions === 'object' && Object.keys(cfg.beat_actions).length) ? JSON.stringify(cfg.beat_actions) : '';
+  if ($('cfg-rate-signed')) $('cfg-rate-signed').value = (typeof cfg.chat_rate_signed === 'number' && cfg.chat_rate_signed > 0) ? cfg.chat_rate_signed : '';
+  if ($('cfg-rate-anon')) $('cfg-rate-anon').value = (typeof cfg.chat_rate_anon === 'number' && cfg.chat_rate_anon > 0) ? cfg.chat_rate_anon : '';
   $('cfg-dwell').value = ms2s(o.dwellMs);
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
@@ -3168,6 +3177,10 @@ async function saveEngagement() {
     if (typeof baVal !== 'object' || baVal === null || Array.isArray(baVal)) { fail('Save engagement', new Error('Action table overrides must be a JSON object')); return; }
   }
   rows.push({ key: 'beat_actions', value: baVal, updated_at: nowIso() });
+  const rs = Number($('cfg-rate-signed').value);
+  if ($('cfg-rate-signed').value !== '' && Number.isFinite(rs) && rs > 0) rows.push({ key: 'chat_rate_signed', value: Math.round(rs), updated_at: nowIso() });
+  const ra = Number($('cfg-rate-anon').value);
+  if ($('cfg-rate-anon').value !== '' && Number.isFinite(ra) && ra > 0) rows.push({ key: 'chat_rate_anon', value: Math.round(ra), updated_at: nowIso() });
   const gr = Number($('cfg-goalrate').value);
   if ($('cfg-goalrate').value !== '' && Number.isFinite(gr) && gr >= 0 && gr <= 1) {
     rows.push({ key: 'goal_sample_rate', value: gr, updated_at: nowIso() });

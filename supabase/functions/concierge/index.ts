@@ -3429,9 +3429,26 @@ async function handleSelfTest(req: Request): Promise<Response> {
 // ── POST — streaming chat ────────────────────────────────────────────────────
 
 async function handleChatPost(req: Request): Promise<Response> {
-  // Rate limit (v1 behavior: 20 req / 10 min per x-forwarded-for IP).
+  // Rate limit. Anonymous traffic: strict per-IP wall. A signed-in,
+  // email-verified patron gets a roomier window keyed by user id — proactive
+  // beats are chat calls too, so an engaged patron at a driving pace could
+  // exhaust the shared IP wall mid-conversation (seen live). Both ceilings
+  // are admin config (chat_rate_signed / chat_rate_anon, per 10 minutes);
+  // the limiter is what keeps the model bill bounded, so the defaults stay
+  // conservative.
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  if (await rateLimited(ip)) {
+  const rlCfg = (await loadConciergeData()).config;
+  const signedLimit = typeof rlCfg?.chat_rate_signed === "number" && rlCfg.chat_rate_signed > 0
+    ? rlCfg.chat_rate_signed : 60;
+  const anonLimit = typeof rlCfg?.chat_rate_anon === "number" && rlCfg.chat_rate_anon > 0
+    ? rlCfg.chat_rate_anon : RATE_LIMIT;
+  const rlUser = await verifyUser(req);
+  if (rlUser) {
+    if (await rateLimited("u:" + rlUser.id, signedLimit)) {
+      return jsonError(req, 429,
+        "Too many requests. The concierge takes a short pause — try again in a few minutes.");
+    }
+  } else if (await rateLimited(ip, anonLimit)) {
     return jsonError(req, 429,
       "Too many requests. The concierge takes a short pause — try again in a few minutes.");
   }

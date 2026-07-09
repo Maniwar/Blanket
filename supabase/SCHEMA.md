@@ -125,6 +125,10 @@ device-kept transcript survives a closed tab; default 7 days). The client reads
 these via `?config=1`; blank/absent keys fall back to built-in defaults scaled
 by `assertiveness`.
 
+*Service limits* (`chat_rate_signed` default 60, `chat_rate_anon` default 20 —
+chat calls per 10 minutes; proactive beats count, so this bounds the model
+bill; signed-in keyed by user id, anonymous by IP).
+
 *The Action Table* (`beat_actions`, object — versioned like every key):
 per-rule overrides for the deterministic beat decision, e.g.
 `{"PROPOSE_GIFT":{"enabled":false}}`. The rules run in fixed order
