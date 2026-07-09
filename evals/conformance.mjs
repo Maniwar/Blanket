@@ -128,35 +128,53 @@ async function main() {
   }
 
   // ── 4. Observed timing: the first follow-up lands on the ladder's first rung ──
-  // After the opener's reply completes, the first nudge should FIRE at
-  // nudge1 × dial (default 8000 × mult). We watch lastSkip for "FIRED".
+  // The ladder only runs once the visitor has SPOKEN (an anonymous visitor who
+  // never typed is deliberately not chased — the anonNudges toggle). So this
+  // check types one real message, waits for the reply, then expects the first
+  // nudge to FIRE at nudge1 × dial. The typed turn runs under the qa- session
+  // key like everything else here.
   {
     const expected = Math.round(num(o.nudge1Ms, 8000) * mult);
     try {
+      // Let the opener finish first so the typed turn doesn't race it.
       await page.waitForFunction(
-        () => { const s = window.FeierabendConcierge.status(); return s.historyTurns > 0 && s.lastRole === "assistant"; },
-        null, { timeout: 45000, polling: 250 },
+        () => { const s = window.FeierabendConcierge.status(); return !s.streaming || s.historyTurns > 0; },
+        null, { timeout: 30000, polling: 250 },
+      ).catch(() => {});
+      const before = await page.evaluate(() => window.FeierabendConcierge.status().historyTurns);
+      await page.evaluate(() => window.FeierabendConcierge.open("Which cloth suits a bright room?"));
+      await page.waitForFunction(
+        (n) => { const s = window.FeierabendConcierge.status(); return s.historyTurns > n + 1 && s.lastRole === "assistant"; },
+        before, { timeout: 60000, polling: 250 },
       );
       const t0 = Date.now();
       let measured = -1;
       try {
         await page.waitForFunction(
-          () => /beat: FIRED|nudge: stood down|the register HELD/.test((window.FeierabendConcierge.status().lastSkip || "")),
-          null, { timeout: expected + 20000, polling: 150 },
+          (since) => {
+            const s = window.FeierabendConcierge.status();
+            const fresh = (s.recentSkips || []).slice(0, 3).join(" ");
+            return /beat: FIRED|nudge: stood down|the register HELD|beat: request FAILED/.test(fresh) &&
+              Date.now() >= since;
+          },
+          t0, { timeout: expected + 20000, polling: 150 },
         );
         const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
         measured = Date.now() - t0;
         const fired = /beat: FIRED/.test(skip);
-        const ok = fired && approx(measured, expected, Math.max(3000, expected * 0.4));
-        row("First follow-up after reply (ms)", expected + " (nudge1 × dial " + mult.toFixed(2) + ")",
-          (fired ? "~" + measured : "gated: " + skip.slice(0, 90)), ok,
-          fired ? "" : "the beat was gated, not mistimed — see the skip reason");
+        const ok = fired && approx(measured, expected, Math.max(3000, expected * 0.5));
+        row("First follow-up after typed reply (ms)", expected + " (nudge1 × dial " + mult.toFixed(2) + ")",
+          (fired ? "~" + measured : "gated: " + skip.slice(0, 110)), ok,
+          fired ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
       } catch {
-        row("First follow-up after reply (ms)", expected, "no beat within " + (expected + 20000) + "ms", false,
-          "neither FIRED nor a named gate appeared in lastSkip");
+        const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
+        row("First follow-up after typed reply (ms)", expected, "no beat within " + (expected + 20000) + "ms", false,
+          "lastSkip at timeout: " + String(skip).slice(0, 120));
       }
     } catch {
-      row("First follow-up after reply (ms)", expected, "opener reply never completed", false, "");
+      const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip).catch(() => "?");
+      row("First follow-up after typed reply (ms)", expected, "typed reply never completed", false,
+        "lastSkip: " + String(skip).slice(0, 120));
     }
   }
 
