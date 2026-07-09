@@ -105,11 +105,12 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   collects the cloth and address itself, so asking beforehand is friction that
   loses the sale. It never proposes opening the register ("shall I…?") without the
   button in the message, and never repeats a qualifying question.
-- **`[HOLD]` is a silence signal, never a reply.** The bot may answer a *proactive*
-  check-in prompt with exactly `[HOLD]` when staying quiet is kinder — the server
-  turns that into a hold and shows nothing. It must never write `[HOLD]` in reply
-  to a message the visitor actually sent; the token can never reach the reader (the
-  pipeline strips it on every path).
+- **Holding is a typed decision, never a reply.** On a *proactive* beat the
+  model decides silence by setting the forced `beat_line` tool's
+  `speak: false` — there is no sentinel token to write, so nothing can leak.
+  It must never meet a message the visitor actually sent with silence. (One
+  terminal scrub for the literal `[HOLD]` string remains as defense-in-depth
+  against old saved rule overrides; the token itself is retired.)
 - **The guardrails themselves are editable and versioned.** The entire
   ENGAGEMENT & PACING rule block is an editable base
   (`concierge_config.engagement_base` — Tuning → Engagement → The written rules, with "Load
@@ -273,10 +274,10 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   the **whole trailing run** of its own unprompted lines (not just the last
   one — a statement beat used to "launder" the guard, and the same question
   came back two beats later): while any question of the bot's is pending, every
-  proactive beat is question-free — one true statement if it has one, `[HOLD]`
-  if it doesn't. From the second reach-out on, each beat must open a
-  **different door** — a subject not yet offered — and when every door is
-  spent, the honest move is `[HOLD]`, never invention, so five beats never
+  proactive beat is question-free — one true statement if it has one, a hold
+  (`speak: false`) if it doesn't. From the second reach-out on, each beat must
+  open a **different door** — a subject not yet offered — and when every door
+  is spent, the honest move is a hold, never invention, so five beats never
   orbit one cloth. The rule is **scoped**, not a gag: it governs only the
   bot's own unprompted follow-ups; an ambiguous reply invites a gentle
   clarify, explicit confirmations (a cancellation, a change) are always asked,
