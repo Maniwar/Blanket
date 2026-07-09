@@ -112,6 +112,14 @@
     }
     try { if (window.FEIER_CX_DEBUG) { console.debug('[concierge] skip:', lastSkip); } } catch (eNS) { /* ignore */ }
   }
+  /* Human duration for diagnostics — picks the unit that reads naturally,
+     since admin windows can be set in hours, minutes, or seconds. */
+  function fmtDur(ms) {
+    if (!(ms > 0)) { return '0s'; }
+    if (ms < 90000) { return Math.max(1, Math.round(ms / 1000)) + 's'; }
+    if (ms < 5400000) { return Math.round(ms / 60000) + 'min'; }
+    return Math.round(ms / 3600000) + 'h';
+  }
   var lastSentAt = 0;           /* silence gap between the visitor's messages */
 
   function freshState() {
@@ -2259,12 +2267,12 @@
       return;
     }
     /* Recently purchased with the post-sale beat switched OFF in admin: the
-       bubble stays quiet for the WHOLE window (default 48h). This used to be
-       the only unnamed gate in the path — a buyer could hit it for two days
-       straight with no diagnostic. */
+       bubble stays quiet for the WHOLE window (default 48h; admin can set it
+       in hours, minutes, or seconds). This used to be the only unnamed gate
+       in the path — a buyer could hit it for two days straight with no
+       diagnostic. */
     if (pa !== null && pa < pc.windowMs && !pc.enabled) {
-      var agoTxt = pa < 5400000 ? Math.max(1, Math.round(pa / 60000)) + 'min' : Math.round(pa / 3600000) + 'h';
-      noteSkip('reengage: commissioned ' + agoTxt + ' ago and the post-sale second-sale beat is OFF in admin (Engagement pace → "Re-engage for a second sale after a purchase") — quiet for the remaining ' + Math.max(1, Math.ceil((pc.windowMs - pa) / 3600000)) + 'h of the ' + Math.round(pc.windowMs / 3600000) + 'h window');
+      noteSkip('reengage: commissioned ' + fmtDur(pa) + ' ago and the post-sale second-sale beat is OFF in admin (Engagement pace → "Re-engage for a second sale after a purchase") — quiet for the remaining ' + fmtDur(pc.windowMs - pa) + ' of the ' + fmtDur(pc.windowMs) + ' window');
       return;
     }
     if (!hadActivity) { noteSkip('reengage: no page activity seen yet this visit — scroll/tap/move first (console use doesn\'t count)'); return; }

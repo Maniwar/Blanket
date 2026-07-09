@@ -1235,8 +1235,15 @@
           <div class="ed-grid">
             <div><label class="micro" for="cfg-reengage-grace">Quiet grace after a sale (seconds)</label>
               <input type="number" id="cfg-reengage-grace" class="mono-field" min="0" step="1" placeholder="240"></div>
-            <div><label class="micro" for="cfg-reengage-postwindow">Post-sale upsell window (hours)</label>
-              <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="1" step="1" placeholder="48"></div>
+            <div><label class="micro" for="cfg-reengage-postwindow">Post-sale upsell window</label>
+              <div style="display:flex;gap:6px;">
+                <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="0" step="any" placeholder="48" style="flex:1;min-width:0;">
+                <select id="cfg-reengage-postwindow-unit" class="mono-field" style="max-width:110px;">
+                  <option value="3600000">hours</option>
+                  <option value="60000">minutes</option>
+                  <option value="1000">seconds</option>
+                </select>
+              </div></div>
           </div>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
             <input type="checkbox" id="cfg-reengage-postsale">
@@ -3059,7 +3066,16 @@ async function loadConfig() {
   $('cfg-reengage-signed-idle').value = ms2s(o.reengageIdleSignedMs);
   $('cfg-reengage-signed-max').value = (typeof o.reengageMaxSigned === 'number') ? o.reengageMaxSigned : '';
   $('cfg-reengage-grace').value = (typeof o.reengageGraceMs === 'number') ? Math.round(o.reengageGraceMs / 1000) : '';
-  $('cfg-reengage-postwindow').value = (typeof o.reengagePostSaleWindowMs === 'number') ? Math.round(o.reengagePostSaleWindowMs / 3600000) : '';
+  // Show the window in the largest unit that divides it evenly, so a value
+  // saved as "30 seconds" loads back as 30 seconds, not 0 hours.
+  (function () {
+    const ms = o.reengagePostSaleWindowMs;
+    const fld = $('cfg-reengage-postwindow'), unit = $('cfg-reengage-postwindow-unit');
+    if (typeof ms !== 'number' || !(ms > 0)) { fld.value = ''; unit.value = '3600000'; return; }
+    const u = ms % 3600000 === 0 ? 3600000 : ms % 60000 === 0 ? 60000 : 1000;
+    unit.value = String(u);
+    fld.value = Math.round(ms / u);
+  })();
   $('cfg-reengage-postsale').checked = o.reengagePostSaleEnabled !== false;
   $('cfg-wrapchip-turns').value = (typeof o.wrapChipMinTurns === 'number') ? o.wrapChipMinTurns : '';
   $('cfg-wrapchip-followup').checked = o.wrapChipOnFollowup !== false;
@@ -3176,9 +3192,10 @@ async function saveEngagement() {
   const rGrace = Number($('cfg-reengage-grace').value);
   if ($('cfg-reengage-grace').value !== '' && Number.isFinite(rGrace) && rGrace >= 0) o.reengageGraceMs = Math.round(rGrace * 1000);
   const rPostWin = Number($('cfg-reengage-postwindow').value);
+  const rPostUnit = Number($('cfg-reengage-postwindow-unit').value) || 3600000;
   // > 0, not >= 0: the widget requires a positive window, so a saved 0 would
   // silently fall back to the 48h default — worse than rejecting it here.
-  if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin > 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * 3600000);
+  if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin > 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * rPostUnit);
   o.reengagePostSaleEnabled = $('cfg-reengage-postsale').checked;
   const wcT = Number($('cfg-wrapchip-turns').value);
   if ($('cfg-wrapchip-turns').value !== '' && Number.isFinite(wcT) && wcT >= 0) o.wrapChipMinTurns = Math.round(wcT);

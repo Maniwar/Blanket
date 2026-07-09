@@ -121,8 +121,9 @@ never persisted, lifted early by typing or reload), re-engagement keys (`reengag
 `reengageIdleAnonMs`/`reengageMaxAnon`, `reengageIdleSignedMs`/
 `reengageMaxSigned`, `reengageGraceMs` — congrats quiet right after a purchase,
 entered in *seconds* in the admin, default 4 min; `reengagePostSaleWindowMs` —
-how long after a purchase the bubble pivots to second-sale framing, entered in
-*hours* in the admin because it is a days-scale horizon, default 48 h;
+how long after a purchase the bubble pivots to second-sale framing, entered as
+a value **plus a unit picker (hours / minutes / seconds)** in the admin —
+days-scale in production (default 48 h), seconds-scale for testing;
 `reengagePostSaleEnabled` — bool, default on; **off silences the closed-panel
 bubble for the entire post-sale window**, named in `status().lastSkip` and
 visible in `status().postSale`), wrap-chip visibility (`wrapChipMinTurns` —

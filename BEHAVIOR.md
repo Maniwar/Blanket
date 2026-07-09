@@ -251,8 +251,9 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   applies), whether the chat panel is open or closed. After the sale the bot leads
   with reassurance (grace window), then may re-engage for a companion cloth/gift —
   never "still eyeing it." Timings are admin-tunable (`outreach.reengageGraceMs`,
-  seconds in the admin UI; `reengagePostSaleWindowMs`, **hours** in the admin UI
-  because it is a days-scale horizon, default 48 h; `reengagePostSaleEnabled`).
+  seconds in the admin UI; `reengagePostSaleWindowMs`, a value **with a unit
+  picker — hours, minutes, or seconds** — days-scale in production, default
+  48 h, seconds-scale when testing; `reengagePostSaleEnabled`).
 - **Turning the post-sale beat OFF silences the bubble for the whole window.**
   The Engagement-pace checkbox *"Re-engage for a second sale after a purchase"*
   is a strong switch: unchecked, a visitor who just bought gets **no
