@@ -2563,6 +2563,7 @@
       shell.fail();
       if (nudgeCount > 0) { nudgeCount--; }
       holdAttempts++;
+      noteSkip('beat: the register HELD (' + entryMode + ') — the model judged nothing new worth saying (' + holdAttempts + '/' + effHoldBudget() + ' holds)');
       setStreaming(false);
       if (holdAttempts < effHoldBudget()) { scheduleNudge(true); } /* keep a light presence a while longer */
       return;
@@ -2658,6 +2659,7 @@
       unacked++;                 /* this reach-out is unacknowledged until they show a sign of life */
       entryMode = 'nudge';
       pendingNudge = { seconds: Math.round(wait / 1000), count: nudgeCount, signedIn: !!authEmail };
+      noteSkip('nudge: FIRED (#' + nudgeCount + ') — requesting the line now');
       performRequest({ quiet: true }); /* no phantom typing if it holds */
     }, wait);
   }
@@ -2727,6 +2729,7 @@
       if (composing()) { nudgeTimer = setTimeout(fireOpener, 2000); return; }
       pendingOpener = kind;
       entryMode = 'opener:' + kind;
+      noteSkip('opener(' + kind + '): FIRED — requesting the line now');
       performRequest({ quiet: true }); /* lazy shell — no phantom typing if it holds */
     }
     nudgeTimer = setTimeout(fireOpener, delay);
