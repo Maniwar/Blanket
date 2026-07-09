@@ -115,7 +115,13 @@ optional re-show window — blank = once per section per view), `anonNudges` (bo
 signed-out visitors who haven't typed yet; off = one opener, then wait),
 `substanceGate` (bool, default true — a proactive beat must have
 something new and concrete or it holds; held beats are logged as
-`concierge_actions.action='beat_hold'`), `quietMs` (how long "that's all" /
+`concierge_actions.action='beat_hold'`), `beatJudge` (bool, default true —
+every spoken proactive line gets a second, stricter binary review before the
+visitor sees it; a veto stays silent and writes
+`concierge_actions.action='beat_veto'` with the killed line + reason; the
+judge **fails open** on any API error, and the Actions tab shows the 7-day
+spoke · held · vetoed scoreboard; toggle in Engagement → House rules),
+`quietMs` (how long "that's all" /
 "don't message me" pauses every proactive beat; default 30 min — time-boxed,
 never persisted, lifted early by typing or reload), re-engagement keys (`reengageEnabled`,
 `reengageIdleAnonMs`/`reengageMaxAnon`, `reengageIdleSignedMs`/
@@ -151,7 +157,11 @@ deploy workflow. Simple rules are spent for 24h via their `beat_action` audit
 row; the two *proposals* rest on an **escalating ladder** instead —
 `outreach.proposalRestHours` (default `[24, 72, 168]`: a day, three days, a
 week after each unanswered repeat; a new order or client-book note re-opens
-early). Edited in Engagement → ⑤ After they buy → Fine-tune.
+early). Edited in Engagement → ⑤ After they buy → Fine-tune. The ledger also
+carries **register colour for the proposal briefs**: `byCloth` (kept orders
+per colorway, so a companion proposal names a cloth the patron does NOT yet
+have) and `bookFacts` (the newest 1–2 durable client-book facts, delivered
+with the never-reveal reminder in the same brief).
 
 *Prompt bases as editable text* (versioned like every config key via
 `concierge_edit_history`, History ⟲ in admin; blank = the built-in, and

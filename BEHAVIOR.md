@@ -182,6 +182,26 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   `[HOLD]` sentinel class (decorated holds like `**[HOLD]**` slipping regex
   scrubbing into the transcript) is structurally impossible. One terminal
   scrub remains as defense-in-depth against old saved rule overrides.
+- **A reach-out judge reviews every spoken proactive line before it ships.**
+  An unprompted line arrives uninvited, so it gets a second, stricter reading
+  (a pinned, binary Haiku verdict — the same design as the eval judge) before
+  the visitor sees it. It vetoes only clear defects: leaked plumbing/meta,
+  scorekeeping ("I've reached out twice"), invented commerce (discounts the
+  house never gives), pressure, or broken output. **Fail-open**: if the judge
+  is unreachable the line ships unreviewed — a quality gate must never become
+  an availability risk. A veto stays silent, writes a `beat_veto` audit row
+  (the killed line + the judge's reason), and does **not** mark the decided
+  action spent, so the next beat may retry the same door with a better line.
+  The Actions tab shows the 7-day scoreboard — **spoke · held · vetoed** — and
+  each count filters the log. Toggle: Engagement → House rules ("Review every
+  reach-out before it sends", `outreach.beatJudge`, default on).
+- **Proposal briefs carry register colour — never guesses.** A
+  `PROPOSE_COMPANION` brief tallies the cloths the patron already holds
+  (ledger `byCloth`) and instructs the line to name a colorway they do NOT
+  yet have, for a different room; companion and gift briefs both carry the
+  one or two **newest client-book facts** (ledger `bookFacts`) so the
+  suggestion fits their life — and the never-reveal reminder travels in the
+  same sentence, because the book must never read back as surveillance.
 - **Substance or silence — with speech as the default posture.** A proactive
   beat speaks when it has something **new and concrete** — a register fact not
   yet mentioned, an open goal's next step, a house instruction, an unoffered
@@ -263,6 +283,14 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   so the Actions tab shows deliberate silence and hold rate is a real metric.
   The product-level user stories, acceptance criteria, and the full
   quantitative/qualitative measure set live in [`DESIGN.md`](DESIGN.md) §2.10.
+- **A long reply earns its reading time.** The first follow-up rung is floored
+  to ~300ms per word of the newest assistant reply (capped at 90s) — the
+  widget never interrupts someone mid-paragraph, and `status().readFloorMs`
+  exposes the floor so the conformance harness expects the same number the
+  widget enforces. Server-side defense for other clients: when the reply on
+  screen runs past 80 words, the first beat's hot-exchange override stands
+  down and the brief demands one short fresh step or a hold — never more
+  prose stacked on unread prose.
 - **Opening the panel earns an immediate goal beat.** The open is the visit's
   highest-attention moment, so the goal-directed opener lands while the
   visitor is actually looking: ~1.2s for a signed-in patron, ~3s for an

@@ -1417,6 +1417,10 @@
             <div><label class="micro" for="cfg-goalrate">Score goals on this share of conversations (0–1) <span class="info-badge" title="1 = every conversation, 0.2 = one in five. Lower it to cut model cost at scale; the analytics stay representative.">i</span></label>
               <input type="number" id="cfg-goalrate" class="mono-field" data-unit="0–1" min="0" max="1" step="0.05" placeholder="1"></div>
           </div>
+          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+            <input type="checkbox" id="cfg-beat-judge" checked>
+            <span class="micro"><strong>Review every reach-out before it sends (recommended)</strong> <span class="info-badge" title="A second, stricter reading of each unprompted line — follow-up, opener, and page bubble alike — before the visitor sees it. It kills lines that leak internal wording, keep score of the visitor's silence, invent discounts, or pressure; each kill is logged under Actions with the line and the reason (Reach-outs strip: vetoed). If the reviewer is ever unreachable, lines pass through unreviewed rather than going silent. Costs a moment's delay and a small model charge per reach-out.">i</span></span>
+          </label>
         </details>
 
         <details class="stage" id="stage-rules">
@@ -1663,6 +1667,7 @@ need to ask my partner | Of course — the hold keeps their number while they ta
           <button id="act-apply" class="btn">Search</button>
           <button id="act-clear" class="btn ghost">Clear</button>
         </div>
+        <div id="beat-strip" class="micro" style="margin:2px 0 10px;opacity:.85;"></div>
         <div id="actions-list"></div>
         <div class="card-foot">
           <button id="actions-more" class="btn ghost" style="display:none;">Load more</button>
@@ -3250,6 +3255,7 @@ async function loadConfig() {
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
   $('cfg-substance-gate').checked = o.substanceGate !== false; // default: gated
+  if ($('cfg-beat-judge')) $('cfg-beat-judge').checked = o.beatJudge !== false; // default: reviewed
   $('cfg-anon-nudges').checked = o.anonNudges === true; // default: off
   $('cfg-goalrate').value = (typeof cfg.goal_sample_rate === 'number') ? cfg.goal_sample_rate : '';
   $('cfg-nudgecap').value = (typeof o.nudgeCap === 'number') ? o.nudgeCap : '';
@@ -3656,6 +3662,7 @@ async function saveEngagement() {
   const dr = s2ms('cfg-draft'); if (dr) o.draftMs = dr;
   o.idleReach = $('cfg-idlereach').checked;
   o.substanceGate = $('cfg-substance-gate').checked;
+  if ($('cfg-beat-judge')) o.beatJudge = $('cfg-beat-judge').checked;
   o.anonNudges = $('cfg-anon-nudges').checked;
   const cap = Number($('cfg-nudgecap').value);
   if ($('cfg-nudgecap').value !== '' && Number.isFinite(cap) && cap >= 0) o.nudgeCap = Math.round(cap);
@@ -5498,6 +5505,39 @@ async function loadActions(more) {
   }
   renderActions();
   showMore('actions-more', rows.length === PAGE);
+  if (!more) loadBeatStrip();
+}
+
+/* The reach-out scoreboard: how the proactive beats resolved over the last
+   7 days. SPOKE = a line went out (beat_action) · HELD = the concierge chose
+   silence (beat_hold) · VETOED = it drafted a line and the reach-out judge
+   killed it (beat_veto — the killed line and reason are in the row's payload).
+   Each count filters the log below to its rows on click. */
+async function loadBeatStrip() {
+  const host = $('beat-strip'); if (!host) return;
+  const since = new Date(Date.now() - 7 * 86400000).toISOString();
+  function cnt(action) {
+    return sb.from('concierge_actions').select('id', { count: 'exact', head: true })
+      .eq('action', action).gte('created_at', since)
+      .then(function (r) { return r.error ? null : (r.count || 0); });
+  }
+  const counts = await Promise.all([cnt('beat_action'), cnt('beat_hold'), cnt('beat_veto')]);
+  if (counts.some(function (c) { return c === null; })) { host.textContent = ''; return; }
+  host.textContent = '';
+  host.appendChild(el('span', '', 'Reach-outs, last 7 days: '));
+  [['spoke', 'beat_action', counts[0]], ['held', 'beat_hold', counts[1]], ['vetoed', 'beat_veto', counts[2]]]
+    .forEach(function (seg, i) {
+      if (i) host.appendChild(el('span', '', ' · '));
+      const s = el('span', 'act-link', seg[0] + ' ' + seg[2].toLocaleString('en-US'));
+      if (seg[0] === 'vetoed' && seg[2] > 0) s.style.color = 'var(--warn, #b5651d)';
+      s.title = 'Show only ' + seg[1] + ' rows';
+      s.addEventListener('click', function () { $('act-q').value = seg[1]; loadActions(); });
+      host.appendChild(s);
+    });
+  const info = el('span', 'info-badge', 'i');
+  info.title = 'How the concierge’s unprompted lines resolved. Spoke = a line went out. Held = it chose silence (nothing new worth saying). Vetoed = it drafted a line and the reach-out reviewer killed it before the visitor saw it — the killed line and the reason are in the row. A rising held share means the doors are spent; a rising vetoed share means the drafts are drifting off-rules.';
+  info.style.marginLeft = '6px';
+  host.appendChild(info);
 }
 
 /* Open one order's detail drawer straight from a serial (used by the Actions log,

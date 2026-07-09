@@ -46,6 +46,12 @@ prefix — so proactive beats and plain anonymous chat now form **separate cache
 lineages**. Beats still cache against each other (the beat tool is byte-stable);
 the loss is only the cross-path reuse, minor at this traffic.
 
+The reach-out judge (`outreach.beatJudge`, default on) adds **one small Haiku
+call per SPOKEN proactive line** — a ~600-token review at Haiku pricing,
+pennies per hundred reach-outs. Held beats skip it (nothing to review), and it
+fails open, so a judge outage costs quality review, never availability. Turn
+it off in Engagement → House rules if even that margin matters.
+
 #### How Claude's prompt cache actually works (the mechanism)
 
 This is Anthropic's server-side **prompt caching**, not something we store. What we

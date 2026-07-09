@@ -188,3 +188,38 @@ Deno.test("PLACEHOLDER_ADDR catches test addresses, spares real ones", () => {
   assert(PLACEHOLDER_ADDR.test("123 test street"), "test");
   assert(!PLACEHOLDER_ADDR.test("8201 Peach Orchard Pass, McKinney"), "real address passes");
 });
+
+// ── Enriched proposal briefs (register colour) ──────────────────────────────
+
+Deno.test("companion brief names the held cloths and carries the book facts + never-reveal reminder", () => {
+  const d = chooseBeatAction(
+    ledger({
+      totalOrders: 2,
+      postSaleWindow: true,
+      byCloth: { Loden: 2 },
+      bookFacts: ["prefers muted tones; the study faces north"],
+    }),
+    undefined,
+    { nowMs: NOW },
+  );
+  assertEq(d.action, "PROPOSE_COMPANION", "companion selected");
+  assert(d.detail.includes("2× Loden"), "brief tallies the held cloths: " + d.detail);
+  assert(d.detail.includes("do NOT yet have"), "brief steers to a different colorway");
+  assert(d.detail.includes("prefers muted tones"), "brief carries the book fact");
+  assert(/never quote, cite, or reveal/i.test(d.detail), "the never-reveal reminder travels with the fact");
+});
+
+Deno.test("gift brief carries book facts; both briefs stay plain when the ledger has none", () => {
+  const withFacts = chooseBeatAction(
+    ledger({ totalOrders: 1, bookFacts: ["sister in Hamburg admired it"] }),
+    undefined,
+    { nowMs: NOW },
+  );
+  assertEq(withFacts.action, "PROPOSE_GIFT", "gift selected");
+  assert(withFacts.detail.includes("sister in Hamburg"), "gift brief carries the fact");
+  assert(/never quote, cite, or reveal/i.test(withFacts.detail), "never-reveal reminder present");
+  const plain = chooseBeatAction(ledger({ totalOrders: 1 }), undefined, { nowMs: NOW });
+  assertEq(plain.action, "PROPOSE_GIFT", "gift selected without extras");
+  assert(!/client book/i.test(plain.detail), "no book clause when there are no facts");
+  assert(!plain.detail.includes("They hold"), "no cloth clause when the tally is absent");
+});

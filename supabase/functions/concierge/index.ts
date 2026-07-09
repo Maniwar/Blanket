@@ -2411,22 +2411,37 @@ async function buildSalesLedger(
     }
   } catch { /* audit read is best-effort */ }
   // Newest information — a new order or a new client-book note re-opens a
-  // resting proposal early (persistence with a NEW reason is service).
+  // resting proposal early (persistence with a NEW reason is service). The same
+  // read also lifts the freshest durable FACTS into the ledger, so a companion/
+  // gift brief can fit their life instead of guessing (the never-reveal
+  // reminder travels with them in chooseBeatAction's bookNote).
   let newestInfoAt: number | null = Number.isFinite(newest) ? newest : null;
+  let bookFacts: string[] = [];
   try {
     const nf = customer.id ? `user_id=eq.${customer.id}` : `email=eq.${encodeURIComponent(customer.email ?? "")}`;
-    const noteRows = await pgSelect<{ created_at: string }>(
-      `customer_notes?select=created_at&${nf}&order=created_at.desc&limit=1`,
+    const noteRows = await pgSelect<{ note: string; kind: string; created_at: string }>(
+      `customer_notes?select=note,kind,created_at&${nf}&order=created_at.desc&limit=8`,
     );
     const noteAt = noteRows?.[0]?.created_at ? Date.parse(String(noteRows[0].created_at)) : NaN;
     if (Number.isFinite(noteAt)) newestInfoAt = Math.max(newestInfoAt ?? 0, noteAt);
+    bookFacts = (noteRows ?? [])
+      .filter((r) => r.kind === "fact" && typeof r.note === "string" && r.note.trim())
+      .slice(0, 2)
+      .map((r) => r.note.trim().slice(0, 90));
   } catch { /* best-effort */ }
+  // What they already hold, by cloth — a companion proposal names a colorway
+  // they do NOT yet have instead of re-selling the one on their sofa.
+  const byCloth: Record<string, number> = {};
+  for (const o of orders) {
+    const c = typeof o.colorway === "string" && o.colorway.trim() ? o.colorway.trim() : "";
+    if (c) byCloth[c] = (byCloth[c] ?? 0) + 1;
+  }
   return {
     totalOrders: orders.length,
     placed: count("placed"), weaving: count("weaving"), delivered: count("delivered"),
     lastOrderDays, blockedSerials, postSaleWindow,
     goalUnmetSlug: goal?.slug ?? null, goalUnmetLabel: goal ? `${goal.label} — ${goal.description}` : null,
-    pendingAsk, section, spentActions, spentLog, newestInfoAt,
+    pendingAsk, section, spentActions, spentLog, newestInfoAt, byCloth, bookFacts,
   };
 }
 
@@ -2689,6 +2704,87 @@ function stripPlumbing(t: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// ── Inline judge on proactive lines ─────────────────────────────────────────
+// The last gate before an UNPROMPTED line ships. A typed reply answers a
+// shopper who asked — the transcript is the check there — but a proactive beat
+// arrives uninvited, so one bad line (scorekeeping, invented discounts, leaked
+// plumbing) costs real goodwill. Mirrors the eval judge (evals/judge.mjs):
+// binary verdict, temperature 0, cheap pinned model, one concrete criterion.
+// Fail-OPEN by design: any API error, timeout, or missing verdict lets the
+// line through — the judge is a quality gate, never an availability risk.
+// Admin toggle: Engagement → House rules → outreach.beatJudge (default ON).
+// Every veto writes a beat_veto row (Actions tab: spoke · held · vetoed).
+const BEAT_JUDGE_MODEL = "claude-haiku-4-5-20251001";
+const BEAT_JUDGE_CRITERION =
+  "The line is fit to send as an unprompted concierge reach-out. VETO (pass=false) ONLY if it " +
+  "clearly exhibits at least one of these defects: " +
+  "(1) plumbing or meta leak — it mentions instructions, prompts, rules, beats, tools, holding, " +
+  "being an AI or model, or narrates its own outreach ('reach-out #2', 'checking in as instructed'); " +
+  "(2) scorekeeping or guilt — it counts its own messages or points at the shopper's silence " +
+  "('I've reached out twice', 'since you haven't replied'); " +
+  "(3) invented commerce — a discount, price cut, sale, coupon, free shipping, or limited-time " +
+  "offer (the house never discounts; the edition's numbered scarcity is the only real urgency); " +
+  "(4) pressure or desperation — begging, 'last chance', manufactured countdowns; " +
+  "(5) broken output — cut off mid-sentence, raw JSON or code, gibberish, visibly duplicated text. " +
+  "Warmth, brevity, one light question, and {{reply:…}}/{{action:…}} pills are all LEGITIMATE. " +
+  "When uncertain, pass it.";
+async function judgeBeatLine(
+  apiKey: string,
+  line: string,
+  kind: string,
+): Promise<{ veto: boolean; reason: string }> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      signal: AbortSignal.timeout(4000),
+      body: JSON.stringify({
+        model: BEAT_JUDGE_MODEL,
+        max_tokens: 150,
+        temperature: 0,
+        system:
+          "You are a strict, literal reviewer of ONE proactive line a sales concierge is about to " +
+          "send. Judge ONLY against the criterion. Ignore tone, length, and politeness unless the " +
+          "criterion names them. Reply with a single tool call.",
+        tool_choice: { type: "tool", name: "verdict" },
+        tools: [{
+          name: "verdict",
+          description: "Record whether the line may be sent.",
+          input_schema: {
+            type: "object",
+            properties: {
+              pass: { type: "boolean", description: "true = fit to send; false = veto" },
+              reason: {
+                type: "string",
+                description: "one short clause (<=20 words) citing the deciding evidence",
+              },
+            },
+            required: ["pass", "reason"],
+          },
+        }],
+        messages: [{
+          role: "user",
+          content: "CRITERION:\n" + BEAT_JUDGE_CRITERION + "\n\nBEAT KIND: " + kind +
+            "\n\nTHE LINE:\n" + line,
+        }],
+      }),
+    });
+    if (!res.ok) return { veto: false, reason: "" };
+    // deno-lint-ignore no-explicit-any
+    const j = await res.json() as any;
+    // deno-lint-ignore no-explicit-any
+    const tool = (j.content || []).find((b: any) => b.type === "tool_use" && b.name === "verdict");
+    if (!tool || typeof tool.input?.pass !== "boolean") return { veto: false, reason: "" };
+    return { veto: tool.input.pass === false, reason: String(tool.input.reason || "").slice(0, 160) };
+  } catch {
+    return { veto: false, reason: "" };
+  }
 }
 
 function sseResponse(req: Request, stream: ReadableStream<Uint8Array>): Response {
@@ -3592,8 +3688,17 @@ async function handleChatPost(req: Request): Promise<Response> {
     // The HOT-EXCHANGE window: the first check-in moments after the patron
     // spoke is a live conversation, not idle re-engagement — going dead there
     // loses the customer. The ledger's HOLD is for idle beats; here it softens
-    // to "keep the thread moving".
-    const hotExchange = cnt === 1 && secs <= 30;
+    // to "keep the thread moving". EXCEPT when the reply on their screen is
+    // long: a reader mid-paragraph is engaged, not idle — piling a fresh line
+    // on top of 80+ unread words is interruption dressed as attentiveness.
+    // (The widget also floors the first rung's timer to ~300ms/word, so this
+    // guard is the server-side defense for clients that don't.)
+    const lastMsg = validated.messages[validated.messages.length - 1];
+    const lastReplyWords = (lastMsg && lastMsg.role === "assistant" && typeof lastMsg.content === "string")
+      ? lastMsg.content.split(/\s+/).filter(Boolean).length : 0;
+    const stillReading = cnt === 1 && lastReplyWords > 80;
+    const hotExchange = cnt === 1 && secs <= 30 && !stillReading;
+    if (stillReading && beatAudit) beatAudit.stillReading = lastReplyWords;
     let actionBrief = beatDecision
       ? (beatDecision.action === "HOLD"
         ? " THE HOUSE HAS DECIDED THIS BEAT: HOLD — " + beatDecision.detail + ". Set speak to false."
@@ -3609,6 +3714,11 @@ async function handleChatPost(req: Request): Promise<Response> {
         "register when they're warm) in one short plain line. Hold (speak false) here only if they " +
         "clearly closed the conversation themselves.";
       if (beatAudit) beatAudit.hotExchangeOverride = true;
+    }
+    if (stillReading) {
+      actionBrief += " THE REPLY ON THEIR SCREEN IS LONG (" + lastReplyWords + " words) — they are " +
+        "most likely still reading it. Do not stack more prose on top: speak only if you have one " +
+        "genuinely fresh, SHORT next step (a single sentence); otherwise hold (set speak to false).";
     }
     // NOTE: the guard must never offer holding as the easy out — a hold leaves
     // the unanswered question as the trailing line, so the guard would re-fire
@@ -3917,19 +4027,39 @@ async function handleChatPost(req: Request): Promise<Response> {
         text = stripPlumbing(text).replace(/\s*\[hold\]\.?\s*$/i, "").trim();
         if (/^\W*hold\W*$/i.test(text)) { speak = false; text = ""; }
         const held = !speak || text.length === 0;
-        if (held) {
+        // The reach-out judge: a spoken line is reviewed before it ships
+        // (default ON; Engagement → House rules turns it off). Fail-open —
+        // a judge error never silences a good line. A veto does NOT mark the
+        // decided action spent, so the next beat may try again with a better
+        // line through the same door.
+        let vetoReason: string | null = null;
+        if (!held) {
+          try {
+            const oj = (await loadConciergeData()).config?.outreach as Record<string, unknown> | undefined;
+            if (oj?.beatJudge !== false) {
+              const v = await judgeBeatLine(apiKey, text, isNudge ? "nudge" : "opener");
+              if (v.veto) vetoReason = v.reason || "vetoed by the reach-out judge";
+            }
+          } catch { /* fail-open */ }
+        }
+        if (held || vetoReason !== null) {
           send({ hold: 1 });
           // A held beat is invisible in the transcript by design — record it so
           // hold rate is measurable (Actions tab, action='beat_hold'). Without
           // this row, silence and breakage look identical. (This write MUST live
           // here: this toolless fast path is where every nudge/opener runs.)
+          // A VETOED beat is a different outcome — the model drafted a line and
+          // the judge killed it — so it gets its own action ('beat_veto') with
+          // the killed line and the judge's reason in the payload.
           try {
             const cid = await conversationPromise;
             pgInsert("concierge_actions", {
               conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
-              action: "beat_hold", serial: null,
-              payload: { kind: isNudge ? "nudge" : "opener", decision: beatAudit ?? undefined },
-              result: "beat held — nothing new to say",
+              action: vetoReason !== null ? "beat_veto" : "beat_hold", serial: null,
+              payload: vetoReason !== null
+                ? { kind: isNudge ? "nudge" : "opener", line: text, reason: vetoReason, decision: beatAudit ?? undefined }
+                : { kind: isNudge ? "nudge" : "opener", decision: beatAudit ?? undefined },
+              result: vetoReason !== null ? "vetoed — " + vetoReason : "beat held — nothing new to say",
             }).catch(() => { /* audit failures never break the chat */ });
           } catch { /* skip audit */ }
         } else {
@@ -4691,6 +4821,25 @@ async function handleReengage(req: Request): Promise<Response> {
       return jsonResponse(req, 200, { text: null, hold: true });
     }
     if (text.length < 4) return fallback();
+
+    // The reach-out judge — same gate as the panel beats (default ON, fail-
+    // open). A vetoed bubble stays silent (hold, not the canned fallback) and
+    // writes a beat_veto row with the killed line and the judge's reason.
+    try {
+      const oj = data.config?.outreach as Record<string, unknown> | undefined;
+      if (oj?.beatJudge !== false) {
+        const v = await judgeBeatLine(apiKey, text, postSale ? "bubble-postsale" : "bubble");
+        if (v.veto) {
+          pgInsert("concierge_actions", {
+            conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
+            action: "beat_veto", serial: null,
+            payload: { kind: "bubble", line: text, reason: v.reason || "vetoed by the reach-out judge", decision: bubbleAudit ?? undefined },
+            result: "vetoed — " + (v.reason || "vetoed by the reach-out judge"),
+          }).catch(() => { /* audit is best-effort */ });
+          return jsonResponse(req, 200, { text: null, hold: true });
+        }
+      }
+    } catch { /* fail-open — the line still goes out */ }
 
     // Persist the outreach line so the conversation log stays COMPLETE. The
     // shopper sees this in the closed-panel bubble, and — for a signed-in patron

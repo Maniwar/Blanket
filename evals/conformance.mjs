@@ -160,10 +160,15 @@ async function main() {
       // A typed turn resets the ladder (nudgeCount → 0), so a fired rung is a
       // COUNTER increment — anchor on that, not on log strings, which can hold
       // a stale "FIRED" from a rung that ran off the opener before we typed.
+      // The widget floors the first rung to the reply's reading time
+      // (status().readFloorMs, ~300ms/word) — expect the same number.
       const base = await page.evaluate(() => {
         const s = window.FeierabendConcierge.status();
-        return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "" };
+        return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "", floor: s.readFloorMs || 0 };
       });
+      const eff = Math.max(expected, base.floor);
+      const cfgLabel = expected + " (nudge1 × dial " + mult.toFixed(2) + ")" +
+        (eff > expected ? " floored to " + eff + " by reading time (" + base.floor + "ms)" : "");
       const t0 = Date.now();
       let measured = -1;
       try {
@@ -175,7 +180,7 @@ async function main() {
             return top !== b.top &&
               /nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(top);
           },
-          base, { timeout: expected + 20000, polling: 150 },
+          base, { timeout: eff + 20000, polling: 150 },
         );
         const after = await page.evaluate(() => {
           const s = window.FeierabendConcierge.status();
@@ -183,13 +188,13 @@ async function main() {
         });
         measured = Date.now() - t0;
         const fired = after.n > base.n;
-        const ok = fired && approx(measured, expected, Math.max(3000, expected * 0.5));
-        row("First follow-up after typed reply (ms)", expected + " (nudge1 × dial " + mult.toFixed(2) + ")",
+        const ok = fired && approx(measured, eff, Math.max(3000, eff * 0.5));
+        row("First follow-up after typed reply (ms)", cfgLabel,
           (fired ? "~" + measured : "gated: " + after.top.slice(0, 110)), ok,
           fired ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
       } catch {
         const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
-        row("First follow-up after typed reply (ms)", expected, "no beat within " + (expected + 20000) + "ms", false,
+        row("First follow-up after typed reply (ms)", cfgLabel, "no beat within " + (eff + 20000) + "ms", false,
           "lastSkip at timeout: " + String(skip).slice(0, 120));
       }
     } catch {

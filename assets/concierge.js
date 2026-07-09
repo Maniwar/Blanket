@@ -2163,6 +2163,18 @@
     }
   }
 
+  /* Reading time the last reply has earned: ~300ms per word of the newest
+     assistant message, capped at 90s. The first follow-up rung never fires
+     sooner — a beat that interrupts someone mid-paragraph reads as impatience,
+     not attentiveness. */
+  function readFloorMs() {
+    var i, m = null;
+    for (i = history.length - 1; i >= 0; i--) { if (history[i].role === 'assistant') { m = history[i]; break; } }
+    if (!m || typeof m.content !== 'string') { return 0; }
+    var words = m.content.split(/\s+/).filter(function (w) { return !!w; }).length;
+    return Math.min(90000, words * 300);
+  }
+
   /* Closed-panel re-engagement: when the visitor was active and then went idle
      (panel closed), reach out with a contextual line — the "they paused, notice
      it" beat. Cadence derives from the assertiveness dial (Attentive baseline),
@@ -2794,6 +2806,15 @@
     if (idx >= 4 && typeof o.nudge5Ms === 'number') { wait = o.nudge5Ms; }
     wait = Math.round(wait * assertDelayMult());          /* assertiveness scales the pace */
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
+    /* Reading-time floor (first rung only): a long reply earns its reading
+       time — the first follow-up must never land while they're mid-paragraph.
+       ~300ms per word, capped at 90s so one long reply can't stall the ladder.
+       Exposed as readFloorMs in status() so the conformance harness expects
+       the same number the widget enforces. */
+    if (idx === 0) {
+      var rfl = readFloorMs();
+      if (rfl > wait) { wait = rfl; }
+    }
     /* an attention beat (panel just opened) overrides the ladder — absolute,
        not dial-scaled: the moment is now either way */
     if (typeof quickMs === 'number' && quickMs >= 0) { wait = quickMs; }
@@ -3975,6 +3996,7 @@
         lastRole: history.length ? history[history.length - 1].role : null,
         entryMode: entryMode,
         nudgeTimerArmed: !!nudgeTimer,
+        readFloorMs: readFloorMs(),
         reengage: (function () {
           var c = reengageCfg(), pc = reengagePostCfg(), pa = purchaseAgeMs();
           return {

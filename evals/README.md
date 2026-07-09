@@ -116,8 +116,29 @@ runs weekly); the PASS/FAIL table lands in the job summary and as an artifact.
 A FAIL row names the configured value and what the live widget actually ran —
 paste the table back to the assistant to diagnose.
 
+## Persona evals (the "live back-and-forth" check)
+Scripted turns can't catch failures that only emerge over a real conversation
+— interrogation loops, spec-dumping before discovery, pressure creep. So
+**`persona.mjs`** has a cheap model PLAY a shopper (a hesitant comparer, a
+hurried gift buyer, a happy post-purchase browser) against the deployed
+function for a few turns, then grades the whole conversation: mechanical
+checks (question density, no plumbing leaks, reply length) plus a binary
+conversation-level judge per criterion. **Advisory by design** — two models
+improvising means red rows are leads to read (the failing transcript prints
+inline), never a gate; the exit code is always 0. Run from **Actions →
+Persona Evals** (also weekly), or locally:
+
+```bash
+EVAL_ENDPOINT=... ANTHROPIC_API_KEY=... node evals/persona.mjs
+node evals/persona.mjs --filter gift    # one persona
+```
+
+It lives outside the deploy gauntlet on purpose: its chat turns would eat the
+anonymous rate budget the live smoke + behavior deck already share.
+
 ## Files
 - `scenarios.mjs` — the behavior deck
 - `run.mjs` — replay + report (and `--selftest`)
 - `judge.mjs` — the pinned binary LLM judge
 - `conformance.mjs` — configured ↔ live parameter conformance report
+- `persona.mjs` — advisory persona-simulated multi-turn conversations

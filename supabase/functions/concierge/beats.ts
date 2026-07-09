@@ -25,6 +25,13 @@ export interface SalesLedger {
    * proposal early: persistence with a NEW reason is service, the same ask on a
    * timer is pestering. */
   newestInfoAt: number | null;
+  /** Kept orders per colorway — lets a companion proposal name a cloth they do
+   * NOT yet have instead of guessing. Optional: absent reads as unknown. */
+  byCloth?: Record<string, number>;
+  /** The newest 1–2 client-book snippets — colour for WHICH cloth or WHOM a
+   * gift suits. The book itself stays INVISIBLE to the shopper: the brief that
+   * carries these must also carry the never-reveal reminder. */
+  bookFacts?: string[];
 }
 
 export interface BeatDecision {
@@ -150,6 +157,24 @@ export function chooseBeatAction(
   };
   const fail = (k: string, why: string) => trace.push(`${k}: ${why}`);
 
+  // Register colour for the proposal briefs: what they already hold (so a
+  // companion names a cloth they do NOT have) and the freshest book facts (so
+  // the suggestion fits their life) — with the never-reveal reminder attached,
+  // because the client book must never read back as surveillance.
+  const clothNote = (() => {
+    const parts = Object.entries(l.byCloth ?? {})
+      .filter(([, n]) => typeof n === "number" && n > 0)
+      .map(([c, n]) => `${n}× ${c}`);
+    return parts.length
+      ? ` They hold ${parts.join(", ")} — name a colorway they do NOT yet have, for a different room.`
+      : "";
+  })();
+  const bookNote = (l.bookFacts && l.bookFacts.length)
+    ? ` The client book notes: ${
+      l.bookFacts.map((f) => `"${f}"`).join("; ")
+    } — let this shape which cloth or whom it suits, but NEVER quote, cite, or reveal the book itself: knowledge worn lightly, as a good clerk would.`
+    : "";
+
   if (!enabled("FIX_BLOCKED_ORDER")) fail("FIX_BLOCKED_ORDER", "disabled by admin");
   else if (!l.blockedSerials.length) {
     fail("FIX_BLOCKED_ORDER", "no placed order carries a placeholder address");
@@ -174,7 +199,8 @@ export function chooseBeatAction(
       if (gate.why) trace.push(`PROPOSE_COMPANION: ${gate.why}`);
       return pick(
         "PROPOSE_COMPANION",
-        "they bought recently — invite a companion cloth for ANOTHER room (never re-sell the one they have)",
+        "they bought recently — invite a companion cloth for ANOTHER room (never re-sell the one they have)." +
+          clothNote + bookNote,
       );
     }
   }
@@ -188,7 +214,7 @@ export function chooseBeatAction(
       if (gate.why) trace.push(`PROPOSE_GIFT: ${gate.why}`);
       return pick(
         "PROPOSE_GIFT",
-        "invite a blanket sent as a GIFT — the register card can carry another name",
+        "invite a blanket sent as a GIFT — the register card can carry another name." + bookNote,
       );
     }
   }
