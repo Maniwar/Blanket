@@ -4168,8 +4168,16 @@ async function handleReengage(req: Request): Promise<Response> {
     let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
     text = stripPlumbing(text).replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 240);
     // A deliberate hold: nothing new to say. Distinct from the null fallback so
-    // the client stays SILENT instead of showing its canned line.
+    // the client stays SILENT instead of showing its canned line. Audited like
+    // every other held beat (action='beat_hold') so the hold-rate metric counts
+    // bubbles too — the docs promise "every held beat is logged", and mean it.
     if (/^\[?hold\]?\.?$/i.test(text)) {
+      pgInsert("concierge_actions", {
+        conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
+        action: "beat_hold", serial: null,
+        payload: { kind: "bubble" },
+        result: "beat held — nothing new to say",
+      }).catch(() => { /* audit failures never break the outreach */ });
       return jsonResponse(req, 200, { text: null, hold: true });
     }
     if (text.length < 4) return fallback();

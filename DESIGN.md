@@ -875,10 +875,14 @@ happening.** Stories with acceptance criteria:
   across the whole trailing run of its unprompted lines, not just the last),
   proactive beats contain no question marks; the pending question may return
   only after I speak again.
-- **As a shopper, successive reach-outs don't orbit one topic.**
+- **As a shopper, successive reach-outs don't orbit one topic — on any
+  surface.**
   *Accepted when:* from the second reach-out on, each beat opens a subject not
   yet offered, and when the subjects are spent the bot holds instead of
-  re-wrapping old ones.
+  re-wrapping old ones. This binds the **closed-panel bubble** too: it is
+  shown its own recent lines, a raised subject is spent until I answer, its
+  pending question suppresses further question marks, and its hold is real
+  silence (no canned fallback line) until I show fresh activity.
 - **As a signed-in patron, my conversation survives the tab.**
   *Accepted when:* closing and reopening the site within the kept-transcript
   window restores the visible thread and the bot's context (no re-greeting, no
