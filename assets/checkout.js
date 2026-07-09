@@ -463,12 +463,14 @@
       '.ck-giftline input{accent-color:var(--ck-brass,#A67C3D);width:15px;height:15px;',
       'flex:0 0 auto;cursor:pointer;}',
 
-      /* the key gate: six figures from the letter (or one long pasted key) */
-      '.ck-otprow{display:flex;gap:.7rem;margin-top:.7rem;align-items:stretch;}',
-      '.ck-otp{flex:1 1 11ch;min-width:0;text-align:center;font-family:"IBM Plex Mono",monospace;',
-      'font-size:1.1rem;letter-spacing:.45em;text-indent:.45em;}',
+      /* the key gate: the figures from the letter (or one long pasted key).
+         The input takes the full row — a 6-10 figure code with wide spacing
+         never clips — and the button sits on its own line below. */
+      '.ck-otprow{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:.7rem;align-items:stretch;}',
+      '.ck-otp{flex:1 1 100%;min-width:0;text-align:center;font-family:"IBM Plex Mono",monospace;',
+      'font-size:1.1rem;letter-spacing:.4em;text-indent:.4em;}',
       '.ck-otp.ck-otp-long{letter-spacing:.05em;text-indent:0;font-size:.85rem;}',
-      '.ck-otpbtn{flex:0 0 auto;margin-top:0;}',
+      '.ck-otpbtn{flex:1 1 auto;margin-top:0;}',
 
       /* ---------- act 4 — the register card ---------- */
       '.ck-card{position:relative;overflow:hidden;border:1px solid var(--ck-brass-soft);',
