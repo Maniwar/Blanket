@@ -837,6 +837,37 @@
     pointer-events:none; opacity:.7; }
   .unit-wrap input{ padding-right:44px; width:100%; box-sizing:border-box; }
   #eng-reengage-grid.dim{ opacity:.45; }
+
+  /* ---- Engagement visual round: preset chips, fine-tune, visual calm ---- */
+  .eng-chips{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 4px; }
+  .eng-chiplabel{ opacity:.65; }
+  .eng-chip{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; padding:7px 14px; border:1px solid var(--line,#2a2f27);
+    border-radius:999px; background:transparent; color:var(--brass-soft,#a98f68); cursor:pointer; }
+  .eng-chip:hover{ border-color:var(--brass-soft,#a98f68); }
+  .eng-chip[aria-pressed="true"]{ color:var(--brass,#c49b5b); border-color:var(--brass,#c49b5b);
+    background:rgba(196,155,91,.1); }
+  .eng-chip.is-custom{ border-style:dashed; cursor:default; }
+  .eng-chip.is-undo{ border-style:dotted; }
+  details.finetune{ margin-top:10px; }
+  details.finetune>summary{ cursor:pointer; list-style:none; user-select:none; padding:4px 0;
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--brass-soft,#a98f68); opacity:.7; }
+  details.finetune>summary::-webkit-details-marker{ display:none; }
+  details.finetune>summary::before{ content:"▸ "; opacity:.6; }
+  details.finetune[open]>summary::before{ content:"▾ "; }
+  /* visual calm: sentence-case field labels — all-caps only on stage titles, sub-heads, journey, chips */
+  #engagement-card details.stage label.micro,
+  #engagement-card details.stage .ck-check .micro{ text-transform:none; letter-spacing:.02em; }
+  /* inputs sized to content */
+  #engagement-card input.mono-field[data-unit]{ width:12ch; }
+  #engagement-card .unit-wrap{ display:inline-block; }
+  #engagement-card .eng-ladrow .unit-wrap{ display:block; }
+  #engagement-card .eng-ladrow .unit-wrap input{ width:100%; }
+  details.finetune .ed-grid{ grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px 18px; }
+  /* digest promoted to the stage's accent */
+  .eng-digest{ border-top:none; border-left:2px solid var(--brass,#c49b5b);
+    background:rgba(196,155,91,.05); padding:8px 12px; margin-top:12px; }
 </style>
 </head>
 <body>
@@ -1151,6 +1182,13 @@
         </div>
         <p class="note">On this page, a <strong>reach-out</strong> is any line the concierge speaks without being asked — a bubble beside the closed chat, a hello when the panel opens, or a follow-up mid-conversation. One word, used everywhere below.</p>
         <p class="note eng-dial" id="eng-dial-banner"></p>
+        <div class="eng-chips eng-master" role="radiogroup" aria-label="House manner">
+          <span class="micro eng-chiplabel">House manner</span>
+          <button type="button" class="eng-chip" data-master="discreet" aria-pressed="false">Discreet</button>
+          <button type="button" class="eng-chip" data-master="attentive" aria-pressed="false">Attentive</button>
+          <button type="button" class="eng-chip" data-master="eager" aria-pressed="false">Eager</button>
+          <span class="eng-chip is-custom" hidden>Custom</span>
+        </div>
         <div class="eng-journey" id="eng-journey" role="navigation" aria-label="Jump to a stage">
           <button type="button" data-stage="stage-browse">① Browsing</button>
           <button type="button" data-stage="stage-open">② The panel opens</button>
@@ -1162,30 +1200,37 @@
 
         <details class="stage" id="stage-browse" open>
           <summary>① While they browse — chat closed</summary>
-          <p class="note">Until someone opens the chat, the concierge has two quiet voices: a small bubble beside the chat button, and short "Ask the mill ✳" prompts woven into the page. Everything here answers one question — how present is the house while they simply look?</p>
+          <p class="note">Until someone opens the chat, the concierge has two quiet voices: a bubble beside the chat button and short "Ask the mill ✳" prompts in the page — how present is the house while they simply look?</p>
+          <div class="eng-chips" role="radiogroup" aria-label="Manner" data-stage="stage-browse">
+            <button type="button" class="eng-chip" data-preset="discreet" aria-pressed="false">Discreet</button>
+            <button type="button" class="eng-chip" data-preset="attentive" aria-pressed="false">Attentive</button>
+            <button type="button" class="eng-chip" data-preset="eager" aria-pressed="false">Eager</button>
+            <span class="eng-chip is-custom" hidden>Custom</span>
+            <button type="button" class="eng-chip is-undo" hidden>Undo</button>
+          </div>
+          <details class="finetune">
+            <summary>Fine-tune</summary>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-dwell">First bubble after they've been reading for (seconds)</label>
-              <input type="number" id="cfg-dwell" class="mono-field" data-unit="s" min="5" step="1" placeholder="45">
-              <p class="note" style="margin-top:4px;">The small offer beside the closed chat button. This one timing is exact — the selling dial doesn't move it — though at dial 3+ a second, later bubble may follow.</p></div>
+            <div><label class="micro" for="cfg-dwell">First bubble after they've been reading for (seconds) <span class="info-badge" title="The small offer beside the closed chat button. This one timing is exact — the selling dial doesn't move it — though at dial 3+ a second, later bubble may follow.">i</span></label>
+              <input type="number" id="cfg-dwell" class="mono-field" data-unit="s" min="5" step="1" placeholder="45"></div>
             <div><label class="micro" for="cfg-bubble-withdraw">An ignored bubble fades away after (seconds)</label>
               <input type="number" id="cfg-bubble-withdraw" class="mono-field" data-unit="s" min="3" step="1" placeholder="22"></div>
             <div><label class="micro" for="cfg-maxambient">Bubbles per visit, at most (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
               <input type="number" id="cfg-maxambient" class="mono-field" data-unit="×" data-dial="default-only" data-fx="dial≥4 ? 3 : 2" min="0" step="1" placeholder="2">
               <div class="cfg-state" id="cfg-maxambient-fx"></div></div>
-            <div><label class="micro" for="cfg-unackedcap">Give up after this many ignored reach-outs (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
+            <div><label class="micro" for="cfg-unackedcap">Give up after this many ignored reach-outs (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span> <span class="info-badge" title="If this many reach-outs pass with no sign of life — no scroll, tap, or typing — the concierge stops trying until the visitor stirs. This brake covers every surface, bubble and chat alike.">i</span></label>
               <input type="number" id="cfg-unackedcap" class="mono-field" data-unit="×" data-dial="default-only" data-fx="dial≥4 ? 3 : 2" min="0" step="1" placeholder="2">
-              <div class="cfg-state" id="cfg-unackedcap-fx"></div>
-              <p class="note" style="margin-top:4px;">If this many reach-outs pass with no sign of life — no scroll, tap, or typing — the concierge stops trying until the visitor stirs. This brake covers every surface, bubble and chat alike.</p></div>
+              <div class="cfg-state" id="cfg-unackedcap-fx"></div></div>
           </div>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
             <input type="checkbox" id="cfg-idlereach">
-            <span class="micro"><strong>Also greet visitors who pause before ever scrolling.</strong> Off = the bubble waits for a first scroll, so it only greets people who've shown they're reading.</span>
+            <span class="micro"><strong>Also greet visitors who pause before ever scrolling</strong> <span class="info-badge" title="Off = the bubble waits for a first scroll, so it only greets people who've shown they're reading.">i</span></span>
           </label>
 
           <h4 class="eng-sub">If they go quiet on the page</h4>
-          <p class="note">They were reading, then stopped — chat still closed. The concierge may return with one fresh, relevant line. Blank timing fields follow the selling dial; type a number to pin it exactly.</p>
+          <p class="note">They were reading, then stopped — chat still closed. The concierge may return with one fresh, relevant line.</p>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="cfg-reengage-enabled">
+            <input type="checkbox" id="cfg-reengage-enabled" checked>
             <span class="micro"><strong>Return to a visitor who went quiet.</strong></span>
           </label>
           <div class="ed-grid" id="eng-reengage-grid" style="margin-top:8px;">
@@ -1204,49 +1249,66 @@
           </div>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
             <input type="checkbox" id="cfg-reengage-regrade">
-            <span class="micro"><strong>Re-check this patron's goals just before returning</strong> — the returning line then speaks from the freshest read of their goals, at one extra model call per return. Off = use the last saved read.</span>
+            <span class="micro"><strong>Re-check this patron's goals just before returning</strong> <span class="info-badge" title="The returning line then speaks from the freshest read of their goals, at one extra model call per return. Off = use the last saved read.">i</span></span>
           </label>
 
           <h4 class="eng-sub">Woven into the page itself</h4>
           <p class="note">The concierge's quietest voice: "Ask the mill ✳" starters inside page sections, and a small chip that follows the scroll.</p>
           <div class="ed-grid">
-            <div style="grid-column:1 / -1;"><label class="micro" for="cfg-inline-sections">Show "Ask the mill ✳" starters in these sections</label>
-              <input type="text" id="cfg-inline-sections" class="mono-field" placeholder="why, wool, label, ritual, arrival">
-              <p class="note" style="margin-top:4px;">Valid keys: <code>hero</code>, <code>why</code>, <code>wool</code>, <code>label</code>, <code>ritual</code>, <code>arrival</code>, <code>reserve</code>. Blank = the default five. Add <code>hero</code> to show one on the title page.</p></div>
+            <div style="grid-column:1 / -1;"><label class="micro" for="cfg-inline-sections">Show "Ask the mill ✳" starters in these sections <span class="info-badge" title="Valid keys: hero, why, wool, label, ritual, arrival, reserve — comma-separated. Blank = the default five. Add hero to show one on the title page.">i</span></label>
+              <input type="text" id="cfg-inline-sections" class="mono-field" placeholder="why, wool, label, ritual, arrival"></div>
             <div><label class="micro" for="cfg-chip-cap">Scroll chips per page view, at most (count)</label>
               <input type="number" id="cfg-chip-cap" class="mono-field" data-unit="×" min="0" step="1" placeholder="5"></div>
             <div><label class="micro" for="cfg-chip-linger">A chip stays on screen for (seconds)</label>
               <input type="number" id="cfg-chip-linger" class="mono-field" data-unit="s" min="2" step="1" placeholder="9"></div>
             <div><label class="micro" for="cfg-chip-repeat">A section's chip may return after (minutes)</label>
-              <input type="number" id="cfg-chip-repeat" class="mono-field" data-unit="min" min="1" step="1" placeholder="blank = once per view">
-              <p class="note" style="margin-top:4px;">Blank = each section's chip appears once per page view.</p></div>
+              <input type="number" id="cfg-chip-repeat" class="mono-field" data-unit="min" min="1" step="1" placeholder="blank = once per view"></div>
           </div>
+          </details>
           <div class="cfg-state eng-digest" id="eng-live-browse"></div>
         </details>
 
         <details class="stage" id="stage-open" open>
           <summary>② The moment they open the panel</summary>
-          <p class="note">The open is the visit's highest-attention moment, so the concierge speaks first — a beat sooner or later depending on who arrived. Seconds, decimals allowed; the selling dial does not touch these — the moment is now either way.</p>
+          <p class="note">The open is the visit's highest-attention moment, so the concierge speaks first — a beat sooner or later depending on who arrived.</p>
+          <div class="eng-chips" role="radiogroup" aria-label="Manner" data-stage="stage-open">
+            <button type="button" class="eng-chip" data-preset="discreet" aria-pressed="false">Discreet</button>
+            <button type="button" class="eng-chip" data-preset="attentive" aria-pressed="false">Attentive</button>
+            <button type="button" class="eng-chip" data-preset="eager" aria-pressed="false">Eager</button>
+            <span class="eng-chip is-custom" hidden>Custom</span>
+            <button type="button" class="eng-chip is-undo" hidden>Undo</button>
+          </div>
+          <details class="finetune">
+            <summary>Fine-tune</summary>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-opener-signed">Greet a signed-in patron after (seconds)</label>
+            <div><label class="micro" for="cfg-opener-signed">Greet a signed-in patron after (seconds) <span class="info-badge" title="Seconds, decimals allowed; the selling dial does not touch the timings in this stage — the moment is now either way.">i</span></label>
               <input type="number" id="cfg-opener-signed" class="mono-field" data-unit="s" min="0" step="0.1" placeholder="1.2"></div>
             <div><label class="micro" for="cfg-opener-anon">Speak to a guest, after the house greeting (seconds)</label>
               <input type="number" id="cfg-opener-anon" class="mono-field" data-unit="s" min="0" step="0.1" placeholder="3"></div>
             <div><label class="micro" for="cfg-opener-reengage">Pick a live conversation back up after (seconds)</label>
               <input type="number" id="cfg-opener-reengage" class="mono-field" data-unit="s" min="0" step="0.1" placeholder="1.1"></div>
-            <div><label class="micro" for="cfg-opener-follow">They tapped the bubble — first follow-up after (seconds)</label>
-              <input type="number" id="cfg-opener-follow" class="mono-field" data-unit="s" min="0" step="0.5" placeholder="8">
-              <p class="note" style="margin-top:4px;">The tapped bubble already said hello, so the next line comes quickly.</p></div>
-            <div><label class="micro" for="cfg-opener-cooldown">Don't repeat the hello within (minutes)</label>
-              <input type="number" id="cfg-opener-cooldown" class="mono-field" data-unit="min" min="0" step="1" placeholder="10">
-              <p class="note" style="margin-top:4px;">If the concierge spoke this recently, a re-opened panel picks the thread back up instead of greeting again — a refresh never repeats the welcome.</p></div>
+            <div><label class="micro" for="cfg-opener-follow">They tapped the bubble — first follow-up after (seconds) <span class="info-badge" title="The tapped bubble already said hello, so the next line comes quickly.">i</span></label>
+              <input type="number" id="cfg-opener-follow" class="mono-field" data-unit="s" min="0" step="0.5" placeholder="8"></div>
+            <div><label class="micro" for="cfg-opener-cooldown">Don't repeat the hello within (minutes) <span class="info-badge" title="If the concierge spoke this recently, a re-opened panel picks the thread back up instead of greeting again — a refresh never repeats the welcome.">i</span></label>
+              <input type="number" id="cfg-opener-cooldown" class="mono-field" data-unit="min" min="0" step="1" placeholder="10"></div>
           </div>
+          </details>
           <div class="cfg-state eng-digest" id="eng-live-open"></div>
         </details>
 
         <details class="stage" id="stage-talk" open>
           <summary>③ During the conversation — the follow-up ladder</summary>
           <p class="note">When the visitor goes quiet mid-chat, the concierge follows up on a ladder — quickly at first, then more and more patiently — and only when it has something new to say. <strong>The selling dial paces every rung, even numbers you type.</strong></p>
+          <div class="eng-chips" role="radiogroup" aria-label="Manner" data-stage="stage-talk">
+            <button type="button" class="eng-chip" data-preset="discreet" aria-pressed="false">Discreet</button>
+            <button type="button" class="eng-chip" data-preset="attentive" aria-pressed="false">Attentive</button>
+            <button type="button" class="eng-chip" data-preset="eager" aria-pressed="false">Eager</button>
+            <span class="eng-chip is-custom" hidden>Custom</span>
+            <button type="button" class="eng-chip is-undo" hidden>Undo</button>
+          </div>
+          <div class="eng-ladstrip" id="eng-ladder-strip" aria-hidden="true"></div>
+          <details class="finetune">
+            <summary>Fine-tune</summary>
           <div class="eng-ladrow">
             <div><label class="micro" for="cfg-nudge1">1st, after <span class="eng-dialmark">⚡</span></label>
               <input type="number" id="cfg-nudge1" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="8"></div>
@@ -1259,56 +1321,62 @@
             <div><label class="micro" for="cfg-nudge5">5th &amp; later <span class="eng-dialmark">⚡</span></label>
               <input type="number" id="cfg-nudge5" class="mono-field" data-unit="s" data-dial="always" min="3" step="1" placeholder="300"></div>
           </div>
-          <div class="eng-ladstrip" id="eng-ladder-strip" aria-hidden="true"></div>
           <div class="ed-grid" style="margin-top:12px;">
             <div><label class="micro" for="cfg-nudgecap">Follow-ups per conversation, at most (count) <span class="eng-dialmark" title="Blank follows the selling dial">⚡</span></label>
               <input type="number" id="cfg-nudgecap" class="mono-field" data-unit="×" data-dial="default-only" data-fx="6 + (dial−3)" min="0" step="1" placeholder="6">
               <div class="cfg-state" id="cfg-nudgecap-fx"></div></div>
-            <div><label class="micro" for="cfg-holdbudget">Rest after this many turns with nothing new to say (count)</label>
-              <input type="number" id="cfg-holdbudget" class="mono-field" data-unit="×" min="0" step="1" placeholder="4">
-              <p class="note" style="margin-top:4px;">When a follow-up's moment arrives but there's nothing new worth saying, the concierge holds — silently, and the hold is logged under Actions. After this many silent holds in a row it rests until the visitor speaks or moves.</p></div>
+            <div><label class="micro" for="cfg-holdbudget">Rest after this many turns with nothing new to say (count) <span class="info-badge" title="When a follow-up's moment arrives but there's nothing new worth saying, the concierge holds — silently, and the hold is logged under Actions. After this many silent holds in a row it rests until the visitor speaks or moves.">i</span></label>
+              <input type="number" id="cfg-holdbudget" class="mono-field" data-unit="×" min="0" step="1" placeholder="4"></div>
           </div>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
             <input type="checkbox" id="cfg-anon-nudges">
-            <span class="micro"><strong>Follow up with guests before they've typed.</strong> Off = a guest hears one opener and the concierge then waits for them to speak first. On = the ladder above runs for guests too — still only with something new to say.</span>
+            <span class="micro"><strong>Follow up with guests before they've typed</strong> <span class="info-badge" title="Off = a guest hears one opener and the concierge then waits for them to speak first. On = the ladder above runs for guests too — still only with something new to say.">i</span></span>
           </label>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-            <input type="checkbox" id="cfg-substance-gate">
-            <span class="micro"><strong>Only speak when there's something new to say (recommended).</strong> A follow-up must carry a fresh, concrete fact — an order update, a next step, a house note. Otherwise it stays silent, and the silence is logged under Actions so restraint stays measurable. Off = the older habit of always filling the pause.</span>
+            <input type="checkbox" id="cfg-substance-gate" checked>
+            <span class="micro"><strong>Only speak when there's something new to say (recommended)</strong> <span class="info-badge" title="A follow-up must carry a fresh, concrete fact — an order update, a next step, a house note. Otherwise it stays silent, and the silence is logged under Actions so restraint stays measurable. Off = the older habit of always filling the pause.">i</span></span>
           </label>
 
-          <h4 class="eng-sub">A polite way out</h4>
-          <p class="note">A small "That's all for now" chip gives the visitor a graceful way to end the conversation — and quiets the concierge when tapped. Never shown under the very first reply.</p>
+          <h4 class="eng-sub">A polite way out <span class="info-badge" title="Never shown under the very first reply.">i</span></h4>
+          <p class="note">A small "That's all for now" chip gives the visitor a graceful way to end the conversation — and quiets the concierge when tapped.</p>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-wrapchip-turns">Offer it once the visitor has sent this many messages (count)</label>
-              <input type="number" id="cfg-wrapchip-turns" class="mono-field" data-unit="×" min="0" step="1" placeholder="3">
-              <p class="note" style="margin-top:4px;">0 = offer it from the start.</p></div>
+            <div><label class="micro" for="cfg-wrapchip-turns">Offer it once the visitor has sent this many messages (count) <span class="info-badge" title="0 = offer it from the start.">i</span></label>
+              <input type="number" id="cfg-wrapchip-turns" class="mono-field" data-unit="×" min="0" step="1" placeholder="3"></div>
           </div>
           <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
             <input type="checkbox" id="cfg-wrapchip-followup" checked>
-            <span class="micro"><strong>Also offer it whenever the concierge has just followed up on its own</strong> — being chatted at is exactly when someone wants a polite way out.</span>
+            <span class="micro"><strong>Also offer it whenever the concierge has just followed up on its own</strong> <span class="info-badge" title="Being chatted at is exactly when someone wants a polite way out.">i</span></span>
           </label>
+          </details>
           <div class="cfg-state eng-digest" id="eng-live-talk"></div>
-          <p class="micro" style="margin-top:4px;opacity:.6;">Assumes the visitor stays silent; quiet mode, an open order sheet, or a hold can still still any of these.</p>
+          <span class="info-badge" title="Assumes the visitor stays silent; quiet mode, an open order sheet, or a hold can still stall any of these." style="margin-top:4px;">i</span>
         </details>
 
         <details class="stage" id="stage-register" open>
           <summary>④ At the register</summary>
           <p class="note">One moment with its own clock: the order sheet is open but unfinished. While the sheet is actively worked, the concierge never interrupts.</p>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-draft">Remind about a half-written order after (seconds)</label>
-              <input type="number" id="cfg-draft" class="mono-field" data-unit="s" min="5" step="1" placeholder="25">
-              <p class="note" style="margin-top:4px;">They opened the order sheet, began, then drifted. One gentle reminder.</p></div>
+            <div><label class="micro" for="cfg-draft">Remind about a half-written order after (seconds) <span class="info-badge" title="They opened the order sheet, began, then drifted. One gentle reminder.">i</span></label>
+              <input type="number" id="cfg-draft" class="mono-field" data-unit="s" min="5" step="1" placeholder="25"></div>
           </div>
         </details>
 
         <details class="stage" id="stage-postsale" open>
           <summary>⑤ After they buy</summary>
           <p class="note">A purchase changes the tone: first a quiet moment — the congratulations owns it — then a window where you choose the concierge's manner. "Still thinking it over?" lines never appear after a sale.</p>
+          <div class="eng-chips" role="radiogroup" aria-label="Manner" data-stage="stage-postsale">
+            <button type="button" class="eng-chip" data-preset="quiet" aria-pressed="false">Quiet</button>
+            <button type="button" class="eng-chip" data-preset="present" aria-pressed="false">Present</button>
+            <button type="button" class="eng-chip" data-preset="companion" aria-pressed="false">Companion</button>
+            <span class="eng-chip is-custom" hidden>Custom</span>
+            <button type="button" class="eng-chip is-undo" hidden>Undo</button>
+          </div>
+          <details class="finetune">
+            <summary>Fine-tune</summary>
           <div class="ed-grid">
             <div><label class="micro" for="cfg-reengage-grace">Stay quiet right after the sale for (seconds)</label>
               <input type="number" id="cfg-reengage-grace" class="mono-field" data-unit="s" min="0" step="1" placeholder="240"></div>
-            <div><label class="micro" for="cfg-reengage-postwindow">Then, for the next…</label>
+            <div><label class="micro" for="cfg-reengage-postwindow">Then, for the next… <span class="info-badge" title="How long your chosen manner lasts. Hours-scale in production (say 48); switch the unit to seconds when testing.">i</span></label>
               <div style="display:flex;gap:6px;">
                 <input type="number" id="cfg-reengage-postwindow" class="mono-field" min="0" step="any" placeholder="48" style="flex:1;min-width:0;">
                 <select id="cfg-reengage-postwindow-unit" class="mono-field" style="max-width:110px;">
@@ -1316,40 +1384,34 @@
                   <option value="60000">minutes</option>
                   <option value="1000">seconds</option>
                 </select>
-              </div>
-              <p class="note" style="margin-top:4px;">How long your chosen manner lasts. Hours-scale in production (say 48); switch the unit to seconds when testing.</p></div>
+              </div></div>
           </div>
           <div style="margin-top:8px;">
-            <label class="micro" for="cfg-postsale-mode">…the concierge should</label>
+            <label class="micro" for="cfg-postsale-mode">…the concierge should <span class="info-badge" title="Quiet announces itself in the widget's status readout, so silence never looks like a bug. The page bubble can still propose a companion via its own rule — govern that under The written rules.">i</span></label>
             <select id="cfg-postsale-mode" class="mono-field">
               <option value="upsell">Re-engage for a second sale (companion cloth / gift)</option>
               <option value="presence">Stay present — check in warmly, without selling</option>
               <option value="quiet">Stay quiet through the whole window</option>
             </select>
-            <p class="note" style="margin-top:4px;">Quiet announces itself in the widget's status readout, so silence never looks like a bug. The page bubble can still propose a companion via its own rule — govern that under <em>The written rules</em>.</p>
           </div>
+          </details>
           <div class="cfg-state eng-digest" id="eng-live-postsale"></div>
         </details>
 
-        <details class="stage" id="stage-house" open>
+        <details class="stage" id="stage-house">
           <summary>House rules — always on</summary>
           <p class="note">Limits that hold at every stage of the visit: a visitor's request for quiet, the model bill, and how long anything is remembered.</p>
           <div class="ed-grid">
-            <div><label class="micro" for="cfg-quiet-mins">"That's all for now" silences everything for (minutes)</label>
-              <input type="number" id="cfg-quiet-mins" class="mono-field" data-unit="min" min="1" step="1" placeholder="30">
-              <p class="note" style="margin-top:4px;">A time-boxed pause, not a switch: it lifts by itself after this window, on a page reload, or the moment the visitor types — whichever comes first.</p></div>
-            <div><label class="micro" for="cfg-history-keep">A signed-in patron's transcript is kept for (days)</label>
-              <input type="number" id="cfg-history-keep" class="mono-field" data-unit="days" min="0" step="1" placeholder="7">
-              <p class="note" style="margin-top:4px;">Kept on their device, keyed to their identity, wiped on sign-out; older than this window, the chat starts fresh. Guest chats always stay per-tab.</p></div>
-            <div><label class="micro" for="cfg-rate-signed">Signed-in · replies allowed per 10 minutes (count)</label>
-              <input type="number" id="cfg-rate-signed" class="mono-field" data-unit="×" min="5" step="5" placeholder="60">
-              <p class="note" style="margin-top:4px;">A spending brake, not a pacing tool — reach-outs count too, so this bounds the model bill. Signed-in patrons are keyed by identity.</p></div>
-            <div><label class="micro" for="cfg-rate-anon">Guests · replies allowed per 10 minutes (count)</label>
-              <input type="number" id="cfg-rate-anon" class="mono-field" data-unit="×" min="5" step="5" placeholder="20">
-              <p class="note" style="margin-top:4px;">Guests are keyed by IP.</p></div>
-            <div><label class="micro" for="cfg-goalrate">Score goals on this share of conversations (0–1)</label>
-              <input type="number" id="cfg-goalrate" class="mono-field" data-unit="0–1" min="0" max="1" step="0.05" placeholder="1">
-              <p class="note" style="margin-top:4px;">1 = every conversation, 0.2 = one in five. Lower it to cut model cost at scale; the analytics stay representative.</p></div>
+            <div><label class="micro" for="cfg-quiet-mins">"That's all for now" silences everything for (minutes) <span class="info-badge" title="A time-boxed pause, not a switch: it lifts by itself after this window, on a page reload, or the moment the visitor types — whichever comes first.">i</span></label>
+              <input type="number" id="cfg-quiet-mins" class="mono-field" data-unit="min" min="1" step="1" placeholder="30"></div>
+            <div><label class="micro" for="cfg-history-keep">A signed-in patron's transcript is kept for (days) <span class="info-badge" title="Kept on their device, keyed to their identity, wiped on sign-out; older than this window, the chat starts fresh. Guest chats always stay per-tab.">i</span></label>
+              <input type="number" id="cfg-history-keep" class="mono-field" data-unit="days" min="0" step="1" placeholder="7"></div>
+            <div><label class="micro" for="cfg-rate-signed">Signed-in · replies allowed per 10 minutes (count) <span class="info-badge" title="A spending brake, not a pacing tool — reach-outs count too, so this bounds the model bill. Signed-in patrons are keyed by identity.">i</span></label>
+              <input type="number" id="cfg-rate-signed" class="mono-field" data-unit="×" min="5" step="5" placeholder="60"></div>
+            <div><label class="micro" for="cfg-rate-anon">Guests · replies allowed per 10 minutes (count) <span class="info-badge" title="Guests are keyed by IP.">i</span></label>
+              <input type="number" id="cfg-rate-anon" class="mono-field" data-unit="×" min="5" step="5" placeholder="20"></div>
+            <div><label class="micro" for="cfg-goalrate">Score goals on this share of conversations (0–1) <span class="info-badge" title="1 = every conversation, 0.2 = one in five. Lower it to cut model cost at scale; the analytics stay representative.">i</span></label>
+              <input type="number" id="cfg-goalrate" class="mono-field" data-unit="0–1" min="0" max="1" step="0.05" placeholder="1"></div>
           </div>
         </details>
 
@@ -3341,6 +3403,7 @@ function renderEngFx() {
   /* re-engage dimming */
   const rg = $('eng-reengage-grid'), re = $('cfg-reengage-enabled');
   if (rg && re) rg.classList.toggle('dim', !re.checked);
+  if (window.engPresetSync) window.engPresetSync();
 }
 /* unit suffixes inside inputs + wiring (runs once; the script sits below the DOM) */
 (function engInit() {
@@ -3363,6 +3426,146 @@ function renderEngFx() {
     st.classList.add('flash'); setTimeout(function () { st.classList.remove('flash'); }, 1200);
   });
   renderEngFx();
+})();
+
+/* ---- Engagement presets: one tap per manner; typed values are never lost ----
+   ATTENTIVE writes BLANK into every managed numeric field — blank IS the
+   shipped default (saveEngagement rebuilds outreach from scratch and omits
+   blanks; the widget falls back to its built-ins). Discreet/Eager pin the
+   dial's own endpoints (assets/concierge.js assertDelayMult ×1.5 / ×0.65). */
+(function () {
+  const card = $('engagement-card'); if (!card) return;
+  const ENG_PRESETS = {
+    'stage-browse': {
+      discreet:  { 'cfg-dwell': '70', 'cfg-bubble-withdraw': '15', 'cfg-maxambient': '1', 'cfg-unackedcap': '1', 'cfg-idlereach': false, 'cfg-reengage-enabled': true, 'cfg-reengage-anon-idle': '60', 'cfg-reengage-anon-max': '1', 'cfg-reengage-signed-idle': '45', 'cfg-reengage-signed-max': '2', 'cfg-chip-cap': '3', 'cfg-chip-linger': '7', 'cfg-chip-repeat': '' },
+      attentive: { 'cfg-dwell': '', 'cfg-bubble-withdraw': '', 'cfg-maxambient': '', 'cfg-unackedcap': '', 'cfg-idlereach': false, 'cfg-reengage-enabled': true, 'cfg-reengage-anon-idle': '', 'cfg-reengage-anon-max': '', 'cfg-reengage-signed-idle': '', 'cfg-reengage-signed-max': '', 'cfg-chip-cap': '', 'cfg-chip-linger': '', 'cfg-chip-repeat': '' },
+      eager:     { 'cfg-dwell': '30', 'cfg-bubble-withdraw': '30', 'cfg-maxambient': '3', 'cfg-unackedcap': '3', 'cfg-idlereach': true, 'cfg-reengage-enabled': true, 'cfg-reengage-anon-idle': '26', 'cfg-reengage-anon-max': '4', 'cfg-reengage-signed-idle': '20', 'cfg-reengage-signed-max': '5', 'cfg-chip-cap': '7', 'cfg-chip-linger': '12', 'cfg-chip-repeat': '10' }
+    },
+    'stage-open': {
+      discreet:  { 'cfg-opener-signed': '2.5', 'cfg-opener-anon': '6', 'cfg-opener-reengage': '2', 'cfg-opener-follow': '15', 'cfg-opener-cooldown': '20' },
+      attentive: { 'cfg-opener-signed': '', 'cfg-opener-anon': '', 'cfg-opener-reengage': '', 'cfg-opener-follow': '', 'cfg-opener-cooldown': '' },
+      eager:     { 'cfg-opener-signed': '0.7', 'cfg-opener-anon': '1.5', 'cfg-opener-reengage': '0.8', 'cfg-opener-follow': '5', 'cfg-opener-cooldown': '5' }
+    },
+    'stage-talk': {
+      discreet:  { 'cfg-nudge1': '12', 'cfg-nudge2': '45', 'cfg-nudge3': '135', 'cfg-nudge4': '270', 'cfg-nudge5': '450', 'cfg-nudgecap': '4', 'cfg-holdbudget': '3', 'cfg-anon-nudges': false, 'cfg-substance-gate': true, 'cfg-wrapchip-turns': '2', 'cfg-wrapchip-followup': true },
+      attentive: { 'cfg-nudge1': '', 'cfg-nudge2': '', 'cfg-nudge3': '', 'cfg-nudge4': '', 'cfg-nudge5': '', 'cfg-nudgecap': '', 'cfg-holdbudget': '', 'cfg-anon-nudges': false, 'cfg-substance-gate': true, 'cfg-wrapchip-turns': '', 'cfg-wrapchip-followup': true },
+      eager:     { 'cfg-nudge1': '5', 'cfg-nudge2': '20', 'cfg-nudge3': '60', 'cfg-nudge4': '120', 'cfg-nudge5': '200', 'cfg-nudgecap': '8', 'cfg-holdbudget': '6', 'cfg-anon-nudges': true, 'cfg-substance-gate': true, 'cfg-wrapchip-turns': '4', 'cfg-wrapchip-followup': true }
+    },
+    'stage-postsale': {
+      quiet:     { 'cfg-reengage-grace': '480', 'cfg-reengage-postwindow': '72', 'cfg-reengage-postwindow-unit': '3600000', 'cfg-postsale-mode': 'quiet' },
+      present:   { 'cfg-reengage-grace': '', 'cfg-reengage-postwindow': '', 'cfg-reengage-postwindow-unit': '3600000', 'cfg-postsale-mode': 'presence' },
+      companion: { 'cfg-reengage-grace': '', 'cfg-reengage-postwindow': '', 'cfg-reengage-postwindow-unit': '3600000', 'cfg-postsale-mode': 'upsell' }
+    }
+  };
+  /* ⚡ default-only fields: '' means "follow the dial", so compare RAW —
+     a typed number is pinned and semantically different even when it equals
+     today's dial output. Everything else compares by EFFECTIVE value. */
+  const RAW_IDS = { 'cfg-maxambient': 1, 'cfg-unackedcap': 1, 'cfg-reengage-anon-idle': 1, 'cfg-reengage-anon-max': 1, 'cfg-reengage-signed-idle': 1, 'cfg-reengage-signed-max': 1, 'cfg-nudgecap': 1 };
+  const undoStore = {};      /* stageId -> { snap, timer } */
+  const customLatch = {};    /* stageId -> finetune already auto-opened once */
+
+  function fieldsOf(stageId) { return ENG_PRESETS[stageId] ? ENG_PRESETS[stageId][Object.keys(ENG_PRESETS[stageId])[0]] : null; }
+  function snapshot(stageId) {
+    const snap = {};
+    Object.keys(fieldsOf(stageId)).forEach(function (id) {
+      const el = $(id); if (!el) return;
+      snap[id] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    return snap;
+  }
+  function writeField(id, v) {
+    const el = $(id); if (!el) return;
+    if (el.type === 'checkbox') { el.checked = !!v; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    else { el.value = v; el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); }
+  }
+  function matchPreset(stageId) {
+    const presets = ENG_PRESETS[stageId];
+    const names = Object.keys(presets);
+    for (let n = 0; n < names.length; n++) {
+      const p = presets[names[n]];
+      let ok = true;
+      for (const id in p) {
+        const el = $(id); if (!el) { ok = false; break; }
+        const want = p[id];
+        if (el.type === 'checkbox') { if (el.checked !== !!want) { ok = false; break; } }
+        else if (el.tagName === 'SELECT') { if (el.value !== String(want)) { ok = false; break; } }
+        else if (RAW_IDS[id]) { if (String(el.value) !== String(want)) { ok = false; break; } }
+        else {
+          const ph = Number(el.placeholder);
+          if (!Number.isFinite(ph)) { if (String(el.value) !== String(want)) { ok = false; break; } }
+          else {
+            const have = el.value === '' ? ph : Number(el.value);
+            const target = want === '' ? ph : Number(want);
+            if (have !== target) { ok = false; break; }
+          }
+        }
+      }
+      if (ok) return names[n];
+    }
+    return null;
+  }
+  function applyPreset(stageId, name) {
+    const p = ENG_PRESETS[stageId] && ENG_PRESETS[stageId][name]; if (!p) return;
+    if (matchPreset(stageId) === null) {           /* leaving Custom — offer Undo */
+      const row = card.querySelector('.eng-chips[data-stage="' + stageId + '"]');
+      const undo = row && row.querySelector('.is-undo');
+      if (undo) {
+        if (undoStore[stageId] && undoStore[stageId].timer) { clearTimeout(undoStore[stageId].timer); }
+        undoStore[stageId] = { snap: snapshot(stageId), timer: setTimeout(function () { undo.hidden = true; }, 10000) };
+        undo.hidden = false;
+      }
+    }
+    for (const id in p) { writeField(id, p[id]); }
+  }
+  window.engPresetSync = function () {
+    let masterName = null, masterAgree = true;
+    ['stage-browse', 'stage-open', 'stage-talk', 'stage-postsale'].forEach(function (stageId) {
+      const row = card.querySelector('.eng-chips[data-stage="' + stageId + '"]'); if (!row) return;
+      const m = matchPreset(stageId);
+      row.querySelectorAll('.eng-chip[data-preset]').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-preset') === m));
+      });
+      const cust = row.querySelector('.is-custom'); if (cust) cust.hidden = m !== null;
+      if (stageId !== 'stage-postsale') {
+        if (masterName === null && masterAgree) masterName = m;
+        else if (m !== masterName) masterAgree = false;
+        if (m === null) masterAgree = false;
+      }
+      /* fine-tune summary: pinned count + first-Custom auto-open */
+      const stage = $(stageId);
+      const ft = stage && stage.querySelector('details.finetune');
+      if (ft) {
+        let pinned = 0;
+        Object.keys(fieldsOf(stageId)).forEach(function (id) {
+          const el = $(id); if (el && el.type !== 'checkbox' && el.tagName !== 'SELECT' && el.value !== '') pinned++;
+        });
+        ft.querySelector('summary').textContent = pinned ? 'Fine-tune · ' + pinned + ' pinned' : 'Fine-tune';
+        if (m === null && !customLatch[stageId]) { customLatch[stageId] = true; ft.open = true; }
+      }
+    });
+    const master = card.querySelector('.eng-chips.eng-master');
+    if (master) {
+      const name = masterAgree ? masterName : null;
+      master.querySelectorAll('.eng-chip[data-master]').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-master') === name));
+      });
+      const mc = master.querySelector('.is-custom'); if (mc) mc.hidden = name !== null;
+    }
+  };
+  card.addEventListener('click', function (e) {
+    const pb = e.target.closest('.eng-chip[data-preset]');
+    if (pb) { applyPreset(pb.closest('.eng-chips').getAttribute('data-stage'), pb.getAttribute('data-preset')); return; }
+    const mb = e.target.closest('.eng-chip[data-master]');
+    if (mb) { const n = mb.getAttribute('data-master'); ['stage-browse', 'stage-open', 'stage-talk'].forEach(function (s) { applyPreset(s, n); }); return; }
+    const ub = e.target.closest('.eng-chip.is-undo');
+    if (ub) {
+      const stageId = ub.closest('.eng-chips').getAttribute('data-stage');
+      const st = undoStore[stageId];
+      if (st) { for (const id in st.snap) { writeField(id, st.snap[id]); } if (st.timer) clearTimeout(st.timer); }
+      ub.hidden = true;
+    }
+  });
+  window.engPresetSync();
 })();
 
 /* objections config <-> textarea. Stored as [{trigger,response}]; shown one per
