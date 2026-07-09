@@ -864,6 +864,17 @@
               var msg = typeof r.j.message === 'string' ? r.j.message : 'Recorded.';
               while (card.firstChild) { card.removeChild(card.firstChild); }
               card.appendChild(el('div', 'cx-form-done', '\u2733 ' + msg));
+              /* Durable: rewrite the transcript so any re-render (reopen,
+                 reload, cross-tab restore) shows the form as RECORDED \u2014 the
+                 original {{form:...}} token would otherwise resurrect a
+                 fresh blank form every time the history is drawn. */
+              var tok = '{{form:' + slug + ':' + serial + '}}';
+              for (var hi = 0; hi < history.length; hi++) {
+                if (history[hi].role === 'assistant' && history[hi].content.indexOf(tok) !== -1) {
+                  history[hi].content = history[hi].content
+                    .split(tok).join('\u2733 ' + def.title + ' \u2014 recorded in the register for N\u00ba ' + serial + '.');
+                }
+              }
               history.push({ role: 'assistant', content: '(The register recorded a form submission for N\u00ba ' + serial + ': ' + msg + ')' });
               saveHistory();
             } else {

@@ -3519,7 +3519,12 @@ async function handleChatPost(req: Request): Promise<Response> {
         beatAudit = { action: beatDecision.action, beat: "nudge", ledger, trace: beatDecision.trace };
       }
     } catch { /* ledger is best-effort — the beat falls back to prompt judgment */ }
-    const actionBrief = beatDecision
+    // The HOT-EXCHANGE window: the first check-in moments after the patron
+    // spoke is a live conversation, not idle re-engagement — going dead there
+    // loses the customer. The ledger's HOLD is for idle beats; here it softens
+    // to "keep the thread moving".
+    const hotExchange = cnt === 1 && secs <= 30;
+    let actionBrief = beatDecision
       ? (beatDecision.action === "HOLD"
         ? " THE HOUSE HAS DECIDED THIS BEAT: HOLD — " + beatDecision.detail + ". Reply exactly [HOLD]."
         : " THE HOUSE HAS DECIDED THIS BEAT'S ACTION — computed from the register, not guessed: " +
@@ -3527,6 +3532,14 @@ async function handleChatPost(req: Request): Promise<Response> {
           "plain line — every guardrail above still binds (no question mark if one of yours is " +
           "pending), and do not substitute a different subject.")
       : "";
+    if (hotExchange && (!beatDecision || beatDecision.action === "HOLD")) {
+      actionBrief = " THEY SPOKE ONLY MOMENTS AGO — this is a LIVE exchange, not idle re-engagement, " +
+        "and a live exchange never goes dead on the first beat: offer the single most natural next " +
+        "step (a shade more depth on what they asked, a choice to put in front of them, or the " +
+        "register when they're warm) in one short plain line. [HOLD] here only if they clearly " +
+        "closed the conversation themselves.";
+      if (beatAudit) beatAudit.hotExchangeOverride = true;
+    }
     // NOTE: the guard must never offer holding as the easy out — a hold leaves
     // the unanswered question as the trailing line, so the guard would re-fire
     // on every later beat and the bot would fall silent entirely (a hold loop).

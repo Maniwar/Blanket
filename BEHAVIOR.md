@@ -119,6 +119,14 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   the closed-panel bubble) without replacing the base. Every save lands in
   `concierge_edit_history`. The bullets that follow describe the **built-in**
   defaults.
+- **A live exchange never goes dead on the first beat.** The first check-in
+  after the patron just spoke (check-in #1, within ~30s of their message) is a
+  hot conversation, not idle re-engagement — the substance gate and even a
+  ledger HOLD soften there to "offer the single most natural next step" (more
+  depth, a choice, the register). Holding on that beat is allowed only when
+  the patron clearly closed the conversation themselves. Keeps the post-reply
+  silence inside the first ladder rung (default 20s × dial, tunable via
+  "1st follow-up").
 - **Sell, don't just report.** The substance gate is not a license to become a
   status board: on every spoken beat the bot prefers the line that moves
   *toward the register* — an open goal's next step, a companion cloth for
