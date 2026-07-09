@@ -2153,7 +2153,12 @@
       if (token) { headers['Authorization'] = 'Bearer ' + token; }
       fetch(url, { method: 'POST', headers: headers, body: body })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { cb(j && typeof j.text === 'string' && j.text ? j.text : reengageLine(postSale)); })
+        .then(function (j) {
+          /* a deliberate server hold — everything worth saying was said;
+             stay SILENT rather than falling back to the canned line */
+          if (j && j.hold) { cb(null); return; }
+          cb(j && typeof j.text === 'string' && j.text ? j.text : reengageLine(postSale));
+        })
         ['catch'](function () { cb(reengageLine(postSale)); });
     })['catch'](function () { cb(reengageLine(postSale)); });
   }
@@ -2206,6 +2211,14 @@
     reengageBusy = true;
     fetchReengageLine(postSale, function (line) {
       reengageBusy = false;
+      /* the server held — nothing new to say. Treat it like a spoken beat for
+         pacing (fresh activity required before another try), so the tick
+         doesn't re-ask the register every 4 seconds. */
+      if (!line) {
+        noteSkip('reengage: the register held — everything worth saying has been said (a reply re-opens it)');
+        activeSinceReengage = false;
+        return;
+      }
       /* re-check — state may have changed while the line was being composed */
       if (panelOpen || quietMode || streaming || outreachEl) { return; }
       var c2 = reengageCfg();

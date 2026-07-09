@@ -32,8 +32,8 @@
 
   <rect x="790" y="114" width="350" height="92" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
   <text x="806" y="137" class="t h" font-size="13.5">Re-engage bubble — panel closed</text>
-  <text x="806" y="156" class="m" font-size="11.5">Was active, then went idle. Line composed server-side</text>
-  <text x="806" y="171" class="m" font-size="11.5">from open goals + patron record; withdraws itself (22s)</text>
+  <text x="806" y="156" class="m" font-size="11.5">Was active, then idle. Server-composed from goals + patron;</text>
+  <text x="806" y="171" class="m" font-size="11.5">sees its own recent lines — no repeats; holds when dry (22s)</text>
   <text x="806" y="189" class="m mono" font-size="10.5">reengageIdle*Ms · reengageMax* · bubbleWithdrawMs</text>
 
   <path d="M215 206 L215 236" stroke="#8a7a5a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>

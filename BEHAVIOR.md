@@ -158,7 +158,13 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   bot's own unprompted follow-ups; an ambiguous reply invites a gentle
   clarify, explicit confirmations (a cancellation, a change) are always asked,
   and a pending question may be returned to once the patron speaks again.
-  Persistence stays wanted; repetition is what annoys.
+  Persistence stays wanted; repetition is what annoys. **The closed-panel
+  bubble follows the same rules**: `?reengage=1` composes each line fresh, so
+  it is shown its own recent lines (bubbles are logged to the conversation)
+  and bound to the same contract — spent subjects, no re-asks while a question
+  is pending, and an explicit hold (`{hold:true}`) when nothing new is left,
+  which the client honors with silence (no canned fallback line) until the
+  patron shows fresh activity.
 - **Every pacing number is admin-tunable** (Tuning → Engagement pace, stored on
   the `outreach` config key, no deploy): the five-step in-chat follow-up ladder
   (`nudge1Ms`–`nudge5Ms`, last repeats), `nudgeCap`, `unackedCap` (pause after

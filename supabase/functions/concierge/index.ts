@@ -4069,6 +4069,44 @@ async function handleReengage(req: Request): Promise<Response> {
     const signed = customer !== null;
     const postSale = body.post_sale === true;
 
+    // Anti-repetition for the bubble: this endpoint composes each line fresh,
+    // so without seeing its own recent lines it rediscovers the same subject
+    // every beat (seen live: four bubbles in a row about the same placeholder
+    // addresses, two re-asking the same unanswered question). Bubbles are
+    // logged to the conversation, so read them back and bind the same rules
+    // the in-panel beats follow: spent subjects, no re-asks, hold when dry.
+    let recentLines: string[] = [];
+    let pendingAsk = false;
+    if (cid) {
+      const prior = await pgSelect<{ role: string; content: string }>(
+        `concierge_messages?select=role,content&conversation_id=eq.${cid}&order=created_at.desc&limit=8`,
+      );
+      if (prior && prior.length) {
+        recentLines = prior.filter((m) => m.role === "assistant")
+          .map((m) => String(m.content)).slice(0, 5);
+        // pending = any line in the trailing assistant run (nothing from the
+        // visitor since) still ends in a question mark
+        for (const m of prior) {
+          if (m.role !== "assistant") break;
+          if (/\?\s*["'”’]?\s*$/.test(String(m.content).trim())) { pendingAsk = true; break; }
+        }
+      }
+    }
+    const repeatGuard = recentLines.length
+      ? " YOUR OWN RECENT LINES to this shopper (newest first): " +
+        recentLines.map((l, i) => `[${i + 1}] ${l.slice(0, 140)}`).join("  ") +
+        ". HARD RULES: never repeat, rephrase, or re-ask anything above — a subject already raised " +
+        "(an order, an address, a cloth) is SPENT until the shopper answers; open a genuinely " +
+        "different door." +
+        (pendingAsk
+          ? " A question of yours is still unanswered — this line must contain NO question mark."
+          : "") +
+        " If nothing NEW and TRUE is left to say, reply exactly HOLD (just that word) and nothing else."
+      : "";
+    const askOrStatement = pendingAsk
+      ? "as one plain statement with NO question mark. "
+      : "ending in one light question. ";
+
     // FULL patron context for a signed-in shopper — this outreach line must be
     // able to welcome them back warmly by name, standing, orders, and client
     // book, and honour any open house instruction (customerBlock carries the
@@ -4096,9 +4134,10 @@ async function handleReengage(req: Request): Promise<Response> {
         "browsing again on the '" + (section || "page") + "' section. Write ONE short line (max 30 " +
         "words) that does NOT treat them as undecided — a light nod to their new entry is fine, then " +
         "warmly invite a SECOND blanket: a companion cloth for another room, or one as a gift with the " +
-        "register card in another name. End in one light question. " +
+        "register card in another name, " + askOrStatement +
         (signed ? "They are a signed-in patron." : "They are an anonymous visitor.") +
-        " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line." + houseClause;
+        " Plain text only: no markdown, no quotation marks, no {{tokens}}. Just the line." +
+        houseClause + repeatGuard;
     } else {
       const open = goalStatus
         ? data.goals.filter((g) => (goalStatus![g.slug]?.status ?? "unmet") !== "met")
@@ -4109,10 +4148,10 @@ async function handleReengage(req: Request): Promise<Response> {
         "You are the Mill Concierge for Feierabend, a numbered German wool blanket. Write ONE short " +
         "outreach line (max 30 words) to a shopper who is reading the '" + (section || "page") +
         "' section and has paused with the chat closed. Advance THIS goal, tied to what's in front of " +
-        "them: " + goal.label + " — " + goal.description + ". Warm, specific, ending in one light " +
-        "question. " + (signed ? "They are a signed-in patron; a small nod to that is welcome." :
+        "them: " + goal.label + " — " + goal.description + ". Warm, specific, " + askOrStatement +
+        (signed ? "They are a signed-in patron; a small nod to that is welcome." :
         "They are an anonymous visitor.") + " Plain text only: no markdown, no quotation marks, no " +
-        "{{tokens}}, no greeting boilerplate. Just the line." + houseClause;
+        "{{tokens}}, no greeting boilerplate. Just the line." + houseClause + repeatGuard;
     }
     const started = Date.now();
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -4128,6 +4167,11 @@ async function handleReengage(req: Request): Promise<Response> {
     // deno-lint-ignore no-explicit-any
     let text = blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
     text = stripPlumbing(text).replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 240);
+    // A deliberate hold: nothing new to say. Distinct from the null fallback so
+    // the client stays SILENT instead of showing its canned line.
+    if (/^\[?hold\]?\.?$/i.test(text)) {
+      return jsonResponse(req, 200, { text: null, hold: true });
+    }
     if (text.length < 4) return fallback();
 
     // Persist the outreach line so the conversation log stays COMPLETE. The
