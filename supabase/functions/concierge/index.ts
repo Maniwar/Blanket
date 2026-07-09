@@ -3411,7 +3411,9 @@ async function handleChatPost(req: Request): Promise<Response> {
           "they're browsing (the BROWSING section and page) — e.g. the cloth they're reading about, " +
           "gift vs. their own home — and invite them in. End with a single light question. This is a " +
           "plain spoken line: do NOT use any tools and do NOT write any tool call — just speak. Do " +
-          "not mention this note. One or two sentences.]"
+          "not mention this note. One or two sentences. NEVER reply [HOLD] on this opening beat — " +
+          "opening the panel is their attention at its peak, and even with nothing new in the " +
+          "register a clerk greets the person who just walked in; the hold is for LATER check-ins.]"
         : "[Context note, not the shopper's words: they just reopened the chat to pick the thread " +
           "back up. Re-engage with ONE warm, specific line that advances a conversation goal, drawn " +
           "from the conversation so far and the CUSTOMER block / CLIENT BOOK already above — never a " +
@@ -3419,7 +3421,9 @@ async function handleChatPost(req: Request): Promise<Response> {
           "by the team, weave it into this line in your OWN voice; you need no tool and do NOT resolve it here " +
           "(the house checks it off for you). " + HOUSE_NOTE_GUARD + " This is a plain spoken line: do NOT use any " +
           "tools and do NOT write any tool call (no function-call XML, no {{…}}) — just speak. Do not " +
-          "mention this note. One or two sentences ending in a light question.]") + openerNotes,
+          "mention this note. One or two sentences ending in a light question. NEVER reply [HOLD] on " +
+          "this opening beat — they just walked back in and their attention is at its peak; even with " +
+          "nothing new to sell, a clerk acknowledges the return. The hold is for LATER check-ins.]") + openerNotes,
     });
   }
 

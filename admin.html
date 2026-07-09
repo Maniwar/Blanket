@@ -1147,6 +1147,19 @@
           <div><label class="micro" for="cfg-bubble-withdraw">Bubble withdraws after</label>
             <input type="number" id="cfg-bubble-withdraw" class="mono-field" min="3" step="1" placeholder="22"></div>
         </div>
+        <p class="note" style="margin:14px 0 6px;"><strong>On-page beats</strong> — the inline "Ask the mill ✳" starters woven into page sections, and the floating context chip that appears as the visitor scrolls.</p>
+        <div class="ed-grid">
+          <div style="grid-column:1 / -1;"><label class="micro" for="cfg-inline-sections">Inline starters appear in (section keys, comma-separated)</label>
+            <input type="text" id="cfg-inline-sections" class="mono-field" placeholder="why, wool, label, ritual, arrival">
+            <p class="note" style="margin-top:4px;">Valid keys: <code>hero</code>, <code>why</code>, <code>wool</code>, <code>label</code>, <code>ritual</code>, <code>arrival</code>, <code>reserve</code>. Blank = the default five. Add <code>hero</code> to show one on the title page.</p></div>
+          <div><label class="micro" for="cfg-chip-cap">Context chips per page view (count)</label>
+            <input type="number" id="cfg-chip-cap" class="mono-field" min="0" step="1" placeholder="5"></div>
+          <div><label class="micro" for="cfg-chip-linger">Chip stays on screen (seconds)</label>
+            <input type="number" id="cfg-chip-linger" class="mono-field" min="2" step="1" placeholder="9"></div>
+          <div><label class="micro" for="cfg-chip-repeat">Chip may reappear after (minutes)</label>
+            <input type="number" id="cfg-chip-repeat" class="mono-field" min="1" step="1" placeholder="blank = once per view">
+            <p class="note" style="margin-top:4px;">By default each section's chip shows once per page view — this lets it return after a while.</p></div>
+        </div>
         <div style="margin-top:12px;">
           <label class="micro" for="cfg-history-keep">Kept transcript window (days)</label>
           <input type="number" id="cfg-history-keep" class="mono-field" min="0" step="1" placeholder="7" style="max-width:120px;">
@@ -2990,6 +3003,10 @@ async function loadConfig() {
   $('cfg-opener-anon').value = ms2sDec(o.openerAnonMs);
   $('cfg-opener-reengage').value = ms2sDec(o.openerReengageMs);
   $('cfg-opener-follow').value = ms2sDec(o.openerFollowMs);
+  $('cfg-inline-sections').value = Array.isArray(o.inlineSections) ? o.inlineSections.join(', ') : '';
+  $('cfg-chip-cap').value = (typeof o.chipCap === 'number') ? o.chipCap : '';
+  $('cfg-chip-linger').value = ms2s(o.chipLingerMs);
+  $('cfg-chip-repeat').value = (typeof o.chipRepeatMs === 'number' && o.chipRepeatMs > 0) ? Math.round(o.chipRepeatMs / 60000) : '';
   $('cfg-bubble-withdraw').value = ms2s(o.bubbleWithdrawMs);
   $('cfg-history-keep').value = (typeof o.historyKeepMs === 'number' && o.historyKeepMs > 0) ? Math.round(o.historyKeepMs / 86400000) : '';
   $('cfg-quiet-mins').value = (typeof o.quietMs === 'number' && o.quietMs > 0) ? Math.round(o.quietMs / 60000) : '';
@@ -3089,6 +3106,13 @@ async function saveEngagement() {
   const opA = s2msZ('cfg-opener-anon'); if (opA !== null) o.openerAnonMs = opA;
   const opR = s2msZ('cfg-opener-reengage'); if (opR !== null) o.openerReengageMs = opR;
   const opF = s2msZ('cfg-opener-follow'); if (opF !== null) o.openerFollowMs = opF;
+  const inl = $('cfg-inline-sections').value.split(',').map(s => s.trim().toLowerCase()).filter(s => /^[a-z0-9_-]{1,32}$/.test(s));
+  if (inl.length) o.inlineSections = inl;
+  const ccap = Number($('cfg-chip-cap').value);
+  if ($('cfg-chip-cap').value !== '' && Number.isFinite(ccap) && ccap >= 0) o.chipCap = Math.round(ccap);
+  const cling = s2ms('cfg-chip-linger'); if (cling) o.chipLingerMs = cling;
+  const crep = Number($('cfg-chip-repeat').value);
+  if ($('cfg-chip-repeat').value !== '' && Number.isFinite(crep) && crep > 0) o.chipRepeatMs = Math.round(crep * 60000);
   const bw = s2ms('cfg-bubble-withdraw'); if (bw) o.bubbleWithdrawMs = bw;
   const hk = Number($('cfg-history-keep').value);
   if ($('cfg-history-keep').value !== '' && Number.isFinite(hk) && hk > 0) o.historyKeepMs = Math.round(hk * 86400000);

@@ -296,6 +296,18 @@ follow-up loop is armed in its place.
 - The suggestion chips (and the on-page inline starters) are the admin's
   configured starters **topped up** with the baked KB defaults, per section — so a
   section left blank or only partly filled still offers a few, never one or none.
+- **Where the on-page beats appear is admin-configurable** (Engagement pace →
+  On-page beats): `outreach.inlineSections` lists the sections that carry an
+  inline "Ask the mill ✳" starter (default the five content sections; add
+  `hero` for the title page — its DOM id is `top`, mapped internally, which is
+  why checking hero in the starters alone never showed one). The floating
+  context chip's budget is tunable too: `chipCap` per page view,
+  `chipLingerMs` on screen, and `chipRepeatMs` to let a section's chip
+  reappear after a while instead of the default once-per-view.
+- **The opening beat of a panel session never holds.** The substance gate
+  governs later check-ins; opening the panel is peak attention, so the opener
+  (greet or re-engage) always produces one short warm line — even when the
+  register holds nothing new, the return itself is acknowledged.
 - For a **signed-in** patron the widget leads with **personalized** starters from
   `?starters=1` — built deterministically from their real orders (where's my Nº,
   change the cloth, update the gift card, care guide, show all orders) — then tops

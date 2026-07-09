@@ -1684,23 +1684,35 @@
   }
 
   /* Per-pageview chip state — in memory, so a reload starts fresh and the
-     nudges behave predictably. Caps: once per section, CHIP_CAP per view. */
+     nudges behave predictably. Caps (all admin-configurable via outreach):
+     chipCap per view, once per section unless chipRepeatMs re-arms it,
+     chipLingerMs on screen. */
   var chipShownCount = 0;
-  var chipSeenSections = [];
+  var chipSeenAt = {};          /* section id -> when its chip last showed */
   var CHIP_CAP = 5;
   var CHIP_DWELL_MS = 1100;
   var CHIP_LINGER_MS = 9000;
+  function chipCfg() {
+    var o = orCfg();
+    return {
+      cap: (typeof o.chipCap === 'number' && o.chipCap >= 0) ? o.chipCap : CHIP_CAP,
+      dwell: (typeof o.chipDwellMs === 'number' && o.chipDwellMs >= 0) ? o.chipDwellMs : CHIP_DWELL_MS,
+      linger: (typeof o.chipLingerMs === 'number' && o.chipLingerMs > 0) ? o.chipLingerMs : CHIP_LINGER_MS,
+      repeat: (typeof o.chipRepeatMs === 'number' && o.chipRepeatMs > 0) ? o.chipRepeatMs : 0
+    };
+  }
 
   function onSectionChange(sectionId) {
     updateLauncher();
     if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
     hideChip();
     if (panelOpen) { return; }
-    if (chipShownCount >= CHIP_CAP) { return; }
-    var k;
-    for (k = 0; k < chipSeenSections.length; k++) {
-      if (chipSeenSections[k] === sectionId) { return; }
-    }
+    var cc = chipCfg();
+    if (chipShownCount >= cc.cap) { return; }
+    var seenTs = chipSeenAt[sectionId];
+    /* once per section per view — unless the admin allows a re-show after
+       chipRepeatMs (the "it stopped appearing" dial) */
+    if (seenTs && (!cc.repeat || (Date.now() - seenTs) < cc.repeat)) { return; }
     var sugg = suggestedMap();
     if (!sugg) { return; }
     var list = sugg[sectionId];
@@ -1708,14 +1720,14 @@
     var question = String(list[0]);
     dwellTimer = setTimeout(function () {
       dwellTimer = null;
-      if (panelOpen || currentSection() !== sectionId || chipShownCount >= CHIP_CAP) { return; }
+      if (panelOpen || currentSection() !== sectionId || chipShownCount >= chipCfg().cap) { return; }
       showChip(sectionId, question);
-    }, CHIP_DWELL_MS);
+    }, cc.dwell);
   }
 
   function showChip(sectionId, question) {
     hideChip();
-    chipSeenSections.push(sectionId);
+    chipSeenAt[sectionId] = Date.now();
     chipShownCount++;
     chipEl = el('button', 'cx-chip', question);
     chipEl.type = 'button';
@@ -1729,7 +1741,7 @@
     /* force layout, then fade in */
     void chipEl.offsetWidth;
     chipEl.classList.add('cx-on');
-    chipHideTimer = setTimeout(hideChip, CHIP_LINGER_MS);
+    chipHideTimer = setTimeout(hideChip, chipCfg().linger);
   }
 
   function hideChip() {
@@ -3339,18 +3351,35 @@
   ---------------------------------------------------------- */
   var LIGHT_SECTIONS = { wool: 1, ritual: 1 }; /* wool-coloured backgrounds → ink text */
 
+  /* Where the inline "Ask the mill ✳" starters render — admin-configurable
+     (outreach.inlineSections, an array of section keys) with the baked list as
+     default. 'hero' is a valid key: the hero header's DOM id is 'top', so it
+     is mapped explicitly (checking hero in the starters config used to do
+     nothing because getElementById('hero') found no element). */
+  function inlinePlacementList() {
+    var o = orCfg();
+    var raw = o.inlineSections;
+    if (Object.prototype.toString.call(raw) !== '[object Array]') { return INLINE_SECTIONS; }
+    var out = [], i, v;
+    for (i = 0; i < raw.length && out.length < 12; i++) {
+      v = raw[i];
+      if (typeof v === 'string' && /^[a-z0-9_-]{1,32}$/i.test(v)) { out.push(v.toLowerCase()); }
+    }
+    return out.length ? out : INLINE_SECTIONS;
+  }
   function initInlineStarters() {
-    var i;
-    for (i = 0; i < INLINE_SECTIONS.length; i++) {
+    var list0 = inlinePlacementList(), i;
+    for (i = 0; i < list0.length; i++) {
       (function (id) {
-        var section = document.getElementById(id);
+        var section = document.getElementById(id) ||
+          (id === 'hero' ? (document.getElementById('top') || document.querySelector('header.hero')) : null);
         if (!section) { return; }
         var list = kbSuggested(id);   /* override + baked top-up, so never sparse */
         if (list.length < 2) { return; }
         var question = String(list[1]);
         if (!question) { return; }
         /* match the section's own gutters by living inside its inner wrapper */
-        var target = section.querySelector('.scrub-inner,.specs-inner,.ritual-inner,.arrival-inner');
+        var target = section.querySelector('.hero-content,.scrub-inner,.specs-inner,.ritual-inner,.arrival-inner');
         var pad = false;
         if (!target) {
           var head = section.querySelector('.benefits-head');

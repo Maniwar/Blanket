@@ -106,7 +106,11 @@ via a tapped bubble; default 8s, replaces the first ladder delay for that
 open), `dwellMs`/`dwell2Ms` (closed-panel reach-out delays),
 `draftMs` (half-written-order nudge), `idleReach` (bool), `maxAmbient` (max
 closed-panel reach-outs), `bubbleWithdrawMs` (how long the outreach bubble
-lingers), `substanceGate` (bool, default true — a proactive beat must have
+lingers), *on-page beats:* `inlineSections` (array of section keys where the
+inline "Ask the mill ✳" starters render; default `why,wool,label,ritual,
+arrival`; `hero` maps to the title header), `chipCap`/`chipLingerMs`/
+`chipRepeatMs` (context-chip budget per page view, on-screen time, and an
+optional re-show window — blank = once per section per view), `substanceGate` (bool, default true — a proactive beat must have
 something new and concrete or it holds; held beats are logged as
 `concierge_actions.action='beat_hold'`), `quietMs` (how long "that's all" /
 "don't message me" pauses every proactive beat; default 30 min — time-boxed,
