@@ -794,13 +794,16 @@ insert into public.concierge_config (key, value) values
     "About twelve dollars a year across the fifty it takes to be inherited.",
     "Numbered on the selvedge and entered by hand in the Webbuch, kept since 1897.",
     "Mended by the mill for life — a blanket like this isn't replaced, it's inherited.",
-    "The Feierabend hour: the end of the workday, with it across your knees."
+    "The Feierabend hour: the end of the workday, with it across your knees.",
+    "A gift with the recipient's name in the Webbuch — a way of saying you expect them to keep it for fifty years."
   ]$h$::jsonb),
   ('objections', $o$[
     {"trigger":"price","response":"About twelve dollars a year across the fifty it takes to be inherited — and mended for life. The cost is the last time you buy one."},
     {"trigger":"care","response":"Wool self-cleans; airing handles most days. A cold wool cycle now and then, line dry — wash it less than you think."},
     {"trigger":"commitment","response":"The 30-night trial carries the risk: sleep under it, and if it isn't right, send it back clean for a full refund."},
-    {"trigger":"gift timing","response":"Woven to order, three to five weeks to the door — and the register card can carry the recipient's name."}
+    {"trigger":"gift timing","response":"Woven to order, three to five weeks to the door — and the register card can carry the recipient's name."},
+    {"trigger":"need to ask partner / think about it","response":"Of course — it should be a shared decision. The hold keeps their number while they talk; offer to leave the care and provenance details they'd want to show, and one thread to return to."},
+    {"trigger":"is it worth it vs a known brand","response":"The honest comparison: the great houses' throws run far above this, and the mill's answer is zero synthetic, a numbered edition, and mending for life — acknowledge the other maker fairly, then state the position."}
   ]$o$::jsonb)
 on conflict (key) do nothing;
 

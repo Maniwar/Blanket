@@ -1481,13 +1481,31 @@ About twelve dollars a year across the fifty it takes to be inherited."></textar
           <div class="cfg-state" id="cfg-hooks-state"></div>
         </div>
         <div class="field">
-          <label class="micro" for="cfg-objections">Objection playbook<span class="info-badge" title="One per line as “trigger | response” — the concierge meets the hesitation, then re-opens the door. Blank = none of these; the base voice still handles hesitations. To change the default, edit the Base voice or the SOPs.">i</span></label>
+          <label class="micro" for="cfg-objections">Objection playbook<span class="info-badge" title="One per line as “trigger | response” — the concierge meets the hesitation, then re-opens the door. Blank = none of these; the selling method still handles hesitations (acknowledge → isolate → confirm). Suggested extras: a 'partner / think about it' stall play and a fair brand comparison.">i</span></label>
           <textarea id="cfg-objections" rows="4" placeholder="price | About twelve dollars a year, and mended for life — the cost is the last time you buy one.
-care | Wool self-cleans; airing handles most days. Wash it less than you think."></textarea>
+need to ask my partner | Of course — the hold keeps their number while they talk it over; offer to send the details worth showing."></textarea>
           <div class="field-actions">
             <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="objections">History ⟲</button>
           </div>
           <div class="cfg-state" id="cfg-objections-state"></div>
+        </div>
+        <div class="field" style="margin-top:16px;">
+          <label class="micro" for="cfg-selling-base">The selling method (replaces the built-in when set)<span class="info-badge" title="The full method: discovery before presenting, give-first, the six moves with three close shapes, the held-number endowment, honest proof, price framing, the commission trigger. Keep the {{DIAL}} marker — the live how-hard-to-sell guidance is substituted there (added automatically if missing). High-impact; every save is versioned — History restores any prior one.">i</span></label>
+          <textarea id="cfg-selling-base" rows="10" placeholder="Blank = the built-in selling method. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-selling-base" data-default="selling_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="selling_base">History ⟲</button>
+          </div>
+          <div class="cfg-state" id="cfg-selling-base-state"></div>
+        </div>
+        <div class="field" style="margin-top:16px;">
+          <label class="micro" for="cfg-exemplars-base">Worked examples — how a good turn reads<span class="info-badge" title="Style anchors the model imitates: one example per selling move, plus WEAK→GOOD pairs that show the failures to avoid (bluntness, spec-dumping, reciting the client book). Examples steer style more reliably than rules — edit these to change how the concierge SOUNDS. Keep the WEAK:/GOOD: labels on the contrastive pairs. Versioned; History restores any prior one.">i</span></label>
+          <textarea id="cfg-exemplars-base" rows="8" placeholder="Blank = the built-in worked examples. Press “Load built-in to edit”, tweak, and Save."></textarea>
+          <div class="field-actions">
+            <button class="cfg-linkbtn cfg-loaddefault" type="button" data-target="cfg-exemplars-base" data-default="exemplars_base">Load built-in to edit</button>
+            <button class="cfg-linkbtn cfg-history" type="button" data-entity="config" data-ref="exemplars_base">History ⟲</button>
+          </div>
+          <div class="cfg-state" id="cfg-exemplars-base-state"></div>
         </div>
         <div class="card-foot">
           <button id="save-selling" class="btn primary">Save selling style</button>
@@ -3268,6 +3286,8 @@ async function loadConfig() {
   $('cfg-hooks').value = Array.isArray(cfg.hooks)
     ? cfg.hooks.filter(function (h) { return typeof h === 'string'; }).join('\n') : '';
   $('cfg-objections').value = objectionsToText(cfg.objections);
+  if ($('cfg-selling-base')) $('cfg-selling-base').value = (typeof cfg.selling_base === 'string') ? cfg.selling_base : '';
+  if ($('cfg-exemplars-base')) $('cfg-exemplars-base').value = (typeof cfg.exemplars_base === 'string') ? cfg.exemplars_base : '';
   refreshAllCfgStates();   // "Effect" readouts + revert links reflect the loaded config
   renderSectionToggles(cfg.prompt_sections);   // per-section on/off switches
   populateModelPickers();  // live model dropdown (fire-and-forget)
@@ -3701,7 +3721,9 @@ async function saveSelling() {
     { key: 'primary_objective', value: objective, updated_at: nowIso() },
     { key: 'assertiveness', value: av, updated_at: nowIso() },
     { key: 'hooks', value: hooks, updated_at: nowIso() },
-    { key: 'objections', value: objections, updated_at: nowIso() }
+    { key: 'objections', value: objections, updated_at: nowIso() },
+    { key: 'selling_base', value: String($('cfg-selling-base').value || ''), updated_at: nowIso() },
+    { key: 'exemplars_base', value: String($('cfg-exemplars-base').value || ''), updated_at: nowIso() }
   ];
   const res = await sb.from('concierge_config').upsert(rows, { onConflict: 'key' });
   if (res.error) { fail('Save behavior & selling style', res.error); return; }

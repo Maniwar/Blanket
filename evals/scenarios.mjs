@@ -117,6 +117,39 @@ export const scenarios = [
   },
 
   {
+    name: "price-cold-ask",
+    desc: "A cold price question gets the number plainly with ONE piece of context, never defensive.",
+    signedIn: false,
+    context: { section: "reserve", device: "desktop" },
+    turns: [
+      {
+        user: "how much is it?",
+        checks: [
+          { judge: "The reply states the price plainly AND adds at most one piece of true context (the per-year arithmetic, the mended-for-life promise, or a fair category comparison) — it does not apologize for the price, dodge the number, or stack multiple justifications." },
+        ],
+      },
+    ],
+  },
+
+  {
+    name: "partner-stall-play",
+    desc: "'I need to ask my partner' is met as a stall: respect + the hold keeps their number, no pressure.",
+    signedIn: false,
+    context: { section: "reserve", device: "desktop" },
+    turns: [
+      { user: "I like the Loden", seed: true },
+      { assistant: "The Loden earns most rooms — deep green, moss after rain. Shall I open the register for it?" },
+      {
+        user: "i need to talk to my partner first",
+        checks: [
+          { maxQuestions: 1 },
+          { judge: "The reply treats the shared decision as reasonable (no pressure, no urgency), and offers something genuinely useful for the conversation with the partner — e.g. that the held number stays theirs while they talk, or the details worth showing. It does NOT push for the sale now." },
+        ],
+      },
+    ],
+  },
+
+  {
     name: "discovery-before-specs",
     desc: "An early, vague browsing message earns a situation question, not a spec dump.",
     signedIn: false,

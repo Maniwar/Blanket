@@ -114,9 +114,17 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   ENGAGEMENT & PACING rule block is an editable base
   (`concierge_config.engagement_base` — Tuning → Engagement → The written rules, with "Load
   built-in to edit" and History ⟲ rollback like the voice base; blank = the
-  built-in text below). `beat_notes` additionally appends the admin's own
-  standing instructions to **every** proactive beat brief (nudges, openers,
-  the closed-panel bubble) without replacing the base. Every save lands in
+  built-in text below). So are the **selling method** (`selling_base` —
+  discovery-before-presenting, give-first, the six moves with three close
+  shapes, held-number endowment, honest proof, price framing, the commission
+  trigger; keep the `{{DIAL}}` marker) and the **worked examples**
+  (`exemplars_base` — the few-shot style anchors the model imitates: one pair
+  per move plus WEAK→GOOD contrastive pairs for the house's own historical
+  failures; editing these changes how the concierge *sounds* more reliably
+  than adding rules). Both live in Tuning → Selling. `beat_notes` additionally
+  appends the admin's own standing instructions to **every** proactive beat
+  brief (nudges, openers, the closed-panel bubble) without replacing the bases
+  — ranking below the honesty rules. Every save lands in
   `concierge_edit_history`. The bullets that follow describe the **built-in**
   defaults.
 - **A live exchange never goes dead on the first beat.** The first check-in

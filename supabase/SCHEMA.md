@@ -153,13 +153,21 @@ row; the two *proposals* rest on an **escalating ladder** instead —
 week after each unanswered repeat; a new order or client-book note re-opens
 early). Edited in Engagement → ⑤ After they buy → Fine-tune.
 
-*Engagement guardrails as editable text* (versioned like every config key via
-`concierge_edit_history`, History ⟲ in admin): `engagement_base` — the full
-ENGAGEMENT & PACING rule block (substance-or-silence, sell-don't-report, plain
-speech, never-re-ask, `[HOLD]`); blank = the built-in, `?defaults=1` serves the
-built-in for "Load built-in to edit". `beat_notes` — the admin's standing
-instructions appended to every proactive beat brief (in-chat nudges, openers,
-and the closed-panel bubble) on top of the base.
+*Prompt bases as editable text* (versioned like every config key via
+`concierge_edit_history`, History ⟲ in admin; blank = the built-in, and
+`?defaults=1` serves each built-in for "Load built-in to edit"):
+`engagement_base` — the full ENGAGEMENT & PACING rule block
+(substance-with-speech-as-default, sell-don't-report, plain speech,
+vary-the-door, the hold rule). `selling_base` — the full SELLING method
+(discovery before presenting, give-first, the six moves with three close
+shapes, held-number endowment, honest claimed/remaining proof, price framing,
+gift-as-giver-identity, the commission trigger); keep the `{{DIAL}}` marker —
+the live how-hard-to-sell guidance substitutes there (re-appended if dropped).
+`exemplars_base` — the WORKED EXAMPLES block (one style-anchor pair per move
+plus WEAK→GOOD contrastive pairs for the historical failure modes); its
+section (`exemplars`) is toggleable in prompt_sections like the others.
+`beat_notes` — the admin's standing instructions appended to every proactive
+beat brief on top of the bases (they rank below the honesty rules).
 
 *Reporting & retention keys* (Conversion tab / Edition & access — see
 [`ATTRIBUTION.md`](../ATTRIBUTION.md)): `unit_price` (USD behind every revenue
