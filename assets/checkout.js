@@ -463,11 +463,12 @@
       '.ck-giftline input{accent-color:var(--ck-brass,#A67C3D);width:15px;height:15px;',
       'flex:0 0 auto;cursor:pointer;}',
 
-      /* the key gate: six figures from the letter */
+      /* the key gate: six figures from the letter (or one long pasted key) */
       '.ck-otprow{display:flex;gap:.7rem;margin-top:.7rem;align-items:stretch;}',
-      '.ck-otp{flex:0 1 11ch;text-align:center;font-family:"IBM Plex Mono",monospace;',
+      '.ck-otp{flex:1 1 11ch;min-width:0;text-align:center;font-family:"IBM Plex Mono",monospace;',
       'font-size:1.1rem;letter-spacing:.45em;text-indent:.45em;}',
-      '.ck-otpbtn{flex:1 1 auto;margin-top:0;}',
+      '.ck-otp.ck-otp-long{letter-spacing:.05em;text-indent:0;font-size:.85rem;}',
+      '.ck-otpbtn{flex:0 0 auto;margin-top:0;}',
 
       /* ---------- act 4 — the register card ---------- */
       '.ck-card{position:relative;overflow:hidden;border:1px solid var(--ck-brass-soft);',
@@ -1737,38 +1738,59 @@
     otpInput.className = 'ck-input ck-otp';
     otpInput.type = 'text';
     otpInput.autocomplete = 'one-time-code';
-    otpInput.setAttribute('inputmode', 'numeric');
-    otpInput.setAttribute('maxlength', '6');
-    otpInput.setAttribute('aria-label', 'Six-figure code from the email');
+    /* No maxlength and no numeric-only keyboard: the letter usually carries a
+       short all-digit code, but a differently-configured mailer can send a
+       longer or alphanumeric key — the gate accepts whatever the letter says
+       rather than silently truncating it at six characters. */
+    otpInput.setAttribute('maxlength', '80');
+    otpInput.setAttribute('aria-label', 'The key from the email — the short code, or the whole long key');
     otpInput.placeholder = '······';
     var otpBtn = el('button', 'ck-primary ck-otpbtn', 'Turn the key');
     otpBtn.type = 'button';
     otpRow.appendChild(otpInput);
     otpRow.appendChild(otpBtn);
     var otpLabel = el('p', 'ck-notice',
-      'The letter also carries six figures — copy them here and the lock turns without leaving this page.');
+      'The letter also carries the key’s figures — copy them here and the lock turns without leaving this page. If your letter shows one long key instead, paste the whole thing.');
     box.appendChild(otpLabel);
     box.appendChild(otpRow);
     box.appendChild(sysline);
 
     function tryOtp() {
-      var code = (otpInput.value || '').replace(/\D/g, '');
-      if (code.length !== 6) { say('Six figures — the letter has them under the seal.'); return; }
+      var raw = (otpInput.value || '').replace(/\s+/g, '');
+      if (!raw) { say('The letter has the key — under the seal.'); return; }
+      /* Two shapes of key: the usual short all-digit code (6–10 figures,
+         verified as a token), or a long opaque key (a token hash — some mail
+         templates carry that instead). Try the shape that matches. */
+      var digitCode = /^\d{6,10}$/.test(raw) ? raw : '';
+      var longKey = !digitCode && raw.length >= 16 ? raw : '';
+      if (!digitCode && !longKey) {
+        say('That doesn’t look like the key — copy the figures (or the one long key) exactly as the letter shows them.');
+        return;
+      }
       otpBtn.disabled = true;
       say('');
       ensureSb().then(function (sb) {
         if (!sb) { return null; }
-        return sb.auth.verifyOtp({ email: order.email, token: code, type: 'email' });
+        return digitCode
+          ? sb.auth.verifyOtp({ email: order.email, token: digitCode, type: 'email' })
+          : sb.auth.verifyOtp({ token_hash: longKey, type: 'email' });
       }).then(function (res) {
         otpBtn.disabled = false;
         if (!res) { say(ERR_LINE); return; }
-        if (res.error) { say('Those figures do not turn the lock — check them once more, or resend the key.'); return; }
+        if (res.error) { say('That key does not turn the lock — check it once more, or resend the key.'); return; }
         showAct(3, 1);
       })['catch'](function () { otpBtn.disabled = false; say(ERR_LINE); });
     }
     otpBtn.addEventListener('click', tryOtp);
     otpInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); tryOtp(); }
+    });
+    /* the wide six-figure spacing collapses when a long key is pasted, so the
+       whole key stays readable inside the box */
+    otpInput.addEventListener('input', function () {
+      var long = (otpInput.value || '').replace(/\s+/g, '').length > 10;
+      if (long) { otpInput.classList.add('ck-otp-long'); }
+      else { otpInput.classList.remove('ck-otp-long'); }
     });
 
     var backRow = el('div', 'ck-backrow');
