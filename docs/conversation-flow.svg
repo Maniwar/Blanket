@@ -44,7 +44,7 @@
   <rect x="40" y="240" width="1100" height="118" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
   <text x="56" y="264" class="cap t h">2 · Client gates — a beat that fails one stays silent and names itself</text>
   <g font-size="11.5" class="m">
-    <text x="56" y="288">quiet mode (visitor asked for room — typing lifts it) · follow-up budget spent (nudgeCap) · unacknowledged reach-outs ≥ cap (unackedCap —</text>
+    <text x="56" y="288">quiet mode (time-boxed pause, quietMs — lifts by itself, on reload, or when they type) · follow-up budget spent (nudgeCap) · unacknowledged ≥ cap (unackedCap —</text>
     <text x="56" y="306">any sign of life resumes) · anonymous visitor hasn't typed yet (by design) · last word is the visitor's (reply, don't re-open) · another bubble</text>
     <text x="56" y="324">already on screen · post-sale congrats grace (reengageGraceMs) · demo mode</text>
   </g>

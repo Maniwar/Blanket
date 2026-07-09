@@ -105,7 +105,9 @@ before resting), opener delays `openerSignedMs`/`openerAnonMs`/
 closed-panel reach-outs), `bubbleWithdrawMs` (how long the outreach bubble
 lingers), `substanceGate` (bool, default true — a proactive beat must have
 something new and concrete or it holds; held beats are logged as
-`concierge_actions.action='beat_hold'`), re-engagement keys (`reengageEnabled`,
+`concierge_actions.action='beat_hold'`), `quietMs` (how long "that's all" /
+"don't message me" pauses every proactive beat; default 30 min — time-boxed,
+never persisted, lifted early by typing or reload), re-engagement keys (`reengageEnabled`,
 `reengageIdleAnonMs`/`reengageMaxAnon`, `reengageIdleSignedMs`/
 `reengageMaxSigned`, `reengageGraceMs`, `reengagePostSaleWindowMs`,
 `reengagePostSaleEnabled`), and `historyKeepMs` (how long a signed-in patron's

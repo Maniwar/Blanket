@@ -882,9 +882,12 @@ happening.** Stories with acceptance criteria:
   window restores the visible thread and the bot's context (no re-greeting, no
   repeated pitch); signing out or switching identity wipes the kept copy;
   anonymous chats stay per-tab.
-- **As any visitor, my "leave me alone" always wins.**
-  *Accepted when:* quiet mode stops every beat until I type; unacknowledged
-  reach-outs pause the bot at the configured count.
+- **As any visitor, my "leave me alone" always wins — but doesn't outlive its
+  welcome.**
+  *Accepted when:* quiet mode stops every beat for the configured window
+  (`outreach.quietMs`, default 30 min) and lifts by itself, on reload, or the
+  moment I type — whichever comes first; unacknowledged reach-outs pause the
+  bot at the configured count.
 
 **Merchant-facing**
 

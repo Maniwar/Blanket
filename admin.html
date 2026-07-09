@@ -1150,6 +1150,11 @@
           <input type="number" id="cfg-history-keep" class="mono-field" min="0" step="1" placeholder="7" style="max-width:120px;">
           <p class="note" style="margin-top:4px;">A <strong>signed-in</strong> patron's chat transcript survives closing the tab (kept on their device, keyed to their identity, wiped on sign-out). Older than this window, it starts fresh. Anonymous chats always stay per-tab.</p>
         </div>
+        <div style="margin-top:12px;">
+          <label class="micro" for="cfg-quiet-mins">Quiet-mode pause (minutes)</label>
+          <input type="number" id="cfg-quiet-mins" class="mono-field" min="1" step="1" placeholder="30" style="max-width:120px;">
+          <p class="note" style="margin-top:4px;">How long "That's all for now" / "Don't message me" silences every proactive beat. It's a <strong>time-boxed pause, not a switch</strong>: it lifts by itself after this window, on a page reload (deliberately not persisted), or the moment the visitor types — whichever comes first.</p>
+        </div>
         <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
           <input type="checkbox" id="cfg-idlereach">
           <span class="micro">Reach out to an idle visitor even before they scroll</span>
@@ -2968,6 +2973,7 @@ async function loadConfig() {
   $('cfg-opener-reengage').value = ms2sDec(o.openerReengageMs);
   $('cfg-bubble-withdraw').value = ms2s(o.bubbleWithdrawMs);
   $('cfg-history-keep').value = (typeof o.historyKeepMs === 'number' && o.historyKeepMs > 0) ? Math.round(o.historyKeepMs / 86400000) : '';
+  $('cfg-quiet-mins').value = (typeof o.quietMs === 'number' && o.quietMs > 0) ? Math.round(o.quietMs / 60000) : '';
   $('cfg-dwell').value = ms2s(o.dwellMs);
   $('cfg-draft').value = ms2s(o.draftMs);
   $('cfg-idlereach').checked = o.idleReach !== false; // default: reach out
@@ -3064,6 +3070,8 @@ async function saveEngagement() {
   const bw = s2ms('cfg-bubble-withdraw'); if (bw) o.bubbleWithdrawMs = bw;
   const hk = Number($('cfg-history-keep').value);
   if ($('cfg-history-keep').value !== '' && Number.isFinite(hk) && hk > 0) o.historyKeepMs = Math.round(hk * 86400000);
+  const qm = Number($('cfg-quiet-mins').value);
+  if ($('cfg-quiet-mins').value !== '' && Number.isFinite(qm) && qm > 0) o.quietMs = Math.round(qm * 60000);
   const dw = s2ms('cfg-dwell'); if (dw) o.dwellMs = dw;
   const dr = s2ms('cfg-draft'); if (dr) o.draftMs = dr;
   o.idleReach = $('cfg-idlereach').checked;

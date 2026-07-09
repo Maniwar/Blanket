@@ -119,6 +119,17 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   to **plain speech** (one or two clerk-plain sentences, at most one image,
   every fact verbatim from the register — never invented rituals, meanings, or
   tallies).
+- **Quiet mode is a time-boxed pause, not a switch.** "That's all for now" (the
+  in-flow chip or ⋯ menu) and "Don't message me until I write back" both enter
+  quiet mode, which silences **every** proactive beat — in-panel nudges,
+  openers, and the closed-panel bubble. It lifts three ways, whichever comes
+  first: (1) **by itself** after the quiet window (`outreach.quietMs`, default
+  30 minutes, Tuning → Engagement pace), after which the bot resumes a *light*
+  presence rather than staying dark; (2) **on page reload** — the pause is
+  deliberately not persisted, so a fresh page never inherits an old silence;
+  (3) **the moment the visitor types** — their message always reopens play.
+  Diagnosable live: `FeierabendConcierge.status()` reports `quietMode` and
+  `quietRemainingMs`, and `lastSkip` names the quiet window when it's the gate.
 - **Plain is not blunt; the book is background; status words are law.** Three
   guardrails on the plain-speech correction: (1) dropping poetry never means
   dropping warmth — no curtness, no interrogation, no scorekeeping; a patron

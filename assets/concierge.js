@@ -2176,7 +2176,7 @@
     /* panel open / demo are not diagnostic — stay silent so lastSkip keeps
        the in-panel story; everything below names its gate. */
     if (isDemo() || panelOpen || reengageBusy) { return; }
-    if (quietMode) { noteSkip('reengage: QUIET MODE is on for this tab (typing a message lifts it)'); return; }
+    if (quietMode) { noteSkip('reengage: QUIET MODE — pauses for ' + Math.round(effQuietMs() / 60000) + 'min; lifts by itself, on reload, or when you type'); return; }
     if (streaming) { noteSkip('reengage: a reply is streaming'); return; }
     if (outreachEl) { noteSkip('reengage: an outreach bubble is already on screen (it withdraws by itself after ~22s)'); return; }
     var pc = reengagePostCfg();
@@ -2222,17 +2222,37 @@
      Conversation lifecycle — closing / snoozing (a mix of both:
      the visitor's own signal AND the bot winding down)
   ---------------------------------------------------------- */
-  var QUIET_KEY = 'feier_cx_quiet';
-  var quietMode = false;        /* visitor asked for room; no nudges until they write */
-  try { quietMode = window.sessionStorage.getItem(QUIET_KEY) === '1'; } catch (eQ) { quietMode = false; }
+  var quietMode = false;        /* visitor asked for room — a time-boxed pause, not a switch */
+  var quietTimer = null;        /* auto-lift after the quiet window */
+  var quietUntil = 0;           /* when the current quiet spell ends (for status()) */
+  /* How long "that's all" / "don't message me" holds: admin outreach.quietMs,
+     default 30 minutes. Deliberately NOT persisted — a reload starts fresh,
+     and typing always lifts it early. */
+  function effQuietMs() {
+    var o = orCfg();
+    return (typeof o.quietMs === 'number' && o.quietMs > 0) ? o.quietMs : 30 * 60000;
+  }
   var wrappedUp = false;        /* this conversation has been recorded as closed/snoozed */
 
   function setQuiet(on) {
     quietMode = on;
-    try {
-      if (on) { window.sessionStorage.setItem(QUIET_KEY, '1'); }
-      else { window.sessionStorage.removeItem(QUIET_KEY); }
-    } catch (eSQ) { /* ignore */ }
+    if (quietTimer) { clearTimeout(quietTimer); quietTimer = null; }
+    if (on) {
+      var win = effQuietMs();
+      quietUntil = Date.now() + win;
+      /* the pause lifts by itself — the bot resumes a light presence rather
+         than staying dark until the visitor happens to type */
+      quietTimer = setTimeout(function () {
+        quietTimer = null;
+        if (!quietMode) { return; }
+        quietMode = false;
+        quietUntil = 0;
+        updateWrapPill();
+        if (panelOpen && !streaming && !nudgeTimer) { scheduleNudge(); }
+      }, win);
+    } else {
+      quietUntil = 0;
+    }
     updateWrapPill();
   }
 
@@ -2574,7 +2594,7 @@
     clearNudge();
     if (isDemo()) { noteSkip('nudge: demo mode'); return; }
     if (!panelOpen) { noteSkip('nudge: panel is closed'); return; }
-    if (quietMode) { noteSkip('nudge: QUIET MODE is on for this tab (persists across reload; typing a message lifts it)'); return; }
+    if (quietMode) { noteSkip('nudge: QUIET MODE — pauses for ' + Math.round(effQuietMs() / 60000) + 'min; lifts by itself, on reload, or when you type'); return; }
     var o = orCfg();
     /* Effective caps scale with assertiveness: a more driving concierge circles
        back a couple more times; admin nudgeCap overrides entirely. */
@@ -2631,7 +2651,7 @@
   }
   function openerOnOpenCore() {
     if (isDemo()) { noteSkip('opener: demo mode'); return; }
-    if (quietMode) { noteSkip('opener: QUIET MODE is on for this tab (persists across reload; typing a message lifts it)'); return; }
+    if (quietMode) { noteSkip('opener: QUIET MODE — pauses for ' + Math.round(effQuietMs() / 60000) + 'min; lifts by itself, on reload, or when you type'); return; }
     if (streaming) { noteSkip('opener: a reply is already streaming'); return; }
     if (reengagedThisOpen) { noteSkip('opener: already spoke once this panel session'); return; }
     var last = history.length ? history[history.length - 1] : null;
@@ -3685,6 +3705,7 @@
         email: authEmail || null,
         panelOpen: panelOpen,
         quietMode: quietMode,
+        quietRemainingMs: quietMode ? Math.max(0, quietUntil - Date.now()) : 0,
         wrappedUp: wrappedUp,
         visitorHasTyped: spoke,
         nudgeCount: nudgeCount,
