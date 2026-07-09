@@ -157,27 +157,36 @@ async function main() {
       // Acknowledge the reply too (a reader who got an answer is looking at it).
       await page.mouse.move(410, 350);
       await page.mouse.move(390, 310);
+      // A typed turn resets the ladder (nudgeCount → 0), so a fired rung is a
+      // COUNTER increment — anchor on that, not on log strings, which can hold
+      // a stale "FIRED" from a rung that ran off the opener before we typed.
+      const base = await page.evaluate(() => {
+        const s = window.FeierabendConcierge.status();
+        return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "" };
+      });
       const t0 = Date.now();
       let measured = -1;
       try {
-        // The widget's own diagnostics name each lifecycle event: a fired rung
-        // logs "nudge: FIRED (#1)"; anything else that shows up first is a gate.
         await page.waitForFunction(
-          (since) => {
+          (b) => {
             const s = window.FeierabendConcierge.status();
-            const fresh = (s.recentSkips || []).slice(0, 3).join(" ");
-            return /nudge: FIRED|nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(fresh) &&
-              Date.now() >= since;
+            if ((s.nudgeCount || 0) > b.n) return true;
+            const top = (s.recentSkips || [])[0] || "";
+            return top !== b.top &&
+              /nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(top);
           },
-          t0, { timeout: expected + 20000, polling: 150 },
+          base, { timeout: expected + 20000, polling: 150 },
         );
-        const fresh = await page.evaluate(() => (window.FeierabendConcierge.status().recentSkips || []).slice(0, 3));
+        const after = await page.evaluate(() => {
+          const s = window.FeierabendConcierge.status();
+          return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "" };
+        });
         measured = Date.now() - t0;
-        const firedEntry = fresh.find((s) => /nudge: FIRED \(#1\)/.test(s));
-        const ok = !!firedEntry && approx(measured, expected, Math.max(3000, expected * 0.5));
+        const fired = after.n > base.n;
+        const ok = fired && approx(measured, expected, Math.max(3000, expected * 0.5));
         row("First follow-up after typed reply (ms)", expected + " (nudge1 × dial " + mult.toFixed(2) + ")",
-          (firedEntry ? "~" + measured : "gated: " + String(fresh[0] || "").slice(0, 110)), ok,
-          firedEntry ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
+          (fired ? "~" + measured : "gated: " + after.top.slice(0, 110)), ok,
+          fired ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
       } catch {
         const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
         row("First follow-up after typed reply (ms)", expected, "no beat within " + (expected + 20000) + "ms", false,
