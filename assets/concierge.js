@@ -2130,6 +2130,8 @@
   var currentAbort = null;
   var demoTimers = [];
   var nudgeTimer = null;        /* silence timer while the panel is open */
+  var nudgeArmedMs = 0;         /* the wait the CURRENT timer was armed with (diagnostics) */
+  var nudgeArmedAt = 0;         /* when it was armed (ms epoch) */
   var nudgeCount = 0;           /* proactive follow-ups since the visitor last spoke */
   var pendingNudge = null;      /* {seconds,count} carried into the next request */
   var pendingOpener = null;     /* 'reengage' | 'greet' — carried into the next request */
@@ -2818,6 +2820,8 @@
     /* an attention beat (panel just opened) overrides the ladder — absolute,
        not dial-scaled: the moment is now either way */
     if (typeof quickMs === 'number' && quickMs >= 0) { wait = quickMs; }
+    nudgeArmedMs = wait;   /* status() reports it — the armed wait is a lookup, not a guess */
+    nudgeArmedAt = Date.now();
     nudgeTimer = setTimeout(function () {
       nudgeTimer = null;   /* this arm is consumed — !nudgeTimer checks stay honest */
       if (streaming || !panelOpen || quietMode) {
@@ -3996,6 +4000,8 @@
         lastRole: history.length ? history[history.length - 1].role : null,
         entryMode: entryMode,
         nudgeTimerArmed: !!nudgeTimer,
+        nudgeArmedMs: nudgeArmedMs,
+        nudgeArmedAgoMs: nudgeArmedAt ? (Date.now() - nudgeArmedAt) : null,
         readFloorMs: readFloorMs(),
         reengage: (function () {
           var c = reengageCfg(), pc = reengagePostCfg(), pa = purchaseAgeMs();

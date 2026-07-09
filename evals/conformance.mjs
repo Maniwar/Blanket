@@ -184,13 +184,13 @@ async function main() {
         );
         const after = await page.evaluate(() => {
           const s = window.FeierabendConcierge.status();
-          return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "" };
+          return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "", armed: s.nudgeArmedMs || 0 };
         });
         measured = Date.now() - t0;
         const fired = after.n > base.n;
         const ok = fired && approx(measured, eff, Math.max(3000, eff * 0.5));
         row("First follow-up after typed reply (ms)", cfgLabel,
-          (fired ? "~" + measured : "gated: " + after.top.slice(0, 110)), ok,
+          (fired ? "~" + measured + " (widget armed " + after.armed + "ms)" : "gated: " + after.top.slice(0, 110)), ok,
           fired ? "" : "the beat was gated, not mistimed — the skip reason names the gate");
       } catch {
         const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
