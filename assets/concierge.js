@@ -2805,6 +2805,16 @@
       history.push({ role: 'assistant', content: partial });
       saveHistory();
     }
+    /* A PROACTIVE beat that failed (network / rate limit) must not splash an
+       error at someone who asked nothing — but it must not vanish from the
+       diagnostics either: it was the last invisible lifecycle state (FIRED →
+       …nothing). Name it, and retry later, spaciously. */
+    if (shell.proactive) {
+      noteSkip('beat: request FAILED (' + entryMode + ') — network error or rate limit; nothing was shown');
+      setStreaming(false);
+      scheduleNudge(true);
+      return;
+    }
     addSysLine(ERROR_LINE);
     addRetryChip();
     setStreaming(false);

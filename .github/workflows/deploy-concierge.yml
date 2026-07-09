@@ -86,6 +86,56 @@ jobs:
       - name: Deploy commission function
         run: supabase functions deploy commission --no-verify-jwt
 
+      # QA gate: hit the REAL production endpoints right after deploying. Local
+      # checks (deno check) prove the code parses and types — they cannot prove
+      # the function boots, reaches the model, or that the schema matches. This
+      # step can, because GitHub runners reach supabase.co. session_key is
+      # prefixed "qa-" so smoke traffic is excluded from engagement metrics.
+      - name: Live smoke (production endpoints)
+        run: |
+          BASE="https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1"
+          ORIGIN="https://feier-abend.co"
+          fail=0
+
+          check () { # label expected_codes actual_code
+            echo "$1 -> HTTP $3 (want: $2)"
+            case ",$2," in
+              *,"$3",*) ;;
+              *) echo "::error::Live smoke failed: $1 returned $3, expected one of [$2]"; fail=1 ;;
+            esac
+          }
+
+          code=$(curl -sS -o /tmp/cfg.json -w '%{http_code}' --max-time 30 \
+            -H "Origin: $ORIGIN" "$BASE/concierge?config=1" || echo 000)
+          check "GET concierge?config=1" "200" "$code"
+
+          code=$(curl -sS -o /tmp/chat.txt -w '%{http_code}' --max-time 120 \
+            -H "Origin: $ORIGIN" -H "Content-Type: application/json" \
+            -d '{"messages":[{"role":"user","content":"smoke ping — reply with one word"}],"session_key":"qa-smoke-ci","context":{}}' \
+            "$BASE/concierge" || echo 000)
+          check "POST concierge (anon chat)" "200,429" "$code"
+          if [ "$code" = "200" ] && [ ! -s /tmp/chat.txt ]; then
+            echo "::error::Live smoke failed: chat returned 200 but an empty body — the model call likely broke"
+            fail=1
+          fi
+
+          code=$(curl -sS -o /tmp/re.json -w '%{http_code}' --max-time 120 \
+            -H "Origin: $ORIGIN" -H "Content-Type: application/json" \
+            -d '{"session_key":"qa-smoke-ci","context":{}}' \
+            "$BASE/concierge?reengage=1" || echo 000)
+          check "POST concierge?reengage=1" "200,429" "$code"
+
+          code=$(curl -sS -o /tmp/comm.json -w '%{http_code}' --max-time 30 \
+            -H "Origin: $ORIGIN" -H "Content-Type: application/json" \
+            -d '{}' "$BASE/commission" || echo 000)
+          check "POST commission {} (validation reject)" "400,429" "$code"
+
+          if [ "$fail" = "1" ]; then
+            echo "::error::One or more live smoke checks failed — the deployed functions are NOT healthy."
+            exit 1
+          fi
+          echo "All live smoke checks passed — production endpoints are answering correctly."
+
       - name: Print endpoint
         run: |
           echo "Endpoint: https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/concierge"

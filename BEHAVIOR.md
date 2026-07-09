@@ -308,7 +308,13 @@ diagnostics on any page where it's mounted — open the browser console and run:
 - **`status().lastSkip`** — the headline field: names, in plain language with a
   timestamp, the exact gate that stopped the **most recent** proactive beat
   (e.g. *"reengage: not idle long enough — fires after 30s still; last activity
-  4s ago (moving the mouse resets the clock)"*).
+  4s ago (moving the mouse resets the clock)"*). It covers the **whole
+  lifecycle**, not just gates: when a beat's timer fires it records *"beat:
+  FIRED — requesting the line now"*; if the register decides silence it becomes
+  *"beat: the register HELD …"*; and if the network request itself dies (offline,
+  rate limit, server error) it becomes *"beat: request FAILED — network error or
+  rate limit; nothing was shown"* and a spacious retry is armed. A proactive
+  beat can therefore never vanish without a trace — silence always has a name.
 - **`window.FEIER_CX_DEBUG = true`** — from then on, every skipped beat also
   logs live to the console (`[concierge] skip: …`) as it happens.
 - **`FeierabendConcierge.open()` / `.close()`** — programmatic panel control

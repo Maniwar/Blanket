@@ -283,8 +283,13 @@ concierge@feier-abend.co.
 
 The **Deploy Concierge** GitHub Action deploys **both** functions (concierge
 and commission) and, when `SUPABASE_DB_PASSWORD` is set, runs `supabase db push`
-first. To deploy this one by hand instead, apply migrations first (Supabase MCP
-server or `supabase db push`), then:
+first. After deploying, it runs a **live smoke test against the production
+endpoints** (config fetch, an anonymous chat turn under the metrics-excluded
+`qa-smoke-ci` session key, a re-engage call, and a commission validation
+reject) — the workflow goes red if the deployed functions don't answer
+correctly, so a green run means the live surface was actually exercised, not
+just type-checked. To deploy this one by hand instead, apply migrations first
+(Supabase MCP server or `supabase db push`), then:
 
 ```bash
 supabase functions deploy commission --no-verify-jwt
