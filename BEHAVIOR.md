@@ -173,6 +173,14 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`).
 
 ## Chat panel & composer (client UX)
+- **"That's all for now" is a visible control, not a hidden menu item.** Once a
+  real exchange exists (one visitor turn + one bot turn), a small pill appears
+  above the composer — one tap wraps the conversation: quiet mode on, the
+  register records the wrap, a warm goodbye, and the panel closes. It hides
+  again while there's nothing to wrap (fresh chat, already wrapped, quiet).
+  The ⋯ menu keeps both signals ("Don't message me until I write back" and
+  "That's all for now") for completeness; typing again always lifts the quiet
+  and starts a fresh conversation.
 - **A brief tab-switch does not end the conversation.** Glancing at another tab
   (e.g. the admin) no longer marks the live chat "closed" — the wind-down fires
   only on a real leave (tab hidden ~60s, or an actual page unload). An explicit
