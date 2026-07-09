@@ -124,9 +124,11 @@ entered in *seconds* in the admin, default 4 min; `reengagePostSaleWindowMs` —
 how long after a purchase the bubble pivots to second-sale framing, entered as
 a value **plus a unit picker (hours / minutes / seconds)** in the admin —
 days-scale in production (default 48 h), seconds-scale for testing;
-`reengagePostSaleEnabled` — bool, default on; **off silences the closed-panel
-bubble for the entire post-sale window**, named in `status().lastSkip` and
-visible in `status().postSale`), wrap-chip visibility (`wrapChipMinTurns` —
+`postSaleMode` — what happens *inside* that window: `upsell` (default —
+second-sale framing: companion / gift), `presence` (normal warm check-ins, no
+selling frame), or `quiet` (**no closed-panel bubble for the entire window**,
+named in `status().lastSkip` and visible in `status().postSale`); the legacy
+`reengagePostSaleEnabled: false` maps to `quiet`), wrap-chip visibility (`wrapChipMinTurns` —
 patron turns before the "That's all for now" chip appears, default 3, 0 =
 always; `wrapChipOnFollowup` — bool, default on: also show it whenever a
 proactive follow-up has fired), and `historyKeepMs` (how long a signed-in patron's

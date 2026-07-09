@@ -1245,10 +1245,15 @@
                 </select>
               </div></div>
           </div>
-          <label class="ck-check" style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-            <input type="checkbox" id="cfg-reengage-postsale">
-            <span class="micro">Re-engage for a second sale after a purchase (companion cloth / gift). Off = stay quiet through the post-sale window (the whole window — the widget names this in <code>status().lastSkip</code> when active).</span>
-          </label>
+          <div style="margin-top:8px;">
+            <label class="micro" for="cfg-postsale-mode">Within that window, after a purchase, the concierge should…</label>
+            <select id="cfg-postsale-mode" class="mono-field">
+              <option value="upsell">Re-engage for a second sale (companion cloth / gift)</option>
+              <option value="presence">Stay present — check in warmly, without selling</option>
+              <option value="quiet">Stay quiet through the whole window</option>
+            </select>
+            <p class="note" style="margin-top:4px;">The window above always sets the duration; this picks what happens inside it. "Quiet" names itself in <code>status().lastSkip</code> so it never looks like a bug. (The ledger-driven bubble can still propose a companion via its own Action Table rule — govern that under Beat actions.)</p>
+          </div>
           <p class="note" style="margin:10px 0 6px;">The <strong>"That's all for now" chip</strong> appears when ending is plausibly on the patron's mind — once the bot has begun following up on its own, or once the exchange runs deep — never under the very first reply.</p>
           <div class="ed-grid">
             <div><label class="micro" for="cfg-wrapchip-turns">Wrap chip · patron turns before it appears</label>
@@ -3076,7 +3081,9 @@ async function loadConfig() {
     unit.value = String(u);
     fld.value = Math.round(ms / u);
   })();
-  $('cfg-reengage-postsale').checked = o.reengagePostSaleEnabled !== false;
+  $('cfg-postsale-mode').value = (o.postSaleMode === 'presence' || o.postSaleMode === 'quiet' || o.postSaleMode === 'upsell')
+    ? o.postSaleMode
+    : (o.reengagePostSaleEnabled === false ? 'quiet' : 'upsell');   /* legacy checkbox key */
   $('cfg-wrapchip-turns').value = (typeof o.wrapChipMinTurns === 'number') ? o.wrapChipMinTurns : '';
   $('cfg-wrapchip-followup').checked = o.wrapChipOnFollowup !== false;
   $('cfg-reengage-regrade').checked = cfg.reengage_regrade === true;
@@ -3196,7 +3203,8 @@ async function saveEngagement() {
   // > 0, not >= 0: the widget requires a positive window, so a saved 0 would
   // silently fall back to the 48h default — worse than rejecting it here.
   if ($('cfg-reengage-postwindow').value !== '' && Number.isFinite(rPostWin) && rPostWin > 0) o.reengagePostSaleWindowMs = Math.round(rPostWin * rPostUnit);
-  o.reengagePostSaleEnabled = $('cfg-reengage-postsale').checked;
+  o.postSaleMode = $('cfg-postsale-mode').value;
+  o.reengagePostSaleEnabled = o.postSaleMode !== 'quiet';   /* keep the legacy key in step */
   const wcT = Number($('cfg-wrapchip-turns').value);
   if ($('cfg-wrapchip-turns').value !== '' && Number.isFinite(wcT) && wcT >= 0) o.wrapChipMinTurns = Math.round(wcT);
   else delete o.wrapChipMinTurns;

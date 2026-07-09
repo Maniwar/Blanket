@@ -2234,13 +2234,21 @@
       return (lp && lp.ts) ? (Date.now() - lp.ts) : null;
     } catch (e) { return null; }
   }
-  /* Admin-tunable post-sale behaviour (from ?config outreach). */
+  /* Admin-tunable post-sale behaviour (from ?config outreach). The window sets
+     the DURATION; postSaleMode picks what happens inside it:
+       'upsell'   — re-engage for a second sale (companion / gift). Default.
+       'presence' — keep the normal warm check-ins, no selling frame.
+       'quiet'    — no bubble at all until the window passes (named in lastSkip).
+     Legacy: reengagePostSaleEnabled=false (the old checkbox) maps to 'quiet'. */
   function reengagePostCfg() {
     var o = orCfg();
+    var mode = (o.postSaleMode === 'presence' || o.postSaleMode === 'quiet' || o.postSaleMode === 'upsell')
+      ? o.postSaleMode
+      : (o.reengagePostSaleEnabled === false ? 'quiet' : 'upsell');
     return {
       graceMs: (typeof o.reengageGraceMs === 'number' && o.reengageGraceMs >= 0) ? o.reengageGraceMs : 4 * 60000,
       windowMs: (typeof o.reengagePostSaleWindowMs === 'number' && o.reengagePostSaleWindowMs > 0) ? o.reengagePostSaleWindowMs : 48 * 3600000,
-      enabled: o.reengagePostSaleEnabled !== false   /* default on */
+      mode: mode
     };
   }
   function reengageTick() {
@@ -2266,13 +2274,13 @@
       noteSkip('reengage: fresh commission — congrats grace window, ' + Math.ceil((pc.graceMs - pa) / 1000) + 's left');
       return;
     }
-    /* Recently purchased with the post-sale beat switched OFF in admin: the
-       bubble stays quiet for the WHOLE window (default 48h; admin can set it
-       in hours, minutes, or seconds). This used to be the only unnamed gate
-       in the path — a buyer could hit it for two days straight with no
+    /* Recently purchased with the post-sale mode set to QUIET in admin: the
+       bubble stays silent for the WHOLE window (admin sets its length in
+       hours, minutes, or seconds). This used to be the only unnamed gate in
+       the path — a buyer could hit it for two days straight with no
        diagnostic. */
-    if (pa !== null && pa < pc.windowMs && !pc.enabled) {
-      noteSkip('reengage: commissioned ' + fmtDur(pa) + ' ago and the post-sale second-sale beat is OFF in admin (Engagement pace → "Re-engage for a second sale after a purchase") — quiet for the remaining ' + fmtDur(pc.windowMs - pa) + ' of the ' + fmtDur(pc.windowMs) + ' window');
+    if (pa !== null && pa < pc.windowMs && pc.mode === 'quiet') {
+      noteSkip('reengage: commissioned ' + fmtDur(pa) + ' ago and the post-sale mode is QUIET in admin (Engagement pace → after a purchase) — silent for the remaining ' + fmtDur(pc.windowMs - pa) + ' of the ' + fmtDur(pc.windowMs) + ' window');
       return;
     }
     if (!hadActivity) { noteSkip('reengage: no page activity seen yet this visit — scroll/tap/move first (console use doesn\'t count)'); return; }
@@ -2285,10 +2293,12 @@
       noteSkip('reengage: not idle long enough — fires after ' + Math.round(c.idleMs / 1000) + 's still; last activity ' + Math.round(idleFor / 1000) + 's ago via ' + (lastActivitySrc || 'page activity') + ' (any tap, key, scroll or mouse-move resets the clock — checking the console counts too)');
       return;
     }
-    /* Past the grace but recently purchased → re-engage for a SECOND sale
-       (companion cloth / gift), not "still eyeing". The beat-off case already
+    /* Past the grace but recently purchased → what happens depends on the
+       admin's post-sale mode: 'upsell' frames the line for a SECOND sale
+       (companion cloth / gift, never "still eyeing"); 'presence' keeps the
+       normal warm check-in with no selling frame. The 'quiet' case already
        returned above, with its name. */
-    var postSale = pa !== null && pa < pc.windowMs;
+    var postSale = pc.mode === 'upsell' && pa !== null && pa < pc.windowMs;
     reengageBusy = true;
     reengageBusyAt = Date.now();
     fetchReengageLine(postSale, function (line) {
@@ -3989,7 +3999,8 @@
             graceActive: pa !== null && pa < pc.graceMs,
             windowMs: pc.windowMs,
             windowActive: pa !== null && pa < pc.windowMs,
-            secondSaleBeatEnabled: pc.enabled
+            mode: pc.mode,
+            secondSaleBeatEnabled: pc.mode === 'upsell'
           };
         })(),
         lastSkip: lastSkip || '(no proactive beat has been skipped yet)',

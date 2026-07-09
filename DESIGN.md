@@ -748,12 +748,13 @@ rather than merely reacting:
   then re-engages in **post-sale mode** — inviting a *second* entry (a companion
   cloth for another room, or one as a gift), never treating the buyer as still
   undecided. The `?reengage=1` endpoint has a `post_sale` branch for this; the
-  grace, the post-sale window length, and whether to re-engage at all after a
-  sale are admin-tunable (`outreach.reengageGraceMs`,
-  `reengagePostSaleWindowMs`, `reengagePostSaleEnabled`). Note the enabled
-  flag is a **strong switch**: off, a recent buyer gets *no* closed-panel
-  bubble for the entire window (default 48 h) — the state names itself in
-  `status().lastSkip` and is visible in `status().postSale`.
+  grace, the post-sale window length (value + unit picker), and the behavior
+  inside the window are admin-tunable (`outreach.reengageGraceMs`,
+  `reengagePostSaleWindowMs`, `postSaleMode`). The mode is explicit:
+  **upsell** (second-sale framing, default), **presence** (warm check-ins
+  without the selling frame), or **quiet** (*no* closed-panel bubble for the
+  entire window — names itself in `status().lastSkip` and shows in
+  `status().postSale`; the legacy `reengagePostSaleEnabled: false` maps here).
 - **Journey-aware goals.** Each goal can carry one or more `sections` (page/journey
   stages), edited as checkboxes in the admin; `buildSystemPrompt` flags the open goals that match where the visitor is and
   tells the concierge to lead with them, so the agenda tracks the shopper's path

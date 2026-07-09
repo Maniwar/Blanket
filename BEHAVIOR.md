@@ -254,15 +254,16 @@ the moment), the substance-gate decision, and the measures — in one picture.*
   seconds in the admin UI; `reengagePostSaleWindowMs`, a value **with a unit
   picker — hours, minutes, or seconds** — days-scale in production, default
   48 h, seconds-scale when testing; `reengagePostSaleEnabled`).
-- **Turning the post-sale beat OFF silences the bubble for the whole window.**
-  The Engagement-pace checkbox *"Re-engage for a second sale after a purchase"*
-  is a strong switch: unchecked, a visitor who just bought gets **no
-  closed-panel bubble at all** for the entire post-sale window (default 48
-  hours) — the alternative would be re-engaging a fresh buyer with nothing
-  appropriate to say. This state names itself in `status().lastSkip`
-  (*"commissioned 2h ago and the post-sale second-sale beat is OFF in admin —
-  quiet for the remaining 46h of the 48h window"*), and `status().postSale`
-  shows the purchase age, window, and switch at a glance.
+- **The post-sale window sets a duration; a separate mode picks what happens
+  inside it.** Engagement pace → *"after a purchase, the concierge should…"*
+  offers three modes (`outreach.postSaleMode`): **upsell** (default — re-engage
+  for a second sale: companion cloth / gift), **presence** (keep the normal
+  warm check-ins with no selling frame), or **quiet** (no closed-panel bubble
+  at all until the window passes). Quiet names itself in `status().lastSkip`
+  (*"commissioned 2h ago and the post-sale mode is QUIET in admin — silent for
+  the remaining 46h of the 48h window"*), and `status().postSale` shows the
+  purchase age, window, and mode at a glance. The old checkbox key
+  (`reengagePostSaleEnabled: false`) maps to quiet for back-compat.
 
 ## Chat panel & composer (client UX)
 - **A blank bubble never ships.** Before a reply is committed, the client
