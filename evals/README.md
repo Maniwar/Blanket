@@ -11,6 +11,11 @@ four layers (behavior deck, config conformance, persona evals, runtime reach-out
 judge) end-to-end — what each one boots, what it checks, and the exact artifact
 each verdict lands in.
 
+**Every test case, enumerated:** [`CATALOG.md`](CATALOG.md) lists all cases
+across all four layers — each scenario's setup, its checks verbatim, the
+failure it was designed against, the sales-psychology coverage map (technique →
+test, with the known gaps named), and the checklist for designing a new case.
+
 ## Why it's built this way
 
 LLM output isn't deterministic, so the design follows current LLM-as-judge practice:
@@ -164,6 +169,7 @@ and what the live system actually did — so a red row is a diagnosis, not just
 an alarm.
 
 ## Files
+- `CATALOG.md` — every test case: setup, checks, design rationale, coverage map
 - `scenarios.mjs` — the behavior deck
 - `run.mjs` — replay + report (and `--selftest`)
 - `judge.mjs` — the pinned binary LLM judge
