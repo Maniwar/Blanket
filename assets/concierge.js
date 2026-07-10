@@ -381,10 +381,13 @@
       '.cx-panel.cx-dragging{transition:none;}',
       '.cx-handle{flex:0 0 auto;padding:.55rem 0 .2rem;display:flex;justify-content:center;cursor:grab;touch-action:none;position:relative;}',
       '.cx-handle::before{content:"";width:38px;height:3px;border-radius:2px;background:rgba(196,155,91,.45);}',
-      /* One-time mobile tutorial: a rising chevron + caption over the handle,
-         teaching swipe-up-to-expand. Removed forever once they expand. */
-      '.cx-swipehint{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:.15rem;',
+      /* One-time mobile tutorial: a floating pill ABOVE the sheet's edge
+         teaching swipe-up-to-expand — outside the panel so it can never
+         collide with the header. Removed forever once they expand. */
+      '.cx-swipehint{position:absolute;bottom:calc(100% + .55rem);left:50%;transform:translateX(-50%);',
       'display:flex;align-items:center;gap:.45rem;pointer-events:none;white-space:nowrap;',
+      'padding:.42rem .9rem;border-radius:999px;background:rgba(23,31,26,.93);',
+      'border:1px solid rgba(196,155,91,.4);box-shadow:0 4px 16px rgba(0,0,0,.35);',
       'font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;',
       'color:var(--cx-brass-soft,#C49B5B);opacity:0;animation:cxHintIn .5s ease .6s forwards;z-index:3;}',
       '.cx-swipehint .cx-swipearr{display:inline-block;font-size:.85rem;line-height:1;',
