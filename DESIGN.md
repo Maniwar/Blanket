@@ -65,7 +65,9 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   to leave my email so I'm remembered next time, so that signing in feels like a
   courtesy, not a gate. *(Periodic email invite in later check-ins.)*
 - **As a guest offered the sign-in key, I want the invitation to behave like a
-  line in the conversation — offered once, answered once — not a pursuit.**
+  line in the conversation — offered once, answered once — so that signing in
+  stays a courtesy I take up when ready, never a pursuit that follows me down
+  the page.**
   *Accepted when:* the bot offers sign-in at most once per thread of reach-outs
   (the offer is a spent SUBJECT under the vary-the-door contract); when several
   offers exist in an older transcript, only the **newest** button is live —
@@ -881,8 +883,8 @@ happening.** Stories with acceptance criteria:
 
 **Shopper-facing**
 
-- **As a shopper, a proactive line only reaches me when it's worth my
-  attention.**
+- **As a shopper, I want a proactive line to reach me only when it's worth my
+  attention, so that being accompanied never turns into being chased.**
   *Accepted when:* a beat with nothing new to say emits nothing (the model
   sets the typed `beat_line` tool's `speak` field to false — no sentinel
   token exists to leak); a beat that speaks carries at least one concrete,
@@ -892,37 +894,44 @@ happening.** Stories with acceptance criteria:
   passes a second, stricter reading (the **reach-out judge**) before I see
   it — a line that keeps score of my silence, invents a discount, or leaks
   internal wording is killed and logged, never shown.
-- **As a shopper, I'm never interrupted mid-paragraph.**
+- **As a shopper, I want the concierge to wait while I read its last reply, so
+  that a follow-up lands as attentiveness, never impatience.**
   *Accepted when:* the first follow-up after a reply is floored to that
   reply's reading time (~300ms/word, capped at 90s), and past 80 words the
   server itself stands the "keep the thread moving" push down — one short
   fresh step or silence, never prose stacked on unread prose.
-- **As a shopper, an edited fact reaches me immediately — and a negated
-  question never gets the opposite answer.**
+- **As a shopper, I want corrected knowledge to reach me at once and my
+  question's polarity to be respected, so that every answer I get is current
+  and actually answers what I asked.**
   *Accepted when:* any save to the knowledge base, SOPs, or configuration
   flushes the anonymous answer cache (a Postgres trigger — it re-warms from
   traffic), and a cached answer is refused when my question's polarity
   differs from the cached one's ("does it shed?" vs "does it never shed?").
-- **As a shopper, I'm never re-asked a question I've ignored.**
+- **As a shopper, I want a question I've left unanswered to rest until I
+  return to it, so that my silence is read as an answer, not an invitation to
+  ask again.**
   *Accepted when:* while any question of the bot's sits unanswered (checked
   across the whole trailing run of its unprompted lines, not just the last),
   proactive beats contain no question marks; the pending question may return
   only after I speak again.
-- **As a shopper, successive reach-outs don't orbit one topic — on any
-  surface.**
+- **As a shopper, I want successive reach-outs to open genuinely different
+  doors — on any surface — so that persistence feels like service, never
+  repetition.**
   *Accepted when:* from the second reach-out on, each beat opens a subject not
   yet offered, and when the subjects are spent the bot holds instead of
   re-wrapping old ones. This binds the **closed-panel bubble** too: it is
   shown its own recent lines, a raised subject is spent until I answer, its
   pending question suppresses further question marks, and its hold is real
   silence (no canned fallback line) until I show fresh activity.
-- **As a signed-in patron, my conversation survives the tab.**
+- **As a signed-in patron, I want my conversation to survive the tab, so that
+  returning is continuity, not starting over.**
   *Accepted when:* closing and reopening the site within the kept-transcript
   window restores the visible thread and the bot's context (no re-greeting, no
   repeated pitch); signing out or switching identity wipes the kept copy;
   anonymous chats stay per-tab.
-- **As any visitor, my "leave me alone" always wins — but doesn't outlive its
-  welcome.**
+- **As any visitor, I want my "leave me alone" to win immediately and lapse
+  gracefully on its own, so that I control the pace without having to manage
+  a setting.**
   *Accepted when:* quiet mode stops every beat for the configured window
   (`outreach.quietMs`, default 30 min) and lifts by itself, on reload, or the
   moment I type — whichever comes first; unacknowledged reach-outs pause the
@@ -930,7 +939,9 @@ happening.** Stories with acceptance criteria:
 
 **Merchant-facing**
 
-- **As the merchant, every pacing number is mine to tune, without a deploy.**
+- **As the merchant, I want every pacing number tunable without a deploy, so
+  that the concierge's manner is a merchandising decision, not an engineering
+  ticket.**
   *Accepted when:* Tuning → Engagement exposes the full in-chat ladder
   (`nudge1Ms`–`nudge5Ms`), both rest counts (`nudgeCap`, `unackedCap`), the
   hold budget, opener timings (`openerSignedMs`/`openerAnonMs`/
@@ -938,52 +949,60 @@ happening.** Stories with acceptance criteria:
   (`bubbleWithdrawMs`), post-sale behavior, and the kept-transcript window
   (`historyKeepMs`); a blank field falls back to the built-in default scaled
   by the assertiveness dial; changes take effect within the 60s config cache.
-- **As the merchant, I control the substance gate itself.**
+- **As the merchant, I want to control the substance gate itself, so that the
+  choice between disciplined silence and constant presence is deliberately
+  mine.**
   *Accepted when:* the "Substance gate" toggle (default ON) switches the beat
   prompts between hold-when-nothing-new and the older always-speak bias.
-- **As the merchant, silence is measurable, not invisible.**
+- **As the merchant, I want silence to be measurable, so that a broken widget
+  and a deliberately quiet one never look the same.**
   *Accepted when:* every held beat writes a `concierge_actions` row
   (`action='beat_hold'`, with conversation id and beat kind), so the Actions
   tab can filter to holds and **hold rate** (holds ÷ proactive beats) is
   derivable per period; a broken widget and a deliberately quiet one no longer
   look the same.
-- **As the merchant, I can diagnose the live widget without guessing.**
+- **As the merchant, I want to diagnose the live widget without guessing, so
+  that "why didn't it speak?" is a lookup, not an investigation.**
   *Accepted when:* `FeierabendConcierge.status()` reports the *effective*
   caps/timers (after config + dial), `lastSkip` names the exact gate that
   stopped the last beat, and `nudgeArmedMs`/`nudgeArmedWhy` record the full
   arithmetic of the armed follow-up (rung, base, dial, reading-time floor,
   overrides), per [`BEHAVIOR.md`](BEHAVIOR.md).
-- **As the merchant, I can PROVE my settings are what the live widget runs —
-  automatically.**
+- **As the merchant, I want automatic proof that my settings are what the live
+  widget runs, so that I hold standing evidence of the design working — not
+  assurances.**
   *Accepted when:* the **Config Conformance** workflow (on demand + weekly)
   boots the real widget headless against production under a metrics-excluded
   `qa-` session key and reports parameter-by-parameter PASS/FAIL — configured
   vs effective values and *observed* timings, dial scaling included; a FAIL
   row names the configured value and what the widget actually did, written
   to be pasted back for diagnosis.
-- **As the merchant, my reach-outs are reviewed before they send — and the
-  outcomes are numbers.**
+- **As the merchant, I want every reach-out reviewed before it sends and the
+  outcomes counted, so that no off-brand line reaches a shopper unrecorded.**
   *Accepted when:* the reach-out judge (default ON, Engagement → House rules)
   vetoes only clear defects (plumbing leaks, scorekeeping, invented commerce,
   pressure, broken output), fails open on any API error, writes a `beat_veto`
   row carrying the killed line + reason, never marks the decided action
   spent, and the Actions tab shows the 7-day **spoke · held · vetoed**
   scoreboard with each count filtering the log.
-- **As the merchant, the concierge is exercised like a real shopper would —
-  not only with scripted turns.**
+- **As the merchant, I want the concierge exercised like a real shopper would
+  — not only with scripted turns — so that failures that only emerge in live
+  back-and-forth surface before shoppers find them.**
   *Accepted when:* the **Persona Evals** workflow (on demand + weekly) has a
   model play distinct shoppers (hesitant comparer, hurried gift buyer, happy
   post-purchase browser) against production for several turns, grades the
   whole conversation (mechanical checks + a binary conversation-level judge),
   and prints the failing transcript inline — advisory, never a gate.
-- **As the merchant, I hear about a rule that fights the constitution when I
-  write it, not when the concierge gets weird.**
+- **As the merchant, I want to hear about a rule that fights the constitution
+  at the moment I write it, so that misconfiguration surfaces as a heads-up,
+  not as the concierge slowly getting weird.**
   *Accepted when:* saving a *changed* prompt text (voice, client-book policy,
   engagement rulebook, selling method, worked examples, beat notes) runs the
   advisory honesty lint (`?lint=1`), which flags only clear conflicts
   (invention, discounts, pressure, revealing the book, deception) as a
   heads-up — never style/tone/pacing, and never blocking the save.
-- **As the merchant, an order strike does what its name says.**
+- **As the merchant, I want an order strike to do what its name says, so that
+  the books, the edition's pool, and the buyer are all told the same story.**
   *Accepted when:* **cancelled** is only offered while an order is `placed`
   (the true cancel: the Nº returns to the edition's pool) and **returned**
   covers weaving-or-later strikes (refund; the Nº stays woven into the

@@ -1047,7 +1047,7 @@
               } catch (eAttr) { /* storage unavailable — attribution degrades to ambient */ }
               closePanel(); window.FeierabendCheckout.open();
             }
-            : function () { openAuthRow(); });
+            : function () { openAuthRow(this); });   /* this = the tapped button — the form mounts right under it */
           act.appendChild(ab);
           frag.appendChild(act);
         }
@@ -3469,8 +3469,18 @@
     openAuthRow();
   }
 
-  function openAuthRow() {
-    if (!panel || authRow) { return; }
+  function openAuthRow(anchorEl) {
+    if (!panel) { return; }
+    if (authRow) {
+      if (authRow.parentNode && document.contains(authRow)) {
+        /* already open — a second tap must never look like a dead button:
+           bring the form to the reader and focus it */
+        try { authRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (eSv) { /* ignore */ }
+        try { var ai = authRow.querySelector('.cx-authinput'); if (ai) { ai.focus(); } } catch (eAf) { /* ignore */ }
+        return;
+      }
+      authRow = null; /* stale reference — a re-render wiped the node; rebuild */
+    }
     ensureSupabase();
     authRow = el('div', 'cx-authrow');
     var cap = el('div', 'cx-authcap', 'Your email — we send a key, no passwords.');
@@ -3567,11 +3577,20 @@
     line.appendChild(input);
     line.appendChild(send);
     authRow.appendChild(line);
-    /* IN the conversation flow, not pinned: the form appears where the sign-in
-       was served (at the current end of the thread) and scrolls away with it —
-       a sticky bar that follows the reader while they scroll is nagging. */
-    msgsEl.appendChild(authRow);
-    try { scrollToBottom(true); } catch (eSc) { /* ignore */ }
+    /* IN the conversation flow, not pinned: the form mounts DIRECTLY UNDER the
+       sign-in button that was tapped (or at the thread's end when opened from
+       the header), and scrolls away with the conversation — a bar pinned to
+       the panel that follows the reader while they scroll is nagging. */
+    var anchorRow = null;
+    try {
+      anchorRow = (anchorEl && anchorEl.closest) ? anchorEl.closest('.cx-actionrow') : null;
+    } catch (eAn) { anchorRow = null; }
+    if (anchorRow && anchorRow.parentNode) {
+      anchorRow.parentNode.insertBefore(authRow, anchorRow.nextSibling);
+    } else {
+      msgsEl.appendChild(authRow);
+    }
+    try { authRow.scrollIntoView({ block: 'nearest' }); } catch (eSc) { /* ignore */ }
     try { input.focus(); if (lastEmail) { input.select(); } } catch (eI) { /* ignore */ }
   }
 
