@@ -6,6 +6,11 @@ can't unit-test: does it show the commission button on a buying signal, avoid th
 and so on. These replay scripted conversations against the **deployed** function and
 report a pass rate.
 
+**Visual map:** [`docs/testing-flows.svg`](../docs/testing-flows.svg) diagrams all
+four layers (behavior deck, config conformance, persona evals, runtime reach-out
+judge) end-to-end — what each one boots, what it checks, and the exact artifact
+each verdict lands in.
+
 ## Why it's built this way
 
 LLM output isn't deterministic, so the design follows current LLM-as-judge practice:
@@ -135,6 +140,28 @@ node evals/persona.mjs --filter gift    # one persona
 
 It lives outside the deploy gauntlet on purpose: its chat turns would eat the
 anonymous rate budget the live smoke + behavior deck already share.
+
+## Auditable outputs — where the evidence lives
+
+Every layer is designed to leave a table you can read after the fact — and paste
+back to the assistant for diagnosis. This is where each verdict lands:
+
+| suite | auditable output | where to find it |
+| --- | --- | --- |
+| Unit tests (`beats_test.ts`) | 17 deterministic assertions, red/green | **Deploy Concierge** run → *Beat engine unit tests* step |
+| Live smoke | request/response of a real chat turn against the deployed function | **Deploy Concierge** run → *Live smoke* step |
+| Behavior deck | pass **rate** per check (e.g. `9/10`) with the judge's reason on misses | **Deploy Concierge** run → job summary table; same deck runnable in the admin **Evals** tab with inline transcripts |
+| Beat trend | 7-day spoke/held counts, drift vs the prior week | **Deploy Concierge** run → *Beat trend* step |
+| Config conformance | per-parameter PASS/FAIL rows, each tagged with its evidence **method** — *observed live*, *effective value*, or *skipped (reason named)* — plus a summary header counting each | **Config Conformance** run → job summary + `conformance-report.md` artifact |
+| Persona evals | per-persona check table; a failing conversation's full transcript prints inline | **Persona Evals** run → job summary |
+| Runtime reach-out judge | every proactive line's fate: `beat_action` (spoke), `beat_hold` (arithmetic held it), `beat_veto` (judge killed it, with the line + reason) | `concierge_actions` table; admin **Actions** tab shows the 7-day *spoke · held · vetoed* strip, click a segment to filter rows |
+| Live widget diagnostics | `FeierabendConcierge.status()` — armed follow-up (`nudgeArmedWhy` shows the full arithmetic: rung base × dial × spacious, floor, quick override), recent skips with reasons, re-engage state, hold budget | browser console on the storefront |
+
+Two conventions keep the evidence honest: all QA traffic runs under `qa-*`
+session keys that the metrics views exclude (test runs never inflate the
+dashboard), and a FAIL row always names **both** numbers — what was configured
+and what the live system actually did — so a red row is a diagnosis, not just
+an alarm.
 
 ## Files
 - `scenarios.mjs` — the behavior deck
