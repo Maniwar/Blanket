@@ -1,0 +1,36 @@
+name: Deck Art (Gemini)
+
+# Manual only. Generates pitch-deck imagery with the Gemini image API and
+# commits the PNGs to pitch/art/ on the branch it was dispatched from.
+# The key comes from the GEMINI_API_KEY repository SECRET (masked in logs);
+# fork PRs never see secrets, and dispatching requires write access.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: deck-art
+
+jobs:
+  art:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate images with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 scripts/deck_art.py
+
+      - name: Commit the art to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898306+github-actions[bot]@users.noreply.github.com"
+          git add pitch/art
+          if git diff --cached --quiet; then
+            echo "No new art to commit."
+          else
+            git commit -m "Deck art: Gemini-generated pitch imagery (pitch/art)"
+            git push
+          fi
