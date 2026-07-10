@@ -394,7 +394,12 @@
       'animation:cxHintRise 1.5s ease-in-out .9s 3;}',
       '@keyframes cxHintIn{to{opacity:.95;}}',
       '@keyframes cxHintRise{0%,100%{transform:translateY(2px);opacity:.5;}45%{transform:translateY(-5px);opacity:1;}}',
-      '@media (prefers-reduced-motion:reduce){.cx-swipehint{animation:none;opacity:.95;}.cx-swipehint .cx-swipearr{animation:none;}}',
+      /* The demonstration itself: while the hint shows, the SHEET lifts a
+         finger's-width and settles back, twice — previewing exactly what the
+         gesture does. Synced to the chevron's rise; removed with the hint. */
+      '.cx-panel.cx-hintnudge{animation:cxSheetNudge 1.5s ease-in-out .9s 2;}',
+      '@keyframes cxSheetNudge{0%,100%{transform:translateY(0);}45%{transform:translateY(-14px);}}',
+      '@media (prefers-reduced-motion:reduce){.cx-swipehint{animation:none;opacity:.95;}.cx-swipehint .cx-swipearr{animation:none;}.cx-panel.cx-hintnudge{animation:none;}}',
       '.cx-head{padding:0 1.4rem .6rem !important;gap:.6rem !important;min-height:auto !important;}',
       '.cx-close{margin:-.3rem -.7rem 0 0 !important;}',
       '.cx-authmail{display:none !important;}',
@@ -3860,6 +3865,7 @@
     if (learned) { lsSet('cx-swipe-hint', 'done'); }
     if (swipeHintEl && swipeHintEl.parentNode) { swipeHintEl.parentNode.removeChild(swipeHintEl); }
     swipeHintEl = null;
+    if (panel) { panel.classList.remove('cx-hintnudge'); }
   }
   function maybeSwipeHint() {
     if (window.innerWidth >= 900) { return; }        /* the sheet only drags on mobile */
@@ -3876,6 +3882,7 @@
     swipeHintEl.appendChild(el('span', 'cx-swipearr', '↑'));
     swipeHintEl.appendChild(el('span', '', 'swipe up for more room'));
     handle.appendChild(swipeHintEl);
+    panel.classList.add('cx-hintnudge');   /* the sheet demonstrates its own gesture */
     setTimeout(function () { dismissSwipeHint(false); }, REDUCED ? 3500 : 6000);
   }
 
