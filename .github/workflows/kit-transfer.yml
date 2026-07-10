@@ -31,5 +31,5 @@ jobs:
           if [ -z "$KIT_PUSH_TOKEN" ]; then echo "KIT_PUSH_TOKEN secret is missing"; exit 1; fi
           AUTH=$(printf 'x-access-token:%s' "$KIT_PUSH_TOKEN" | base64 -w0)
           git -C /tmp/kit -c http.extraheader="AUTHORIZATION: basic ${AUTH}" \
-            push https://github.com/Maniwar/concierge-kit refs/remotes/origin/main:refs/heads/main
-          echo "Pushed $(git -C /tmp/kit rev-parse --short origin/main) to concierge-kit:main"
+            push https://github.com/Maniwar/concierge-kit 'refs/remotes/origin/*:refs/heads/*'
+          echo "Pushed all bundled branches to concierge-kit"
