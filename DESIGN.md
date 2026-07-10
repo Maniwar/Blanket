@@ -64,6 +64,20 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 - **As a guest who's warming up**, I want to be invited — gently, occasionally —
   to leave my email so I'm remembered next time, so that signing in feels like a
   courtesy, not a gate. *(Periodic email invite in later check-ins.)*
+- **As a guest offered the sign-in key, I want the invitation to behave like a
+  line in the conversation — offered once, answered once — not a pursuit.**
+  *Accepted when:* the bot offers sign-in at most once per thread of reach-outs
+  (the offer is a spent SUBJECT under the vary-the-door contract); when several
+  offers exist in an older transcript, only the **newest** button is live —
+  earlier ones dim; tapping one opens the email form **in the conversation
+  flow, right where it was served** — it scrolls away with the thread, never
+  pinned to the panel where it would follow the reader; after the key is
+  accepted for delivery, **every** sign-in button flips to "Key sent — check
+  your inbox" and the confirmation says plainly that the key can take a minute
+  and may land in spam; and once I'm signed in, every sign-in button stands
+  down ("Signed in — the register is open to you"), including on the
+  mid-thread sign-in that keeps my conversation (no re-render hides them —
+  they are swept on the auth change itself).
 - **As a guest ready to buy**, I want to commission with just an email
   verification, so that I don't have to create a password. *(Magic-link OTP guest
   checkout.)*
