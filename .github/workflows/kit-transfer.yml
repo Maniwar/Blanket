@@ -1,0 +1,35 @@
+name: Kit Transfer
+
+# Manual only. Relays the concierge-kit git history (committed here as a
+# bundle at .github/kit-transfer/kit.bundle) to the Maniwar/concierge-kit
+# repository, using the KIT_PUSH_TOKEN fine-grained PAT (Contents: write on
+# concierge-kit only). Temporary bridge while this session cannot add the
+# kit repo to its scope; remove once direct access works.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: kit-transfer
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack the bundle
+        run: |
+          git clone .github/kit-transfer/kit.bundle /tmp/kit
+          git -C /tmp/kit log --oneline | head -5
+
+      - name: Push to concierge-kit
+        env:
+          KIT_PUSH_TOKEN: ${{ secrets.KIT_PUSH_TOKEN }}
+        run: |
+          if [ -z "$KIT_PUSH_TOKEN" ]; then echo "KIT_PUSH_TOKEN secret is missing"; exit 1; fi
+          AUTH=$(printf 'x-access-token:%s' "$KIT_PUSH_TOKEN" | base64 -w0)
+          git -C /tmp/kit -c http.extraheader="AUTHORIZATION: basic ${AUTH}" \
+            push https://github.com/Maniwar/concierge-kit HEAD:main
+          echo "Pushed $(git -C /tmp/kit rev-parse --short HEAD) to concierge-kit:main"
