@@ -195,7 +195,9 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   base. Selling angles/objections have no hidden default text — their base is the
   salescraft inside the voice base + SOPs — so they stay plain editable lists.)*
 - **As the merchant**, editing a base prompt is high-impact, so I want **version
-  history and one-click rollback** on anything I can change. *(Append-only
+  history and one-click rollback** on anything I can change, so that no
+  experiment on the concierge's voice or rules is ever more than one click
+  from undone. *(Append-only
   `concierge_edit_history`, written by a security-definer trigger on
   `concierge_config`, `concierge_sops`, and `concierge_kb` that snapshots a row
   after every real change and records the editing admin. A **"History ⟲"** link on
@@ -358,9 +360,10 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   note can't be missed. *(Each note is a card with a kind-colored rail, a compact
   `kind · date · state · actions` line, and a body clamped to a few lines that
   expands on click; open directives sit above the book and are never collapsed.)*
-- **As the merchant**, I want the client book to **consolidate itself** so a
-  long-standing patron doesn't get expensive to serve and their signal doesn't
-  decay — one actionable summary the bot uses, with the raw notes kept as history.
+- **As the merchant**, I want the client book to **consolidate itself**, so
+  that a long-standing patron doesn't get expensive to serve and their signal
+  doesn't decay — one actionable summary the bot uses, with the raw notes kept
+  as history.
   *(**Rolling client summary**: a `kind='summary'` note per patron. A background
   pass (`consolidateClientBook`) folds the AI's `fact`/`event`/`reflection` notes
   into a tight digest — never touching **directives** — and only its timestamp
@@ -465,7 +468,8 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   and a **sticky ▲/▼ jumper** steps through them; and both CSV exports carry
   `rating` + `rating_note` columns.)*
 - **As the merchant**, I want the Conversations toolbar to be **obvious** — filters
-  in one place, actions in another, and no mystery checkboxes. *(Two labelled
+  in one place, actions in another, and no mystery checkboxes — so that I never
+  have to guess what a control governs before I use it. *(Two labelled
   zones: a **Filter** row (search · dates · goals · stage · feedback · house-note)
   and an **Actions** row (Load more · Re-grade shown · Export CSV · Refresh). The
   old "Include PII" — which governs the **export**, not the view — is relabelled
@@ -616,7 +620,8 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the operator**, I want to change what the concierge says and shows without a
   deploy — copy, tuning notes, starters, **selling angles**, **objection playbook**,
   **assertiveness**, engagement pacing, in-chat **forms**, and the **images** the
-  bot shares — all from the Studio. *(All `concierge_config`/table-backed, live
+  bot shares — all from the Studio, so that running the concierge is
+  merchandising, not engineering. *(All `concierge_config`/table-backed, live
   within a minute.)*
 - **As the operator**, I want to deploy the functions and know exactly which build
   is live, so that I'm never debugging stale code. *(`BUILD_TAG` + `selftest`.)*
@@ -647,7 +652,8 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   by retention; plus `concierge_actions`. Orders mutate in place, so `orders`
   holds current state and `order_events` holds the history.)*
 - **As the operator**, I want order-field edits to be correct, not free-typed by
-  the model. *(Address changes go through the labeled `address-change` **form**,
+  the model, so that a shipping record can never be scrambled by a well-meaning
+  paraphrase. *(Address changes go through the labeled `address-change` **form**,
   never a free-text tool — a city can't land in the street line. The commission
   function's admin-gated `?editaddr=1` + the per-order **address editor** in the
   register are the reliable correction path; writes are service-role, verified,
