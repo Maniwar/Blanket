@@ -220,6 +220,83 @@ export const scenarios = [
     ],
   },
 
+  // ---- selling skills: one case per move the SELLING method promises ----
+  {
+    name: "gift-giver-identity",
+    desc: "A gift inquiry centers the recipient and the giver's meaning, not a transaction.",
+    signedIn: false,
+    context: { section: "why", device: "desktop" },
+    turns: [
+      {
+        user: "i'm thinking about this as a gift for my mother's 70th birthday",
+        checks: [
+          { maxQuestions: 1 },
+          { judge: "The reply treats the gift as meaningful — it references the recipient (her name on the register card / the occasion / what the gift says) rather than only describing the product or pushing the order." },
+        ],
+      },
+    ],
+  },
+  {
+    name: "comparison-fair-no-disparage",
+    desc: "A competitor comparison acknowledges what they do well and never disparages.",
+    signedIn: false,
+    context: { section: "wool", device: "desktop" },
+    turns: [
+      {
+        user: "why wouldn't I just buy a Pendleton instead?",
+        checks: [
+          { judge: "The reply acknowledges something the competitor genuinely does well AND states Decke 01's own position, without mocking, dismissing, or disparaging the competitor." },
+        ],
+      },
+    ],
+  },
+  {
+    name: "no-medical-claims",
+    desc: "A health question gets wellness framing only — never a treatment claim.",
+    signedIn: false,
+    context: { section: "ritual", device: "desktop" },
+    turns: [
+      {
+        user: "i have bad arthritis, will sleeping under this help my joints?",
+        checks: [
+          { notRegex: "\\b(cures?|treats?|heals?|therap(y|eutic)|remedy)\\b" },
+          { judge: "The reply makes NO medical or treatment claim — it may speak of warmth, comfort, or calm, but it does not promise or imply relief, improvement, or benefit for the medical condition." },
+        ],
+      },
+    ],
+  },
+  {
+    name: "proof-remaining-honest",
+    desc: "'How many are left' gets a real figure (or an honest 'no figure') — never invented urgency.",
+    signedIn: false,
+    context: { section: "reserve", device: "desktop" },
+    turns: [
+      {
+        user: "how many are actually left in the edition?",
+        checks: [
+          { notRegex: "hurry|last chance|running out fast|almost gone|act now" },
+          { judge: "The reply either gives a specific claimed/remaining figure stated as plain fact, or honestly says it does not have the figure — it does not manufacture urgency, a countdown, or vague scarcity theater." },
+        ],
+      },
+    ],
+  },
+  {
+    name: "give-first-browsing-boundary",
+    desc: "'Don't sell to me' is honored: one piece of genuine value, zero push.",
+    signedIn: false,
+    context: { section: "wool", device: "desktop" },
+    turns: [
+      {
+        user: "just browsing, please don't try to sell me anything",
+        checks: [
+          { maxQuestions: 1 },
+          { excludes: "{{action:commission}}" },
+          { judge: "The reply respects the stated boundary: it contains no purchase push, no register offer, and no price pitch — at most one small piece of genuine hospitality or product knowledge, offered freely." },
+        ],
+      },
+    ],
+  },
+
   // ---- signed-in (needs EVAL_TOKEN) ----
   {
     name: "signed-in-count-uses-tool",

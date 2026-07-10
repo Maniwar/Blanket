@@ -3350,6 +3350,21 @@
 
   var authResolved = false;     /* the first auth read on load is not a change */
 
+  /* Sign-in buttons rendered while the visitor was anonymous must not survive
+     as live CTAs once they ARE signed in — the transcript isn't re-rendered on
+     an adopt-the-thread sign-in (continuity is kept), so sweep the DOM. */
+  function sweepSigninButtons() {
+    if (!authEmail || !msgsEl) { return; }
+    try {
+      var bs = msgsEl.querySelectorAll('.cx-action-signin');
+      for (var i = 0; i < bs.length; i++) {
+        bs[i].disabled = true;
+        bs[i].style.opacity = '0.45';
+        bs[i].textContent = '✳ Signed in — the register is open to you';
+      }
+    } catch (eSw) { /* cosmetic only */ }
+  }
+
   function setAuthState(session) {
     var em = '';
     try {
@@ -3383,6 +3398,7 @@
           if (panelOpen && msgsEl && !streaming) {
             reengagedThisOpen = false;
             if (!history.length) { renderHistory(); }
+            sweepSigninButtons();
             maybeOpenerOnOpen();
           }
         }
@@ -3407,6 +3423,7 @@
         ssSet(OWNER_KEY, em);
         if (em) { restoreKeptHistory(); }
         if (panelOpen && !streaming && !history.length && msgsEl) { renderHistory(); }
+        sweepSigninButtons();
       }
     }
   }
