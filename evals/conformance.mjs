@@ -400,6 +400,22 @@ async function main() {
       } catch (e) {
         row("submit_inquiry tool registered (?tools)", "exposed", "fetch failed", false, "effective", String(e.message).slice(0, 120));
       }
+      // (a2) the KB-grounded starter generator is admin-gated. An unauthenticated POST
+      // must be refused — it would otherwise be an anonymous model-spend surface. Cheap:
+      // requireAdmin returns 403 before any model call, so this probe costs nothing.
+      try {
+        const res = await fetch(endpoint + (endpoint.includes("?") ? "&" : "?") + "genstarters=1",
+          { method: "POST",
+            headers: { apikey: conn.key || "", Authorization: "Bearer " + (conn.key || ""), "content-type": "application/json" },
+            body: JSON.stringify({ sections: ["default"] }) });
+        const gated = res.status === 401 || res.status === 403;
+        row("Starter generator is admin-gated (?genstarters)", "401/403 without an admin token",
+          "HTTP " + res.status, gated, "effective",
+          gated ? "the KB-grounded starter drafter refuses non-admins — no unauthenticated model spend"
+                : "NOT gated — an anon POST reached the generator; requireAdmin regressed");
+      } catch (e) {
+        row("Starter generator is admin-gated (?genstarters)", "401/403 without an admin token", "fetch failed", null, "skip", String(e.message).slice(0, 120));
+      }
       // (b) inquiry_notify_email is a live concierge_config row (admin RLS read).
       if (!restBase || !conn.key) {
         row("inquiry_notify_email is a live config key", "present in concierge_config", "no supabaseUrl/key on page", null, "skip",

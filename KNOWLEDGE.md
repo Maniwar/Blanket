@@ -94,10 +94,35 @@ on demand through a **`recall_context`** tool the model can call. That's the onl
 retrieval-shaped mechanism, and it's about *who the customer is*, never about the
 product facts. See `DESIGN.md` §4.10.
 
+## Conversation starters — hand-written or drafted from the KB
+
+The tappable opening questions in the widget (per page section, plus a `default`
+fallback trio) live in `concierge_config.starters` and are edited in Studio →
+Tuning → **Conversation starters**. A freshly-adopted site ships these blank or
+generic, because the stamp can retarget the *section keys* but can't write good
+per-section starter *copy*.
+
+**Draft with AI** (the `✳` button on that panel) fixes that in one click:
+
+- The studio POSTs the section keys to `?genstarters=1` (admin-only); the server
+  reads the **live knowledge base** and the house voice and drafts a few short,
+  tappable shopper questions per section — grounded *only* in what the KB says
+  (it is told never to reference a spec, price, or feature the KB doesn't
+  contain, same honesty rule as everything else here).
+- It fills **only empty** input slots, so anything you already typed is
+  preserved. Nothing is saved automatically — you review, edit, and press **Save
+  starters**. The human stays in the loop.
+
+It's the same pattern as the prompt tuner (`?promptreview=1`) and the honesty
+lint (`?lint=1`): an admin-only, KB-grounded helper that proposes, never commits.
+
 ## Managing it
 
 - **Edit** in the Studio (Knowledge, Procedures, Selling, Goals). Everything is
   data; no deploy needed to change what the bot knows or how it behaves.
+- **Draft starters** from the KB (Tuning → Conversation starters → *Draft with
+  AI*) — grounded in the live knowledge base, fills only blank slots, review then
+  Save.
 - **Version history** on every base field and row (`concierge_edit_history`),
   one-click revertible.
 - **Honesty lint** (`?lint=1`) runs on prompt-text saves — a KB claim with no

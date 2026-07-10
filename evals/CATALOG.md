@@ -220,6 +220,7 @@ publishable key via PostgREST, exactly as the admin studio does.
 | submit_inquiry tool registered (?tools) | effective / skip | fetches the admin `?tools=1` manifest and asserts `submit_inquiry` is present (with its enabled state) — the inquiry write path is exposed to the model |
 | inquiry_notify_email is a live config key | effective / skip | PostgREST read of `concierge_config?key=eq.inquiry_notify_email` returns a row — the notify destination `submit_inquiry` reads (blank → `EMAIL_FROM`) exists |
 | Inquiries panel reads concierge_inquiries | effective / skip | PostgREST `concierge_inquiries?select=id,kind,status&limit=1` under the admin token succeeds (200) — the same admin-RLS read Customers → Inquiries runs (admin all, no anon policy) |
+| Starter generator is admin-gated (?genstarters) | effective / skip | POST `?genstarters=1` with only the publishable key (no admin token) must return 401/403 — the KB-grounded starter drafter refuses non-admins, so there is no anonymous model-spend surface (the 403 short-circuits before any model call) |
 
 ---
 

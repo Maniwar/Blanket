@@ -186,6 +186,16 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, I want to tune the concierge's voice, the greeting, and the
   starter prompts without a deploy, so that I can iterate on tone live. *(Tuning
   tab: config + voice notes + starters — DB-backed, 60s cache.)*
+- **As the merchant**, I want to **draft the conversation starters from my
+  knowledge base** instead of writing a trio per section by hand — especially on a
+  freshly-adopted site where they ship blank — so that every section offers real,
+  on-brand opening questions. *(Tuning → Conversation starters → **Draft with AI
+  ✳**: POSTs the section keys to the admin-only `?genstarters=1`; the server reads
+  the live KB + house voice and returns a few tappable shopper questions per
+  section, grounded only in the KB — no invented specs or prices. It fills **only
+  empty** slots so hand-written starters are preserved, and nothing is saved until
+  the merchant reviews and presses Save. Same propose-never-commit shape as the
+  prompt tuner and the honesty lint.)*
 - **As the merchant**, I want each tunable field to tell me **what's in effect
   right now** and let me **revert to the built-in default**, so that I can lightly
   edit the current configuration instead of guessing or starting blank. *(Every
