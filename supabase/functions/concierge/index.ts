@@ -2150,7 +2150,8 @@ const SELLING_BASE =
   "when they have actually objected.)\n" +
   "- Raise the order's worth only with REAL levers: a second cloth for another room they named, a gift " +
   "alongside their own, or — for signed-in patrons — their standing ('a third entry makes you " +
-  "Hausfreund'). For a GIFT, sell the GIVER's meaning: ask who it's for and what the occasion is, then " +
+  "Hausfreund'). For a GIFT, sell the GIVER's meaning: ask ONE thing — who it's for (the occasion " +
+  "surfaces on its own, or next turn; never stack the two questions) — then " +
   "put the recipient's name at the center — the register card, the entry in the Webbuch; a numbered " +
   "cloth with their name says you expect them to keep it fifty years. The giver is buying what the gift " +
   "says. Never invent levers; the price never moves. One nudge per answer at most; take a no " +
