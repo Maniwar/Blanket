@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1560" viewBox="0 0 1240 1560" font-family="'Helvetica Neue',Arial,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1760" viewBox="0 0 1240 1760" font-family="'Helvetica Neue',Arial,sans-serif">
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/>
@@ -11,7 +11,7 @@
     </style>
   </defs>
 
-  <rect width="1240" height="1560" fill="#f6f2ea"/>
+  <rect width="1240" height="1760" fill="#f6f2ea"/>
   <text x="40" y="46" class="t h" font-size="24">Conversion &amp; revenue attribution — how every number is made</text>
   <text x="40" y="70" class="m" font-size="13">The capture pipeline, the four attribution tiers, the behavioral funnel, and the exact metric formulas behind the admin's Conversion tab. Full prose: ATTRIBUTION.md.</text>
 
@@ -227,19 +227,47 @@
     <text x="56" y="1248">adds attribution, attr_entry, attr_section, attr_turns, attr_lookback_days, chat_session — the raw join key, so every tier is re-derivable externally</text>
   </g>
 
-  <!-- ========== 7. HONEST LIMITS ========== -->
-  <text x="40" y="1308" class="t h cap">7 · Honest limits — read before quoting numbers</text>
-  <rect x="40" y="1320" width="1160" height="150" rx="10" fill="#fbeeea" stroke="#dcae9f"/>
+  <!-- ========== 7. INQUIRY MODE — CHECKOUT-LESS CONVERSION EVENT ========== -->
+  <text x="40" y="1308" class="t h cap">7 · Inquiry mode — the checkout-less conversion event (a LEAD, never a sale)</text>
+  <text x="40" y="1327" class="m" font-size="11.5">Some installs have no checkout (a single-piece listing, a car-sale page), so the concierge earns no commission — there its conversion event is a submitted inquiry, counted and split by kind, never valued.</text>
+
+  <rect x="40" y="1340" width="373" height="128" rx="10" fill="#ffffff" stroke="#d3cdbf"/>
+  <text x="56" y="1364" class="t h" font-size="13.5">The conversion event</text>
+  <text x="56" y="1384" class="m mono" font-size="11">a submitted inquiry → concierge_inquiries</text>
+  <text x="56" y="1403" class="m" font-size="11">The analog of the ✳ commission click: on a</text>
+  <text x="56" y="1417" class="m" font-size="11">checkout-less page, handing the house a lead</text>
+  <text x="56" y="1431" class="m" font-size="11">IS the conversion. Anonymous-capable, captured</text>
+  <text x="56" y="1445" class="m" font-size="11">through the concierge (an inquiry form or tool).</text>
+
+  <rect x="433" y="1340" width="373" height="128" rx="10" fill="#ffffff" stroke="#d3cdbf"/>
+  <text x="449" y="1364" class="t h" font-size="13.5">The metric — Leads &amp; inquiries</text>
+  <text x="449" y="1384" class="m mono" font-size="11">count(concierge_inquiries) · per kind</text>
+  <text x="449" y="1403" class="m" font-size="11">A COUNT in the range + a per-kind split (offer /</text>
+  <text x="449" y="1417" class="m" font-size="11">viewing / question / callback), with the same</text>
+  <text x="449" y="1431" class="m" font-size="11">delta / compare / trend treatment. NO dollar</text>
+  <text x="449" y="1445" class="m" font-size="11">value — its own bucket, never joined to orders.</text>
+
+  <rect x="826" y="1340" width="374" height="128" rx="10" fill="#ffffff" stroke="#d3cdbf"/>
+  <text x="842" y="1364" class="t h" font-size="13.5">Attributed by construction</text>
+  <text x="842" y="1384" class="m mono" font-size="11">chat_via='concierge' · chat_meta{…}</text>
+  <text x="842" y="1403" class="m" font-size="11">Submitted THROUGH the concierge, so there is no</text>
+  <text x="842" y="1417" class="m" font-size="11">non-chat path to imply. chat_meta = {section,</text>
+  <text x="842" y="1431" class="m" font-size="11">turns, origin, captured_at}. Hidden on commission-</text>
+  <text x="842" y="1445" class="m" font-size="11">mode installs; qa- / eval- traffic excluded.</text>
+
+  <!-- ========== 8. HONEST LIMITS ========== -->
+  <text x="40" y="1508" class="t h cap">8 · Honest limits — read before quoting numbers</text>
+  <rect x="40" y="1520" width="1160" height="150" rx="10" fill="#fbeeea" stroke="#dcae9f"/>
   <g font-size="11.5" class="m">
-    <text x="56" y="1346">• Session capture is same-tab; the identity tier closes it for signed-in buyers (30d lookback) — anonymous cross-session journeys still read UNASSISTED (a floor).</text>
-    <text x="56" y="1368">• Assisted tiers are co-occurrence, not causation — that is exactly why the ✳ tier exists.</text>
-    <text x="56" y="1390">• Almost nothing depends on grading: revenue, tiers, rate, funnel are hard data; only the stages card + two opportunity reads use the judge (sampled, re-runnable).</text>
-    <text x="56" y="1412">• Retention: keep-forever by default; pruning is a confirmed admin act (Edition &amp; access → Data retention, ≥30d horizon) — orders and tier stamps always survive.</text>
-    <text x="56" y="1434">• Demo pricing: revenue is exactly count × configured price — no tax, discounts, refunds, or partials.</text>
-    <text x="56" y="1456">• Funnel stages mix units (devices / conversations / orders) — stage-to-stage pass-through is directional, and each row states its unit.</text>
+    <text x="56" y="1546">• Session capture is same-tab; the identity tier closes it for signed-in buyers (30d lookback) — anonymous cross-session journeys still read UNASSISTED (a floor).</text>
+    <text x="56" y="1568">• Assisted tiers are co-occurrence, not causation — that is exactly why the ✳ tier exists.</text>
+    <text x="56" y="1590">• Almost nothing depends on grading: revenue, tiers, rate, funnel are hard data; only the stages card + two opportunity reads use the judge (sampled, re-runnable).</text>
+    <text x="56" y="1612">• Retention: keep-forever by default; pruning is a confirmed admin act (Edition &amp; access → Data retention, ≥30d horizon) — orders and tier stamps always survive.</text>
+    <text x="56" y="1634">• Demo pricing: revenue is exactly count × configured price — no tax, discounts, refunds, or partials. A lead is never priced at all — it is a count, not revenue.</text>
+    <text x="56" y="1656">• Funnel stages mix units (devices / conversations / orders) — stage-to-stage pass-through is directional, and each row states its unit.</text>
   </g>
 
   <!-- footer -->
-  <text x="40" y="1502" class="m" font-size="12">Sources of truth: orders.chat_session / chat_via / chat_meta · site_events · concierge_conversations.sales_stage · concierge_config.unit_price</text>
-  <text x="40" y="1522" class="m" font-size="12">Prose spec: ATTRIBUTION.md (events glossary · metric table · credit rules) · schema: supabase/SCHEMA.md · design rationale: DESIGN.md §4.8</text>
+  <text x="40" y="1702" class="m" font-size="12">Sources of truth: orders.chat_session / chat_via / chat_meta · site_events · concierge_inquiries.chat_via / chat_meta / kind · concierge_config.unit_price</text>
+  <text x="40" y="1722" class="m" font-size="12">Prose spec: ATTRIBUTION.md (events glossary · metric table · credit rules · leads vs sales) · leads: INQUIRIES.md · schema: supabase/SCHEMA.md · design: DESIGN.md §4.8 &amp; §4.14</text>
 </svg>

@@ -96,6 +96,21 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   (`feier_last_email`) and prefills the sign-in row, selected so a tap-Enter sends
   or a keystroke replaces it. Device-local convenience; it deliberately survives
   sign-out and never leaves the browser.)*
+- **As an anonymous shopper on a page with no checkout** (a single-piece listing,
+  a used car for sale), I want to make a serious offer, book a viewing, ask the
+  owner a question, or request a callback — right in the chat, without making an
+  account — so that I can act on real interest without friction. *(Inquiry mode:
+  the concierge captures the lead through the `make-an-offer` / `book-a-viewing`
+  forms or the `submit_inquiry` tool. Anonymous-capable and serial-free — no
+  sign-in — with email **or** phone the only thing required so the house can
+  follow up. See* [`INQUIRIES.md`](INQUIRIES.md)*.)*
+- **As a shopper making an offer**, I want the price held firm and my details
+  simply taken down so the owner can get back to me — not a bot that haggles or
+  invents a discount — so that I trust I'm dealing with a real house. *(The
+  `serious-offers` SOP keeps the price firm: an inquiry opens a conversation with
+  the owner, it is **not** a negotiation. `submit_inquiry` stores the offer
+  (`kind=offer`, with the figure when named) and emails the house — my interest is
+  captured as a **lead**, never quietly discounted.)*
 
 ### 2.2 Customer — signed-in / returning patron
 
@@ -450,6 +465,21 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   filter, mark people notified on, and export to email, so that demand past a
   full run isn't lost. *(Customers tab: Waitlist card; `waitlist` table;
   commission `POST ?waitlist=1`; concierge `join_waitlist` tool.)*
+- **As the merchant**, I want the leads the concierge captures — serious offers,
+  viewing requests, questions, callbacks — in one worklist I can filter and
+  export, and where I can move each one **new → contacted → closed** as I work it,
+  so that a serious buyer never falls through the cracks. *(Customers tab:
+  **Inquiries** panel below Waitlist, mirroring it — newest first, filter by date /
+  keyword / kind / status, CSV export, and a per-row status control that writes a
+  `concierge_inquiries` update, admin-only under RLS. See §4.14 and*
+  [`INQUIRIES.md`](INQUIRIES.md)*.)*
+- **As the merchant**, I want the offer and viewing forms to arrive as **drafts I
+  switch on only when the page is ready**, so that lead capture goes live on my
+  say-so, not automatically. *(Tools → Form tools: `make-an-offer` and
+  `book-a-viewing` seed **`enabled=false`**, each bound to `submit_inquiry` with
+  its `kind` fixed by a hidden field; I set the destination in the
+  `inquiry_notify_email` config key and tick **Enabled** to turn them on. Like all
+  generated content, they are drafts-first. See* [`FORMS.md`](FORMS.md)*.)*
 - **As the merchant**, I want to know the concierge is actually selling, so that I
   can justify it — so I need its assisted revenue attributed. *(Order ↔ chat
   attribution via `chat_session`.)*
@@ -517,6 +547,17 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   commission button (`orders.chat_via`, with the click's `{entry, section,
   turns}` in `chat_meta`); **chat-assisted** — a conversation co-occurred in the
   buying session (`chat_session`); **unassisted**. See §4.8.)*
+- **As the merchant on a checkout-less install**, I want a **Leads & inquiries**
+  card that **counts** the leads the concierge captured — broken down by kind
+  (offer / viewing / question / callback), **with no dollar value ever attached** —
+  so that I can measure demand honestly and a lead is never mistaken for a sale.
+  *(Conversion tab: a **count-only** card reading `concierge_inquiries` by
+  `created_at` — never joined to `orders` — with the same delta / period-compare /
+  trend treatment as the commission metrics. It is **hidden entirely** on a
+  commission-mode install like Feierabend (no inquiries), so it never disturbs or
+  blends into the revenue figures; `qa-` / `eval-` traffic is excluded exactly as
+  elsewhere. A lead is counted, never valued, never folded into revenue. See §4.14
+  and* [`ATTRIBUTION.md`](ATTRIBUTION.md)*.)*
 - **As the merchant**, I want a **real behavioral funnel** — visits → chat
   opened → spoke to the concierge → register opened → commission — **measured
   over time**, so that I can see where journeys leak and whether changes move
@@ -1716,6 +1757,128 @@ as **"considering"** in the Conversations list, so it can't be misread as
 "still being graded" (an evaluation status); the stored value and colour are
 unchanged.
 
+### 4.14 Inquiry mode — lead capture without a checkout
+**Decision:** not every page the concierge sells on has a register. A single-piece
+listing, a used-car sale page, a made-to-order commission — there is nothing to
+place an order against, so the concierge cannot earn a commission and there is no
+checkout to attribute. The most valuable thing a shopper can do there is **hand
+the house a lead**: a serious offer, a request to view the piece in person, a
+question only the owner can answer, or a request for a callback. The **inquiry**
+primitive captures exactly that — stores it, and emails the house — and the
+capture is treated as the **inquiry-mode conversion event**, the analog of the
+commission-button click. Crucially, though, **an inquiry is a qualified lead, not
+a sale**: it is counted, never valued, and never allowed anywhere near revenue.
+Full spec: [`INQUIRIES.md`](INQUIRIES.md); attribution: [`ATTRIBUTION.md`](ATTRIBUTION.md).
+
+**The primitive.** A `concierge_inquiries` row is the whole unit: `kind` (one of
+`offer` · `viewing` · `question` · `callback`), the shopper's `name`, `email`
+and/or `phone`, an optional offer `amount`, a line of `message`, the `session_key`
+and `page_url` for provenance, and a `status` (`new` → `contacted` → `closed`) the
+house works. **RLS mirrors `waitlist` exactly:** row-level security on,
+authenticated **admins** get full access (`is_concierge_admin()`), and there is
+**no anon policy** — a direct client insert is denied. The row is written only by
+the edge function's **service role**, which bypasses RLS.
+
+**Anonymous capture, by design.** A serious buyer usually has no account — they
+arrived from a listing, not a login — so an inquiry must never require sign-in.
+Two paths reach the same `submit_inquiry` tool:
+
+- **Anonymously, via an inquiry form.** The widget POSTs the form to the edge
+  function's `?form=1` endpoint; `handleFormPost` routes any form whose
+  `submit_tool` is `submit_inquiry` down a **serial-free, sign-in-free** path and
+  runs the tool with the service role. This is the exception to the otherwise
+  order-scoped, ownership-gated form contract (see [`FORMS.md`](FORMS.md)) — an
+  inquiry form carries no order serial and requires no JWT.
+- **Signed-in, in the tool loop.** The model may call `submit_inquiry` directly,
+  e.g. when a signed-in owner makes an offer in chat.
+
+The tool **re-validates server-side** regardless of what the form sent: the `kind`
+must be one of the four, and **`email` OR `phone`** is required so the house has a
+way back. It is **rate-limited** twice over — the shared per-IP form limiter, plus
+a per-session cap of **5 inquiries per `session_key` per rolling hour** (it counts
+the session's recent rows and, over the cap, returns a polite "we already have
+your details" **without inserting or re-notifying**).
+
+**Fail-soft house notification.** On a successful insert the tool fires a Resend
+email to the address in the `inquiry_notify_email` config key, **falling back to
+the `EMAIL_FROM` address when that key is blank**. The send is deliberately
+**fail-soft**: a Resend error (or a missing `RESEND_API_KEY`) never fails the tool —
+the lead is already saved — and every attempt, hit or miss, is recorded in
+`email_log` (kind `inquiry`). Losing the notification must never lose the lead.
+
+**Drafts-first forms.** Two `concierge_forms` rows are seeded — `make-an-offer`
+(name, email, phone, amount, message → `kind=offer`) and `book-a-viewing` (name,
+email, phone, preferred time → `kind=viewing`) — both **`enabled=false`**, like all
+generated content. The `kind` is bound by a **fixed-value hidden field** set by the
+definition, not typed by the shopper. An operator turns a form on when the page is
+ready; the `serious-offers` SOP (also seeded) tells the concierge to emit
+`{{form:make-an-offer}}` / `{{form:book-a-viewing}}` when a shopper signals a
+serious offer or asks to view — and to keep the price **firm** while doing so.
+
+**The honesty decision — a lead is its own bucket, never revenue.** Because the
+inquiry is the conversion event, it is tempting to fold it into the same reporting
+as a commission. It is deliberately **not**:
+
+- **Its own table, its own bucket.** Everything is read from `concierge_inquiries`
+  by `created_at` — **never joined to `orders`**, never added to commission
+  revenue, the ✳/assisted tiers, or "sales."
+- **A count, never a value.** The Conversion tab surfaces a dedicated **Leads &
+  inquiries** card — a total plus a per-kind split — with the same
+  period-comparison / delta / trend treatment as the other metrics, but **no dollar
+  figure is ever attached**. A lead has no price because the deal closes
+  off-platform; the house follows up by email or phone.
+- **Rendered only where it applies.** On a commission-mode install like Feierabend
+  (no inquiries) the card is **hidden entirely** — it never disturbs or blends into
+  the commission metrics. Where inquiries exist but none fall in the range, it
+  shows honest zeros.
+- **Same exclusions.** `qa-` / `eval-` test traffic is excluded exactly as it is
+  from every commission metric.
+
+**Attribution reuse — concierge-attributed by construction.** An inquiry is
+submitted *through* the concierge, so there is no non-chat path to imply. At insert
+time `submit_inquiry` stamps two columns mirroring `orders`, so the same machinery
+that measures commissions measures leads:
+
+| Column | Value |
+|--------|-------|
+| `chat_via` | always `concierge` (constraint: `NULL` or `concierge`) |
+| `chat_meta` | `{section, turns, origin, captured_at}` — the page section, the conversation depth, how it arrived (`origin`: `tool` in chat / `form` via a form POST), and the capture timestamp |
+
+The session context reaches the stamp the same way the commission marker reaches
+checkout: injected from the live request on the agentic tool path, or carried on
+the anonymous `?form=1` body (`section` / `turns` beside `session_key`) on the form
+path — so the forms stay sign-in-free while the stamp is still faithful. This
+mirrors the commission click's `{entry, section, turns}` exactly.
+
+```mermaid
+flowchart LR
+  SIG["Shopper signals — offer / viewing /<br/>question / callback (anonymous OK)"] -->|"serious-offers SOP"| FORM["Concierge emits<br/>{{form:make-an-offer}}"]
+  FORM -->|"?form=1 · serial-free · no sign-in"| TOOL["submit_inquiry<br/>validate kind + email-or-phone · rate-limit 5/session/hr"]
+  SIG -.->|"signed-in: model calls the tool in chat"| TOOL
+  TOOL -->|"service role (RLS denies anon)"| ROW[["concierge_inquiries<br/>+ chat_via / chat_meta stamp"]]
+  TOOL -->|"fail-soft"| MAIL["Resend → inquiry_notify_email<br/>(→ EMAIL_FROM) · email_log"]
+  ROW --> ADMIN["Admin · Inquiries panel<br/>new → contacted → closed"]
+  ROW --> LEADS["Conversion tab · Leads and inquiries<br/>a COUNT, per kind — never revenue"]
+```
+
+**Data & API summary (inquiries).**
+- **Table:** `concierge_inquiries` (idempotent `create table if not exists` in
+  `setup.sql`); RLS mirrors `waitlist` (admin all, no anon policy); columns
+  `chat_via` / `chat_meta` added idempotently (`chat_via` constrained `NULL` or
+  `concierge`). Indexes: `created_at desc`, `(status, created_at)`,
+  `(session_key, created_at)` for the rate-limit lookup.
+- **Write:** `submit_inquiry` tool (service role) — anonymous via `handleFormPost`
+  (`?form=1`) or signed-in in the tool loop; validates `kind` + email-or-phone,
+  rate-limits 5/session/hour, fires the fail-soft `inquiry_notify_email` notice.
+- **Forms:** `make-an-offer` / `book-a-viewing` seeded `enabled=false`, bound to
+  `submit_inquiry` with a fixed hidden `kind`.
+- **Config:** `concierge_config.inquiry_notify_email` (blank → `EMAIL_FROM`).
+- **Admin:** Inquiries panel (Customers tab) — filter / export / status control;
+  Leads & inquiries card (Conversion tab) — count-only, per-kind, hidden on
+  commission-mode installs.
+- **Evals:** `serious-offer-capture` (behavior deck), a persona
+  (`serious-offer-maker`), and conformance rows for the tool / config key / table.
+
 ---
 
 ## 5. Subsystems
@@ -1850,6 +2013,22 @@ the new one propagates.) The open transcript exports to CSV for a record.
   the storefront ticker reads the live figure from `?next=1`. The demo seeds at
   **Nº 14,215 of 15,000** for the "nearly sold out" scarcity story; an admin can
   reset it to a fresh edition (start at Nº 1, any run size) at will.
+- **Inquiry mode — lead capture without a checkout.** A `concierge_inquiries`
+  table and a `submit_inquiry` tool let the concierge capture a serious offer,
+  viewing request, question, or callback on a checkout-less page — **anonymous-
+  capable** (a serial-free, sign-in-free `?form=1` path or the signed-in tool
+  loop), validating `kind` + email-or-phone, rate-limited 5/session/hour, and
+  firing a **fail-soft** house email to `inquiry_notify_email` (falling back to
+  `EMAIL_FROM`; every attempt logged in `email_log`). Two drafts-first forms
+  (`make-an-offer`, `book-a-viewing`, `enabled=false`) and a `serious-offers` SOP
+  drive it while keeping the price firm. The submitted inquiry is wired as the
+  **inquiry-mode conversion event** — stamped `chat_via='concierge'` +
+  `chat_meta` by construction and surfaced on the Conversion tab as a
+  **Leads & inquiries** count with a per-kind breakdown and **no dollar value**,
+  in its own bucket (never joined to `orders` or folded into revenue) and hidden on
+  commission-mode installs. Admins work leads in an **Inquiries** panel (new →
+  contacted → closed). A lead is a qualified lead, never a sale. See §4.14,
+  [`INQUIRIES.md`](INQUIRIES.md), [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
 ### Designed for, not yet built
 

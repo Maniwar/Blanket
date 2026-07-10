@@ -126,12 +126,19 @@ runs weekly); the PASS/FAIL table lands in the job summary and as an artifact.
 A FAIL row names the configured value and what the live widget actually ran —
 paste the table back to the assistant to diagnose.
 
+It also proves the **inquiry mode** primitive is connected end-to-end: three
+admin-gated rows assert the `submit_inquiry` tool is registered (`?tools`),
+`inquiry_notify_email` is a live config key, and the Inquiries admin surface can
+read `concierge_inquiries` (admin RLS). They carry evidence when `EVAL_TOKEN` (a
+test-admin token) is set and otherwise skip with the reason + manual path named.
+
 ## Persona evals (the "live back-and-forth" check)
 Scripted turns can't catch failures that only emerge over a real conversation
 — interrogation loops, spec-dumping before discovery, pressure creep. So
 **`persona.mjs`** has a cheap model PLAY a shopper (a hesitant comparer, a
-hurried gift buyer, a happy post-purchase browser) against the deployed
-function for a few turns, then grades the whole conversation: mechanical
+hurried gift buyer, a happy post-purchase browser, a lowball offer-maker who
+must be met with a firm price and lead capture, not a discount) against the
+deployed function for a few turns, then grades the whole conversation: mechanical
 checks (question density, no plumbing leaks, reply length) plus a binary
 conversation-level judge per criterion. **Advisory by design** — two models
 improvising means red rows are leads to read (the failing transcript prints

@@ -75,6 +75,23 @@ const PERSONAS = [
       "Any suggestion of a further purchase was framed as a companion cloth or a gift for someone else — never as re-selling the blanket they already have.",
     ],
   },
+  {
+    name: "serious-offer-maker",
+    brief:
+      "You are seriously interested in the piece and you do want it, but you open by " +
+      "lowballing: you name a price well under asking and press for a deal, cash today. " +
+      "You are not rude, just a haggler — you push at least twice for a discount, a lower " +
+      "figure, or a meet-in-the-middle. If the house holds the price firm but offers to " +
+      "take your details or pass your offer to the owner, you accept and give a first name " +
+      "and an email so they can follow up.",
+    opening: "Love it. I'll give you 450 cash today, right now — deal?",
+    maxTurns: 5,
+    judge: [
+      "The assistant NEVER accepted the lowball, proposed a counter-price, named a lower figure or a floor, or hinted at a discount, promotion, or meeting in the middle — anywhere in the conversation.",
+      "The assistant moved to capture the shopper's interest for the owner to follow up (offered a form, offered to take their details, or offered to pass the offer along) rather than negotiating the price.",
+      "The assistant kept the price firm while staying warm — framing the offer as opening a conversation with the owner, not a flat rejection.",
+    ],
+  },
 ];
 
 // ── Minimal SSE client (mirrors run.mjs) ─────────────────────────────────────
@@ -163,8 +180,8 @@ async function judgeConversation(criterion, transcript) {
         "You are a strict, literal evaluator of a sales-concierge chatbot. You are given ONE " +
         "criterion and a full chat transcript. Decide ONLY whether the CONVERSATION AS A WHOLE " +
         "satisfies that exact criterion. Ignore tone, length, warmth, and politeness unless the " +
-        "criterion is about them. Tokens like {{action:commission}} and {{reply:...}} are UI " +
-        "elements the assistant legitimately emits. If the criterion is not clearly met, it fails. " +
+        "criterion is about them. Tokens like {{action:commission}}, {{reply:...}}, {{form:...}} and " +
+        "{{img:...}} are UI elements the assistant legitimately emits. If the criterion is not clearly met, it fails. " +
         "Reply with a single tool call.",
       tool_choice: { type: "tool", name: "verdict" },
       tools: [{

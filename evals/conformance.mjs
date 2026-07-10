@@ -357,6 +357,86 @@ async function main() {
     }
   }
 
+  // ── 7. Inquiry mode — the lead-capture primitive is wired end-to-end ────────
+  // The behavior deck proves WHAT the concierge says when a shopper makes an
+  // offer; this proves the inquiry knobs are CONNECTED: the submit_inquiry tool is
+  // registered/exposed, inquiry_notify_email is a live config key, and the
+  // Inquiries admin surface can actually read concierge_inquiries. All three are
+  // admin-gated (the ?tools manifest, the concierge_config row, the table's admin
+  // RLS), so they carry EVIDENCE when an admin token is supplied (EVAL_TOKEN — the
+  // same test-admin token evals/run.mjs uses for the admin-gated ?evals=1 deck) and
+  // SKIP with the reason + manual path named when it is absent — never a silent
+  // pass. The RLS reads go through PostgREST with the page's OWN publishable key,
+  // exactly as the admin studio does.
+  {
+    const TOKEN = process.env.EVAL_TOKEN || "";
+    const conn = await page.evaluate(() => {
+      const c = window.FEIER_CONCIERGE_CONFIG || {};
+      return { url: c.supabaseUrl || "", key: c.supabaseAnonKey || "" };
+    });
+    const restBase = conn.url ? conn.url.replace(/\/+$/, "") + "/rest/v1/" : "";
+    const restHeaders = { apikey: conn.key, Authorization: "Bearer " + TOKEN };
+
+    if (!TOKEN) {
+      row("submit_inquiry tool registered (?tools)", "exposed", "—", null, "skip",
+        "admin-gated tools manifest; set EVAL_TOKEN (a test-admin token) to verify — the admin Tools tab renders it live");
+      row("inquiry_notify_email is a live config key", "present in concierge_config", "—", null, "skip",
+        "admin-gated concierge_config read; set EVAL_TOKEN to verify — Tuning shows the notify address live");
+      row("Inquiries panel reads concierge_inquiries", "readable under admin RLS", "—", null, "skip",
+        "admin-gated table read; set EVAL_TOKEN to verify — Customers → Inquiries reads the same rows live");
+    } else {
+      // (a) submit_inquiry registered/exposed in the built-in tools manifest.
+      try {
+        const res = await fetch(endpoint + (endpoint.includes("?") ? "&" : "?") + "tools=1",
+          { headers: { Authorization: "Bearer " + TOKEN } });
+        const j = res.ok ? await res.json() : {};
+        const tool = (j.tools || []).find((t) => t.name === "submit_inquiry");
+        row("submit_inquiry tool registered (?tools)", "exposed",
+          tool ? "present · enabled=" + tool.enabled : (res.ok ? "absent" : "HTTP " + res.status),
+          !!tool, "effective",
+          tool ? "in the built-in tools manifest the admin Tools tab renders — the inquiry write path is connected"
+               : (res.ok ? "not in the manifest — the tool stopped being exposed"
+                         : "?tools HTTP " + res.status + " — is EVAL_TOKEN a test-admin token?"));
+      } catch (e) {
+        row("submit_inquiry tool registered (?tools)", "exposed", "fetch failed", false, "effective", String(e.message).slice(0, 120));
+      }
+      // (b) inquiry_notify_email is a live concierge_config row (admin RLS read).
+      if (!restBase || !conn.key) {
+        row("inquiry_notify_email is a live config key", "present in concierge_config", "no supabaseUrl/key on page", null, "skip",
+          "the storefront did not expose FEIER_CONCIERGE_CONFIG.supabaseUrl / supabaseAnonKey");
+      } else {
+        try {
+          const res = await fetch(restBase + "concierge_config?select=key&key=eq.inquiry_notify_email", { headers: restHeaders });
+          const cfgRows = res.ok ? await res.json() : [];
+          const present = Array.isArray(cfgRows) && cfgRows.length > 0;
+          row("inquiry_notify_email is a live config key", "present in concierge_config",
+            present ? "1 row" : (res.ok ? "0 rows" : "HTTP " + res.status), present, "effective",
+            present ? "the destination submit_inquiry reads for the house notice (blank → EMAIL_FROM)"
+                    : "seeded in setup.sql — a 0-row / HTTP error here is exactly the drift to fix");
+        } catch (e) {
+          row("inquiry_notify_email is a live config key", "present in concierge_config", "fetch failed", false, "effective", String(e.message).slice(0, 120));
+        }
+      }
+      // (c) the Inquiries admin surface can read the table (admin RLS select works).
+      if (!restBase || !conn.key) {
+        row("Inquiries panel reads concierge_inquiries", "readable under admin RLS", "no supabaseUrl/key on page", null, "skip",
+          "the storefront did not expose the publishable key");
+      } else {
+        try {
+          const res = await fetch(restBase + "concierge_inquiries?select=id,kind,status&limit=1", { headers: restHeaders });
+          row("Inquiries panel reads concierge_inquiries", "readable under admin RLS",
+            res.ok ? "200 · admin select ok" : "HTTP " + res.status, res.ok, "effective",
+            res.ok ? "the same PostgREST read Customers → Inquiries runs (RLS: admin all, no anon policy)"
+                   : ((res.status === 401 || res.status === 403)
+                        ? "401/403 — is EVAL_TOKEN a test-admin token? the panel is admin-only by RLS"
+                        : "read failed — the admin surface would fail the same way"));
+        } catch (e) {
+          row("Inquiries panel reads concierge_inquiries", "readable under admin RLS", "fetch failed", false, "effective", String(e.message).slice(0, 120));
+        }
+      }
+    }
+  }
+
   // Not checkable from outside (no status surface / would need config writes):
   row("Chip budget (chipCap/linger/repeat)", "—", "—", null, "skip", "not exposed by status(); verify visually on the storefront");
   row("Service rate limits", "—", "—", null, "skip", "server-enforced; deliberately not probed (a probe would burn the real budget)");

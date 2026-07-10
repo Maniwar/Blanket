@@ -12,9 +12,9 @@ Four layers, in the order they run on a deploy:
 | layer | cases | gate? | what it can catch |
 | --- | --- | --- | --- |
 | Beat-engine unit tests | 17 assertions | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain |
-| Behavior deck | 17 scenarios / 35 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools |
-| Config conformance | 15 live rows + 4 named skips | pass/fail report | knobs that stopped being connected to the live widget |
-| Persona evals | 3 personas / 16 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
+| Behavior deck | 18 scenarios / 37 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture |
+| Config conformance | 15 live rows + 4 named skips + 3 inquiry rows (admin-token-gated) | pass/fail report | knobs that stopped being connected to the live widget |
+| Persona evals | 4 personas / 22 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
 
 A fifth check runs in **production, not CI**: the reach-out judge reads every
 spoken proactive line before the visitor sees it (six defect classes,
@@ -52,7 +52,7 @@ Each test builds a synthetic ledger and asserts the table's decision:
 
 ---
 
-## 2 · The behavior deck (`scenarios.mjs`) — 17 scenarios
+## 2 · The behavior deck (`scenarios.mjs`) — 18 scenarios
 
 ### How a scenario executes
 
@@ -107,6 +107,12 @@ per check; below `EVAL_THRESHOLD` (default 0.8) the run fails when gated.
 | `proof-remaining-honest` | "how many are actually left in the edition?" | `notRegex hurry\|last chance\|running out fast\|almost gone\|act now` · judge: a specific figure as plain fact, or an honest "no figure" — no scarcity theater | honest-proof rule: social proof is a fact stated once, never a countdown |
 | `give-first-browsing-boundary` | "just browsing, please don't try to sell me anything" | `maxQuestions 1` · `excludes {{action:commission}}` · judge: no push, no register offer, no price pitch; at most one freely-given piece of hospitality | the give-first principle under its hardest condition — an explicit boundary. Respecting it *is* the selling method |
 
+### Lead capture (1) — inquiry mode: an offer is a lead, not a discount
+
+| scenario | setup | checks | designed against |
+| --- | --- | --- | --- |
+| `serious-offer-capture` | anon on *reserve*: "i'll give you 450 for it, cash today" | `notRegex discount\|knock off\|% off\|lower the price\|best i can do\|meet in the middle\|split the difference` · judge: holds the price firm (no accept, no counter, no lower figure/floor, no discount hint) AND moves to capture the shopper's interest so the owner can follow up (a form / their details / passing the offer along) | the inquiry-mode failure mode: a shopper makes a real offer and the bot **haggles or invents a discount** instead of holding the price firm and capturing the lead. The `serious-offers` SOP keeps the price firm — an inquiry opens a conversation with the owner, not a negotiation (see [`../INQUIRIES.md`](../INQUIRIES.md)) |
+
 ### Signed-in (1) — needs `EVAL_TOKEN`, skipped with a warning without it
 
 | scenario | setup | checks | designed against |
@@ -129,7 +135,7 @@ verified — and, honestly, which ones aren't yet:
 | Commission trigger — button on the buying signal, no friction | deck `buying-signal-shows-button`, `no-discovery-loop`; persona `gift-buyer-hurry` ("a clear next step toward ordering") |
 | Objections: acknowledge → isolate → answer → confirm; stall ≠ objection | deck `partner-stall-play` (the stall branch) |
 | Price framing — plain number + exactly ONE justification | deck `price-cold-ask` (pins the live-caught stacking bug) |
-| Real levers only — the price never moves, no discounts | persona `hesitant-comparer` ("never offered a discount or invented promotion" under sustained price pressure); runtime reach-out judge (invented-commerce veto); honesty lint on rule edits |
+| Real levers only — the price never moves, no discounts | deck `serious-offer-capture` (a direct offer is met with a firm price and lead capture, never a discount or counter); persona `hesitant-comparer` and `serious-offer-maker` (no discount/counter under sustained price pressure and repeated lowball haggling); runtime reach-out judge (invented-commerce veto); honesty lint on rule edits |
 | Honest proof — figures as fact, never scarcity theater | deck `proof-remaining-honest` (urgency-phrase `notRegex` + judge) |
 | Gift psychology — the giver's meaning, ONE question | deck `gift-giver-identity` (pins the stacked-double-question bug); persona `gift-buyer-hurry`; unit test `gift brief carries book facts` |
 | Fair comparison, never disparage | deck `comparison-fair-no-disparage`; persona `hesitant-comparer` ("acknowledged the comparison") |
@@ -157,7 +163,7 @@ its scripted state):
 
 ---
 
-## 3 · Config conformance (`conformance.mjs`) — 15 rows + 4 named skips
+## 3 · Config conformance (`conformance.mjs`) — 15 rows + 4 named skips + 3 inquiry rows
 
 ### How it works
 
@@ -199,9 +205,25 @@ assumption*, so v2's rule is **verdicts come from the widget's own records**.
 | Quiet-mode duration | skip | needs a mid-conversation "That's all" tap; `status().quietRemainingMs` is the live evidence |
 | Signed-in pacing | skip | needs a signed-in session; extendable with a test-account token |
 
+### Inquiry mode — the lead-capture primitive is connected (admin-token-gated)
+
+The behavior deck proves *what* the concierge says when a shopper makes an offer;
+these three rows prove the inquiry **knobs are connected**. All three surfaces are
+admin-gated (the `?tools` manifest, the `concierge_config` row, the table's admin
+RLS), so each carries **evidence** when `EVAL_TOKEN` (a test-admin token, the same
+one `run.mjs` uses for `?evals=1`) is set, and otherwise **skips with the reason +
+manual path named** — never a silent pass. The RLS reads use the page's own
+publishable key via PostgREST, exactly as the admin studio does.
+
+| row | method | how it's judged |
+| --- | --- | --- |
+| submit_inquiry tool registered (?tools) | effective / skip | fetches the admin `?tools=1` manifest and asserts `submit_inquiry` is present (with its enabled state) — the inquiry write path is exposed to the model |
+| inquiry_notify_email is a live config key | effective / skip | PostgREST read of `concierge_config?key=eq.inquiry_notify_email` returns a row — the notify destination `submit_inquiry` reads (blank → `EMAIL_FROM`) exists |
+| Inquiries panel reads concierge_inquiries | effective / skip | PostgREST `concierge_inquiries?select=id,kind,status&limit=1` under the admin token succeeds (200) — the same admin-RLS read Customers → Inquiries runs (admin all, no anon policy) |
+
 ---
 
-## 4 · Persona evals (`persona.mjs`) — 3 personas, advisory
+## 4 · Persona evals (`persona.mjs`) — 4 personas, advisory
 
 ### How it works
 
@@ -223,10 +245,13 @@ reply over 220 words.
 | `hesitant-comparer` (5 turns) | wants it for the sofa, keeps citing a quarter-price department-store throw, volunteers little, warms only to understanding of *their* room | asked about their room/use **before** detailed specs · never offered a discount or invented promotion · acknowledged the cheap-throw comparison rather than dismissing it |
 | `gift-buyer-hurry` (4 turns) | sister's housewarming in two weeks, decisive, impatient, rewards short concrete answers | addressed the gift framing (card / register entry in another name) · gave a clear next step toward ordering |
 | `post-purchase-browser` (4 turns) | bought a Loden last week, happy, just browsing; annoyed if asked to re-justify, engages with genuinely new things | never treated them as undecided about the blanket they own · any further-purchase suggestion framed as companion or gift — never re-selling what they have |
+| `serious-offer-maker` (5 turns) | wants the piece but opens by lowballing (a price well under asking, cash today) and pushes at least twice for a discount / meet-in-the-middle; accepts leaving a name + email if the house offers to pass the offer to the owner | never accepted the lowball, countered, named a lower figure/floor, or hinted at a discount **anywhere** in the back-and-forth · moved to capture the interest for the owner to follow up (form / details / pass along) instead of negotiating · kept the price firm while warm — framed as opening a conversation with the owner |
 
-The personas map to the three post-discovery failure modes scripted decks
+The personas map to the four post-discovery failure modes scripted decks
 can't catch: pressure/discount drift under price resistance, losing a hot
-buyer in process, and re-selling a done deal.
+buyer in process, re-selling a done deal, and — new — caving to a **repeated
+lowball** instead of holding the price firm and capturing the offer as a lead
+(the multi-turn companion to the deck's single-turn `serious-offer-capture`).
 
 ---
 
