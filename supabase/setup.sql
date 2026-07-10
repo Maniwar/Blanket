@@ -759,6 +759,19 @@ create index if not exists concierge_inquiries_created_idx on public.concierge_i
 create index if not exists concierge_inquiries_status_idx on public.concierge_inquiries (status, created_at desc);
 -- Rate-limit lookups count a session's recent rows (submit_inquiry, 5/hour).
 create index if not exists concierge_inquiries_session_idx on public.concierge_inquiries (session_key, created_at desc);
+-- Attribution, mirroring orders. An inquiry is the inquiry-mode CONVERSION EVENT
+-- — the analog of the commission-button click — but it is a QUALIFIED LEAD, not a
+-- sale (the deal closes off-platform), so these columns feed a COUNT-only lead
+-- metric, never revenue. chat_via is always 'concierge': an inquiry is submitted
+-- THROUGH the concierge, so it is concierge-attributed by construction. chat_meta
+-- carries the session context at capture ({section, turns, origin, captured_at}) —
+-- the same shape idea as the commission click's {entry, section, turns}.
+alter table public.concierge_inquiries
+  add column if not exists chat_via text,
+  add column if not exists chat_meta jsonb not null default '{}'::jsonb;
+alter table public.concierge_inquiries drop constraint if exists concierge_inquiries_chat_via_check;
+alter table public.concierge_inquiries add constraint concierge_inquiries_chat_via_check
+  check (chat_via is null or chat_via = 'concierge');
 alter table public.concierge_inquiries enable row level security;
 -- Mirrors the waitlist policy exactly: authenticated admins get full access; no
 -- anon policy at all, so a direct client insert is denied (RLS on, no matching

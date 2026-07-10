@@ -204,6 +204,51 @@ tooltip); the **Chats** tab lists chats that *touched* the order — see below.
   navigation. A chat can hold a service link without deserving conversion
   credit, and vice versa.
 
+## The inquiry-mode conversion event (leads, not sales)
+
+Some installs have **no checkout** — a single-piece listing, a car-sale page. The
+concierge there can't produce a commission, so its conversion event is a
+**submitted inquiry**: a serious **offer**, a **viewing** request, a **question**
+only the owner can answer, or a **callback** request. Each is written to its own
+table, `concierge_inquiries` (never `orders`), by the `submit_inquiry` tool.
+
+**An inquiry is a qualified lead, not a closed sale.** The deal closes
+off-platform — the house follows up by email or phone. So the inquiry-mode event
+is treated very differently from a commission:
+
+- **Its own bucket.** Inquiries live in `concierge_inquiries`, never folded into
+  `orders`, the revenue totals, or the ✳/assisted tiers.
+- **A count, never a value.** The Conversion tab surfaces inquiries as
+  **Leads & inquiries** — a *count* in the range, broken down by kind (offer /
+  viewing / question / callback), with the same period-comparison / delta / trend
+  treatment as the other metrics. **No dollar figure is ever attached**, and a
+  lead is never added to commission revenue or allowed to inflate "sales."
+- **Rendered only where it exists.** On a commission-mode install like Feierabend
+  (no inquiries) the leads card is hidden entirely; it never disturbs or blends
+  into the commission metrics.
+
+**How the inquiry is attributed.** An inquiry is submitted *through* the
+concierge, so it is **concierge-attributed by construction** — there is no
+non-chat path to imply. At insert time `submit_inquiry` stamps the same shape of
+evidence the commission click captures:
+
+- `concierge_inquiries.chat_via` = `'concierge'` (always — the honest channel).
+- `concierge_inquiries.chat_meta` = `{section, turns, origin, captured_at}`: the
+  page **section**, the conversation **depth** (user turns so far), how it
+  **arrived** (`origin`: `tool` = the model called `submit_inquiry` in chat;
+  `form` = an anonymous inquiry-form POST), and the capture **timestamp**. This
+  mirrors the commission click's `{entry, section, turns}`.
+
+The session context reaches the tool the same way the commission marker reaches
+checkout: in the agentic tool path it is injected from the live request
+(`session_key`, section, user-turn count); on the anonymous form-post path the
+widget sends `section` / `turns` alongside `session_key` on the `?form=1` body,
+exactly as the commission click carries its marker context. Forms stay
+**anonymous-capable** — no sign-in is required to hand the house a lead.
+
+**Test traffic** (`qa-` / `eval-` session keys) is excluded from the leads metric
+just as it is from every commission metric.
+
 ## Honest limits (read before quoting numbers)
 
 - **Session capture is same-tab.** The chat key lives in `sessionStorage`, so
@@ -294,6 +339,9 @@ The levers, in the order they usually pay off:
 | `concierge_actions` | `conversation_id`, `serial` | Service touches on existing orders |
 | `site_events` | `kind`, `visit_key`, `via` | Funnel beacons: visit / chat_open / checkout_open (PII-free) |
 | `concierge_config` | `unit_price` | Register price behind every revenue figure |
+| `concierge_inquiries` | `chat_via` | Inquiry-mode channel — always `concierge` (concierge-attributed by construction); `concierge_inquiries_chat_via_check` |
+| `concierge_inquiries` | `chat_meta` | `{section, turns, origin, captured_at}` at capture — feeds the **count-only** leads metric, never revenue |
+| `concierge_inquiries` | `kind` | Lead kind: `offer` / `viewing` / `question` / `callback` — the Conversion tab's per-kind breakdown |
 
 Full column docs in [`supabase/SCHEMA.md`](supabase/SCHEMA.md); design
 rationale in [`DESIGN.md`](DESIGN.md) §4.8.

@@ -1239,6 +1239,26 @@ async function runRegisterTool(
     const sessionKey = typeof input.session_key === "string" ? input.session_key.trim().slice(0, 64) : "";
     const pageUrl = typeof input.page_url === "string" ? input.page_url.trim().slice(0, 400) : "";
 
+    // Attribution — an inquiry is the inquiry-mode CONVERSION EVENT (the analog of
+    // the commission-button click), so we capture the session context the same way
+    // the commission flow does. It is ALWAYS concierge-attributed by construction:
+    // an inquiry is only ever submitted THROUGH the concierge, whether the model
+    // called this tool in chat ('tool') or an anonymous inquiry form did ('form').
+    // chat_meta mirrors the commission click's {section, turns} plus how it arrived
+    // and when — but this stays a lead, never a sale: nothing here carries a value.
+    const section = typeof input.section === "string" ? input.section.trim().slice(0, 80) : "";
+    const turnsRaw = typeof input.turns === "number"
+      ? input.turns
+      : (typeof input.turns === "string" ? Number(input.turns) : NaN);
+    const turns = Number.isFinite(turnsRaw) && turnsRaw > 0 ? Math.min(Math.floor(turnsRaw), 9999) : null;
+    const origin = input.origin === "form" ? "form" : "tool";
+    const chatMeta: Record<string, unknown> = {
+      section: section || null,
+      turns,
+      origin,
+      captured_at: new Date().toISOString(),
+    };
+
     // Rate limit: at most 5 inquiries per session in a rolling hour. Count the
     // session's recent rows; over the cap we already have their details — don't
     // write another row and don't notify the house again.
@@ -1263,6 +1283,10 @@ async function runRegisterTool(
       message: message || null,
       session_key: sessionKey || null,
       page_url: pageUrl || null,
+      // The inquiry-mode conversion stamp — concierge by construction. Kept in
+      // its OWN column, never folded into orders/revenue. See ATTRIBUTION.md.
+      chat_via: "concierge",
+      chat_meta: chatMeta,
       meta: customer && customer.id
         ? { user_id: customer.id, user_email: customer.email ?? null }
         : {},
@@ -4393,8 +4417,25 @@ async function handleChatPost(req: Request): Promise<Response> {
                 cancel_order: "Striking the entry…",
               } as Record<string, string>)[block.name] ?? "Consulting the register…";
               send({ s: label });
+              // submit_inquiry is the inquiry-mode conversion event — stamp it with
+              // the live session context (session key, page section, conversation
+              // depth) so its attribution mirrors the commission click. The model's
+              // own args never carry these; inject them from the request, without
+              // overriding anything the model happened to pass.
+              let toolInput: Record<string, unknown> = (block.input ?? {}) as Record<string, unknown>;
+              if (block.name === "submit_inquiry") {
+                toolInput = { ...toolInput };
+                if (validated.sessionKey && toolInput.session_key === undefined) {
+                  toolInput.session_key = validated.sessionKey;
+                }
+                if (currentSection && toolInput.section === undefined) {
+                  toolInput.section = currentSection;
+                }
+                if (toolInput.turns === undefined) toolInput.turns = userTurns;
+                if (toolInput.origin === undefined) toolInput.origin = "tool";
+              }
               const out = await runRegisterTool(
-                block.name, block.input ?? {}, customer, cid,
+                block.name, toolInput, customer, cid,
               );
               results.push({ type: "tool_result", tool_use_id: block.id, content: out });
             }
@@ -4767,9 +4808,16 @@ async function handleFormPost(req: Request): Promise<Response> {
 
   // ── Inquiry forms — anonymous lead capture, no order serial ──────────────
   if (def.submit_tool === "submit_inquiry") {
+    // Anonymous lead capture. The session context (session_key, page section,
+    // conversation depth) rides the form POST the same way the commission click's
+    // marker rides checkout — the tool stamps chat_via='concierge'/chat_meta from
+    // it. origin='form' records that this lead arrived through an inquiry form.
     const input: Record<string, unknown> = {
       session_key: typeof body.session_key === "string" ? body.session_key : "",
       page_url: typeof body.page_url === "string" ? body.page_url : "",
+      section: typeof body.section === "string" ? body.section : "",
+      turns: typeof body.turns === "number" ? body.turns : undefined,
+      origin: "form",
     };
     for (const f of fields) {
       const name = typeof f.name === "string" ? f.name : "";

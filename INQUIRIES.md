@@ -129,7 +129,47 @@ worked (a direct `concierge_inquiries` update, admin-only under RLS).
 
 ---
 
-## 6. Configuration
+## 6. Reporting — the inquiry-mode conversion event
+
+On a checkout-less page the concierge can't earn a commission, so **a submitted
+inquiry is its conversion event** — the analog of the commission-button click.
+The **Conversion** tab surfaces it as a dedicated **Leads & inquiries** card,
+built in the same style as the commission metrics (range-scoped tiles, deltas vs
+the comparison window, a per-kind split bar, and a trend chart).
+
+The hard honesty rule: **a lead is not a sale.** So this card is deliberately
+walled off from every revenue figure:
+
+- **Count only, never a value.** A total lead count plus per-kind counts (offer /
+  viewing / question / callback). **No dollar figure is ever attached**, and a
+  lead is never added to commission revenue, the ✳ tiers, or "sales."
+- **Its own bucket.** Everything is read from `concierge_inquiries` by
+  `created_at` — never joined to `orders`.
+- **Hidden where it doesn't apply.** On a commission-mode install (e.g.
+  Feierabend) with no inquiries, the card renders nothing at all — it never
+  disturbs or blends into the commission metrics. Where inquiries exist but none
+  fall in the selected range, it shows honest zeros.
+- **Same exclusions.** `qa-` / `eval-` test traffic is excluded exactly as it is
+  from the commission metrics.
+
+### Attribution stamp
+
+Because an inquiry is submitted **through** the concierge, it is
+**concierge-attributed by construction** — there is no non-chat path. At insert
+time `submit_inquiry` stamps two columns mirroring `orders`:
+
+| Column | Value |
+|--------|-------|
+| `chat_via` | always `concierge` (constraint: `NULL` or `concierge`) |
+| `chat_meta` | `{section, turns, origin, captured_at}` — page section, conversation depth, how it arrived (`tool` in chat / `form` via a form POST), and the timestamp |
+
+The session context reaches the stamp the same way the commission marker reaches
+checkout: injected from the live request on the agentic tool path, or carried on
+the anonymous `?form=1` body (`section` / `turns` beside `session_key`) on the
+form path — the forms stay sign-in-free. Full spec and the lead-vs-sale
+distinction: [`ATTRIBUTION.md`](ATTRIBUTION.md).
+
+## 7. Configuration
 
 | Where | Key | What |
 |-------|-----|------|
@@ -138,7 +178,7 @@ worked (a direct `concierge_inquiries` update, admin-only under RLS).
 
 ---
 
-## 7. Trust & audit
+## 8. Trust & audit
 
 - **No anon DB write.** RLS denies a direct client insert; the row is written by
   the service role inside the edge function only.

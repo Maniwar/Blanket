@@ -2010,6 +2010,31 @@ need to ask my partner | Of course — the hold keeps their number while they ta
         <div id="cv-breakdown"></div>
       </section>
 
+      <!-- Inquiry-mode conversion — LEADS, not sales. Its own bucket, kept clear
+           of every commission-revenue metric above: a COUNT only, never a dollar
+           value, never added to revenue. Hidden entirely on a commission-mode
+           install (Feierabend) that has no inquiries. See ATTRIBUTION.md. -->
+      <section class="card" id="cv-inq-card" style="display:none;">
+        <div class="card-head">
+          <h3>Leads &amp; inquiries<span class="info-badge" title="The inquiry-mode conversion event: a serious offer, a viewing request, a question, or a callback a shopper handed the concierge (concierge_inquiries), captured through the concierge by construction. A COUNT of QUALIFIED LEADS — NOT sales, NOT revenue: the deal closes off-platform, so a lead is counted, never valued, and never added to commissions. Date basis: inquiry date (created_at). Shown only where inquiries exist.">i</span></h3>
+          <span class="micro">Inquiry-mode conversion — a count of leads handed to the concierge, by kind. Qualified leads, not closed sales; no dollar value.</span>
+        </div>
+        <div class="metrics" id="cv-inq-tiles">
+          <div class="stat"><span class="micro">Leads / inquiries<span class="info-badge" title="Count of inquiries created in the range (concierge_inquiries, by created_at) — offers, viewings, questions, and callbacks combined. Test traffic (qa- / eval- session keys) is excluded, exactly like the commission metrics. A lead count, never revenue.">i</span></span><div class="val" id="cv-inq-total">—</div><div class="cv-delta" id="cv-inq-total-d"></div></div>
+          <div class="stat"><span class="micro">Offers<span class="info-badge" title="Inquiries of kind 'offer' created in the range. A shopper naming a figure is a lead, not a sale — the owner follows up off-platform. Counted, never valued.">i</span></span><div class="val" id="cv-inq-offer">—</div><div class="cv-delta" id="cv-inq-offer-d"></div></div>
+          <div class="stat"><span class="micro">Viewings<span class="info-badge" title="Inquiries of kind 'viewing' created in the range — a request to see the piece in person.">i</span></span><div class="val" id="cv-inq-viewing">—</div><div class="cv-delta" id="cv-inq-viewing-d"></div></div>
+          <div class="stat"><span class="micro">Questions<span class="info-badge" title="Inquiries of kind 'question' created in the range — a question only the owner can answer.">i</span></span><div class="val" id="cv-inq-question">—</div><div class="cv-delta" id="cv-inq-question-d"></div></div>
+          <div class="stat"><span class="micro">Callbacks<span class="info-badge" title="Inquiries of kind 'callback' created in the range — a request for the owner to call back.">i</span></span><div class="val" id="cv-inq-callback">—</div><div class="cv-delta" id="cv-inq-callback-d"></div></div>
+        </div>
+        <div id="cv-inq-split"></div>
+        <div id="cv-inq-chart" class="cv-chart"></div>
+        <p class="micro" style="opacity:.7;">A lead is qualified interest, <b>not a closed sale</b> — an inquiry opens a
+          conversation the house closes off-platform, so it is <b>counted, never valued</b>, and never added to
+          commission revenue or the ✳ tiers above. Concierge-attributed by construction (submitted through the
+          concierge). Date basis: inquiry date (created_at). Deltas compare the prior window of equal length.
+          Full definition: <span class="mono">ATTRIBUTION.md</span>.</p>
+      </section>
+
       <p class="micro" style="opacity:.7;">Date bases: order metrics bucket by <b>order date</b> (placed_at);
         conversation metrics by <b>conversation start</b> (created_at); funnel stages by <b>event time</b>,
         unique visitors per bucket. Deltas compare the prior window of equal length. Attribution is captured
@@ -8363,14 +8388,20 @@ async function loadConversion() {
   let cq = sb.from('concierge_conversations').select('id,session_key,sales_stage,created_at,section').limit(10000);
   let eq = sb.from('site_events').select('kind,visit_key,session_key,created_at,via').limit(20000);
   let mq = sb.from('concierge_messages').select('conversation_id,created_at').eq('role', 'user').limit(20000);
+  // Inquiry-mode leads — their OWN query, kept clear of the orders/revenue path.
+  // Optional table (commission-mode installs have none): an error just hides the
+  // leads card, it never fails the report.
+  let iq = sb.from('concierge_inquiries').select('kind,created_at,session_key').order('created_at', { ascending: false }).limit(10000);
   if (fetchFrom) {
     oq = oq.gte('placed_at', fetchFrom); cq = cq.gte('created_at', fetchFrom);
     eq = eq.gte('created_at', fetchFrom); mq = mq.gte('created_at', fetchFrom);
+    iq = iq.gte('created_at', fetchFrom);
   }
-  const [ores, cres, eres, mres, fbAll, fbUp] = await Promise.all([
+  const [ores, cres, eres, mres, fbAll, fbUp, ires] = await Promise.all([
     oq, cq, eq, mq,
     sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }),
-    sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }).eq('rating', 1)
+    sb.from('concierge_feedback').select('*', { count: 'estimated', head: true }).eq('rating', 1),
+    iq
   ]);
   if (ores.error) { fail('Conversion — orders', ores.error); return; }
   if (cres.error) { fail('Conversion — conversations', cres.error); return; }
@@ -8399,6 +8430,10 @@ async function loadConversion() {
     .filter(function (e) { return !isTestKey(e.visit_key) && !isTestKey(e.session_key); });
   const allUserMsgs = ((mres && mres.data) || [])
     .filter(function (m) { return !testConvoIds.has(m.conversation_id); });
+  // Leads — same test-key exclusion as every other metric. A missing/errored
+  // table yields [] so the leads card simply stays hidden (commission-mode).
+  const allInquiries = ((ires && !ires.error && ires.data) || [])
+    .filter(function (q) { return !isTestKey(q.session_key); });
   const orders = allOrders.filter(function (o) { return inCur(o.placed_at); });
   const convos = allConvos.filter(function (c) { return inCur(c.created_at); });
   const pOrders = allOrders.filter(function (o) { return inCmp(o.placed_at); });
@@ -8845,6 +8880,61 @@ async function loadConversion() {
     });
     if (initiated.length > 50) olist.appendChild(el('p', 'micro', 'Showing the 50 most recent of ' + initiated.length + ' — Export CSV for the full range.'));
     bd.appendChild(olist);
+  }
+
+  // ---- Inquiry-mode conversion: LEADS, not sales ----------------------------
+  // A COUNT-only view of concierge_inquiries, deliberately walled off from every
+  // revenue figure above. Hidden entirely on a commission-mode install (no
+  // inquiries at all). Never a dollar value; never added to commissions.
+  const inqCard = $('cv-inq-card');
+  if (inqCard) {
+    if (!allInquiries.length) {
+      inqCard.style.display = 'none';   // commission-mode install — nothing to show
+    } else {
+      inqCard.style.display = '';
+      const inqCur = allInquiries.filter(function (q) { return inCur(q.created_at); });
+      const inqCmp = allInquiries.filter(function (q) { return inCmp(q.created_at); });
+      const inqKindN = function (list, k) {
+        return list.filter(function (q) { return q.kind === k; }).length;
+      };
+      const INQ_KINDS = [
+        ['offer', 'Offers', '#C49B5B'], ['viewing', 'Viewings', '#7a915a'],
+        ['question', 'Questions', '#3F9FC4'], ['callback', 'Callbacks', '#9a7bb0']
+      ];
+      $('cv-inq-total').textContent = String(inqCur.length);
+      setDelta('cv-inq-total-d', inqCur.length, hasCmp ? inqCmp.length : null, true);
+      INQ_KINDS.forEach(function (k) {
+        const cell = $('cv-inq-' + k[0]);
+        if (cell) cell.textContent = String(inqKindN(inqCur, k[0]));
+        setDelta('cv-inq-' + k[0] + '-d', inqKindN(inqCur, k[0]), hasCmp ? inqKindN(inqCmp, k[0]) : null, true);
+      });
+      // Split bar by kind — a count breakdown, no revenue attached.
+      const isp = $('cv-inq-split');
+      isp.textContent = '';
+      isp.appendChild(cvBar(INQ_KINDS.map(function (k) {
+        return { label: k[1], n: inqKindN(inqCur, k[0]), color: k[2] };
+      })));
+      const inqNote = el('p', 'micro');
+      inqNote.style.marginTop = '10px';
+      inqNote.textContent = inqCur.length
+        ? inqCur.length + ' lead' + (inqCur.length === 1 ? '' : 's') + ' in range — qualified interest handed to the concierge, counted not valued (the deal closes off-platform).'
+        : 'No leads in this range.';
+      isp.appendChild(inqNote);
+      // Trend — leads per bucket, same buckets/granularity as the charts above,
+      // with the comparison ghost when a comparison window is in play.
+      const inqVals = bucketize(bk, inqCur, function (q) { return q.created_at; }, function () { return 1; });
+      const inqSeries = [{ name: 'Leads', color: CV_EMPH, values: inqVals }];
+      if (hasCmp) {
+        const ibk = cvBuckets(win.cmpStart, win.cmpEnd - 1, bk.gran);
+        const ig = alignTo(bucketize(ibk, inqCmp, function (q) { return q.created_at; }, function () { return 1; }), bk.starts.length);
+        inqSeries.push({ name: 'Leads · ' + win.cmpLabel, color: CV_CTX, values: ig, wash: false, dash: true });
+      }
+      cvChart($('cv-inq-chart'), {
+        labels: bk.labels, gran: bk.gran, fmt: cvFmtN,
+        aria: 'Leads and inquiries over time, per ' + bk.gran,
+        series: inqSeries
+      });
+    }
   }
 }
 

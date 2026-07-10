@@ -384,6 +384,10 @@ Waitlist card: filter, mark notified, export CSV).
 | `page_url` | text | Where the inquiry was made. |
 | `status` | text | `new` (default) / `contacted` / `closed` (checked). |
 | `meta` | jsonb | `{}`; carries the signed-in user id/email when present. |
+| `chat_via` | text | Attribution channel, mirroring `orders.chat_via`. Always `concierge` (or `NULL` on pre-attribution rows): an inquiry is submitted **through** the concierge, so it is concierge-attributed by construction. Constraint `concierge_inquiries_chat_via_check` (`NULL` or `concierge`). |
+| `chat_meta` | jsonb | `{}`; the session context at capture — `{section, turns, origin, captured_at}`: the page section, the conversation depth (user turns so far), how the lead arrived (`tool` = the model called `submit_inquiry` in chat; `form` = an inquiry form POST), and the capture timestamp. The inquiry-mode analog of the commission click's `{entry, section, turns}`. |
+
+> Attribution note: an inquiry is the **inquiry-mode conversion event** — the analog of the commission-button click — but it is a **qualified lead, not a sale**. `chat_via`/`chat_meta` feed a **count-only** lead metric on the Conversion tab; they are **never** joined to `orders`, added to revenue, or valued in dollars. The deal closes off-platform. See [`../ATTRIBUTION.md`](../ATTRIBUTION.md).
 
 RLS on; **admin** select/manage policy (`is_concierge_admin()`), **no anon
 policy** — a direct client insert is denied, exactly like `waitlist`. **Written

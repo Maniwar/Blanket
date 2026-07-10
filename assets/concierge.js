@@ -892,7 +892,11 @@
         return fetch(endpoint() + '?form=1', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ form: slug, serial: serial, values: values, session_key: sessionKey() })
+          /* section + turns mirror the commission-click marker's context so an
+             inquiry form (anonymous, serial-free) carries the same session
+             provenance the server stamps as chat_meta. Harmless for register-edit
+             forms — the server only reads them for the inquiry path. */
+          body: JSON.stringify({ form: slug, serial: serial, values: values, session_key: sessionKey(), section: currentSection(), turns: history.length })
         }).then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
           .then(function (r) {
             if (r.ok && r.j && r.j.ok) {
