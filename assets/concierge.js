@@ -379,8 +379,19 @@
       '.cx-panel.cx-open{transform:translateY(0);visibility:visible;transition:transform .5s cubic-bezier(.22,.8,.28,1),height .35s ease;}',
       '.cx-panel.cx-tall{height:92svh;}',
       '.cx-panel.cx-dragging{transition:none;}',
-      '.cx-handle{flex:0 0 auto;padding:.55rem 0 .2rem;display:flex;justify-content:center;cursor:grab;touch-action:none;}',
+      '.cx-handle{flex:0 0 auto;padding:.55rem 0 .2rem;display:flex;justify-content:center;cursor:grab;touch-action:none;position:relative;}',
       '.cx-handle::before{content:"";width:38px;height:3px;border-radius:2px;background:rgba(196,155,91,.45);}',
+      /* One-time mobile tutorial: a rising chevron + caption over the handle,
+         teaching swipe-up-to-expand. Removed forever once they expand. */
+      '.cx-swipehint{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:.15rem;',
+      'display:flex;align-items:center;gap:.45rem;pointer-events:none;white-space:nowrap;',
+      'font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;',
+      'color:var(--cx-brass-soft,#C49B5B);opacity:0;animation:cxHintIn .5s ease .6s forwards;z-index:3;}',
+      '.cx-swipehint .cx-swipearr{display:inline-block;font-size:.85rem;line-height:1;',
+      'animation:cxHintRise 1.5s ease-in-out .9s 3;}',
+      '@keyframes cxHintIn{to{opacity:.95;}}',
+      '@keyframes cxHintRise{0%,100%{transform:translateY(2px);opacity:.5;}45%{transform:translateY(-5px);opacity:1;}}',
+      '@media (prefers-reduced-motion:reduce){.cx-swipehint{animation:none;opacity:.95;}.cx-swipehint .cx-swipearr{animation:none;}}',
       '.cx-head{padding:0 1.4rem .6rem !important;gap:.6rem !important;min-height:auto !important;}',
       '.cx-close{margin:-.3rem -.7rem 0 0 !important;}',
       '.cx-authmail{display:none !important;}',
@@ -3767,6 +3778,7 @@
     try { loadHistory(); renderHistory(); } catch (eR) { /* a render hiccup must not block opening */ }
     pinned = true;
     runShimmer();
+    maybeSwipeHint();
     try { scrollToBottom(true); } catch (eSc) { /* ignore */ }
     setTimeout(function () {
       /* On a pointer device, land the cursor in the composer so they can type
@@ -3836,11 +3848,40 @@
   /* ----------------------------------------------------------
      12. Bottom-sheet drag (mobile)
   ---------------------------------------------------------- */
+  /* One-time tutorial: on mobile the sheet expands on a swipe up, but nothing
+     said so. A rising chevron + caption over the handle teaches it — shown at
+     most twice ever, gone the moment they drag, and permanently done once
+     they've expanded. Reduced motion gets the caption without the animation. */
+  var swipeHintEl = null;
+  function dismissSwipeHint(learned) {
+    if (learned) { lsSet('cx-swipe-hint', 'done'); }
+    if (swipeHintEl && swipeHintEl.parentNode) { swipeHintEl.parentNode.removeChild(swipeHintEl); }
+    swipeHintEl = null;
+  }
+  function maybeSwipeHint() {
+    if (window.innerWidth >= 900) { return; }        /* the sheet only drags on mobile */
+    if (!panel || panel.classList.contains('cx-tall')) { return; }
+    var state = lsGet('cx-swipe-hint') || '';
+    if (state === 'done') { return; }
+    var seen = parseInt(state, 10) || 0;
+    if (seen >= 2) { lsSet('cx-swipe-hint', 'done'); return; }  /* twice is teaching; more is nagging */
+    var handle = panel.querySelector('.cx-handle');
+    if (!handle) { return; }
+    lsSet('cx-swipe-hint', String(seen + 1));
+    dismissSwipeHint(false);
+    swipeHintEl = el('div', 'cx-swipehint');
+    swipeHintEl.appendChild(el('span', 'cx-swipearr', '↑'));
+    swipeHintEl.appendChild(el('span', '', 'swipe up for more room'));
+    handle.appendChild(swipeHintEl);
+    setTimeout(function () { dismissSwipeHint(false); }, REDUCED ? 3500 : 6000);
+  }
+
   function initDrag(handle, head) {
     var startY = 0, delta = 0, dragging = false;
 
     function onStart(e) {
       if (window.innerWidth >= 900) { return; }
+      dismissSwipeHint(false);   /* they've grabbed the handle — the hint has served */
       dragging = true;
       delta = 0;
       startY = (e.touches ? e.touches[0].clientY : e.clientY);
@@ -3866,6 +3907,7 @@
         closePanel();
       } else if (delta < -60) {
         panel.classList.add('cx-tall');
+        dismissSwipeHint(true);   /* learned — never show the tutorial again */
       }
       delta = 0;
     }
