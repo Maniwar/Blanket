@@ -635,7 +635,7 @@
       'text-transform:uppercase;color:var(--cx-brass-soft);white-space:nowrap;}',
       '.cx-authlink:hover{color:var(--cx-ink);}',
       '.cx-authlink:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
-      '.cx-authrow{flex:0 0 auto;padding:.85rem 1.4rem .95rem;border-bottom:1px solid var(--cx-hair-soft);}',
+      '.cx-authrow{padding:.85rem 1rem .95rem;margin:.4rem 0 .6rem;border:1px solid var(--cx-hair-soft);border-radius:6px;}',
       '.cx-authcap{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.1em;',
       'text-transform:uppercase;color:rgba(241,236,226,.6);line-height:1.7;}',
       '.cx-authline{display:flex;align-items:flex-end;gap:.7rem;margin-top:.55rem;}',
@@ -2095,6 +2095,8 @@
   }
 
   function renderHistory() {
+    /* the auth row lives IN the flow now — a re-render wipes it with the rest */
+    if (authRow && msgsEl.contains(authRow)) { authRow = null; }
     while (msgsEl.firstChild) { msgsEl.removeChild(msgsEl.firstChild); }
     if (!history.length) {
       var greet = el('div', 'cx-turn cx-turn-assistant');
@@ -3565,7 +3567,11 @@
     line.appendChild(input);
     line.appendChild(send);
     authRow.appendChild(line);
-    panel.insertBefore(authRow, msgsEl);
+    /* IN the conversation flow, not pinned: the form appears where the sign-in
+       was served (at the current end of the thread) and scrolls away with it —
+       a sticky bar that follows the reader while they scroll is nagging. */
+    msgsEl.appendChild(authRow);
+    try { scrollToBottom(true); } catch (eSc) { /* ignore */ }
     try { input.focus(); if (lastEmail) { input.select(); } } catch (eI) { /* ignore */ }
   }
 
