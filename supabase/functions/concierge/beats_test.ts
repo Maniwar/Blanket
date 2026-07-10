@@ -223,3 +223,13 @@ Deno.test("gift brief carries book facts; both briefs stay plain when the ledger
   assert(!/client book/i.test(plain.detail), "no book clause when there are no facts");
   assert(!plain.detail.includes("They hold"), "no cloth clause when the tally is absent");
 });
+
+Deno.test("extractSubjects marks the sign-in invitation as a spent subject", () => {
+  const subjects = extractSubjects([
+    "Sign in and the register opens itself.\n{{action:signin}}",
+    "The Loden suits a north room.",
+  ]);
+  assert(subjects.some((s) => s.includes("sign-in")), "sign-in theme extracted: " + subjects.join("|"));
+  const clean = extractSubjects(["The Loden suits a north room."]);
+  assert(!clean.some((s) => s.includes("sign-in")), "no sign-in theme without the offer");
+});

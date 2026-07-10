@@ -123,6 +123,9 @@ export function extractSubjects(lines: string[]): string[] {
     if (/\bgift\b/i.test(line)) push("the gift proposal");
     if (/\bcompanion\b/i.test(line)) push("the companion-cloth proposal");
     if (/\baddress\b/i.test(line)) push("the address subject");
+    if (/\{\{action:signin\}\}|\bsign(?:ing)?[ -]?in\b/i.test(line)) {
+      push("the sign-in invitation");
+    }
   }
   return out;
 }

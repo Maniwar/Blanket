@@ -1010,12 +1010,26 @@
         var actName = actm[1];
         var canDo = actName === 'commission'
           ? (window.FeierabendCheckout && typeof window.FeierabendCheckout.open === 'function')
-          : authEnabled();
+          : (authEnabled() && !authEmail); /* already signed in → an old sign-in token renders as nothing */
         if (canDo) {
           var act = el('div', 'cx-actionrow cx-fade-in');
           var ab = el('button', 'cx-action',
             actName === 'commission' ? '✳ Begin the commission' : '✳ Sign in — the key arrives by mail');
           ab.type = 'button';
+          if (actName === 'signin') {
+            /* Only the NEWEST sign-in button stays prominent. The bot may have
+               offered the key in several messages; a transcript stacking live
+               gold CTAs reads as nagging. Rendering runs oldest→newest, so
+               demoting all previous sign-in buttons here leaves exactly one. */
+            ab.className += ' cx-action-signin';
+            try {
+              var oldSb = (msgsEl || document).querySelectorAll('.cx-action-signin');
+              for (var osb = 0; osb < oldSb.length; osb++) {
+                oldSb[osb].disabled = true;
+                oldSb[osb].style.opacity = '0.45';
+              }
+            } catch (eOsb) { /* cosmetic only */ }
+          }
           ab.addEventListener('click', actName === 'commission'
             ? function () {
               /* Attribution: the register sheet is opening from the concierge's
@@ -3511,7 +3525,18 @@
             var row = authRow;
             if (!row) { return; }
             while (row.firstChild) { row.removeChild(row.firstChild); }
-            row.appendChild(el('div', 'cx-authcap', 'Sent. Check your inbox.'));
+            row.appendChild(el('div', 'cx-authcap',
+              'Sent. Check your inbox — the key can take a minute, and first keys sometimes land in spam.'));
+            /* The key is on its way — every sign-in button in the transcript
+               reflects that instead of standing as a fresh call-to-action. */
+            try {
+              var sbs = (msgsEl || document).querySelectorAll('.cx-action-signin');
+              for (var sbi = 0; sbi < sbs.length; sbi++) {
+                sbs[sbi].disabled = true;
+                sbs[sbi].style.opacity = '0.45';
+                sbs[sbi].textContent = '✳ Key sent — check your inbox';
+              }
+            } catch (eSb) { /* cosmetic only */ }
           }, fail);
         } catch (eS) { fail(eS); }
       });
