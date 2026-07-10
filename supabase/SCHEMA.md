@@ -79,7 +79,9 @@ a compiled cheap default), `max_tokens` (per-reply cap, default 1024),
 `greeting` (opening line; may embed `{{reply:…}}` pills), `voice_notes`
 (appended to the system prompt as tuning notes), `starters` (per-section
 suggested questions), `images` (admin-added `{{img:token}}` sources, merged
-client-side and injected into the prompt), `goal_sample_rate` (0–1 — fraction of
+client-side and injected into the prompt), `videos` (admin-added
+`{{video:token}}` sources — `{src, poster?, label, description}` — merged and
+injected exactly as `images` are), `goal_sample_rate` (0–1 — fraction of
 turns the async goal grader runs).
 
 *Client-book (memory) keys:* `clientbook_policy` (extra house rules injected into
@@ -189,7 +191,7 @@ config key lands in `concierge_edit_history` (who/when/what), so reporting
 settings are themselves auditable.
 
 **Written by:** admin portal (Tuning tab — Config, Engagement, Selling
-style, Bot images). **Read by:** `handleConfigGet` (`GET ?config=1`),
+style, Bot images, Bot videos). **Read by:** `handleConfigGet` (`GET ?config=1`),
 `handleChatPost` (every reply). **Seeded by:** `setup.sql` (`enabled`, `model`,
 `max_tokens`, `greeting`, `voice_notes`, `assertiveness`, `hooks`, `objections`).
 
@@ -740,7 +742,7 @@ allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
 ### concierge (`functions/concierge/index.ts`)
 | Method / query | Handler | Gate | Purpose |
 | --- | --- | --- | --- |
-| `GET ?config=1` | `handleConfigGet` | public | Bootstrap: enabled, greeting, starters, forms, images, outreach timings, assertiveness. |
+| `GET ?config=1` | `handleConfigGet` | public | Bootstrap: enabled, greeting, starters, forms, images, videos, outreach timings, assertiveness. |
 | `GET ?site=1` | `handleSiteGet` | public | Storefront CMS slot values (`site_content`) for the runtime hydrator + head bake. |
 | `GET ?selftest=1` | `handleSelfTest` | public (tiered) | Diagnostics: recognition, schema presence, attribution, the exact CUSTOMER block. Per-user + admin detail are gated; anon sees only schema presence + counts. |
 | `POST` (chat) | `handleChatPost` | public (rate-limited) | Streaming reply (SSE). Nudges, **proactive openers** (`context.opener`), tools (incl. `recall_context`), cache, logging, goal scheduling. |

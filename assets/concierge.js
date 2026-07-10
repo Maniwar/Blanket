@@ -56,6 +56,21 @@
     }
     return merged;
   }
+  function kbVideos() {
+    var i = kb().videos;
+    var base = (i && typeof i === 'object') ? i : {};
+    if (!remoteVideos || typeof remoteVideos !== 'object') { return base; }
+    /* admin-added videos extend (and can override) the built-in map */
+    var merged = {}, k;
+    for (k in base) { if (Object.prototype.hasOwnProperty.call(base, k)) { merged[k] = base[k]; } }
+    for (k in remoteVideos) {
+      if (Object.prototype.hasOwnProperty.call(remoteVideos, k)) {
+        var v = remoteVideos[k];
+        if (v && typeof v === 'object' && typeof v.src === 'string') { merged[k] = v; }
+      }
+    }
+    return merged;
+  }
   /* remote starters (from ?config=1) REPLACE the KB map when present */
   function suggestedMap() {
     if (remoteStarters) { return remoteStarters; }
@@ -213,6 +228,7 @@
   var remoteForms = {};        /* slug -> {title, fields[], submit_tool} */
   var remoteOutreach = null;   /* admin-set engagement timings (from ?config=1) */
   var remoteImages = null;     /* admin-added {{img:token}} sources (from ?config=1) */
+  var remoteVideos = null;     /* admin-added {{video:token}} sources (from ?config=1) */
   var remoteAssert = null;     /* admin assertiveness 1..5 (from ?config=1) */
 
   /* Assertiveness 1 (restrained) .. 5 (closer); default 3. Scales how often and
@@ -302,6 +318,7 @@
           if (j.auth != null) { remoteAuth = j.auth; }
           if (j.outreach && typeof j.outreach === 'object') { remoteOutreach = j.outreach; }
           if (j.images && typeof j.images === 'object') { remoteImages = j.images; }
+          if (j.videos && typeof j.videos === 'object') { remoteVideos = j.videos; }
           if (typeof j.assertiveness === 'number') { remoteAssert = j.assertiveness; }
           remoteForms = sanitizeForms(j.forms);
         }
@@ -485,6 +502,7 @@
       /* figures */
       '.cx-fig{margin:.2em 0 .95em;}',
       '.cx-fig img{display:block;max-width:100%;height:auto;border:1px solid var(--cx-hair-soft);}',
+      '.cx-fig video{display:block;max-width:100%;height:auto;border:1px solid var(--cx-hair-soft);background:#000;}',
       '.cx-actionrow{margin:.3em 0 .9em;}',
       '.cx-action{min-height:44px;display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;',
       'font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;',
@@ -958,7 +976,8 @@
   function isLegitToken(m) {
     var low = m.toLowerCase();
     /* the real vocabulary the block renderer turns into UI — keep these */
-    return low.indexOf('{{img:') === 0 || low.indexOf('{{reply:') === 0 ||
+    return low.indexOf('{{img:') === 0 || low.indexOf('{{video:') === 0 ||
+      low.indexOf('{{reply:') === 0 ||
       low.indexOf('{{form:') === 0 || low === '{{action:commission}}' ||
       low === '{{action:signin}}';
   }
@@ -987,6 +1006,7 @@
     var i = 0, n = lines.length;
     var para = [];
     var images = kbImages();
+    var videos = kbVideos();
 
     function flushPara() {
       if (!para.length) { return; }
@@ -1022,6 +1042,33 @@
           img.setAttribute('alt', (typeof meta.alt === 'string') ? meta.alt : '');
           fig.appendChild(img);
           frag.appendChild(fig);
+        }
+        i++; continue;
+      }
+
+      /* {{video:token}} line */
+      var vidm = /^\{\{video:([A-Za-z0-9_-]+)\}\}$/.exec(trimmed);
+      if (vidm) {
+        flushPara();
+        var vmeta = videos[vidm[1]];
+        if (vmeta && typeof vmeta === 'object' && typeof vmeta.src === 'string') {
+          var vfig = document.createElement('figure');
+          vfig.className = 'cx-fig cx-fade-in';
+          var vid = document.createElement('video');
+          vid.setAttribute('controls', '');
+          vid.setAttribute('preload', 'metadata');
+          vid.setAttribute('playsinline', '');
+          if (typeof vmeta.poster === 'string' && vmeta.poster) { vid.setAttribute('poster', vmeta.poster); }
+          var vlabel = (typeof vmeta.label === 'string') ? vmeta.label
+            : ((typeof vmeta.alt === 'string') ? vmeta.alt : '');
+          if (vlabel) { vid.setAttribute('aria-label', vlabel); }
+          var vsrc = document.createElement('source');
+          vsrc.setAttribute('src', vmeta.src);
+          vsrc.setAttribute('type', 'video/mp4');
+          vid.appendChild(vsrc);
+          if (vlabel) { vid.appendChild(document.createTextNode(vlabel)); }
+          vfig.appendChild(vid);
+          frag.appendChild(vfig);
         }
         i++; continue;
       }

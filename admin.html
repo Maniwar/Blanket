@@ -338,6 +338,14 @@
   .imgrow .imgsrc{ flex:2 1 200px; min-width:0; }
   .imgrow .imgalt{ flex:1 1 130px; min-width:0; }
   .imgrow .imgdesc{ flex:2 1 180px; min-width:0; }
+  .vidrow{ display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--hairline-dim); flex-wrap:wrap; }
+  .vidrow .vidprev{ width:44px; height:44px; object-fit:cover; border:1px solid var(--hairline-dim); border-radius:6px; background:rgba(38,51,43,.4); flex:0 0 auto; }
+  .vidrow input{ font-size:12px; background:rgba(38,51,43,.4); border:1px solid var(--hairline-dim); color:var(--wool); border-radius:7px; padding:5px 8px; }
+  .vidrow .vidtok{ flex:0 0 110px; font-family:'IBM Plex Mono', monospace; }
+  .vidrow .vidsrc{ flex:2 1 200px; min-width:0; }
+  .vidrow .vidposter{ flex:1 1 150px; min-width:0; }
+  .vidrow .vidlabel{ flex:1 1 130px; min-width:0; }
+  .vidrow .viddesc{ flex:2 1 180px; min-width:0; }
 
   /* customers — order register (compact table + detail drawer) */
   .ord-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
@@ -1142,6 +1150,8 @@
         <table class="tok-ref">
           <tr><td><code>{{img:pack-wide}}</code><br><code>{{img:pack-seal}}</code><br><code>{{img:hero}}</code><br>+ your own</td>
             <td>A photograph, on its own line. These three are built in; add your own in the <strong>Bot images</strong> card below and the concierge can share them too.</td></tr>
+          <tr><td><code>{{video:token}}</code></td>
+            <td>A playable video, on its own line. Register one in the <strong>Bot videos</strong> card below; the concierge shares it when a shopper asks to see something in motion.</td></tr>
           <tr><td><code>{{action:commission}}</code></td><td>A “Begin the commission” button.</td></tr>
           <tr><td><code>{{action:signin}}</code></td><td>A “Sign in” button.</td></tr>
           <tr><td><code>{{reply:Some text}}</code></td><td>A tappable pill that sends “Some text” as the shopper’s next message. One per line; consecutive lines group; up to 6.</td></tr>
@@ -1159,6 +1169,19 @@
         <div class="card-foot">
           <button id="img-add" class="btn ghost" type="button">Add image</button>
           <button id="save-images" class="btn primary" type="button">Save images</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Bot videos</h3>
+          <span class="micro">what {{video:token}} can play</span>
+        </div>
+        <p class="note">Register videos the concierge can play in chat. <strong>Token</strong> is the handle (letters, numbers, <code>-</code> <code>_</code>); <strong>Source</strong> is an MP4 URL or a <code>data:video</code> URI; <strong>Poster</strong> (optional) is a still-image URL / <code>data:image</code> URI shown before play; <strong>Label</strong> is the accessible caption; <strong>Description</strong> tells the bot when to use it. No videos are built in — a clip only plays once you register it here.</p>
+        <div id="vid-list"></div>
+        <div class="card-foot">
+          <button id="vid-add" class="btn ghost" type="button">Add video</button>
+          <button id="save-videos" class="btn primary" type="button">Save videos</button>
         </div>
       </section>
 
@@ -2215,6 +2238,7 @@ const state = {
   inquiries: [],
   emailsBySerial: {},
   images: [],
+  videos: [],
   forms: [],
   goalDefs: [],
   convos: [],
@@ -2514,6 +2538,10 @@ function wireStatic() {
   $('img-add').addEventListener('click', addImageRow);
   $('save-images').addEventListener('click', function () {
     withBusy($('save-images'), saveImages);
+  });
+  $('vid-add').addEventListener('click', addVideoRow);
+  $('save-videos').addEventListener('click', function () {
+    withBusy($('save-videos'), saveVideos);
   });
   $('save-edition').addEventListener('click', function () {
     withBusy($('save-edition'), saveEdition);
@@ -3417,6 +3445,9 @@ async function loadConfig() {
   state.images = imgObjToRows(cfg.images);
   renderImageRows();
 
+  state.videos = vidObjToRows(cfg.videos);
+  renderVideoRows();
+
   setPill(cfg.enabled === true);
   // Size the textareas in the visible Tuning sub-panel now that values are loaded.
   autoGrowAll('#panel-tuning .tsub.on');
@@ -4293,6 +4324,79 @@ async function saveImages() {
     .upsert([{ key: 'images', value: out, updated_at: nowIso() }], { onConflict: 'key' });
   if (res.error) { fail('Save images', res.error); return; }
   toast('Images saved');
+}
+
+/* ---- Bot videos (config key 'videos') ---- */
+const BUILTIN_VID = [];
+function vidObjToRows(o) {
+  if (!o || typeof o !== 'object') return [];
+  const rows = [];
+  Object.keys(o).forEach(function (t) {
+    const v = o[t];
+    if (v && typeof v === 'object') {
+      rows.push({ token: t, src: v.src || '', poster: v.poster || '', label: v.label || v.alt || '', description: v.description || '' });
+    }
+  });
+  return rows;
+}
+function renderVideoRows() {
+  const list = $('vid-list');
+  list.textContent = '';
+  if (!state.videos.length) {
+    list.appendChild(el('div', 'empty micro', 'No videos yet — register one and the concierge can play it in chat.'));
+  }
+  state.videos.forEach(function (r, idx) {
+    const wrap = el('div', 'vidrow');
+    const prev = document.createElement('img');
+    prev.className = 'vidprev';
+    prev.alt = '';
+    if (r.poster) prev.setAttribute('src', r.poster);
+    const mk = function (ph, key, cls) {
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.placeholder = ph; inp.value = r[key] || ''; inp.className = cls;
+      inp.addEventListener('input', function () {
+        r[key] = inp.value;
+        if (key === 'poster') { if (inp.value) prev.setAttribute('src', inp.value); else prev.removeAttribute('src'); }
+      });
+      return inp;
+    };
+    wrap.appendChild(prev);
+    wrap.appendChild(mk('token', 'token', 'vidtok'));
+    wrap.appendChild(mk('video URL or data:video URI', 'src', 'vidsrc'));
+    wrap.appendChild(mk('poster URL (optional)', 'poster', 'vidposter'));
+    wrap.appendChild(mk('label / caption', 'label', 'vidlabel'));
+    wrap.appendChild(mk('when the bot should use it', 'description', 'viddesc'));
+    const rm = el('button', 'btn ghost', 'Remove');
+    rm.type = 'button';
+    rm.addEventListener('click', function () { state.videos.splice(idx, 1); renderVideoRows(); });
+    wrap.appendChild(rm);
+    list.appendChild(wrap);
+  });
+}
+function addVideoRow() { state.videos.push({ token: '', src: '', poster: '', label: '', description: '' }); renderVideoRows(); }
+async function saveVideos() {
+  const out = {};
+  for (let i = 0; i < state.videos.length; i++) {
+    const r = state.videos[i];
+    const t = (r.token || '').trim();
+    if (!t) continue;
+    if (!/^[A-Za-z0-9_-]+$/.test(t)) { toast('Token "' + t + '" — letters, numbers, - _ only', true); return; }
+    if (BUILTIN_VID.indexOf(t) >= 0) { toast('"' + t + '" is a built-in token — pick another', true); return; }
+    const s = (r.src || '').trim();
+    if (!s) { toast('Video "' + t + '" needs a source', true); return; }
+    if (!/^https?:\/\//i.test(s) && !/^data:video\//i.test(s)) {
+      toast('Source for "' + t + '" must be an http(s) URL or a data:video URI', true); return;
+    }
+    const p = (r.poster || '').trim();
+    if (p && !/^https?:\/\//i.test(p) && !/^data:image\//i.test(p)) {
+      toast('Poster for "' + t + '" must be an http(s) URL or a data:image URI', true); return;
+    }
+    out[t] = { src: s, poster: p, label: (r.label || '').trim(), description: (r.description || '').trim() };
+  }
+  const res = await sb.from('concierge_config')
+    .upsert([{ key: 'videos', value: out, updated_at: nowIso() }], { onConflict: 'key' });
+  if (res.error) { fail('Save videos', res.error); return; }
+  toast('Videos saved');
 }
 
 function renderStarters(starters) {

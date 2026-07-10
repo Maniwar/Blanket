@@ -2654,6 +2654,20 @@ function houseAdditionsBlock(data: ConciergeData): string {
         lines.join("\n") + "\n";
     }
   }
+  const cfgVideos = data.config?.videos;
+  if (cfgVideos && typeof cfgVideos === "object" && !Array.isArray(cfgVideos)) {
+    const lines = Object.entries(cfgVideos as Record<string, unknown>)
+      .filter(([tok, v]) => /^[a-z0-9_-]+$/i.test(tok) && v && typeof v === "object")
+      .map(([tok, v]) => {
+        const o = v as { description?: string; label?: string };
+        const desc = (o.description ?? o.label ?? "").toString().slice(0, 200);
+        return `- {{video:${tok}}}${desc ? " — " + desc : ""}`;
+      });
+    if (lines.length > 0) {
+      s += "\nADDITIONAL VIDEOS (admin-added; each on its own line, at most one per answer, only when the shopper asks to see one):\n" +
+        lines.join("\n") + "\n";
+    }
+  }
   const notes = data.config?.voice_notes;
   if (typeof notes === "string" && notes.trim().length > 0) {
     s += "\nADMIN TUNING NOTES (follow these):\n" + notes;
@@ -2859,11 +2873,12 @@ function stripPlumbing(t: string): string {
     .replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "")
     .replace(/<function_calls>[\s\S]*$/i, "")
     .replace(/<\/?(function_calls|invoke|parameter)(\s[^>]*)?>/gi, "")
-    // strip ONLY plumbing tokens — keep the legit img/reply/form/commission/
-    // signin vocabulary the client turns into images, pills, buttons, forms
+    // strip ONLY plumbing tokens — keep the legit img/video/reply/form/commission/
+    // signin vocabulary the client turns into images, videos, pills, buttons, forms
     .replace(/\{\{[a-z_]+(?::[^}]*)?\}\}/gi, (m) => {
       const low = m.toLowerCase();
-      return (low.startsWith("{{img:") || low.startsWith("{{reply:") ||
+      return (low.startsWith("{{img:") || low.startsWith("{{video:") ||
+          low.startsWith("{{reply:") ||
           low.startsWith("{{form:") || low === "{{action:commission}}" ||
           low === "{{action:signin}}" || low === "{{action:snooze}}")
         ? m
@@ -2988,12 +3003,14 @@ async function handleConfigGet(req: Request): Promise<Response> {
   const { forms } = await loadConciergeData();
   const outreach = config?.outreach;
   const images = config?.images;
+  const videos = config?.videos;
   return jsonResponse(req, 200, {
     enabled: config?.enabled === false ? false : true,
     greeting: typeof config?.greeting === "string" ? config.greeting : null,
     starters: starters && typeof starters === "object" && !Array.isArray(starters) ? starters : null,
     outreach: outreach && typeof outreach === "object" && !Array.isArray(outreach) ? outreach : null,
     images: images && typeof images === "object" && !Array.isArray(images) ? images : null,
+    videos: videos && typeof videos === "object" && !Array.isArray(videos) ? videos : null,
     assertiveness: assertivenessLevel({ config } as ConciergeData),
     auth: true,
     forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
@@ -3075,7 +3092,7 @@ const PROMPT_DOCTOR_SYSTEM =
   "that pull opposite ways; (2) REDUNDANCY — the same rule stated in more than one place; " +
   "(3) AMBIGUITY — an instruction the model could reasonably read two ways; (4) GAP — an " +
   "obvious rule the goal needs that is missing. Ignore tone and house style. Tokens like " +
-  "{{action:commission}}, {{reply:...}}, {{img:...}}, {{form:...}}, {{KB}}, {{OBJECTIVE}} are " +
+  "{{action:commission}}, {{reply:...}}, {{img:...}}, {{video:...}}, {{form:...}}, {{KB}}, {{OBJECTIVE}} are " +
   "legitimate UI/template markers — never flag them as syntax errors. In particular, " +
   "{{form:<slug>:<serial>}} is a real, authorized register token for signed-in owners (it opens a " +
   "labeled form, e.g. to collect an address) — never flag it as unauthorized or invented. Be " +

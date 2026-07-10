@@ -4,6 +4,7 @@
  *
  * Sets window.FEIER_KB = {
  *   images:    { token: { src, alt } }            — image tokens usable as {{img:token}}
+ *   videos:    { token: { src, poster, label } }  — video tokens usable as {{video:token}}
  *   suggested: { sectionId: [q1, q2, q3], default: [...] }
  *              — three short shopper questions per page section (ids without '#')
  *   demo:      [ { match: [lowercase keywords], answer: 'markdown string' }, ... ]
@@ -30,6 +31,11 @@
         alt: 'Decke 01 in loden green, deep sculptural folds in low light'
       }
     },
+
+    /* Video tokens usable as {{video:token}}. No built-ins ship with the engine —
+       each brand registers its own in the studio (Tuning → Bot videos), delivered
+       via ?config=1 and merged over this map exactly as custom images are. */
+    videos: {},
 
     suggested: {
       hero: [

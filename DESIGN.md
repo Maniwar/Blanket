@@ -1918,6 +1918,16 @@ via SOPs / tuning notes). The full set is documented in the admin studio
   description). Custom images are stored in config, delivered to the widget via
   `?config=1` and merged into its image map, and their tokens + descriptions are
   injected into the system prompt so the concierge knows to use them.
+- `{{video:<token>}}` — a playable clip on its own line, rendered as a
+  `<video controls preload="metadata" playsinline>` inside the same `cx-fig`
+  figure the images use. None ship built in; admins register each in the studio
+  (Tuning → *Bot videos*: token, source MP4 URL / `data:video` URI, optional
+  poster, label, description). Videos mirror the image path exactly — stored in
+  config under the `videos` key, delivered via `?config=1` and merged into the
+  widget's video map (baked `videos` from `assets/concierge-kb.js` + admin
+  `remoteVideos`), and their tokens + descriptions injected into the system
+  prompt (ADDITIONAL VIDEOS) so the concierge offers one only when a shopper
+  asks to see something in motion.
 - `{{action:commission}}` / `{{action:signin}}` — the commission / sign-in
   buttons. `{{reply:<text>}}` — a tappable pill. `{{form:<slug>:<serial>}}` — an
   in-chat form (defined under Procedures → Forms). Forms — the field schema,
