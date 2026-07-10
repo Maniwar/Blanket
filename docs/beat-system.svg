@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1560" viewBox="0 0 1240 1560" font-family="'Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/>
+    </marker>
+    <style>
+      .t{fill:#2a2620}.m{fill:#6b6455}
+      .h{font-weight:700}
+      .cap{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+      .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    </style>
+  </defs>
+
+  <rect width="1240" height="1560" fill="#f6f2ea"/>
+  <text x="40" y="46" class="t h" font-size="24">The beat system — how a proactive line is decided, judged, and audited</text>
+  <text x="40" y="70" class="m" font-size="13">Timers arm → gates filter → the ledger decides → a typed speak/hold → a second reading → ship with an audit row. Every knob is named beside the stage it controls.</text>
+  <text x="40" y="88" class="m" font-size="13">All knobs live in the admin (Tuning → Engagement / Selling), take effect without a deploy, and are verified weekly by the conformance harness (docs/testing-flows.svg).</text>
+
+  <!-- ============ ROW 1: TIMERS ============ -->
+  <text x="40" y="116" class="cap t h">1 · Timers — when a beat may fire</text>
+  <rect x="40" y="122" width="392" height="128" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="56" y="145" class="t h" font-size="13.5">In-panel follow-up ladder</text>
+  <text x="56" y="164" class="m" font-size="11.5">Leads fast, backs off: 8s → 30s → 90s → 3m → 5m (last repeats).</text>
+  <text x="56" y="180" class="m" font-size="11.5">Each rung's wait = base × dial (×1.5 while resting after holds).</text>
+  <text x="56" y="196" class="m" font-size="11.5">Rung 1 is floored to reading time — ~300ms per word of the</text>
+  <text x="56" y="212" class="m" font-size="11.5">newest reply (cap 90s) — never interrupt someone mid-paragraph.</text>
+  <text x="56" y="228" class="m mono" font-size="10.5">nudge1Ms…nudge5Ms · assertiveness ×[1.5…0.65]</text>
+  <text x="56" y="242" class="m mono" font-size="10.5">readFloorMs (the rung-1 reading floor)</text>
+
+  <rect x="452" y="122" width="372" height="128" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="468" y="145" class="t h" font-size="13.5">Openers — the panel just opened</text>
+  <text x="468" y="164" class="m" font-size="11.5">Peak attention, so the goal beat lands immediately: ~1.2s</text>
+  <text x="468" y="180" class="m" font-size="11.5">signed-in · ~3s anonymous · ~1.1s returning to a live thread.</text>
+  <text x="468" y="196" class="m" font-size="11.5">After a tapped bubble the ladder starts at the quick override.</text>
+  <text x="468" y="212" class="m" font-size="11.5">A fresh open lets a still-fresh line stand (opener cooldown).</text>
+  <text x="468" y="228" class="m mono" font-size="10.5">openerSignedMs · openerAnonMs · openerReengageMs</text>
+  <text x="468" y="242" class="m mono" font-size="10.5">openerFollowMs · openerCooldownMs</text>
+
+  <rect x="844" y="122" width="356" height="128" rx="10" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="860" y="145" class="t h" font-size="13.5">Closed-panel re-engage bubble</text>
+  <text x="860" y="164" class="m" font-size="11.5">Was active, went idle: after the idle threshold the server</text>
+  <text x="860" y="180" class="m" font-size="11.5">composes one fresh line (or an explicit hold — then silence,</text>
+  <text x="860" y="196" class="m" font-size="11.5">no canned fallback). Budgeted per audience; the bubble</text>
+  <text x="860" y="212" class="m" font-size="11.5">withdraws itself if ignored.</text>
+  <text x="860" y="228" class="m mono" font-size="10.5">reengageIdleAnonMs · reengageIdleSignedMs</text>
+  <text x="860" y="242" class="m mono" font-size="10.5">reengageMaxAnon/Signed · bubbleWithdrawMs</text>
+
+  <path d="M620 250 L620 282" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ============ ROW 2: CLIENT GATES ============ -->
+  <text x="40" y="304" class="cap t h">2 · Client gates — a beat that fails one stays silent and names itself</text>
+  <rect x="40" y="310" width="1160" height="128" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
+  <g font-size="11.5" class="m">
+    <text x="56" y="334">quiet mode — a time-boxed pause, lifts by itself, on reload, or when they type (<tspan class="mono" font-size="10.5">quietMs</tspan>) · follow-up budget spent (<tspan class="mono" font-size="10.5">nudgeCap</tspan>) · too many unacknowledged</text>
+    <text x="56" y="352">reach-outs — any sign of life resumes (<tspan class="mono" font-size="10.5">unackedCap</tspan>) · resting after consecutive holds (<tspan class="mono" font-size="10.5">holdBudget</tspan>, next try waits ×1.5) · the checkout sheet is open (sacred</text>
+    <text x="56" y="370">ground) · anonymous visitor hasn't typed yet (by design) · the last word is the visitor's (reply, don't re-open) · a bubble is already on screen · post-sale</text>
+    <text x="56" y="388">congrats grace, then the post-sale mode decides: upsell · presence · quiet (<tspan class="mono" font-size="10.5">reengageGraceMs · reengagePostSaleWindowMs · postSaleMode</tspan>)</text>
+  </g>
+  <text x="56" y="412" class="t" font-size="11.5">Every skip is observable: <tspan class="mono">status().lastSkip</tspan> names the gate with a timestamp; <tspan class="mono">recentSkips</tspan> keeps the last eight; <tspan class="mono">nudgeArmedWhy</tspan> shows the full arm arithmetic.</text>
+
+  <path d="M620 438 L620 470" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="634" y="460" class="m" font-size="11">beat request → edge function (a context note — never logged as the shopper's words)</text>
+
+  <!-- ============ ROW 3: SERVER DECISION ============ -->
+  <text x="40" y="492" class="cap t h">3 · The server decides — numbers first, model second</text>
+  <rect x="40" y="498" width="1160" height="284" rx="10" fill="#eef6ee" stroke="#bcd8bc"/>
+
+  <rect x="56" y="514" width="556" height="70" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="70" y="535" class="t h" font-size="13">Repeat guards — vary the door, not the words</text>
+  <text x="70" y="553" class="m" font-size="11">While ANY of the bot's own unprompted questions is unanswered → this beat is question-free.</text>
+  <text x="70" y="569" class="m" font-size="11">From the 2nd reach-out on, each beat opens a new subject (read cross-surface + cross-conversation).</text>
+
+  <rect x="628" y="514" width="556" height="70" rx="8" fill="#ffffff" stroke="#bcd8bc"/>
+  <text x="642" y="535" class="t h" font-size="13">Reading the moment</text>
+  <text x="642" y="553" class="m" font-size="11">Check-in #1 right after they spoke = a hot exchange, not idleness — but if the reply on screen runs past</text>
+  <text x="642" y="569" class="m" font-size="11">80 words they're still reading: the brief demands one short fresh step or a hold, never stacked prose.</text>
+
+  <rect x="56" y="596" width="1128" height="112" rx="8" fill="#fdf3e3" stroke="#e6cfa0"/>
+  <text x="70" y="618" class="t h" font-size="13">SALES LEDGER → ACTION TABLE (signed-in) — the beat's job is computed, not guessed</text>
+  <text x="70" y="637" class="m" font-size="11">Ledger: orders by status · cloths already held · newest client-book facts · days since last order · anomalies · post-sale window · unmet goals · the 30-day spoken-action log.</text>
+  <text x="70" y="656" class="m" font-size="11.5">Ordered rules pick ONE action:  <tspan class="t h mono" font-size="11">FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT → ADVANCE_GOAL → KEEP_WARM → HOLD</tspan></text>
+  <text x="70" y="675" class="m" font-size="11">An unanswered proposal rests on an escalating ladder — 24h → 3d → 7d — re-opened early by a new order or book note. KEEP_WARM gives one unasked piece of true house</text>
+  <text x="70" y="691" class="m" font-size="11">expertise (once per section per day) before any silence. Briefs carry register colour: a colorway they do NOT yet have, the newest book facts — with the never-reveal reminder.</text>
+  <text x="628" y="618" class="m mono" font-size="10.5" text-anchor="end"></text>
+  <text x="1170" y="618" class="m mono" font-size="10.5" text-anchor="end">beats.ts · unit-tested on every deploy</text>
+
+  <text x="70" y="730" class="m mono" font-size="10.5">substanceGate (the gate itself) · beat_actions (disable any rule per-key) · proposalRestHours (the rest ladder) · beat_notes (standing instructions on every brief)</text>
+  <text x="70" y="750" class="m" font-size="11">Anonymous visitors (no register to compute from) fall back to the prompt's own judgment under the same guardrails. Every brief carries the full patron context —</text>
+  <text x="70" y="766" class="m" font-size="11">customer block, client book, house instructions, goals for the section they're reading — plus the distilled house voice (the closed-panel bubble included).</text>
+
+  <path d="M620 782 L620 814" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ============ ROW 4: TYPED DECISION ============ -->
+  <text x="40" y="836" class="cap t h">4 · A typed decision — the model cannot leak a sentinel</text>
+  <rect x="40" y="842" width="500" height="96" rx="10" fill="#ffffff" stroke="#b8a06a" stroke-width="1.5"/>
+  <text x="56" y="866" class="t h" font-size="13.5">Forced tool: <tspan class="mono">beat_line {speak, line}</tspan></text>
+  <text x="56" y="885" class="m" font-size="11.5">Speak/hold is a boolean field, not a magic word — the old [HOLD]</text>
+  <text x="56" y="901" class="m" font-size="11.5">sentinel (and its decorated leaks) is structurally impossible.</text>
+  <text x="56" y="917" class="m" font-size="11.5">Speech is the default posture; silence must be the honest last resort.</text>
+
+  <path d="M540 870 L610 870" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="548" y="860" class="m" font-size="10.5">speak: true</text>
+  <path d="M290 938 L290 986" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="302" y="966" class="m" font-size="10.5">speak: false → HOLD (audited, action not spent)</text>
+
+  <!-- judge -->
+  <rect x="616" y="842" width="584" height="96" rx="10" fill="#f3eefb" stroke="#cdbde4"/>
+  <text x="632" y="866" class="t h" font-size="13.5">5 · The reach-out judge — a second, stricter reading before it ships</text>
+  <text x="632" y="885" class="m" font-size="11.5">A pinned binary verdict (temperature 0, 4s timeout) vetoes only clear defects: leaked plumbing/meta ·</text>
+  <text x="632" y="901" class="m" font-size="11.5">scorekeeping · invented commerce · pressure · broken output · inventorying the shopper's own data.</text>
+  <text x="632" y="917" class="m" font-size="11.5"><tspan class="t h">Fail-open:</tspan> if the judge is unreachable the line ships — a quality gate is never an availability risk.</text>
+  <text x="632" y="933" class="m mono" font-size="10.5">outreach.beatJudge (House rules, default on) · Haiku-class model</text>
+
+  <!-- outcomes -->
+  <path d="M760 938 L760 986" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="772" y="966" class="m" font-size="10.5">pass</text>
+  <path d="M1060 938 L1060 986" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="1072" y="966" class="m" font-size="10.5">veto</text>
+
+  <rect x="40" y="990" width="460" height="104" rx="10" fill="#ffffff" stroke="#B08838" stroke-width="1.5"/>
+  <text x="56" y="1014" class="t h" font-size="14">HOLD — silence as service</text>
+  <text x="56" y="1034" class="m" font-size="11.5">Nothing renders. Audited: a <tspan class="mono">beat_hold</tspan> row with the ledger</text>
+  <text x="56" y="1050" class="m" font-size="11.5">snapshot and the rule-by-rule trace — "why did it hold?" is a</text>
+  <text x="56" y="1066" class="m" font-size="11.5">lookup. A closed-panel HOLD short-circuits before the model call.</text>
+  <text x="56" y="1086" class="m mono" font-size="10">next try ×1.5 · rests after holdBudget consecutive holds</text>
+
+  <rect x="520" y="990" width="460" height="104" rx="10" fill="#ffffff" stroke="#5E9C57" stroke-width="1.5"/>
+  <text x="536" y="1014" class="t h" font-size="14">SPEAK — the line ships</text>
+  <text x="536" y="1034" class="m" font-size="11.5">1–2 plain sentences, every fact register-verbatim; on a buying</text>
+  <text x="536" y="1050" class="m" font-size="11.5">signal the commission button rides the same reply. Logged to</text>
+  <text x="536" y="1066" class="m" font-size="11.5"><tspan class="mono">concierge_messages</tspan> (bubble included) + a <tspan class="mono">beat_action</tspan> row.</text>
+  <text x="536" y="1086" class="m mono" font-size="10">nudgeCap · unacked until a sign of life · empty render withdrawn</text>
+
+  <rect x="1000" y="990" width="200" height="104" rx="10" fill="#ffffff" stroke="#a45d5d" stroke-width="1.5"/>
+  <text x="1016" y="1014" class="t h" font-size="14">VETO — killed</text>
+  <text x="1016" y="1034" class="m" font-size="11.5">Stays silent. A <tspan class="mono">beat_veto</tspan></text>
+  <text x="1016" y="1050" class="m" font-size="11.5">row keeps the line + reason;</text>
+  <text x="1016" y="1066" class="m" font-size="11.5">the action is NOT spent, so</text>
+  <text x="1016" y="1082" class="m" font-size="11.5">the next beat may retry.</text>
+
+  <path d="M620 1094 L620 1126" stroke="#8a7a5a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ============ ROW 5: AUDIT ============ -->
+  <text x="40" y="1148" class="cap t h">6 · The audit trail — every outcome leaves a row</text>
+  <rect x="40" y="1154" width="1160" height="112" rx="10" fill="#eceae4" stroke="#d3cdbf"/>
+  <g font-size="11.5" class="m">
+    <text x="56" y="1178"><tspan class="t h">Actions tab:</tspan> the 7-day scoreboard — <tspan class="t h">spoke · held · vetoed</tspan> — each count filters the log; every row carries the ledger snapshot and decision trace.</text>
+    <text x="56" y="1196"><tspan class="t h">Conversion tab:</tspan> conversion by entry beat (typed / opener / nudge / tapped outreach) shows which beats actually sell; hold rate is the health guardrail.</text>
+    <text x="56" y="1214"><tspan class="t h">Browser console:</tspan> <tspan class="mono">FeierabendConcierge.status()</tspan> — lastSkip · recentSkips · nudgeArmedWhy (rung base × dial × spacious | floor | quick override) · reengage · postSale.</text>
+    <text x="56" y="1232"><tspan class="t h">CI:</tspan> beats.ts unit tests gate every deploy · the weekly conformance run proves each knob's live effect · the behavior deck and persona evals grade what the beats say.</text>
+  </g>
+  <text x="56" y="1254" class="m" font-size="11">Beat trend in every deploy summary: this week's spoke/held vs last — drift is visible before it is a complaint.</text>
+
+  <!-- ============ ROW 6: KNOB MAP ============ -->
+  <text x="40" y="1296" class="cap t h">7 · Where each knob lives — Tuning → Engagement (laid out as the visitor's journey) + Selling</text>
+  <rect x="40" y="1302" width="1160" height="182" rx="10" fill="#fdf6ec" stroke="#e6cfa0"/>
+  <g font-size="11" class="m">
+    <text x="56" y="1326"><tspan class="t h">① Woven into the page</tspan> — inline "Ask the mill" sections (<tspan class="mono" font-size="10">inlineSections</tspan>) · context chip budget (<tspan class="mono" font-size="10">chipCap · chipLingerMs · chipRepeatMs</tspan>) · ambient budget (<tspan class="mono" font-size="10">maxAmbient</tspan>)</text>
+    <text x="56" y="1346"><tspan class="t h">② When the panel opens</tspan> — the four opener timings · <tspan class="t h">③ A polite way out</tspan> — the wrap chip (<tspan class="mono" font-size="10">wrapChipMinTurns · wrapChipOnFollowup</tspan>) · quiet window (<tspan class="mono" font-size="10">quietMs</tspan>)</text>
+    <text x="56" y="1366"><tspan class="t h">④ While they read</tspan> — the follow-up ladder, caps and budgets (<tspan class="mono" font-size="10">nudge1–5Ms · nudgeCap · unackedCap · holdBudget</tspan>) · re-engage thresholds and budgets (<tspan class="mono" font-size="10">reengage*</tspan>)</text>
+    <text x="56" y="1386"><tspan class="t h">⑤ After they buy</tspan> — grace, window + unit picker, mode (<tspan class="mono" font-size="10">reengageGraceMs · reengagePostSaleWindowMs · postSaleMode</tspan>) · proposal rest ladder (<tspan class="mono" font-size="10">proposalRestHours</tspan>)</text>
+    <text x="56" y="1406"><tspan class="t h">House rules</tspan> — substance gate · reach-out judge toggle · per-rule <tspan class="mono" font-size="10">beat_actions</tspan> · the written rules (<tspan class="mono" font-size="10">engagement_base</tspan>, versioned, "Load built-in to edit", History ⟲)</text>
+    <text x="56" y="1426"><tspan class="t h">Tuning → Selling</tspan> — how hard to sell (the dial scales ladder pace AND reach-out budgets) · selling method + worked examples (<tspan class="mono" font-size="10">selling_base · exemplars_base</tspan>, versioned + linted)</text>
+    <text x="56" y="1446"><tspan class="t h">Everywhere:</tspan> blank = built-in default · every save lands in <tspan class="mono" font-size="10">concierge_edit_history</tspan> (one-click rollback) · prompt-text saves get the advisory honesty lint · no deploy needed.</text>
+  </g>
+  <text x="56" y="1472" class="m" font-size="11">The conformance harness reads these same keys and proves the live widget honors them — configured vs observed, weekly and on demand (docs/testing-flows.svg).</text>
+
+  <!-- footer / legend -->
+  <rect x="40" y="1506" width="16" height="12" fill="#eef4fb" stroke="#c3d6ea"/>
+  <text x="62" y="1517" class="m" font-size="11.5">client (concierge.js)</text>
+  <rect x="220" y="1506" width="16" height="12" fill="#eef6ee" stroke="#bcd8bc"/>
+  <text x="242" y="1517" class="m" font-size="11.5">server decision (index.ts + beats.ts)</text>
+  <rect x="480" y="1506" width="16" height="12" fill="#f3eefb" stroke="#cdbde4"/>
+  <text x="502" y="1517" class="m" font-size="11.5">the judge</text>
+  <rect x="600" y="1506" width="16" height="12" fill="#fdf3e3" stroke="#e6cfa0"/>
+  <text x="622" y="1517" class="m" font-size="11.5">admin-controlled</text>
+  <rect x="760" y="1506" width="16" height="12" fill="#eceae4" stroke="#d3cdbf"/>
+  <text x="782" y="1517" class="m" font-size="11.5">observability &amp; audit</text>
+  <text x="40" y="1544" class="m" font-size="12">Companion diagrams: docs/conversation-flow.svg (the context every beat carries) · docs/testing-flows.svg (how all of this is tested) · docs/prompt-assembly.svg.</text>
+</svg>

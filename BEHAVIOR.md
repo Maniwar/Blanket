@@ -95,6 +95,12 @@ directive-handling detail formerly split into a separate `house-directives` SOP)
 carries (patron record, client book, house notes, goals, house knowledge,
 the moment), the substance-gate decision, and the measures — in one picture.*
 
+![Beat-system diagram](docs/beat-system.svg)
+*The beat engine in operational detail — the ladder arithmetic, every client
+gate, the Sales Ledger → Action Table, the typed speak/hold, the reach-out
+judge's pass/veto branch, the audit rows each outcome writes, and a map of
+every knob to the admin card that owns it.*
+
 - Covered in [`DESIGN.md`](DESIGN.md) §2.8: the move-selector (Ask/Recommend/Show/
   Advance/Reassure/Space), the assertiveness dial, hooks/objections, journey-aware
   goals, closed-panel re-engagement, and post-sale behavior. All admin-tunable.

@@ -790,17 +790,78 @@ rather than merely reacting:
   down the page (discover→why, match-cloth→wool, handle-doubt→specs,
   advance→reserve by default; all admin-editable).
 
-Admin-editable selling inputs (all config keys): `assertiveness`, `hooks`
-(selling angles woven in to build desire), `objections` (`{trigger, response}`
-playbook for the Reassure move), plus engagement pacing — the full in-chat
-ladder `outreach.nudge1Ms`–`nudge5Ms`, rest counts `nudgeCap`/`unackedCap`,
-`holdBudget`, opener timings `openerSignedMs`/`openerAnonMs`/`openerReengageMs`,
-`maxAmbient` and `bubbleWithdrawMs`, the `substanceGate` toggle, re-engagement
-(`reengageEnabled`, `reengageIdleAnonMs`/`reengageMaxAnon`,
-`reengageIdleSignedMs`/`reengageMaxSigned`, post-sale
-`reengageGraceMs`/`reengagePostSaleWindowMs`/`reengagePostSaleEnabled`),
-the kept-transcript window `historyKeepMs`, and the existing dwell/draft
-timings and `goal_sample_rate`.
+**The psychology, spelled out.** The selling method (`SELLING_BASE` in
+`index.ts`, editable as `selling_base` — keep the `{{DIAL}}` marker) applies a
+small set of classic persuasion mechanics, each one bounded by an honesty rule
+so the technique can never outrun the truth:
+
+- **Discovery before presenting** (consultative / SPIN-shaped): earn the
+  *situation* (which room, who for), the *problem* with what they have, and the
+  *payoff* in their own life before recommending — then **translate, never
+  recite**: fact → benefit → their life ("dense enough that it settles over
+  you"), because specs inform but pictures sell.
+- **Give first** (reciprocity): early with a new shopper, one small unasked
+  piece of true house expertise keyed to what they revealed — a shopper who has
+  received something listens differently. The beat engine extends the same
+  principle to silence: `KEEP_WARM` gives once more before holding.
+- **Laddered yeses** (commitment & consistency): room → cloth → open the
+  register; never one big ask, and never the same move twice in a row.
+- **Three close shapes**, picked by what the conversation *earned*:
+  **assumptive** ("shall I open the register for the Loden?" + the button),
+  **alternative** ("Loden or Graphit?" with a pill per cloth *and* the button),
+  **summary** (one line mirroring what *they* said they wanted, then the
+  button). If the register is offered, one tap must be able to act.
+- **Objections: acknowledge → isolate → answer → confirm.** A vague hesitation
+  is isolated with one question ("the price, or whether it suits the room?");
+  the answer is always a *true house fact* (the twelve-dollars-a-year
+  arithmetic, mended-for-life, the 30-night trial). "I'll think about it" is
+  treated as a stall, not an objection — met with grace, never argument.
+- **Endowment on the held number**: once LIVE STATE shows a held slot it is
+  "*your* Nº 14,231", never "a number" — and the lapse consequence may be
+  stated **once, truthfully, without countdown theater** (the hold is read
+  verbatim from LIVE STATE or not mentioned at all).
+- **Honest proof**: claimed/remaining counts may be given once at the
+  evaluating/ready stage, verbatim from LIVE STATE — social proof as fact,
+  never as a ticking clock, never invented.
+- **Price framing without defending**: the number is given plainly with
+  **exactly one** piece of true context riding along. The rule states its own
+  psychology: *a second justification stacked on the first reads as defending
+  the number, and a defended price sounds negotiable* (two pieces are right
+  only inside REASSURE, after an actual objection).
+- **Real levers only for order value**: a companion cloth for a room *they
+  named*, a gift alongside their own, the standing tier — the price itself
+  never moves (the house doesn't discount). For a **gift**, the concierge sells
+  the *giver's* meaning — the recipient's name on the register card and in the
+  Webbuch — and asks **one** thing (who it's for; the occasion surfaces on its
+  own), never a stacked double question.
+- **Worked examples over rules** (`EXEMPLARS_BASE`, editable as
+  `exemplars_base`): rules under-determine style, so a few-shot block pins it —
+  one canonical pair per move plus **WEAK→GOOD contrastive pairs** for the
+  house's own observed failure modes (scorekeeping, spec-dumping, reciting the
+  client book, defending a price that was only asked about, hedged medical
+  claims). When evals catch a selling failure, the fix usually lands here:
+  editing the examples changes how the concierge *sounds* more reliably than
+  adding another rule.
+
+Every one of these sits **under** the constitution's honesty rules (a hedged
+claim is still a claim; no invented facts, prices, or urgency), and two
+independent readers keep it that way at runtime: the **reach-out judge** vetoes
+any proactive line that slips into pressure or invented commerce, and the
+**honesty lint** flags a saved rule edit that conflicts with the constitution
+(see §2.10 and [`BEHAVIOR.md`](BEHAVIOR.md)).
+
+Admin-editable selling inputs (all config keys, all versioned in
+`concierge_edit_history`, all lint-checked on save): `assertiveness` (the
+dial), `hooks` (selling angles woven in to build desire), `objections`
+(`{trigger, response}` playbook for the Reassure move), and the three editable
+prompt bases — `selling_base` (the method above), `exemplars_base` (the worked
+examples), `engagement_base` (the pacing rulebook) — plus `beat_notes`
+(standing instructions appended to every proactive brief). The full engagement
+pacing surface (`outreach.*` — the follow-up ladder, caps, budgets, opener and
+re-engage timings, post-sale mode, quiet window, proposal rest ladder,
+substance gate, beat-judge toggle, per-rule `beat_actions` overrides) is
+specified story-by-story in §2.10, with the live reference in
+[`BEHAVIOR.md`](BEHAVIOR.md).
 
 The **storefront itself** is admin-editable too — copy, section images, and
 SEO/meta — via the Studio's **Website** tab, backed by the `site_content` table,
@@ -833,7 +894,7 @@ direct controls over the result.
   a handful of **named sections**, each the single owner of its concern —
   **Recognition & client book**, **Register desk** (signed-in), **Selling**
   (the six moves + the how-hard dial + the house's angles & objections),
-  **Engagement & pacing** ([HOLD] + follow-up caps), and the **Standard operating
+  **Engagement & pacing** (the speak/hold discipline + follow-up caps), and the **Standard operating
   procedures**. The constitution carries a **"how this brief is organized"**
   precedence block that names each downstream section as the authority for its
   domain — *facts → KNOWLEDGE, tasks → the matching SOP, live facts → LIVE STATE* —
@@ -889,6 +950,12 @@ direct controls over the result.
   and the free-text field stays for any custom id.
 
 ### 2.10 Proactive engagement — substance, silence, and measurement
+
+![Beat-system diagram](docs/beat-system.svg)
+
+*The whole pipeline in one picture — timers → client gates → Sales Ledger →
+Action Table → the typed speak/hold → the reach-out judge → audit rows — with
+every knob mapped to the admin card that owns it.*
 
 The proactive system's product bar: **a shopper should feel accompanied, never
 chased — and the merchant should be able to see, tune, and prove which one is
@@ -1209,7 +1276,9 @@ A luxury associate lingers nearby without hovering. Encoding that:
 - **Substance gate** — beats fire on timers, but timers don't create new facts:
   a model *ordered* to speak on schedule fills the gap with atmosphere and
   invented color once the true facts are spent. So the beat prompts demand
-  something **new and concrete** or an explicit `[HOLD]`; proactive lines are
+  something **new and concrete** or a typed hold (the forced `beat_line`
+  tool's `speak: false` — the structural replacement for the retired `[HOLD]`
+  sentinel); proactive lines are
   held to plain, register-verbatim speech. Every held beat is **logged**
   (`concierge_actions.action='beat_hold'`) so deliberate silence is measurable
   and distinguishable from breakage; the gate itself is an admin toggle
@@ -1281,7 +1350,10 @@ fixed.
 show the commission button on a buying signal, never leak the internal `[HOLD]`
 token, stop looping in discovery once the cloth is known, and call
 `get_my_orders` instead of guessing a count?* Every one of those was a real bug
-this build hit; each is now a scenario in the deck.
+this build hit; each is now a scenario in the deck. (The `[HOLD]` sentinel has
+since been retired for a typed `{speak, line}` decision that makes the leak
+structurally impossible — the *never contains `[HOLD]`* check stays in the deck
+as a regression tripwire against old saved rule overrides.)
 **How it judges, grounded in current LLM-as-judge practice:**
 - **Deterministic checks first.** Most behaviors are mechanically observable — a
   reply *contains* `{{action:commission}}`, *never contains* `[HOLD]`, asks *at
