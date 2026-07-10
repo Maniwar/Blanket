@@ -50,6 +50,13 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
 - **As a first-time visitor**, I want to understand the object and get a question
   answered without signing up, so that I can decide if it's for me. *(Anonymous
   chat; semantic cache serves common questions instantly.)*
+- **As a first-time mobile visitor, I want to be shown — once, briefly — that
+  the chat sheet swipes up to fill the screen, so that I discover the roomier
+  view without hunting for it and without being nagged about it after.**
+  *Accepted when:* on a mobile open, a small rising chevron with "swipe up for
+  more room" rides the drag handle; it appears at most twice ever, dismisses
+  the moment I grab the handle, is marked permanently learned once I expand
+  the sheet, and reduced-motion users get the caption without the animation.
 - **As someone just browsing**, I want the concierge to notice I'm here and open a
   relevant thread — but to ease off if I'm clearly not engaging — so that it feels
   attentive, not spammy. *(Proactive openers + presence-aware nudging.)*
