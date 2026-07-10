@@ -2746,7 +2746,10 @@ const BEAT_JUDGE_CRITERION =
   "(3) invented commerce — a discount, price cut, sale, coupon, free shipping, or limited-time " +
   "offer (the house never discounts; the edition's numbered scarcity is the only real urgency); " +
   "(4) pressure or desperation — begging, 'last chance', manufactured countdowns; " +
-  "(5) broken output — cut off mid-sentence, raw JSON or code, gibberish, visibly duplicated text. " +
+  "(5) broken output — cut off mid-sentence, raw JSON or code, gibberish, visibly duplicated text; " +
+  "(6) inventorying the shopper — reciting their own stored data back at them in aggregate " +
+  "('you're furnishing five rooms across two cities', 'your third order this month'): one remembered " +
+  "detail worn lightly is service, a tally of their life is surveillance. " +
   "Warmth, brevity, one light question, and {{reply:…}}/{{action:…}} pills are all LEGITIMATE. " +
   "When uncertain, pass it.";
 async function judgeBeatLine(

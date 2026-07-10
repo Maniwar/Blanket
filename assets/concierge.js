@@ -2828,9 +2828,9 @@
     if (idx === 2 && typeof o.nudge3Ms === 'number') { wait = o.nudge3Ms; }
     if (idx === 3 && typeof o.nudge4Ms === 'number') { wait = o.nudge4Ms; }
     if (idx >= 4 && typeof o.nudge5Ms === 'number') { wait = o.nudge5Ms; }
+    var armBase = wait;    /* rung base after config, BEFORE dial (diagnostics) */
     wait = Math.round(wait * assertDelayMult());          /* assertiveness scales the pace */
     if (spacious) { wait = Math.round(wait * 1.5); } /* a declined moment earns more room */
-    var armBase = wait;    /* rung base after config, before dial (diagnostics) */
     /* Reading-time floor (first rung only): a long reply earns its reading
        time — the first follow-up must never land while they're mid-paragraph.
        ~300ms per word, capped at 90s so one long reply can't stall the ladder.
