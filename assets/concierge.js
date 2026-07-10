@@ -265,7 +265,8 @@
       if (!fields.length) { continue; }
       def = {
         title: typeof f.title === 'string' ? f.title.slice(0, 80) : f.slug,
-        fields: fields
+        fields: fields,
+        submit_tool: typeof f.submit_tool === 'string' ? f.submit_tool : ''
       };
       out[f.slug] = def;
     }
@@ -782,7 +783,10 @@
   var LINK_RE = /^\[([^\]]*)\]\(([^)\s]+)\)$/;
 
   function safeUrl(url) {
-    return /^https:\/\//i.test(url) || /^mailto:/i.test(url);
+    if (/^https:\/\//i.test(url) || /^mailto:/i.test(url)) { return true; }
+    if (/^\/\//.test(url)) { return false; }                 /* protocol-relative → reject */
+    if (/^[a-z][a-z0-9+.\-]*:/i.test(url)) { return false; } /* any other scheme (javascript:, data:, http:) → reject */
+    return true;                                             /* scheme-less relative path / #anchor → allow */
   }
 
   function renderInline(text, target) {
@@ -846,9 +850,16 @@
      function's ?form=1 endpoint — the same verified, audited write path the
      concierge's own tools use. Definitions come from the Studio via config. */
   function buildChatForm(slug, serial, def) {
+    /* Two shapes share this card. An INQUIRY form (make-an-offer,
+       book-a-viewing -> submit_inquiry) is anonymous and serial-free: the
+       model emits it as {{form:slug}} with no serial, anyone may submit, and
+       the post authenticates with the publishable anon key. A REGISTER-EDIT
+       form (address-change, etc.) carries a serial, is gated on a signed-in
+       user token, and titles itself "N\u00ba <serial>". */
+    var isInquiry = (serial == null) || def.submit_tool === 'submit_inquiry';
     var card = el('div', 'cx-form cx-fade-in');
     card.appendChild(el('div', 'cx-form-title',
-      def.title + ' — N\u00ba ' + serial.toLocaleString('en-US')));
+      isInquiry ? def.title : (def.title + ' — N\u00ba ' + serial.toLocaleString('en-US'))));
 
     var controls = {};
     def.fields.forEach(function (f) {
@@ -882,7 +893,7 @@
 
     var err = el('div', 'cx-form-err');
     err.style.display = 'none';
-    var submit = el('button', 'cx-action', '\u2733 Enter it in the register');
+    var submit = el('button', 'cx-action', isInquiry ? '\u2733 Send to the owner' : '\u2733 Enter it in the register');
     submit.type = 'button';
     card.appendChild(submit);
     card.appendChild(err);
@@ -901,6 +912,43 @@
       say('');
       submit.disabled = true;
       ensureSupabase();
+      if (isInquiry) {
+        /* Anonymous inquiry post: no sign-in, no serial. Authenticate with the
+           publishable anon key (same as the widget's other anonymous calls) so
+           anyone can hand the owner an offer / viewing / question. The server's
+           handleFormPost routes it through submit_inquiry with serial:null. */
+        fetch(endpoint() + '?form=1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': supaKey(), 'Authorization': 'Bearer ' + supaKey() },
+          body: JSON.stringify({ form: slug, serial: null, values: values, session_key: sessionKey(), section: currentSection(), turns: history.length })
+        }).then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+          .then(function (r) {
+            if (r.ok && r.j && r.j.ok) {
+              var msg = typeof r.j.message === 'string' ? r.j.message : 'Sent to the owner.';
+              while (card.firstChild) { card.removeChild(card.firstChild); }
+              card.appendChild(el('div', 'cx-form-done', '\u2733 ' + msg));
+              /* Durable: rewrite the transcript so a re-render shows the form as
+                 SENT rather than resurrecting a blank card. Inquiry forms carry
+                 no serial, so the token to erase is the serial-less one. */
+              var tok = '{{form:' + slug + '}}';
+              for (var hi = 0; hi < history.length; hi++) {
+                if (history[hi].role === 'assistant' && history[hi].content.indexOf(tok) !== -1) {
+                  history[hi].content = history[hi].content
+                    .split(tok).join('\u2733 ' + def.title + ' \u2014 sent to the owner.');
+                }
+              }
+              history.push({ role: 'assistant', content: '(An inquiry form was submitted: ' + msg + ')' });
+              saveHistory();
+            } else {
+              submit.disabled = false;
+              say((r.j && r.j.error) ? String(r.j.error) : 'The owner\u2019s desk is briefly unavailable \u2014 try again.');
+            }
+          })['catch'](function () {
+            submit.disabled = false;
+            say('The owner\u2019s desk is briefly unavailable \u2014 try again.');
+          });
+        return;
+      }
       getAccessToken().then(function (token) {
         if (!token) {
           submit.disabled = false;
@@ -1166,12 +1214,15 @@
         continue;
       }
 
-      /* {{form:slug:serial}} line — structured input defined in the Studio */
-      var fm = /^\{\{form:([a-z0-9-]{2,40}):(\d{1,6})\}\}$/.exec(trimmed);
+      /* {{form:slug:serial}} or serial-less {{form:slug}} line — structured
+         input defined in the Studio. The serial is present for signed-in
+         register-edit forms (address-change, etc.) and ABSENT for anonymous
+         inquiry forms (make-an-offer, book-a-viewing → submit_inquiry). */
+      var fm = /^\{\{form:([a-z0-9-]{2,40})(?::(\d{1,6}))?\}\}$/.exec(trimmed);
       if (fm) {
         flushPara();
         var fdef = remoteForms[fm[1]];
-        if (fdef) { frag.appendChild(buildChatForm(fm[1], parseInt(fm[2], 10), fdef)); }
+        if (fdef) { frag.appendChild(buildChatForm(fm[1], fm[2] ? parseInt(fm[2], 10) : null, fdef)); }
         else {
           /* Unknown or disabled form slug: never drop the line silently — a
              reply that is ONLY this token would land as a blank bubble
