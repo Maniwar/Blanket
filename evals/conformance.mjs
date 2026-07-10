@@ -173,13 +173,43 @@ async function main() {
       // a stale "FIRED" from a rung that ran off the opener before we typed.
       // The widget floors the first rung to the reply's reading time
       // (status().readFloorMs, ~300ms/word) — expect the same number.
+      // Validate an arm record against the config: parse the widget's own
+      // arithmetic ("rung#N base B × dial D [× 1.5 spacious] [| floor F …]
+      // [| quick override Q] → W") and check every term. This anchors the
+      // ladder checks on WHICHEVER rung the watch catches — rung 1 can fire
+      // inside the detection blind window, so insisting on "#1" mislabels a
+      // perfectly configured ladder.
+      const LADDER_DEFAULTS = [8000, 30000, 90000, 180000, 300000];
+      const rungCfg = (n) => {
+        const key = ["nudge1Ms", "nudge2Ms", "nudge3Ms", "nudge4Ms", "nudge5Ms"][Math.min(n, 5) - 1];
+        return num(o[key], LADDER_DEFAULTS[Math.min(n, 5) - 1]);
+      };
+      const checkArm = (why, armed) => {
+        const m = /rung#(\d+) base (\d+) × dial ([\d.]+)(.*?)→ (\d+)/.exec(why || "");
+        if (!m) return { ok: false, detail: "unparseable arm record" };
+        const rung = Number(m[1]), base_ = Number(m[2]), mid = m[4];
+        const spacious = /spacious/.test(mid);
+        const floorM = /floor (\d+)/.exec(mid);
+        const quickM = /quick override (\d+)/.exec(mid);
+        const cfgBase = rungCfg(rung);
+        if (base_ !== cfgBase) {
+          return { ok: false, rung, detail: `rung ${rung} armed from base ${base_} but config says ${cfgBase}` };
+        }
+        let exp = Math.round(base_ * mult);
+        if (spacious) exp = Math.round(exp * 1.5);
+        if (floorM && Number(floorM[1]) > exp) exp = Number(floorM[1]);
+        if (quickM) exp = Number(quickM[1]);
+        return {
+          ok: armed === exp, rung,
+          detail: `rung ${rung}: config base ${cfgBase} × dial ${mult.toFixed(2)}` +
+            (spacious ? " × 1.5 spacious" : "") + (floorM ? ` (reading floor ${floorM[1]})` : "") +
+            ` → expected ${exp}, armed ${armed}`,
+        };
+      };
       const base = await page.evaluate(() => {
         const s = window.FeierabendConcierge.status();
-        return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "", floor: s.readFloorMs || 0 };
+        return { n: s.nudgeCount || 0, top: (s.recentSkips || [])[0] || "" };
       });
-      const eff = Math.max(expected, base.floor);
-      const cfgLabel = expected + " (nudge1 × dial " + mult.toFixed(2) + ")" +
-        (eff > expected ? " floored to " + eff + " by reading time (" + base.floor + "ms)" : "");
       const t0 = Date.now();
       let measured = -1;
       try {
@@ -191,7 +221,7 @@ async function main() {
             return top !== b.top &&
               /nudge: stood down|the register HELD|beat: request FAILED|reach-outs unacknowledged|QUIET MODE/.test(top);
           },
-          base, { timeout: eff + 20000, polling: 150 },
+          base, { timeout: Math.max(expected, 12000) + 20000, polling: 150 },
         );
         const after = await page.evaluate(() => {
           const s = window.FeierabendConcierge.status();
@@ -202,19 +232,30 @@ async function main() {
         });
         measured = Date.now() - t0;
         const fired = after.n > base.n;
-        const ok = fired && approx(measured, eff, Math.max(3000, eff * 0.5));
-        row("Follow-up rung 1 after typed reply (ms)", cfgLabel,
-          (fired ? "~" + measured + " (widget armed " + after.armed + "ms)" : "gated: " + after.top.slice(0, 110)), ok, "observed",
-          fired ? (after.why ? "arm arithmetic: " + after.why.slice(0, 140) : "")
-            : "the beat was gated, not mistimed — the skip reason names the gate");
+        if (fired) {
+          // Two assertions, both from the widget's own records:
+          // (a) the timer fired WHEN its arm said (wall-clock honesty);
+          // (b) the arm itself was computed FROM THE CONFIG (config honesty).
+          const arm1 = checkArm(after.why, after.armed);
+          const timingOk = approx(measured, after.armed, Math.max(2500, after.armed * 0.35));
+          row("Follow-up ladder fires when armed (ms)", after.armed + " (the widget's own arm)",
+            "~" + measured, timingOk, "observed",
+            "an earlier rung may fire inside the detection window — the caught rung is named in the next row");
+          row("Fired rung armed from config (ms)",
+            "rung base × dial" + " (dial " + mult.toFixed(2) + ")",
+            after.armed + " (rung#" + (arm1.rung || "?") + ")", arm1.ok, "observed", arm1.detail);
+        } else {
+          row("Follow-up ladder fires when armed (ms)", expected + " (nudge1 × dial)",
+            "gated: " + after.top.slice(0, 110), false, "observed",
+            "the beat was gated, not mistimed — the skip reason names the gate");
+        }
 
-        // ── Rung 2: verify the NEXT arm carries the configured nudge2 value.
-        // The rung-1 line resolves (spoke or held) and the widget re-arms; its
-        // own recorded arithmetic is the evidence — no minutes-long wait needed.
+        // ── The NEXT arm: the fired rung's line resolves (spoke or held) and
+        // the widget re-arms; its recorded arithmetic is the evidence — no
+        // minutes-long wait needed.
         if (fired) {
           try {
-            // Acknowledge the rung-1 line so pacing state stays like a real reader's.
-            await page.mouse.move(420, 340);
+            await page.mouse.move(420, 340); // acknowledge like a real reader
             await page.waitForFunction(
               (prevWhy) => {
                 const s = window.FeierabendConcierge.status();
@@ -222,32 +263,22 @@ async function main() {
               },
               after.why, { timeout: 30000, polling: 250 },
             );
-            const arm2 = await page.evaluate(() => {
+            const arm2raw = await page.evaluate(() => {
               const s = window.FeierabendConcierge.status();
               return { armed: s.nudgeArmedMs || 0, why: s.nudgeArmedWhy || "" };
             });
-            const rungM = /rung#(\d+)/.exec(arm2.why);
-            const rung = rungM ? Number(rungM[1]) : 0;
-            const spacious = /spacious/.test(arm2.why);
-            const rungBase = rung === 2
-              ? num(o.nudge2Ms, 30000)
-              : rung === 1 ? num(o.nudge1Ms, 8000) : NaN;
-            let exp2 = Number.isFinite(rungBase) ? Math.round(rungBase * mult) : NaN;
-            if (spacious) exp2 = Math.round(exp2 * 1.5);
-            const label2 = rung === 2
-              ? num(o.nudge2Ms, 30000) + " (nudge2 × dial" + (spacious ? " × 1.5 spacious-after-hold" : "") + ")"
-              : "rung " + rung + " re-arm" + (spacious ? " × 1.5 spacious-after-hold" : "");
-            const ok2 = Number.isFinite(exp2) && arm2.armed === exp2;
-            row("Follow-up rung 2 armed with (ms)", label2, arm2.armed + " (armed)", ok2, "observed",
-              "the widget's own arm record: " + arm2.why.slice(0, 130));
+            const arm2 = checkArm(arm2raw.why, arm2raw.armed);
+            row("Next rung armed from config (ms)", "rung base × dial (dial " + mult.toFixed(2) + ")",
+              arm2raw.armed + " (rung#" + (arm2.rung || "?") + ")", arm2.ok, "observed", arm2.detail);
           } catch {
-            row("Follow-up rung 2 armed with (ms)", num(o.nudge2Ms, 30000) + " (nudge2 × dial)", "no re-arm within 30s", false, "observed",
-              "rung 1 fired but no second arm was recorded — check quiet mode/caps in status()");
+            row("Next rung armed from config (ms)", "a re-arm within 30s", "none recorded", false, "observed",
+              "a rung fired but no next arm followed — check quiet mode/caps in status()");
           }
         }
       } catch {
         const skip = await page.evaluate(() => window.FeierabendConcierge.status().lastSkip);
-        row("Follow-up rung 1 after typed reply (ms)", cfgLabel, "no beat within " + (eff + 20000) + "ms", false, "observed",
+        row("Follow-up ladder fires when armed (ms)", expected + " (nudge1 × dial)",
+          "no beat within " + (Math.max(expected, 12000) + 20000) + "ms", false, "observed",
           "lastSkip at timeout: " + String(skip).slice(0, 120));
       }
     } catch {
@@ -258,19 +289,31 @@ async function main() {
   }
 
   // ── 5. Wrap chip visibility rule ────────────────────────────────────────────
+  // The widget's gate is CURRENT state, not history: pending follow-ups
+  // (nudgeCount — holds subtract) or unacknowledged reach-outs, OR enough
+  // patron turns. Mirror the exact formula against status() at read time —
+  // formula drift between config semantics and the widget is what would FAIL.
   {
     const minTurns = typeof o.wrapChipMinTurns === "number" && o.wrapChipMinTurns >= 0 ? o.wrapChipMinTurns : 3;
-    const chip = await page.evaluate(() => !!document.querySelector(".cx-wrapend"));
-    const turns = await page.evaluate(() => window.FeierabendConcierge.status().historyTurns);
-    // One typed exchange happened above; with minTurns beyond that the chip must
-    // still be hidden — unless a follow-up fired (wrapChipOnFollowup), which the
-    // rung-1 observation above deliberately caused. Assert accordingly.
-    const followupFired = rows.some((r) => r.param.startsWith("Follow-up rung 1") && String(r.actual).startsWith("~"));
     const onFollowup = o.wrapChipOnFollowup !== false;
-    const expectVisible = (onFollowup && followupFired);
-    row("Wrap chip visibility", expectVisible ? "visible (a follow-up fired and wrapChipOnFollowup is on)" : "hidden (under " + minTurns + " patron turns)",
-      chip ? "visible" : "hidden", chip === expectVisible, "observed",
-      "config: appears after " + minTurns + " patron turns, or once a follow-up fired" + (onFollowup ? "" : " (that trigger is OFF)"));
+    const s5 = await page.evaluate(() => {
+      const s = window.FeierabendConcierge.status();
+      return {
+        chip: !!document.querySelector(".cx-wrapend"),
+        nudgeCount: s.nudgeCount || 0, unacked: s.unacked || 0,
+        typed: !!s.visitorHasTyped, quiet: !!s.quietMode, wrapped: !!s.wrappedUp,
+      };
+    });
+    // userTurns isn't in status(); this run typed exactly once, so >= minTurns
+    // only when minTurns <= 1.
+    const turnsBranch = minTurns <= 1;
+    const expectVisible = !s5.quiet && !s5.wrapped && s5.typed &&
+      ((onFollowup && (s5.nudgeCount > 0 || s5.unacked > 0)) || turnsBranch);
+    row("Wrap chip follows its rule", expectVisible ? "visible" : "hidden",
+      s5.chip ? "visible" : "hidden", s5.chip === expectVisible, "observed",
+      "gate at read time: pending follow-ups " + s5.nudgeCount + ", unacked " + s5.unacked +
+      ", min turns " + minTurns + ", on-followup " + (onFollowup ? "on" : "off") +
+      " — holds subtract from the pending count by design");
   }
 
   // ── 6. OBSERVED: the closed-panel re-engage fires at the configured idle ───
