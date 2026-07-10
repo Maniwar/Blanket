@@ -34,13 +34,18 @@ the **order serial** the edit applies to. On submit, the widget POSTs the values
 back; the edge function re-validates against the form's own field definitions and
 runs the bound submit tool as that signed-in patron.
 
-### Forms are order-scoped
+### Register-edit forms are order-scoped
 
-Every form carries a serial, so **a form always acts on one existing order**.
-That is a deliberate constraint: the submit path is a register write on a
-specific entry (`Nº 1287`), gated by ownership. There is no "serial-less" form —
-things like joining the waitlist or leaving a note are handled by the concierge's
-own conversational tools, not by a form.
+A **register-edit** form (like `address-change`) carries a serial, so it **always
+acts on one existing order**. That is a deliberate constraint: the submit path is
+a register write on a specific entry (`Nº 1287`), gated by ownership.
+
+The one exception is an **inquiry form** — a form whose submit tool is
+`submit_inquiry` (e.g. `make-an-offer`, `book-a-viewing`). Inquiry forms are
+lead capture, not a register write: they carry **no serial**, require **no
+sign-in**, and work for anonymous visitors. See [`INQUIRIES.md`](INQUIRIES.md).
+Everything else (joining the waitlist, leaving a note) is handled by the
+concierge's own conversational tools, not by a form.
 
 ---
 
@@ -100,6 +105,10 @@ Each expects specific field `name`s:
 
 The admin picker pre-fills the correct starter fields when you choose a tool, so
 a new form is usable immediately.
+
+A third submit tool, **`submit_inquiry`**, powers the anonymous, serial-less
+**inquiry forms** (`make-an-offer`, `book-a-viewing`) — lead capture rather than a
+register write. Its rules are its own; see [`INQUIRIES.md`](INQUIRIES.md).
 
 > Cancellation is intentionally **not** a form. It releases the serial back to the
 > edition and is handled by the concierge's `cancel_order` tool in conversation,
@@ -170,8 +179,9 @@ Seeded in `setup.sql`:
 A form submission crosses the **same trust boundary as the concierge's own tool
 calls** — it is not a shortcut around them:
 
-- **Verified identity.** The submit endpoint requires a valid signed-in JWT; an
-  anonymous visitor can't submit.
+- **Verified identity.** A **register-edit** form's submit endpoint requires a
+  valid signed-in JWT; an anonymous visitor can't submit. (Inquiry forms are the
+  exception — lead capture is anonymous by design; see [`INQUIRIES.md`](INQUIRIES.md).)
 - **Ownership filters.** The write only touches orders belonging to that patron.
 - **Server-side validation.** Field values are re-validated and the submit tool
   applies its own guards (status checks, format checks).

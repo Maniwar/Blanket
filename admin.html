@@ -1767,6 +1767,41 @@ need to ask my partner | Of course — the hold keeps their number while they ta
           <button id="wl-more" class="btn ghost" style="display:none;">Load more</button>
         </div>
       </section>
+
+      <section class="card" style="margin-top:24px;">
+        <div class="card-head">
+          <h3>Inquiries</h3>
+          <span class="micro">inquiries · offers, viewings, questions & callbacks</span>
+        </div>
+        <p class="note">Serious offers, viewing requests, questions, and callbacks a shopper handed the concierge — captured by the make-an-offer / book-a-viewing form or the <code>submit_inquiry</code> tool, and emailed to the house. Move each one <strong>new → contacted → closed</strong> as you work it; export the list to follow up.</p>
+        <div class="row-tools filters">
+          <input type="date" id="inq-from" title="From date">
+          <input type="date" id="inq-to" title="To date">
+          <input type="text" id="inq-q" placeholder="name, email, phone or keyword…" style="max-width:240px;">
+          <select id="inq-kind" title="Kind">
+            <option value="">Kind: any</option>
+            <option value="offer">offer</option>
+            <option value="viewing">viewing</option>
+            <option value="question">question</option>
+            <option value="callback">callback</option>
+          </select>
+          <select id="inq-status" title="Status">
+            <option value="">Status: any</option>
+            <option value="new">new</option>
+            <option value="contacted">contacted</option>
+            <option value="closed">closed</option>
+          </select>
+          <button id="inq-apply" class="btn">Search</button>
+          <button id="inq-clear" class="btn ghost">Clear</button>
+          <button id="inq-export" class="btn ghost">Export CSV</button>
+          <button id="inq-refresh" class="btn">Refresh</button>
+          <span class="micro" id="inq-count" style="color:var(--wool-faint);"></span>
+        </div>
+        <div id="inq-list"></div>
+        <div class="card-foot">
+          <button id="inq-more" class="btn ghost" style="display:none;">Load more</button>
+        </div>
+      </section>
     </div>
 
     <!-- ============ TAB 6 : CONVERSATIONS ============ -->
@@ -2152,6 +2187,7 @@ const state = {
   patSel: new Set(),       // selected patron emails for bulk house-note add
   custChip: '',            // client-side status quick-filter chip
   waitlist: [],
+  inquiries: [],
   emailsBySerial: {},
   images: [],
   forms: [],
@@ -2288,6 +2324,7 @@ async function route() {
     loadGaps();
     loadCustomers();
     loadWaitlist();
+    loadInquiries();
     loadForms();
     loadGoalDefs();
     loadConversations();
@@ -2547,6 +2584,7 @@ function wireStatic() {
   $('convo-export-all').addEventListener('click', function () { withBusy($('convo-export-all'), exportAllTranscriptsCsv); });
   $('convo-regrade').addEventListener('click', function () { withBusy($('convo-regrade'), regradeShown); });
   wireFilter('wl', loadWaitlist, ['wl-q'], $('wl-apply'), $('wl-clear'), $('wl-more'));
+  wireFilter('inq', loadInquiries, ['inq-q', 'inq-kind', 'inq-status'], $('inq-apply'), $('inq-clear'), $('inq-more'));
   // Selects apply on change: the order attributes hit the server; the goal
   // outcome re-filters the conversations already loaded (no server round-trip).
   ['cust-status', 'cust-colorway', 'cust-gift'].forEach(function (id) {
@@ -2574,6 +2612,12 @@ function wireStatic() {
   $('convo-clear').addEventListener('click', function () { $('convo-house').checked = false; $('convo-comm').checked = false; state.convoIdentity = null; }, true);
   $('wl-refresh').addEventListener('click', function () { withBusy($('wl-refresh'), loadWaitlist); });
   $('wl-export').addEventListener('click', exportWaitlistCsv);
+  // Kind/status selects apply live (server round-trip), like the customer selects.
+  ['inq-kind', 'inq-status'].forEach(function (id) {
+    $(id).addEventListener('change', function () { withBusy($('inq-apply'), loadInquiries); });
+  });
+  $('inq-refresh').addEventListener('click', function () { withBusy($('inq-refresh'), loadInquiries); });
+  $('inq-export').addEventListener('click', exportInquiriesCsv);
 }
 
 /* Wire one audit surface's filter controls to its loader. */
@@ -5492,7 +5536,7 @@ function badge(text, color) {
    term can't break the filter grammar. */
 const PAGE = 40;
 const CUST_PAGE = 200; // orders per page for the register view (aggregated by patron)
-const pageState = { act: 0, convo: 0, wl: 0, cust: 0 };
+const pageState = { act: 0, convo: 0, wl: 0, cust: 0, inq: 0 };
 
 function fval(id) { const e = $(id); return e ? (e.value || '').replace(/^\s+|\s+$/g, '') : ''; }
 function fkw(id) { return fval(id).replace(/[,()%*]/g, ''); }           // safe for or()
@@ -7676,6 +7720,87 @@ function exportWaitlistCsv() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'waitlist.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ---- Inquiries (in the Customers tab) ---- */
+async function loadInquiries(more) {
+  if (!more) pageState.inq = 0;
+  const from = pageState.inq * PAGE;
+  let q = sb.from('concierge_inquiries')
+    .select('id,kind,name,email,phone,amount,message,status,session_key,page_url,created_at')
+    .order('created_at', { ascending: false })
+    .range(from, from + PAGE - 1);
+  const df = fFrom('inq-from'), dt = fTo('inq-to'), kw = fkw('inq-q');
+  const kind = fval('inq-kind'), status = fval('inq-status');
+  if (df) q = q.gte('created_at', df);
+  if (dt) q = q.lte('created_at', dt);
+  if (kind) q = q.eq('kind', kind);
+  if (status) q = q.eq('status', status);
+  if (kw) q = q.or(orIlike(['name', 'email', 'phone', 'message'], kw));
+  const res = await q;
+  if (res.error) { fail('Load inquiries', res.error); return; }
+  const rows = res.data || [];
+  state.inquiries = more ? state.inquiries.concat(rows) : rows;
+  pageState.inq++;
+  renderInquiries();
+  showMore('inq-more', rows.length === PAGE);
+}
+
+const INQ_STATUSES = ['new', 'contacted', 'closed'];
+
+function renderInquiries() {
+  const list = $('inq-list');
+  list.textContent = '';
+  $('inq-count').textContent = state.inquiries.length ? state.inquiries.length + ' shown' : '';
+  if (!state.inquiries.length) {
+    list.appendChild(el('div', 'empty micro', 'No inquiries yet.'));
+    return;
+  }
+  state.inquiries.forEach(function (q) {
+    const row = el('div', 'action-row');
+    row.appendChild(el('span', 'micro', fmtWhen(q.created_at)));
+    if (q.kind) row.appendChild(el('span', 'serial', q.kind));
+    if (q.name) row.appendChild(el('span', 'who', q.name));
+    const contact = [q.email, q.phone].filter(Boolean).join(' · ');
+    if (contact) row.appendChild(el('span', 'act', contact));
+    if (q.amount != null) row.appendChild(el('span', 'serial', '$' + Number(q.amount).toLocaleString('en-US')));
+    if (q.message) row.appendChild(el('span', 'payload', q.message));
+    // Status is admin-managed: move each new → contacted → closed as it's worked.
+    const sel = document.createElement('select');
+    sel.className = 'btn ghost';
+    INQ_STATUSES.forEach(function (s) {
+      const o = document.createElement('option');
+      o.value = s; o.appendChild(document.createTextNode(s));
+      if ((q.status || 'new') === s) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', function () { setInquiryStatus(q, sel.value, sel); });
+    row.appendChild(sel);
+    list.appendChild(row);
+  });
+}
+
+async function setInquiryStatus(q, status, sel) {
+  if (sel) sel.disabled = true;
+  const res = await sb.from('concierge_inquiries').update({ status: status }).eq('id', q.id);
+  if (sel) sel.disabled = false;
+  if (res.error) { fail('Update inquiry', res.error); return; }
+  q.status = status;
+}
+
+function exportInquiriesCsv() {
+  const esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+  const head = ['created_at', 'kind', 'name', 'email', 'phone', 'amount', 'message', 'status', 'page_url'];
+  const lines = [head.join(',')];
+  state.inquiries.forEach(function (q) {
+    lines.push(head.map(function (k) { return esc(q[k]); }).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'inquiries.csv';
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(a.href);
 }

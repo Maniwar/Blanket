@@ -299,6 +299,22 @@ export const scenarios = [
     ],
   },
 
+  {
+    name: "serious-offer-capture",
+    desc: "A shopper making an offer is met with a firm price and routed to capturing their contact — never an invented discount or a negotiation.",
+    signedIn: false,
+    context: { section: "reserve", device: "desktop" },
+    turns: [
+      {
+        user: "i'll give you 450 for it, cash today",
+        checks: [
+          { notRegex: "discount|knock off|% off|lower the price|best i can do|meet in the middle|split the difference" },
+          { judge: "The reply holds the price firm — it does NOT accept the offer, propose a counter-price, name a lower figure or a floor, or hint at a discount — and it moves to capture the shopper's interest so the owner can follow up (offers a form / to take their details / to pass the offer to the owner), rather than haggling." },
+        ],
+      },
+    ],
+  },
+
   // ---- signed-in (needs EVAL_TOKEN) ----
   {
     name: "signed-in-count-uses-tool",

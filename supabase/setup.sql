@@ -734,6 +734,42 @@ create policy "admin all waitlist" on public.waitlist
   with check (public.is_concierge_admin());
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 3d-ii. INQUIRIES — inquiry-mode lead capture. A shopper hands the concierge a
+--     serious offer, a viewing request, a question, or a callback (via the
+--     make-an-offer / book-a-viewing form or the submit_inquiry tool). Works for
+--     ANONYMOUS visitors — inserts arrive through the edge function's service role
+--     (RLS below has no anon policy, exactly like waitlist), never a direct client
+--     write. Admin-managed: read the list and move each new → contacted → closed.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.concierge_inquiries (
+  id          uuid primary key default gen_random_uuid(),
+  created_at  timestamptz not null default now(),
+  kind        text not null check (kind in ('offer','viewing','question','callback')),
+  name        text,
+  email       text,
+  phone       text,
+  amount      numeric,
+  message     text,
+  session_key text,
+  page_url    text,
+  status      text not null default 'new' check (status in ('new','contacted','closed')),
+  meta        jsonb not null default '{}'::jsonb
+);
+create index if not exists concierge_inquiries_created_idx on public.concierge_inquiries (created_at desc);
+create index if not exists concierge_inquiries_status_idx on public.concierge_inquiries (status, created_at desc);
+-- Rate-limit lookups count a session's recent rows (submit_inquiry, 5/hour).
+create index if not exists concierge_inquiries_session_idx on public.concierge_inquiries (session_key, created_at desc);
+alter table public.concierge_inquiries enable row level security;
+-- Mirrors the waitlist policy exactly: authenticated admins get full access; no
+-- anon policy at all, so a direct client insert is denied (RLS on, no matching
+-- policy). The edge function writes with the service role, which bypasses RLS.
+drop policy if exists "admin all inquiries" on public.concierge_inquiries;
+create policy "admin all inquiries" on public.concierge_inquiries
+  for all to authenticated
+  using (public.is_concierge_admin())
+  with check (public.is_concierge_admin());
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 3e. EMAIL LOG — a record of every transactional email sent, for the admin to
 --     review and re-send. Written by the edge functions; admin-read.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -804,6 +840,9 @@ insert into public.concierge_config (key, value) values
   ('model','"claude-haiku-4-5-20251001"'::jsonb),
   ('model_fallback','"claude-haiku-4-5-20251001"'::jsonb),
   ('max_tokens','1024'::jsonb),
+  -- Where a new inquiry (submit_inquiry) notification is emailed. Editable in the
+  -- Studio; blank/unset makes the edge function fall back to the EMAIL_FROM address.
+  ('inquiry_notify_email','"concierge@feier-abend.co"'::jsonb),
   ('greeting', to_jsonb($g$Good evening — I am the mill's concierge. Before the wool and the weave: tell me who the blanket is for, and I'll point you to the right cloth.
 
 {{reply:It's for me}}
@@ -1138,6 +1177,21 @@ insert into public.concierge_sops (slug, title, content_md, sort_order) values
 The test: the next conversation should feel like it resumes a relationship — the house followed its own instructions, remembered what mattered, and closed the loop on anything one-time.$sop$, 16)
 on conflict (slug) do nothing;
 
+-- Serious offers & viewings — the inquiry primitive's playbook. Seeded DISABLED
+-- (drafts-first) with a new slug, so it lands in an existing install without
+-- clobbering a Studio edit; an operator enables it alongside the make-an-offer /
+-- book-a-viewing forms. Teaches the firm-price stance and routes a real offer or
+-- viewing request into submit_inquiry rather than a negotiation.
+insert into public.concierge_sops (slug, title, content_md, sort_order, enabled) values
+('serious-offers', 'Serious offers & viewings', $sop$The price is the price. When a shopper makes an offer, asks to negotiate, or wants to come see it in person, you take them seriously without ever moving the number.
+
+1. HOLD THE PRICE, warmly. The figure is firm — you never negotiate it, never hint at a discount, and never name a floor, a "best price", or what the owner "might take". If pressed, reframe to worth (what the piece is and why it lasts), not to a lower number. "The price holds — but let me make sure the owner hears you" is a complete, gracious answer.
+2. A REAL OFFER IS A LEAD, not a haggle. When someone signals a genuine offer, wants a viewing, has a question only the owner can answer, or asks for a callback, that is worth capturing. Take their name and a way to reach them (an email or a phone number — either is enough), the figure if they named one, and a line of context.
+3. CAPTURE IT PROPERLY. Hand them the form on its own line — {{form:make-an-offer}} for an offer, {{form:book-a-viewing}} for a viewing — so they enter their own details; the register records it and the house is notified. If no form is available, you may take the details in chat and record them with submit_inquiry (kind = offer, viewing, question, or callback). Either way, the shopper needs no account — this works for anyone.
+4. PROMISE A FOLLOW-UP, not an outcome. Confirm warmly that the owner will be in touch; never promise the offer will be accepted, a price will be met, or a specific time. You are opening a conversation with the owner, not closing a deal.
+5. STAY HONEST. Don't invent scarcity, a rival bidder, or a deadline to pressure a decision. A serious buyer, well treated, comes back.$sop$, 17, false)
+on conflict (slug) do nothing;
+
 -- Strengthen the house-directives SOP in an already-seeded database (the block
 -- above is 'do nothing', so edits there don't reach existing installs). Pushes
 -- SAME-TURN resolution and a no-repeat rule so a one-time task can't linger open.
@@ -1267,6 +1321,31 @@ insert into public.concierge_forms (slug, title, submit_tool, fields) values
   end if;
 end $seed$;
 
+-- Inquiry-mode lead-capture forms. Added after the first forms seed, so they use
+-- new slugs and land in an already-populated database too; 'do nothing' means a
+-- re-run never clobbers a Studio edit. Seeded DISABLED (drafts-first, like all
+-- generated content) — an operator turns them on when the page is ready. Both
+-- submit through submit_inquiry; the fixed-value `kind` field binds the form to
+-- its inquiry kind (offer / viewing). Anonymous-capable (no order serial, no
+-- sign-in) — see handleFormPost + submit_inquiry in the concierge function.
+insert into public.concierge_forms (slug, title, submit_tool, fields, enabled) values
+('make-an-offer', 'Make an offer', 'submit_inquiry', '[
+  {"name":"kind",    "type":"hidden", "value":"offer"},
+  {"name":"name",    "label":"Your name",              "type":"text",  "required":true,  "maxlength":120, "autocomplete":"name"},
+  {"name":"email",   "label":"Email",                  "type":"text",  "required":true,  "maxlength":200, "autocomplete":"email"},
+  {"name":"phone",   "label":"Phone — if you prefer",  "type":"text",  "required":false, "maxlength":40,  "autocomplete":"tel"},
+  {"name":"amount",  "label":"Your offer",             "type":"text",  "required":true,  "maxlength":20,  "inputmode":"numeric"},
+  {"name":"message", "label":"Anything to add",        "type":"text",  "required":false, "maxlength":600}
+]'::jsonb, false),
+('book-a-viewing', 'Book a viewing', 'submit_inquiry', '[
+  {"name":"kind",    "type":"hidden", "value":"viewing"},
+  {"name":"name",    "label":"Your name",              "type":"text",  "required":true,  "maxlength":120, "autocomplete":"name"},
+  {"name":"email",   "label":"Email",                  "type":"text",  "required":true,  "maxlength":200, "autocomplete":"email"},
+  {"name":"phone",   "label":"Phone",                  "type":"text",  "required":false, "maxlength":40,  "autocomplete":"tel"},
+  {"name":"message", "label":"Preferred time & notes", "type":"text",  "required":false, "maxlength":600}
+]'::jsonb, false)
+on conflict (slug) do nothing;
+
 -- Behavior-eval scenarios (studio Evals tab). Seeds only if empty, so your edits
 -- are never overwritten by re-running this file. Mirrors the code deck in evals/.
 do $seed$
@@ -1339,6 +1418,21 @@ insert into public.concierge_evals (slug, name, description, signed_in, context,
 
   end if;
 end $seed$;
+
+-- Serious-offer capture eval. Added after the first eval seed with a new slug, so
+-- it lands in an already-seeded install too; 'do nothing' never clobbers a Studio
+-- edit. Mirrors the code deck in evals/scenarios.mjs.
+insert into public.concierge_evals (slug, name, description, signed_in, context, turns, sort_order) values
+('serious-offer-capture',
+ 'Serious offer, capture not haggle',
+ 'A shopper making an offer is met with a firm price and routed to capturing their contact — never an invented discount or a negotiation.',
+ false,
+ '{"section":"reserve","device":"desktop"}'::jsonb,
+ '[{"user":"i''ll give you 450 for it, cash today","checks":[
+    {"notRegex":"discount|knock off|% off|lower the price|best i can do|meet in the middle|split the difference"},
+    {"judge":"The reply holds the price firm — it does NOT accept the offer, propose a counter-price, name a lower figure or a floor, or hint at a discount — and it moves to capture the shopper''s interest so the owner can follow up (offers a form / to take their details / to pass the offer to the owner), rather than haggling."}
+  ]}]'::jsonb, 70)
+on conflict (slug) do nothing;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Contact-address migration. The KB/SOP seeds are insert-only-if-empty, so an

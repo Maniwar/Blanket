@@ -904,6 +904,33 @@ const REGISTER_TOOLS: any[] = [
     },
   },
   {
+    name: "submit_inquiry",
+    description:
+      "Capture a shopper's inquiry and notify the house — the inquiry-mode lead primitive. " +
+      "Use it the moment a shopper makes a serious OFFER, asks to VIEW the piece in person, " +
+      "raises a QUESTION only the owner can answer, or asks for a CALLBACK. Works for anyone, " +
+      "signed in or not — no account is needed. Take their name and at least one way to reach " +
+      "them (an email OR a phone number), the offer figure if they named one, and a short line " +
+      "of context. Prefer handing them the make-an-offer / book-a-viewing form when one is " +
+      "available; call this directly only when you're taking the details in chat. Never use it " +
+      "to negotiate the price — you are opening a conversation with the owner, who follows up.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string", enum: ["offer", "viewing", "question", "callback"],
+          description: "What the shopper is handing you: an offer, a viewing request, a question, or a callback request.",
+        },
+        name: { type: "string", description: "The shopper's name." },
+        email: { type: "string", description: "The shopper's email (email or phone is required)." },
+        phone: { type: "string", description: "The shopper's phone (email or phone is required)." },
+        amount: { type: "number", description: "The offer figure, when they named one (offers only)." },
+        message: { type: "string", description: "A short line of context in the shopper's words." },
+      },
+      required: ["kind", "name"],
+    },
+  },
+  {
     name: "resend_confirmation",
     description:
       "Re-send a transactional email the owner already should have — the order " +
@@ -1182,6 +1209,98 @@ async function runRegisterTool(
     if (!row) return "ERROR: the waitlist is unreachable right now.";
     await logAction(cid, customer, "join_waitlist", null, { email }, "added to waitlist");
     return `Done — ${email} is on the waitlist for the next edition; I'll see they're told when it opens.`;
+  }
+
+  if (name === "submit_inquiry") {
+    // Inquiry-mode lead capture — anonymous-capable, no order serial. Stores the
+    // shopper's offer / viewing request / question / callback and notifies the house.
+    const KINDS = ["offer", "viewing", "question", "callback"];
+    const kind = typeof input.kind === "string" ? input.kind.trim().toLowerCase() : "";
+    if (!KINDS.includes(kind)) {
+      return "ERROR: kind must be one of offer, viewing, question, or callback.";
+    }
+    const who = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
+    if (who.length < 1) return "ERROR: a name is needed to take the inquiry.";
+    const email = typeof input.email === "string" ? input.email.trim().toLowerCase().slice(0, 200) : "";
+    const phone = typeof input.phone === "string" ? input.phone.trim().slice(0, 40) : "";
+    const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+    if (!emailOk && !phone) {
+      return "ERROR: an email or a phone number is needed so the house can follow up — ask for one first.";
+    }
+    // Accept the amount as a number or a typed string ("$450", "450 cash").
+    let amount: number | null = null;
+    if (typeof input.amount === "number" && Number.isFinite(input.amount) && input.amount > 0) {
+      amount = input.amount;
+    } else if (typeof input.amount === "string" && input.amount.trim()) {
+      const n = Number(input.amount.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(n) && n > 0) amount = n;
+    }
+    const message = typeof input.message === "string" ? input.message.trim().slice(0, 2000) : "";
+    const sessionKey = typeof input.session_key === "string" ? input.session_key.trim().slice(0, 64) : "";
+    const pageUrl = typeof input.page_url === "string" ? input.page_url.trim().slice(0, 400) : "";
+
+    // Rate limit: at most 5 inquiries per session in a rolling hour. Count the
+    // session's recent rows; over the cap we already have their details — don't
+    // write another row and don't notify the house again.
+    if (sessionKey) {
+      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const recent = await pgSelect<{ id: string }>(
+        `concierge_inquiries?select=id&session_key=eq.${encodeURIComponent(sessionKey)}` +
+          `&created_at=gte.${encodeURIComponent(since)}`,
+      );
+      if (recent && recent.length >= 5) {
+        return "We already have your details — the house has your note and will be in touch. " +
+          "No need to send another.";
+      }
+    }
+
+    const row = await pgInsert<{ id: string }>("concierge_inquiries", {
+      kind,
+      name: who,
+      email: emailOk ? email : null,
+      phone: phone || null,
+      amount,
+      message: message || null,
+      session_key: sessionKey || null,
+      page_url: pageUrl || null,
+      meta: customer && customer.id
+        ? { user_id: customer.id, user_email: customer.email ?? null }
+        : {},
+    });
+    if (!row) return "ERROR: the desk is unreachable right now — try again in a moment.";
+
+    // Notify the house — FAIL-SOFT. The row is already saved; a Resend error must
+    // never fail the tool. Destination is the config key inquiry_notify_email,
+    // falling back to the EMAIL_FROM address when it is unset.
+    try {
+      const data = await loadConciergeData();
+      const cfgTo = typeof data.config?.inquiry_notify_email === "string"
+        ? (data.config.inquiry_notify_email as string).trim() : "";
+      const to = cfgTo || (EMAIL_FROM.match(/<([^>]+)>/)?.[1] ?? EMAIL_FROM);
+      const LABELS: Record<string, string> = {
+        offer: "offer", viewing: "viewing request", question: "question", callback: "callback request",
+      };
+      const label = LABELS[kind];
+      const contact = [emailOk ? email : "", phone].filter(Boolean).join(" · ");
+      bg(sendEmail(
+        to,
+        `New ${label} — ${who}`,
+        emailShell(`A new ${label}`, [
+          `Kind: <strong>${label}</strong>`,
+          `From: <strong>${who}</strong>`,
+          contact ? `Contact: ${contact}` : "",
+          amount != null ? `Amount named: <strong>${amount.toLocaleString("en-US")}</strong>` : "",
+          message ? `Message: ${message}` : "",
+          pageUrl ? `Page: ${pageUrl}` : "",
+          "Reply to the shopper directly to follow up.",
+        ]),
+        { kind: "inquiry", serial: null },
+      ));
+    } catch { /* email is best-effort; the inquiry is already recorded */ }
+
+    const nice = { offer: "offer", viewing: "viewing request", question: "question", callback: "callback request" }[kind];
+    const via = emailOk ? " by email" : phone ? " by phone" : "";
+    return `Thank you — your ${nice} is with the house, and the owner will follow up${via} shortly.`;
   }
 
   if (name === "remember_customer") {
@@ -4268,6 +4387,7 @@ async function handleChatPost(req: Request): Promise<Response> {
                 update_colorway: "Amending the register…",
                 update_shipping_address: "Amending the register…",
                 join_waitlist: "Adding to the waitlist…",
+                submit_inquiry: "Taking down your details…",
                 remember_customer: "Noting the client book…",
                 resolve_admin_note: "Attending to the house's note…",
                 cancel_order: "Striking the entry…",
@@ -4615,37 +4735,76 @@ async function writeClientBookNote(
 }
 
 // ── POST ?form=1 — structured submissions from in-chat forms ─────────────────
-// Same trust boundary as the model's own tool calls: verified JWT, the tool's
-// ownership filters and validation, the concierge_actions audit log.
+// Same trust boundary as the model's own tool calls: the tool's own validation
+// and the concierge_actions audit log. Register-edit forms (address-change) still
+// require a verified JWT and an order serial. Inquiry forms (make-an-offer,
+// book-a-viewing → submit_inquiry) are lead capture: ANONYMOUS-capable and
+// serial-free, so a serious buyer without an account can still reach the house.
 
 async function handleFormPost(req: Request): Promise<Response> {
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
   if (await rateLimited("f:" + ip)) {
     return jsonError(req, 429, "A short pause, please — the register is writing.");
   }
+  // May be null — inquiry forms are anonymous-capable; register-edit forms below
+  // still require sign-in.
   const customer = await verifyUser(req);
-  if (!customer) {
-    return jsonError(req, 401, "The register takes signed entries — sign in first.");
-  }
   let body: Record<string, unknown>;
   try { body = await req.json() as Record<string, unknown>; } catch {
     return jsonError(req, 400, "Request body must be valid JSON.");
   }
   const slug = typeof body.form === "string" ? body.form : "";
-  const serial = typeof body.serial === "number" ? Math.floor(body.serial) : NaN;
   const values = (body.values && typeof body.values === "object" && !Array.isArray(body.values))
     ? body.values as Record<string, unknown>
     : null;
-  if (!slug || !Number.isFinite(serial) || !values) {
-    return jsonError(req, 400, "form, serial, and values are required.");
+  if (!slug || !values) {
+    return jsonError(req, 400, "form and values are required.");
   }
   const data = await loadConciergeData();
   const def = data.forms.find((f) => f.slug === slug);
   if (!def) return jsonError(req, 404, "No such form.");
+  const fields = Array.isArray(def.fields) ? def.fields as Array<Record<string, unknown>> : [];
+
+  // ── Inquiry forms — anonymous lead capture, no order serial ──────────────
+  if (def.submit_tool === "submit_inquiry") {
+    const input: Record<string, unknown> = {
+      session_key: typeof body.session_key === "string" ? body.session_key : "",
+      page_url: typeof body.page_url === "string" ? body.page_url : "",
+    };
+    for (const f of fields) {
+      const name = typeof f.name === "string" ? f.name : "";
+      if (!name) continue;
+      // A fixed-value field (e.g. the form's `kind`) is set by the definition,
+      // not typed by the shopper.
+      if (typeof f.value === "string") { input[name] = f.value; continue; }
+      const raw = values[name];
+      const v = typeof raw === "string" ? raw.trim().slice(0, 2000) : "";
+      if (f.required === true && !v) {
+        return jsonError(req, 400, `${name} is required.`);
+      }
+      input[name] = v;
+    }
+    // submit_inquiry ignores customer for the row (no user_id column); pass the
+    // signed-in one when present so the notification can note who it was.
+    const who = customer ?? { id: "", email: null };
+    const result = await runRegisterTool("submit_inquiry", input, who, null);
+    if (result.startsWith("ERROR:")) {
+      return jsonError(req, 400, result.slice(6).trim());
+    }
+    return jsonResponse(req, 200, { ok: true, message: result });
+  }
+
+  // ── Register-edit forms — signed-in and serial-bound (e.g. address-change) ─
+  if (!customer) {
+    return jsonError(req, 401, "The register takes signed entries — sign in first.");
+  }
+  const serial = typeof body.serial === "number" ? Math.floor(body.serial) : NaN;
+  if (!Number.isFinite(serial)) {
+    return jsonError(req, 400, "form, serial, and values are required.");
+  }
 
   // Build the tool input strictly from the form's own field definitions.
   const input: Record<string, unknown> = { serial };
-  const fields = Array.isArray(def.fields) ? def.fields as Array<Record<string, unknown>> : [];
   for (const f of fields) {
     const name = typeof f.name === "string" ? f.name : "";
     if (!name) continue;

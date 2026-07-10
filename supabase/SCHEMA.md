@@ -370,12 +370,36 @@ commission `POST ?waitlist=1` (sold-out form) and the concierge `join_waitlist`
 tool (both via service role). **Read/managed by:** admin (Orders & Customers tab →
 Waitlist card: filter, mark notified, export CSV).
 
+### `concierge_inquiries` — inquiry-mode lead capture
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | uuid PK | Row id. |
+| `created_at` | timestamptz | When it came in. |
+| `kind` | text | `offer` / `viewing` / `question` / `callback` (checked). |
+| `name` | text | The shopper's name. |
+| `email`,`phone` | text | At least one is required (contact). |
+| `amount` | numeric | The offer figure, when named. |
+| `message` | text | A line of context. |
+| `session_key` | text | Widget session — the rate-limit key. |
+| `page_url` | text | Where the inquiry was made. |
+| `status` | text | `new` (default) / `contacted` / `closed` (checked). |
+| `meta` | jsonb | `{}`; carries the signed-in user id/email when present. |
+
+RLS on; **admin** select/manage policy (`is_concierge_admin()`), **no anon
+policy** — a direct client insert is denied, exactly like `waitlist`. **Written
+by:** the concierge `submit_inquiry` tool via service role — reached anonymously
+through the make-an-offer / book-a-viewing forms (`POST ?form=1`, serial-free) or
+directly by the signed-in model. Rate-limited to 5 per `session_key` per hour;
+notifies `inquiry_notify_email` (fail-soft). **Read/managed by:** admin (Orders &
+Customers tab → Inquiries card: filter by kind/status, set status, export CSV).
+See [`../INQUIRIES.md`](../INQUIRIES.md).
+
 ### `email_log` — record of transactional emails
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `id` | uuid PK | Row id. |
 | `to_email` | text | Recipient. |
-| `kind` | text | `placed` / `shipped` / `returned` / `cancelled`. |
+| `kind` | text | `placed` / `shipped` / `returned` / `cancelled` / `inquiry`. |
 | `serial` | int | The order's Nº. |
 | `subject` | text | The email subject line. |
 | `ok` | boolean | Whether Resend accepted it. |
