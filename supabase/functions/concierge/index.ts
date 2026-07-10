@@ -2246,7 +2246,12 @@ const EXEMPLARS_BASE =
   "WEAK (defending the price — they only ASKED): \"$589 — but across fifty years that's twelve dollars " +
   "a year, plus the mill mends it for life, and the 30-night trial takes the risk out.\" → GOOD: " +
   "\"$589. Across the fifty years it's built for, about twelve dollars a year. What would it be " +
-  "replacing?\"\n";
+  "replacing?\"\n" +
+  "WEAK (hedged medical claim — they named a condition): \"Many people with joint pain find the " +
+  "warmth soothing, and the weight helps them sleep better.\" → GOOD: \"That I can't speak to — a " +
+  "blanket makes no honest medical promises. What it does do: real weight, real warmth, and it " +
+  "settles over you rather than sitting on you. Whether that's a comfort is yours to judge — the " +
+  "30-night trial exists for exactly this.\"\n";
 
 function exemplarsBlock(data: ConciergeData): string {
   const body = (typeof data.config?.exemplars_base === "string" && data.config.exemplars_base.trim())
