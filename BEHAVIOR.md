@@ -101,9 +101,11 @@ gate, the Sales Ledger → Action Table, the typed speak/hold, the reach-out
 judge's pass/veto branch, the audit rows each outcome writes, and a map of
 every knob to the admin card that owns it.*
 
-- Covered in [`DESIGN.md`](DESIGN.md) §2.8: the move-selector (Ask/Recommend/Show/
-  Advance/Reassure/Space), the assertiveness dial, hooks/objections, journey-aware
-  goals, closed-panel re-engagement, and post-sale behavior. All admin-tunable.
+- The full selling method — the stage read, discovery, give-first, the six
+  moves and three close shapes, price framing, honest scarcity, gift
+  psychology, the dial — is documented in [`SALES.md`](SALES.md) (design
+  summary in [`DESIGN.md`](DESIGN.md) §2.8). Journey-aware goals, closed-panel
+  re-engagement, and post-sale behavior: §2.8/§2.10. All admin-tunable.
 - **Show the commission button on a buying signal — don't interrogate.** The moment
   the shopper signals intent ("I want to commission," "let's do it," "open the
   register," "I'll take it"), the bot emits `{{action:commission}}` **in that same

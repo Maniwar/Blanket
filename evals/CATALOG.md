@@ -117,9 +117,9 @@ per check; below `EVAL_THRESHOLD` (default 0.8) the run fails when gated.
 
 ## 2b · Sales-psychology coverage map
 
-The selling method (DESIGN.md §2.8, "The psychology, spelled out") makes
-specific behavioral promises. This is where each one is verified — and,
-honestly, which ones aren't yet:
+The selling method ([`../SALES.md`](../SALES.md) — design summary in
+DESIGN.md §2.8) makes specific behavioral promises. This is where each one is
+verified — and, honestly, which ones aren't yet:
 
 | technique (the promise) | verified by |
 | --- | --- |

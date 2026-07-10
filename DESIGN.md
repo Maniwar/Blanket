@@ -793,7 +793,9 @@ rather than merely reacting:
 **The psychology, spelled out.** The selling method (`SELLING_BASE` in
 `index.ts`, editable as `selling_base` — keep the `{{DIAL}}` marker) applies a
 small set of classic persuasion mechanics, each one bounded by an honesty rule
-so the technique can never outrun the truth:
+so the technique can never outrun the truth. This is the design summary — the
+full reference (each mechanic's psychology, its failure mode, the dial table,
+configuration, and verification) is [`SALES.md`](SALES.md):
 
 - **Discovery before presenting** (consultative / SPIN-shaped): earn the
   *situation* (which room, who for), the *problem* with what they have, and the
