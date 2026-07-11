@@ -317,6 +317,17 @@ every knob to the admin card that owns it.*
   so the Actions tab shows deliberate silence and hold rate is a real metric.
   The product-level user stories, acceptance criteria, and the full
   quantitative/qualitative measure set live in [`DESIGN.md`](DESIGN.md) §2.10.
+- **Diagnostic beat logging is a switch, for scale.** `beat_hold` (one per idle
+  beat) and `beat_veto` (one per killed line) are the fastest-growing rows in
+  `concierge_actions` and nothing operational reads them — they exist to explain
+  silence. `outreach.beat_audit_log` (Engagement → House rules, "Log held &
+  vetoed beats") gates **both** off; the functional `beat_action` "spoke" row —
+  which the beat brain reads back to enforce *offer-once-per-24h* — is **never**
+  gated. Default **on** for the Feierabend demo (it showcases the spoke·held·
+  vetoed strip); **stamped sites seed it off** (scale-first) and turn it on only
+  while troubleshooting a quiet widget. The Actions-tab **action-type filter**
+  (spoke / held / vetoed / all beats / everything-but-beats) narrows the log
+  without an export.
 - **A long reply earns its reading time.** The first follow-up rung is floored
   to ~300ms per word of the newest assistant reply (capped at 90s) — the
   widget never interrupts someone mid-paragraph, and `status().readFloorMs`

@@ -71,6 +71,28 @@
     }
     return merged;
   }
+  /* A video source is either a direct file (mp4/webm/data:video), played in a
+     native <video>, or a link to a known host (YouTube/Vimeo), played in a
+     sandboxed <iframe> — a raw YouTube/Vimeo page URL is NOT a video file and
+     will not play in <video>. Returns { url, portrait } for a recognised host
+     (url = the privacy-friendly embed URL), else null → render as a file. */
+  function videoEmbed(src) {
+    if (typeof src !== 'string') { return null; }
+    var s = src.trim(), m;
+    /* YouTube Shorts — portrait */
+    if ((m = /youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/.exec(s))) {
+      return { url: 'https://www.youtube-nocookie.com/embed/' + m[1], portrait: true };
+    }
+    /* YouTube watch / youtu.be / embed / live — landscape */
+    if ((m = /(?:youtube\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/.exec(s))) {
+      return { url: 'https://www.youtube-nocookie.com/embed/' + m[1], portrait: false };
+    }
+    /* Vimeo */
+    if ((m = /vimeo\.com\/(?:video\/)?(\d{5,})/.exec(s))) {
+      return { url: 'https://player.vimeo.com/video/' + m[1], portrait: false };
+    }
+    return null;
+  }
   /* remote starters (from ?config=1) REPLACE the KB map when present */
   function suggestedMap() {
     if (remoteStarters) { return remoteStarters; }
@@ -504,6 +526,11 @@
       '.cx-fig{margin:.2em 0 .95em;}',
       '.cx-fig img{display:block;max-width:100%;height:auto;border:1px solid var(--cx-hair-soft);}',
       '.cx-fig video{display:block;max-width:100%;height:auto;border:1px solid var(--cx-hair-soft);background:#000;}',
+      /* responsive iframe embed (YouTube/Vimeo): 16:9 by default, 9:16 for Shorts */
+      '.cx-embed{position:relative;width:100%;padding-top:56.25%;border:1px solid var(--cx-hair-soft);background:#000;}',
+      '.cx-embed.cx-embed-portrait{width:270px;max-width:100%;padding-top:0;height:480px;margin:0 auto;}',
+      '.cx-embed iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}',
+      '.cx-embed.cx-embed-portrait iframe{position:static;}',
       '.cx-actionrow{margin:.3em 0 .9em;}',
       '.cx-action{min-height:44px;display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;',
       'font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;',
@@ -1102,20 +1129,37 @@
         if (vmeta && typeof vmeta === 'object' && typeof vmeta.src === 'string') {
           var vfig = document.createElement('figure');
           vfig.className = 'cx-fig cx-fade-in';
-          var vid = document.createElement('video');
-          vid.setAttribute('controls', '');
-          vid.setAttribute('preload', 'metadata');
-          vid.setAttribute('playsinline', '');
-          if (typeof vmeta.poster === 'string' && vmeta.poster) { vid.setAttribute('poster', vmeta.poster); }
           var vlabel = (typeof vmeta.label === 'string') ? vmeta.label
             : ((typeof vmeta.alt === 'string') ? vmeta.alt : '');
-          if (vlabel) { vid.setAttribute('aria-label', vlabel); }
-          var vsrc = document.createElement('source');
-          vsrc.setAttribute('src', vmeta.src);
-          vsrc.setAttribute('type', 'video/mp4');
-          vid.appendChild(vsrc);
-          if (vlabel) { vid.appendChild(document.createTextNode(vlabel)); }
-          vfig.appendChild(vid);
+          var emb = videoEmbed(vmeta.src);
+          if (emb) {
+            /* YouTube/Vimeo — responsive iframe (portrait for Shorts) */
+            var box = document.createElement('div');
+            box.className = 'cx-embed' + (emb.portrait ? ' cx-embed-portrait' : '');
+            var ifr = document.createElement('iframe');
+            ifr.setAttribute('src', emb.url);
+            ifr.setAttribute('title', vlabel || 'video');
+            ifr.setAttribute('loading', 'lazy');
+            ifr.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+            ifr.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+            ifr.setAttribute('allowfullscreen', '');
+            box.appendChild(ifr);
+            vfig.appendChild(box);
+          } else {
+            /* direct file — native <video> */
+            var vid = document.createElement('video');
+            vid.setAttribute('controls', '');
+            vid.setAttribute('preload', 'metadata');
+            vid.setAttribute('playsinline', '');
+            if (typeof vmeta.poster === 'string' && vmeta.poster) { vid.setAttribute('poster', vmeta.poster); }
+            if (vlabel) { vid.setAttribute('aria-label', vlabel); }
+            var vsrc = document.createElement('source');
+            vsrc.setAttribute('src', vmeta.src);
+            vsrc.setAttribute('type', 'video/mp4');
+            vid.appendChild(vsrc);
+            if (vlabel) { vid.appendChild(document.createTextNode(vlabel)); }
+            vfig.appendChild(vid);
+          }
           frag.appendChild(vfig);
         }
         i++; continue;
