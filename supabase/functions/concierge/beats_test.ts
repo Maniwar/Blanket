@@ -105,6 +105,18 @@ Deno.test("KEEP_WARM is once per section per day, then HOLD", () => {
   assertEq(d.action, "HOLD", "warm line already given for this section today");
 });
 
+Deno.test("proactiveStyle 'offer' makes the presence beat offer-first, not recite", () => {
+  const l = ledger({ spentActions: [] });
+  const expertise = chooseBeatAction(l, undefined, { nowMs: NOW, proactiveStyle: "expertise" });
+  assertEq(expertise.action, "KEEP_WARM:wool", "same action either way");
+  assert(expertise.detail.includes("GIVE FIRST"), "expertise brief hands over knowledge");
+  const offer = chooseBeatAction(l, undefined, { nowMs: NOW, proactiveStyle: "offer" });
+  assertEq(offer.action, "KEEP_WARM:wool", "offer mode keeps the presence beat");
+  assert(offer.detail.includes("OFFER-FIRST"), "offer brief invites, not recites");
+  assert(/NEVER recite/.test(offer.detail), "offer brief forbids reciting facts at the shopper");
+  assert(!offer.detail.includes("GIVE FIRST"), "offer brief is not the expertise brief");
+});
+
 // ── Escalating proposal cool-off ─────────────────────────────────────────────
 
 Deno.test("first proposal is free; second rests 24h", () => {

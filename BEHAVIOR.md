@@ -328,6 +328,19 @@ every knob to the admin card that owns it.*
   while troubleshooting a quiet widget. The Actions-tab **action-type filter**
   (spoke / held / vetoed / all beats / everything-but-beats) narrows the log
   without an export.
+- **Proactive engagement has a *style*, so eager fits the shop.** When no sale
+  action qualifies, the presence beat can engage two ways (`outreach.proactive_style`,
+  Engagement → House rules): **give expertise** (default) hands over a piece of
+  house knowledge — right for a repeat-purchase clientele who own things and have
+  a history; **offer to show** invites the shopper to *see or arrange* one concrete
+  thing the page offers (a photo, a video, the documents, a viewing, an offer).
+  The second is for a single-item **inquiry** page: a first-time shopper has no
+  register to draw on, so "give expertise" degrades into reciting product facts
+  *at* them — which the reach-out judge correctly vetoes as "inventorying the
+  shopper." Offer-first keeps the concierge **eager** but points that eagerness at
+  an invitation instead of a recital, so the lines land instead of getting killed.
+  Stamped inquiry sites seed `offer`; the blanket demo stays `expertise`. The
+  action table is unchanged and still unit-tested (`beats_test.ts`).
 - **A long reply earns its reading time.** The first follow-up rung is floored
   to ~300ms per word of the newest assistant reply (capped at 90s) — the
   widget never interrupts someone mid-paragraph, and `status().readFloorMs`

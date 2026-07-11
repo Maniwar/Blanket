@@ -285,6 +285,16 @@ function beatAuditOn(config: Record<string, unknown> | null | undefined): boolea
   return oc?.beat_audit_log !== false;
 }
 
+// How the proactive give-first/presence beat engages when no sale action fits.
+// 'expertise' (default) hands over house knowledge — right for a repeat clientele.
+// 'offer' invites the shopper to SEE or ARRANGE something — right for a single-item
+// INQUIRY page, where reciting facts reads as "inventorying" and gets vetoed.
+// Set per site via config.outreach.proactive_style; stamped inquiry sites seed 'offer'.
+function proactiveStyleFrom(config: Record<string, unknown> | null | undefined): "expertise" | "offer" {
+  const oc = config?.outreach as Record<string, unknown> | undefined;
+  return oc?.proactive_style === "offer" ? "offer" : "expertise";
+}
+
 // The model used to GRADE conversation goals (live and on re-grade). Admin can pick a
 // separate one (config.grader_model) — e.g. a stronger judge — without changing what
 // answers shoppers; blank falls back to the concierge model.
@@ -4084,7 +4094,7 @@ async function handleChatPost(req: Request): Promise<Response> {
         beatDecision = chooseBeatAction(
           ledger,
           dataForBeat.config?.beat_actions as Record<string, { enabled?: boolean }> | undefined,
-          { restHours: proposalRestHoursFrom(dataForBeat.config?.outreach) },
+          { restHours: proposalRestHoursFrom(dataForBeat.config?.outreach), proactiveStyle: proactiveStyleFrom(dataForBeat.config) },
         );
         beatAudit = { action: beatDecision.action, beat: "nudge", ledger, trace: beatDecision.trace };
       }
@@ -5173,7 +5183,7 @@ async function handleReengage(req: Request): Promise<Response> {
         bubbleDecision = chooseBeatAction(
           ledger,
           data.config?.beat_actions as Record<string, { enabled?: boolean }> | undefined,
-          { restHours: proposalRestHoursFrom(data.config?.outreach) },
+          { restHours: proposalRestHoursFrom(data.config?.outreach), proactiveStyle: proactiveStyleFrom(data.config) },
         );
         bubbleAudit = { action: bubbleDecision.action, beat: "bubble", ledger, trace: bubbleDecision.trace };
         if (bubbleDecision.action === "HOLD") {

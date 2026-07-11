@@ -1450,6 +1450,13 @@
             <input type="checkbox" id="cfg-beat-audit">
             <span class="micro"><strong>Log held &amp; vetoed beats (diagnostic)</strong> <span class="info-badge" title="Records a row under Actions every time a proactive beat stays quiet ('held') or the reviewer kills a line ('vetoed'), so you can diagnose why the concierge is silent. These are the highest-volume rows in the log and nothing operational needs them — leave OFF at scale, turn ON only while troubleshooting. The functional 'spoke' rows (which enforce offer-once) are always kept regardless.">i</span></span>
           </label>
+          <div style="margin-top:12px;">
+            <label class="micro" for="cfg-proactive-style">When it engages first, the concierge should… <span class="info-badge" title="How the proactive 'presence' beat opens when no specific sale action fits. GIVE EXPERTISE hands over a piece of house knowledge — right for a repeat-purchase clientele who own things and have a history. OFFER TO SHOW invites the shopper to see or arrange one concrete thing (a photo, a video, the documents, a viewing, an offer) — right for a single-item INQUIRY page, where reciting facts at a first-time shopper reads as 'inventorying' and gets vetoed. Stamped inquiry sites default to Offer.">i</span></label>
+            <select id="cfg-proactive-style" class="mono-field">
+              <option value="expertise">Give a piece of expertise (repeat-purchase clientele)</option>
+              <option value="offer">Offer to show or arrange something (inquiry page)</option>
+            </select>
+          </div>
         </details>
 
         <details class="stage" id="stage-rules">
@@ -3416,6 +3423,7 @@ async function loadConfig() {
   $('cfg-substance-gate').checked = o.substanceGate !== false; // default: gated
   if ($('cfg-beat-judge')) $('cfg-beat-judge').checked = o.beatJudge !== false; // default: reviewed
   if ($('cfg-beat-audit')) $('cfg-beat-audit').checked = o.beat_audit_log !== false; // default: log (demo); stamped sites seed false
+  if ($('cfg-proactive-style')) $('cfg-proactive-style').value = (o.proactive_style === 'offer') ? 'offer' : 'expertise';
   $('cfg-anon-nudges').checked = o.anonNudges === true; // default: off
   $('cfg-goalrate').value = (typeof cfg.goal_sample_rate === 'number') ? cfg.goal_sample_rate : '';
   $('cfg-nudgecap').value = (typeof o.nudgeCap === 'number') ? o.nudgeCap : '';
@@ -3828,6 +3836,7 @@ async function saveEngagement() {
   o.substanceGate = $('cfg-substance-gate').checked;
   if ($('cfg-beat-judge')) o.beatJudge = $('cfg-beat-judge').checked;
   if ($('cfg-beat-audit')) o.beat_audit_log = $('cfg-beat-audit').checked;
+  if ($('cfg-proactive-style')) o.proactive_style = ($('cfg-proactive-style').value === 'offer') ? 'offer' : 'expertise';
   o.anonNudges = $('cfg-anon-nudges').checked;
   const cap = Number($('cfg-nudgecap').value);
   if ($('cfg-nudgecap').value !== '' && Number.isFinite(cap) && cap >= 0) o.nudgeCap = Math.round(cap);
