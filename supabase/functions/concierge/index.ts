@@ -4461,7 +4461,7 @@ async function handleChatPost(req: Request): Promise<Response> {
           // the judge killed it — so it gets its own action ('beat_veto') with
           // the killed line and the judge's reason in the payload.
           try {
-            if (beatAuditOn(dataForBeat.config)) {
+            if (beatAuditOn(data.config)) {
               const cid = await conversationPromise;
               pgInsert("concierge_actions", {
                 conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
@@ -4617,7 +4617,7 @@ async function handleChatPost(req: Request): Promise<Response> {
             // action='beat_hold'). The substance gate working looks like holds,
             // not text; without this row, silence and breakage look identical.
             // Gated: pure diagnostics, the highest-volume beat row (see beatAuditOn).
-            if (beatAuditOn(dataForBeat.config)) {
+            if (beatAuditOn(data.config)) {
               pgInsert("concierge_actions", {
                 conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
                 action: "beat_hold", serial: null,
