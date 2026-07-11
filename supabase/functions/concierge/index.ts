@@ -278,7 +278,7 @@ function resolveModel(data: ConciergeData): string {
 // the fastest-growing row in concierge_actions (one per idle beat, per visitor), so
 // it is the first thing to shed at scale. config.beat_audit_log gates BOTH off; the
 // functional beat_action "spoke" row (which enforces offer-once) is NEVER gated.
-// Default ON so the Feierabend demo keeps its spoke/held/vetoed strip; stamped sites
+// Default ON so the reference demo keeps its spoke/held/vetoed strip; stamped sites
 // seed it OFF (scale-first) — see the kit's setup rewrite.
 function beatAuditOn(config: Record<string, unknown> | null | undefined): boolean {
   const oc = config?.outreach as Record<string, unknown> | undefined;
