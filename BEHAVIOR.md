@@ -327,7 +327,12 @@ every knob to the admin card that owns it.*
   vetoed strip); **stamped sites seed it off** (scale-first) and turn it on only
   while troubleshooting a quiet widget. The Actions-tab **action-type filter**
   (spoke / held / vetoed / all beats / everything-but-beats) narrows the log
-  without an export.
+  without an export, and each beat row reads in plain language — **✓ Spoke /
+  — Stayed quiet / 🚫 Blocked (not shown)** — so "what the visitor saw" is legible
+  at a glance. In the **Conversations** transcript, held & vetoed beats are
+  **interleaved by time** and marked *"the visitor did NOT see this"* (a vetoed
+  row carries the killed line + the reason), so the merchant reads one timeline of
+  what reached the customer and what the reach-out judge blocked before it could.
 - **Proactive engagement has a *style*, so eager fits the shop.** When no sale
   action qualifies, the presence beat can engage two ways (`outreach.proactive_style`,
   Engagement → House rules): **give expertise** (default) hands over a piece of
