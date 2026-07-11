@@ -2372,6 +2372,20 @@ function sellingBlock(data: ConciergeData): string {
         "then re-open the door):\n" + lines.join("\n") + "\n";
     }
   }
+  // INQUIRY FORMS — when a shopper can hand the house a lead through a form, the
+  // form IS the path. Present only when such a form is enabled, and as a HARD rule
+  // for every audience — so it does not depend on a soft SOP being followed, which
+  // is exactly how a shopper got routed to email instead of shown the form.
+  const inquiryForms = data.forms.filter((f) => f.submit_tool === "submit_inquiry");
+  if (inquiryForms.length > 0) {
+    const list = inquiryForms.map((f) => `{{form:${f.slug}}} for ${f.title.toLowerCase()}`).join("; ");
+    s += "\nINQUIRY FORMS (the shopper's path to the owner — the form IS how they reach the house):\n" +
+      "- When someone makes or signals a genuine offer, asks to negotiate, wants to see it in person, or " +
+      "asks how to make an offer / arrange a viewing, PRESENT THE MATCHING FORM: put its token on its OWN " +
+      "line so they fill it in themselves and the owner is notified — " + list + ". Do this yourself, in " +
+      "chat; do NOT tell them to email instead, and do NOT merely describe the form. It needs no account and " +
+      "works for anyone. Emit the token verbatim on its own line, with no serial number.\n";
+  }
   return s;
 }
 

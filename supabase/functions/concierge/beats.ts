@@ -255,9 +255,9 @@ export function chooseBeatAction(
     // ARRANGE something concrete — never recites facts AT them, which is exactly
     // the "inventorying the shopper" pattern the reach-out judge vetoes.
     const warmDetail = offerFirst
-      ? `keep this shopper engaged OFFER-FIRST, not by reciting anything: invite them to SEE or ARRANGE one concrete thing this page offers — a specific photo or detail to look at, a video if one is registered, the documents or history to view, a viewing in person, or making an offer — keyed to the '${
+      ? `keep this shopper engaged OFFER-FIRST, not by reciting anything: invite them to SEE or ARRANGE one concrete thing — a specific photo or detail to look at, a video ONLY if one is registered, an in-person viewing, or making an offer — keyed to the '${
         l.section || "page"
-      }' section. Name ONE and offer to show or arrange it. NEVER recite specs, history, or the shopper's own data back at them, and never tally what is on file; offer to reveal it instead. Warm, brief, one light invitation, no pressure.`
+      }' section. Name ONE and offer to show or arrange it. ONLY offer what the house has actually made shareable here: NEVER promise a document, image, record, or file (a CARFAX, service invoices, a PDF) is "ready to share" unless it is genuinely available to send in this chat — offering something that isn't set up is a false promise. NEVER recite specs, history, or the shopper's own data back at them, and never tally what is on file; offer to reveal it instead. Warm, brief, one light invitation, no pressure.`
       : `every sales door is spent or resting — GIVE FIRST instead of going quiet: one small, unasked piece of true house expertise keyed to the '${
         l.section || "page"
       }' section (a care fact, the provenance, the box, the mending promise), warm and brief, no ask, no selling`;
