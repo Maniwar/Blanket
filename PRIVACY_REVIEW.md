@@ -17,6 +17,20 @@ corrections, and what still needs a human before a real launch.
 > what would be required **if this went to production with real (or EU) customers**
 > — not gaps in the demo.
 
+## Data-flow diagram & Record of Processing
+
+For a reviewer who wants the whole personal-data picture on one page —
+data subject → browser → edge functions → Postgres/sub-processor, with
+trust boundaries, per-flow legal basis, retention, and access — see the
+data-flow diagram, which also carries a GDPR Art. 30 Record of Processing
+table by data category:
+
+[![Privacy data-flow diagram](docs/privacy-dataflow.svg)](docs/privacy-dataflow.svg)
+
+*[`docs/privacy-dataflow.svg`](docs/privacy-dataflow.svg) — grounded in
+[`privacy.html`](privacy.html), [`supabase/SCHEMA.md`](supabase/SCHEMA.md),
+and this review. Reflects the current US-only demo.*
+
 ## Part 1 — Factual accuracy (policy vs. what the code actually does)
 
 | Claim in the old policy | Reality in code | Action |

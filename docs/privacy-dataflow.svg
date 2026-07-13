@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1279" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+<defs>
+  <marker id="arw" markerWidth="10" markerHeight="10" refX="7.5" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9a927f"/></marker>
+  <style>
+    .h{fill:#2a2622;font-weight:700}.t{fill:#4a4438}.m{fill:#6b6459}.br{fill:#9a6a1c}
+    .mono{font-family:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace}
+    .subj{fill:#eef3f8;stroke:#a9c0d8;stroke-width:1.5}
+    .proc{fill:#f4f7f4;stroke:#b9c7bb;stroke-width:1.5}
+    .db{fill:#f6f1e7;stroke:#d9c9a6;stroke-width:1.5}
+    .ext{fill:#f3eef7;stroke:#cabbd8;stroke-width:1.5}
+    .note{fill:#fbf9f4;stroke:#e4dccb;stroke-width:1.2}
+    .flow{stroke:#9a927f;stroke-width:1.6;fill:none}
+    .tb{fill:none;stroke:#c9a24a;stroke-width:1.4;stroke-dasharray:6 5}
+    .tbl{fill:#ffffff;stroke:#d8d2c6;stroke-width:1}
+    .rowline{stroke:#e8e2d5;stroke-width:1}
+  </style>
+</defs>
+<rect width="1080" height="1360" fill="#faf8f4"/>
+<text x="40" y="44" font-size="23" class="h" text-anchor="start" >Feierabend — Privacy Data-Flow &amp; Record of Processing</text>
+<text x="40" y="66" font-size="12.5" class="m" text-anchor="start" >Personal-data map for privacy &amp; legal review — aligned to GDPR Art. 30 (record of processing) and CCPA/CPRA disclosures.</text>
+<text x="40" y="84" font-size="11" class="m" text-anchor="start" >Good-faith engineering artifact, not legal advice. Current deployment is a US-only demonstration with no real customers. Companion to PRIVACY_REVIEW.md and privacy.html.</text>
+<rect x="40" y="104" width="16" height="14" rx="3" class="subj" />
+<text x="62" y="115" font-size="10.5" class="m" text-anchor="start" >External entity</text>
+<rect x="190" y="104" width="16" height="14" rx="3" class="proc" />
+<text x="212" y="115" font-size="10.5" class="m" text-anchor="start" >Process</text>
+<rect x="340" y="104" width="16" height="14" rx="3" class="db" />
+<text x="362" y="115" font-size="10.5" class="m" text-anchor="start" >Data store</text>
+<rect x="490" y="104" width="16" height="14" rx="3" class="ext" />
+<text x="512" y="115" font-size="10.5" class="m" text-anchor="start" >Sub-processor</text>
+<rect x="640" y="104" width="26" height="14" class="tb" rx="2"/>
+<text x="668" y="115" font-size="10.5" class="m" text-anchor="start" >Trust boundary</text>
+<rect x="800" y="104" width="77" height="16" rx="8" fill="#f7edd8" stroke="#e2c98f"/>
+<text x="807" y="116" font-size="9.5" class="br mono" text-anchor="start" >Legal basis</text>
+<rect x="232" y="150" width="212" height="410" class="tb" rx="10"/>
+<text x="242" y="166" font-size="10" class="br" text-anchor="start" font-weight="700" >CLIENT · browser</text>
+<rect x="458" y="150" width="336" height="410" class="tb" rx="10"/>
+<text x="468" y="166" font-size="10" class="br" text-anchor="start" font-weight="700" >PROCESSOR · Supabase (US region)</text>
+<rect x="808" y="150" width="232" height="200" class="tb" rx="10"/>
+<text x="818" y="166" font-size="10" class="br" text-anchor="start" font-weight="700" >SUB-PROCESSOR · Anthropic (US)</text>
+<rect x="40" y="210" width="176" height="150" rx="10" class="subj" />
+<text x="56" y="236" font-size="12.5" class="h" text-anchor="start" >DATA SUBJECT</text>
+<text x="56" y="256" font-size="11" class="t" text-anchor="start" >Website visitor /</text>
+<text x="56" y="272" font-size="11" class="t" text-anchor="start" >signed-in customer (US)</text>
+<text x="56" y="296" font-size="10.5" class="m" text-anchor="start" font-weight="700" >Provides:</text>
+<text x="56" y="312" font-size="10" class="m" text-anchor="start" >• name, email</text>
+<text x="56" y="327" font-size="10" class="m" text-anchor="start" >• shipping address</text>
+<text x="56" y="342" font-size="10" class="m" text-anchor="start" >• chat messages</text>
+<text x="56" y="357" font-size="10" class="m" text-anchor="start" >• stated preferences</text>
+<rect x="250" y="232" width="180" height="246" rx="10" class="proc" />
+<text x="266" y="258" font-size="12.5" class="h" text-anchor="start" >BROWSER</text>
+<text x="266" y="276" font-size="10.5" class="m mono" text-anchor="start" >GitHub Pages · static</text>
+<text x="266" y="300" font-size="10" class="m" text-anchor="start" >No third-party resources</text>
+<text x="266" y="317" font-size="10" class="m" text-anchor="start" >(typefaces self-hosted)</text>
+<text x="266" y="334" font-size="10" class="m" text-anchor="start" >Publishable key only</text>
+<text x="266" y="351" font-size="10" class="m" text-anchor="start" >Functional storage only:</text>
+<text x="266" y="368" font-size="10" class="m" text-anchor="start" >session + sign-in</text>
+<text x="266" y="385" font-size="10" class="m" text-anchor="start" >No advertising cookies</text>
+<text x="266" y="402" font-size="10" class="m" text-anchor="start" >IP is observed in transit</text>
+<rect x="474" y="196" width="304" height="58" rx="10" class="proc" />
+<text x="490" y="220" font-size="12.5" class="h" text-anchor="start" >concierge function</text>
+<text x="490" y="238" font-size="9.6" class="m mono" text-anchor="start" >Deno · streaming chat + tool loop · cache</text>
+<rect x="474" y="262" width="304" height="50" rx="10" class="proc" />
+<text x="490" y="284" font-size="12.5" class="h" text-anchor="start" >commission function</text>
+<text x="490" y="301" font-size="9.8" class="m mono" text-anchor="start" >Deno · demo checkout · register tools</text>
+<text x="474" y="331" font-size="9.6" class="m" text-anchor="start" >Both use the service-role key (bypass RLS); secrets server-only.</text>
+<rect x="474" y="342" width="304" height="150" rx="10" class="db" />
+<text x="490" y="364" font-size="12" class="h" text-anchor="start" >Managed Postgres — RLS enforced</text>
+<text x="490" y="384" font-size="10" class="t mono" text-anchor="start" font-weight="700" >orders</text>
+<text x="490" y="395" font-size="9" class="m" text-anchor="start" >name · email · shipping/billing addr — owner+admin</text>
+<text x="490" y="405" font-size="10" class="t mono" text-anchor="start" font-weight="700" >concierge_conversations</text>
+<text x="490" y="416" font-size="9" class="m" text-anchor="start" >user_email · IP — admin-only</text>
+<text x="490" y="426" font-size="10" class="t mono" text-anchor="start" font-weight="700" >concierge_messages</text>
+<text x="490" y="437" font-size="9" class="m" text-anchor="start" >chat content — admin</text>
+<text x="490" y="447" font-size="10" class="t mono" text-anchor="start" font-weight="700" >client book</text>
+<text x="490" y="458" font-size="9" class="m" text-anchor="start" >room · cloth · occasion — consent</text>
+<text x="490" y="468" font-size="10" class="t mono" text-anchor="start" font-weight="700" >rate-limit store</text>
+<text x="490" y="479" font-size="9" class="m" text-anchor="start" >transient IP key — service-role only</text>
+<rect x="474" y="510" width="304" height="44" rx="10" class="proc" />
+<text x="490" y="531" font-size="11.5" class="h" text-anchor="start" >Operator / admin (admin.html)</text>
+<text x="490" y="547" font-size="9.4" class="m" text-anchor="start" >reads via service-role · sees IP/PII · transcript export is PII-gated</text>
+<rect x="820" y="214" width="208" height="120" rx="10" class="ext" />
+<text x="836" y="240" font-size="12.5" class="h" text-anchor="start" >Claude API</text>
+<text x="836" y="262" font-size="10" class="m" text-anchor="start" >Receives message text</text>
+<text x="836" y="277" font-size="10" class="m" text-anchor="start" >to generate the answer.</text>
+<text x="836" y="292" font-size="10" class="m" text-anchor="start" >Standard commercial terms.</text>
+<text x="836" y="307" font-size="10" class="m" text-anchor="start" >NOT used to train models.</text>
+<text x="836" y="322" font-size="10" class="m" text-anchor="start" >No storage of record here.</text>
+<path d="M216,285 L250,300" class="flow" marker-end="url(#arw)"/>
+<path d="M430,310 L474,287" class="flow" marker-end="url(#arw)"/>
+<path d="M430,268 L474,225" class="flow" marker-end="url(#arw)"/>
+<path d="M778,222 L820,240" class="flow" marker-end="url(#arw)"/>
+<path d="M626,312 L626,342" class="flow" marker-end="url(#arw)"/>
+<path d="M626,510 L626,492" class="flow" marker-end="url(#arw)"/>
+<text x="40" y="575" font-size="12" class="h" text-anchor="start" >Data flows (what · why · legal basis)</text>
+<text x="52" y="597" font-size="11" class="br" text-anchor="start" font-weight="700" >•</text>
+<text x="66" y="597" font-size="10.5" class="t" text-anchor="start" font-weight="700" >Name, email, shipping address</text>
+<text x="240" y="597" font-size="10.5" class="m" text-anchor="start" >register + checkout / address form → commission fn → orders</text>
+<rect x="760" y="586" width="60" height="16" rx="8" fill="#f7edd8" stroke="#e2c98f"/>
+<text x="767" y="598" font-size="9.5" class="br mono" text-anchor="start" >Contract</text>
+<text x="52" y="621" font-size="11" class="br" text-anchor="start" font-weight="700" >•</text>
+<text x="66" y="621" font-size="10.5" class="t" text-anchor="start" font-weight="700" >Chat messages</text>
+<text x="240" y="621" font-size="10.5" class="m" text-anchor="start" >browser → concierge fn (answer &amp; improve); text relayed to Claude API</text>
+<rect x="760" y="610" width="122" height="16" rx="8" fill="#f7edd8" stroke="#e2c98f"/>
+<text x="767" y="622" font-size="9.5" class="br mono" text-anchor="start" >Legitimate interest</text>
+<text x="52" y="645" font-size="11" class="br" text-anchor="start" font-weight="700" >•</text>
+<text x="66" y="645" font-size="10.5" class="t" text-anchor="start" font-weight="700" >Preferences (client book)</text>
+<text x="240" y="645" font-size="10.5" class="m" text-anchor="start" >browser → concierge fn → client book (personalization)</text>
+<rect x="760" y="634" width="139" height="16" rx="8" fill="#f7edd8" stroke="#e2c98f"/>
+<text x="767" y="646" font-size="9.5" class="br mono" text-anchor="start" >Consent · withdrawable</text>
+<text x="52" y="669" font-size="11" class="br" text-anchor="start" font-weight="700" >•</text>
+<text x="66" y="669" font-size="10.5" class="t" text-anchor="start" font-weight="700" >IP address</text>
+<text x="240" y="669" font-size="10.5" class="m" text-anchor="start" >recorded on the conversation + rate-limit store (abuse / lawful request)</text>
+<rect x="760" y="658" width="185" height="16" rx="8" fill="#f7edd8" stroke="#e2c98f"/>
+<text x="767" y="670" font-size="9.5" class="br mono" text-anchor="start" >Legitimate interest · security</text>
+<text x="52" y="693" font-size="11" class="br" text-anchor="start" font-weight="700" >•</text>
+<text x="66" y="693" font-size="10.5" class="t" text-anchor="start" font-weight="700" >Sign-in email</text>
+<text x="240" y="693" font-size="10.5" class="m" text-anchor="start" >attributes chat to the account when signed in</text>
+<rect x="760" y="682" width="162" height="16" rx="8" fill="#f7edd8" stroke="#e2c98f"/>
+<text x="767" y="694" font-size="9.5" class="br mono" text-anchor="start" >Contract / legit. interest</text>
+<rect x="40" y="725" width="1000" height="40" rx="8" class="note" />
+<text x="56" y="742" font-size="10.5" class="h" text-anchor="start" >Data-subject rights</text>
+<text x="56" y="758" font-size="10" class="m" text-anchor="start" >One email → concierge@feier-abend.co (monitored) — access · rectify · erase · portability · restrict · object · withdraw consent · CCPA know/delete/correct · 45-day response · GPC honored · non-discrimination.</text>
+<rect x="40" y="773" width="1000" height="34" rx="8" class="note" />
+<text x="56" y="788" font-size="10.5" class="h" text-anchor="start" >International transfers</text>
+<text x="56" y="802" font-size="9.8" class="m" text-anchor="start" >N/A — US data subjects, US processors (Supabase, Anthropic); no cross-border transfer to safeguard; pages load no third-party resources.</text>
+<rect x="40" y="813" width="1000" height="34" rx="8" class="note" />
+<text x="56" y="828" font-size="10.5" class="h" text-anchor="start" >Never collected</text>
+<text x="56" y="842" font-size="9.8" class="m" text-anchor="start" >Payment data · sensitive personal information · advertising trackers/cookies · phone number · date of birth.</text>
+<rect x="40" y="853" width="1000" height="34" rx="8" class="note" />
+<text x="56" y="868" font-size="10.5" class="h" text-anchor="start" >Automated decision-making</text>
+<text x="56" y="882" font-size="9.8" class="m" text-anchor="start" >Light profiling for personalization (from orders + client book). No GDPR Art. 22 solely-automated, significant-effect decisions.</text>
+<rect x="40" y="893" width="1000" height="34" rx="8" class="note" />
+<text x="56" y="908" font-size="10.5" class="h" text-anchor="start" >Controller / security</text>
+<text x="56" y="922" font-size="9.8" class="m" text-anchor="start" >Controller: Feierabend Textil (fictional house, demo). Security: row-level security · encryption in transit · secrets server-only.</text>
+<text x="40" y="947" font-size="14" class="h" text-anchor="start" >Record of Processing (GDPR Art. 30) — by data category</text>
+<rect x="40" y="959" width="1000" height="30" rx="6" class="tbl" />
+<rect x="40" y="959" width="1000" height="30" rx="6" fill="#24303a"/>
+<text x="48" y="978" font-size="10.5" class="t" text-anchor="start" font-weight="700" fill="#ffffff">Data category</text>
+<text x="216" y="978" font-size="10.5" class="t" text-anchor="start" font-weight="700" fill="#ffffff">Purpose</text>
+<text x="424" y="978" font-size="10.5" class="t" text-anchor="start" font-weight="700" fill="#ffffff">Legal basis</text>
+<text x="574" y="978" font-size="10.5" class="t" text-anchor="start" font-weight="700" fill="#ffffff">Stored in</text>
+<text x="788" y="978" font-size="10.5" class="t" text-anchor="start" font-weight="700" fill="#ffffff">Retention</text>
+<text x="938" y="978" font-size="10.5" class="t" text-anchor="start" font-weight="700" fill="#ffffff">Access</text>
+<rect x="40" y="989" width="1000" height="50" rx="0" class="tbl" />
+<text x="48" y="1005" font-size="9.2" class="t" text-anchor="start" font-weight="700" >Identity &amp; contact</text>
+<text x="48" y="1017" font-size="9.2" class="m" text-anchor="start" >name, email,</text>
+<text x="48" y="1029" font-size="9.2" class="m" text-anchor="start" >shipping/billing address</text>
+<text x="216" y="1005" font-size="9.2" class="m" text-anchor="start" >Hold register entry; fulfil</text>
+<text x="216" y="1017" font-size="9.2" class="m" text-anchor="start" >the (pretend) commission</text>
+<text x="424" y="1005" font-size="9.2" class="m" text-anchor="start" >Contract</text>
+<text x="574" y="1005" font-size="9.2" class="m" text-anchor="start" >orders</text>
+<text x="788" y="1005" font-size="9.2" class="m" text-anchor="start" >Demo duration; on</text>
+<text x="788" y="1017" font-size="9.2" class="m" text-anchor="start" >request or study end</text>
+<text x="938" y="1005" font-size="9.2" class="m" text-anchor="start" >Owner (RLS) +</text>
+<text x="938" y="1017" font-size="9.2" class="m" text-anchor="start" >admin</text>
+<rect x="40" y="1039" width="1000" height="62" rx="0" class="tbl" />
+<text x="48" y="1055" font-size="9.2" class="t" text-anchor="start" font-weight="700" >Chat content</text>
+<text x="48" y="1067" font-size="9.2" class="m" text-anchor="start" >messages typed to the</text>
+<text x="48" y="1079" font-size="9.2" class="m" text-anchor="start" >concierge</text>
+<text x="216" y="1055" font-size="9.2" class="m" text-anchor="start" >Answer the user; improve the</text>
+<text x="216" y="1067" font-size="9.2" class="m" text-anchor="start" >concierge</text>
+<text x="424" y="1055" font-size="9.2" class="m" text-anchor="start" >Legitimate interest</text>
+<text x="574" y="1055" font-size="9.2" class="m" text-anchor="start" >concierge_messages /</text>
+<text x="574" y="1067" font-size="9.2" class="m" text-anchor="start" >_conversations; relayed to</text>
+<text x="574" y="1079" font-size="9.2" class="m" text-anchor="start" >Claude API (transient, no</text>
+<text x="574" y="1091" font-size="9.2" class="m" text-anchor="start" >training)</text>
+<text x="788" y="1055" font-size="9.2" class="m" text-anchor="start" >Demo duration</text>
+<text x="938" y="1055" font-size="9.2" class="m" text-anchor="start" >Admin (RLS)</text>
+<rect x="40" y="1101" width="1000" height="50" rx="0" class="tbl" />
+<text x="48" y="1117" font-size="9.2" class="t" text-anchor="start" font-weight="700" >Preferences</text>
+<text x="48" y="1129" font-size="9.2" class="m" text-anchor="start" >room, cloth, gift occasion</text>
+<text x="48" y="1141" font-size="9.2" class="m" text-anchor="start" >(signed-in)</text>
+<text x="216" y="1117" font-size="9.2" class="m" text-anchor="start" >Personalize service (client</text>
+<text x="216" y="1129" font-size="9.2" class="m" text-anchor="start" >book)</text>
+<text x="424" y="1117" font-size="9.2" class="m" text-anchor="start" >Consent —</text>
+<text x="424" y="1129" font-size="9.2" class="m" text-anchor="start" >withdrawable</text>
+<text x="574" y="1117" font-size="9.2" class="m" text-anchor="start" >client book</text>
+<text x="788" y="1117" font-size="9.2" class="m" text-anchor="start" >Until withdrawn /</text>
+<text x="788" y="1129" font-size="9.2" class="m" text-anchor="start" >demo end</text>
+<text x="938" y="1117" font-size="9.2" class="m" text-anchor="start" >Admin</text>
+<rect x="40" y="1151" width="1000" height="50" rx="0" class="tbl" />
+<text x="48" y="1167" font-size="9.2" class="t" text-anchor="start" font-weight="700" >Technical — IP</text>
+<text x="48" y="1179" font-size="9.2" class="m" text-anchor="start" >client IP on the</text>
+<text x="48" y="1191" font-size="9.2" class="m" text-anchor="start" >conversation</text>
+<text x="216" y="1167" font-size="9.2" class="m" text-anchor="start" >Rate-limit; prevent abuse;</text>
+<text x="216" y="1179" font-size="9.2" class="m" text-anchor="start" >respond to lawful request</text>
+<text x="424" y="1167" font-size="9.2" class="m" text-anchor="start" >Legitimate interest</text>
+<text x="424" y="1179" font-size="9.2" class="m" text-anchor="start" >(security)</text>
+<text x="574" y="1167" font-size="9.2" class="m" text-anchor="start" >concierge_conversations.ip;</text>
+<text x="574" y="1179" font-size="9.2" class="m" text-anchor="start" >rate-limit store</text>
+<text x="788" y="1167" font-size="9.2" class="m" text-anchor="start" >Demo duration</text>
+<text x="788" y="1179" font-size="9.2" class="m" text-anchor="start" >(security); then</text>
+<text x="788" y="1191" font-size="9.2" class="m" text-anchor="start" >deleted</text>
+<text x="938" y="1167" font-size="9.2" class="m" text-anchor="start" >Admin-only;</text>
+<text x="938" y="1179" font-size="9.2" class="m" text-anchor="start" >PII-gated</text>
+<text x="938" y="1191" font-size="9.2" class="m" text-anchor="start" >export</text>
+<rect x="40" y="1201" width="1000" height="38" rx="0" class="tbl" />
+<text x="48" y="1217" font-size="9.2" class="t" text-anchor="start" font-weight="700" >Sign-in identifier</text>
+<text x="48" y="1229" font-size="9.2" class="m" text-anchor="start" >email when signed in</text>
+<text x="216" y="1217" font-size="9.2" class="m" text-anchor="start" >Attribute chat/orders to the</text>
+<text x="216" y="1229" font-size="9.2" class="m" text-anchor="start" >account</text>
+<text x="424" y="1217" font-size="9.2" class="m" text-anchor="start" >Contract / legit.</text>
+<text x="424" y="1229" font-size="9.2" class="m" text-anchor="start" >interest</text>
+<text x="574" y="1217" font-size="9.2" class="m" text-anchor="start" >concierge_conversations.user_e</text>
+<text x="574" y="1229" font-size="9.2" class="m" text-anchor="start" >mail</text>
+<text x="788" y="1217" font-size="9.2" class="m" text-anchor="start" >Demo duration</text>
+<text x="938" y="1217" font-size="9.2" class="m" text-anchor="start" >Admin</text>
+<text x="40" y="1261" font-size="9.5" class="m">Sources: privacy.html · supabase/SCHEMA.md · PRIVACY_REVIEW.md. Reflects the current US-only demo; production would add a signed DPA per processor and (if EU) SCCs + an Art. 27 representative.</text>
+</svg>
