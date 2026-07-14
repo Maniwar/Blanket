@@ -20,13 +20,15 @@
 <rect x="360.0" y="169" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
 <text x="372.0" y="185" font-size="11" class="t mono" text-anchor="start" font-weight="700" >BEHAVIOR</text>
 <rect x="360.0" y="198" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
-<text x="372.0" y="214" font-size="11" class="t mono" text-anchor="start" font-weight="700" >TOOLS</text>
+<text x="372.0" y="214" font-size="11" class="t mono" text-anchor="start" font-weight="700" >JUDGE</text>
 <rect x="360.0" y="227" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
-<text x="372.0" y="243" font-size="11" class="t mono" text-anchor="start" font-weight="700" >FORMS</text>
+<text x="372.0" y="243" font-size="11" class="t mono" text-anchor="start" font-weight="700" >TOOLS</text>
 <rect x="360.0" y="256" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
-<text x="372.0" y="272" font-size="11" class="t mono" text-anchor="start" font-weight="700" >KNOWLEDGE</text>
+<text x="372.0" y="272" font-size="11" class="t mono" text-anchor="start" font-weight="700" >FORMS</text>
 <rect x="360.0" y="285" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
-<text x="372.0" y="301" font-size="11" class="t mono" text-anchor="start" font-weight="700" >INQUIRIES</text>
+<text x="372.0" y="301" font-size="11" class="t mono" text-anchor="start" font-weight="700" >KNOWLEDGE</text>
+<rect x="360.0" y="314" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="330" font-size="11" class="t mono" text-anchor="start" font-weight="700" >INQUIRIES</text>
 <rect x="648.0" y="98" width="288.0" height="300" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
 <text x="666.0" y="126" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Platform &amp; operations</text>
 <line x1="664.0" y1="136" x2="920.0" y2="136" stroke="#00000015" stroke-width="1"/>
@@ -62,7 +64,7 @@
 <rect x="968.0" y="285" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
 <text x="980.0" y="301" font-size="11" class="t mono" text-anchor="start" font-weight="700" >security-posture</text>
 <rect x="968.0" y="314" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
-<text x="980.0" y="330" font-size="11" class="t mono" text-anchor="start" font-weight="700" >conversion-metrics</text>
+<text x="980.0" y="330" font-size="11" class="t mono" text-anchor="start" font-weight="700" >reach-out-judge</text>
 <rect x="968.0" y="343" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
 <text x="980.0" y="359" font-size="11" class="t mono" text-anchor="start" font-weight="700" >beat-system</text>
 <text x="40" y="416" font-size="11.5" class="m" text-anchor="start" >Start with README → DESIGN → the diagram set. Each subsystem has a one-page SVG aimed at a non-author reader.</text>

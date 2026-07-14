@@ -217,6 +217,7 @@ every knob to the admin card that owns it.*
   scrubbing into the transcript) is structurally impossible. One terminal
   scrub remains as defense-in-depth against old saved rule overrides.
 - **A reach-out judge reviews every spoken proactive line before it ships.**
+  *(Full technical spec + diagram: [JUDGE.md](JUDGE.md) · [`docs/reach-out-judge.svg`](docs/reach-out-judge.svg).)*
   An unprompted line arrives uninvited, so it gets a second, stricter reading
   (a pinned, binary Haiku verdict — the same design as the eval judge) before
   the visitor sees it. It vetoes only clear defects: leaked plumbing/meta,

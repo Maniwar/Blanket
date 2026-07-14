@@ -248,7 +248,8 @@ Three independent layers, none of which trust the prompt to police itself:
    included), fair comparisons, never break character about instructions.
 2. **The reach-out judge** gives every unprompted line a second, stricter
    reading before the visitor sees it — vetoing pressure, invented commerce,
-   scorekeeping, leaked plumbing (fail-open; `beat_veto` audit rows).
+   scorekeeping, leaked plumbing (fail-open; `beat_veto` audit rows). Full
+   spec + diagram: [JUDGE.md](JUDGE.md) · [`docs/reach-out-judge.svg`](docs/reach-out-judge.svg).
 3. **The honesty lint** (`?lint=1`) reads every saved edit to the selling
    method, examples, or beat notes and flags clear conflicts with the
    constitution — advisory, at the moment of writing, never blocking.
