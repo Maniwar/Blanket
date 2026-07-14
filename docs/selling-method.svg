@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1466" viewBox="0 0 1240 1466" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}
+  </style>
+</defs>
+<rect width="1240" height="1466" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >The selling method — one honest turn</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >A seller, not a Q&amp;A bot: read the shopper silently → answer, then make one move → two independent readers keep it honest before the visitor sees a word.</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >The in-conversation companion to docs/beat-system.svg (the proactive machinery). Every rule here is live config (Tuning → Selling), not code.</text>
+<rect x="40" y="104" width="1160" height="58" rx="10" fill="#efe7f3" stroke="#cdbfd6" stroke-width="1" />
+<text x="58" y="124" font-size="12.5" class="t" text-anchor="start" font-weight="700" >The deal:</text>
+<text x="130" y="124" font-size="12.5" class="t" text-anchor="start" >persuasion shapes WHEN and HOW true things are said — never WHAT is true. When salescraft and honesty conflict, honesty wins.</text>
+<text x="58" y="142" font-size="11" class="m" text-anchor="start" >May — time real scarcity · build desire with one true detail · acknowledge a competitor · season a line from the client book.</text>
+<text x="58" y="157" font-size="11" class="warn" text-anchor="start" >May never — invent counts or urgency · discount · make a medical claim (hedged included) · disparage a competitor · recite the book.</text>
+<text x="40" y="186" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · The silent stage read — placed every turn, never said aloud</text>
+<g>
+<rect x="40.0" y="198" width="176" height="52" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="128.0" y="222" font-size="13" class="t" text-anchor="middle" font-weight="700" >browsing</text>
+<text x="128.0" y="238" font-size="10.5" class="m" text-anchor="middle" >no need yet</text>
+<path d="M218.0,224 L233.8,224" stroke="#8a7a5a" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="236.8" y="198" width="176" height="52" rx="10" fill="#e9f1fa" stroke="#c3d6ea" stroke-width="1" />
+<text x="324.8" y="222" font-size="13" class="t" text-anchor="middle" font-weight="700" >engaged</text>
+<text x="324.8" y="238" font-size="10.5" class="m" text-anchor="middle" >curiosity</text>
+<path d="M414.8,224 L430.6,224" stroke="#8a7a5a" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="433.6" y="198" width="176" height="52" rx="10" fill="#e4eef9" stroke="#c3d6ea" stroke-width="1" />
+<text x="521.6" y="222" font-size="13" class="t" text-anchor="middle" font-weight="700" >evaluating</text>
+<text x="521.6" y="238" font-size="10.5" class="m" text-anchor="middle" >comparing</text>
+<path d="M611.6,224 L627.4,224" stroke="#8a7a5a" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="630.4000000000001" y="198" width="176" height="52" rx="10" fill="#f3ece0" stroke="#d8c3a8" stroke-width="1" />
+<text x="718.4000000000001" y="222" font-size="13" class="t" text-anchor="middle" font-weight="700" >objection</text>
+<text x="718.4000000000001" y="238" font-size="10.5" class="m" text-anchor="middle" >a doubt</text>
+<path d="M808.4000000000001,224 L824.2,224" stroke="#8a7a5a" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="827.2" y="198" width="176" height="52" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="915.2" y="222" font-size="13" class="t" text-anchor="middle" font-weight="700" >ready</text>
+<text x="915.2" y="238" font-size="10.5" class="m" text-anchor="middle" >buying signal</text>
+<path d="M1005.2,224 L1021.0,224" stroke="#8a7a5a" stroke-width="1.6" fill="none" marker-end="url(#arr)"/>
+<rect x="1024.0" y="198" width="176" height="52" rx="10" fill="#efeae2" stroke="#d5cbbb" stroke-width="1" />
+<text x="1112.0" y="222" font-size="13" class="t" text-anchor="middle" font-weight="700" >done</text>
+<text x="1112.0" y="238" font-size="10.5" class="m" text-anchor="middle" >closed door</text>
+</g>
+<text x="40" y="270" font-size="11.5" class="m" text-anchor="start" >Selects which move fits — naming it would be scorekeeping. This live read is independent of the analytics grader’s stored sales_stage (after-the-fact admin reporting).</text>
+<text x="40" y="294" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · Answer what was asked — then make ONE move (never the same twice)</text>
+<text x="40" y="312" font-size="11.5" class="m" text-anchor="start" >Variety is what makes it read as a person, not a script. Discovery (SITUATION → PROBLEM → PAYOFF) comes first; then translate fact → benefit → their life, never recite specs.</text>
+<rect x="40" y="326" width="373" height="142" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="40" y="326" width="6" height="142" rx="0" fill="#b98a4a" />
+<text x="60" y="356" font-size="15" class="t" text-anchor="start" font-weight="700" >ASK</text>
+<text x="60" y="378" font-size="11.8" class="m" text-anchor="start" >One real question that moves things forward,</text>
+<text x="60" y="394" font-size="11.8" class="m" text-anchor="start" >with {{reply}} pills for concrete choices.</text>
+<line x1="60" y1="434" x2="393" y2="434" stroke="#e4dccb" stroke-width="1"/>
+<text x="60" y="452" font-size="10.3" class="warn" text-anchor="start" >prevents an interrogation — two questions in a row</text>
+<rect x="433" y="326" width="373" height="142" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="433" y="326" width="6" height="142" rx="0" fill="#b98a4a" />
+<text x="453" y="356" font-size="15" class="t" text-anchor="start" font-weight="700" >RECOMMEND</text>
+<text x="453" y="378" font-size="11.8" class="m" text-anchor="start" >An actual pick with a short reason, unasked</text>
+<text x="453" y="394" font-size="11.8" class="m" text-anchor="start" >— “for a north-facing room, the Ungefärbt.”</text>
+<line x1="453" y1="434" x2="786" y2="434" stroke="#e4dccb" stroke-width="1"/>
+<text x="453" y="452" font-size="10.3" class="warn" text-anchor="start" >prevents the clerk who never recommends (isn’t</text>
+<text x="453" y="465" font-size="10.3" class="warn" text-anchor="start" >selling)</text>
+<rect x="826" y="326" width="373" height="142" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="826" y="326" width="6" height="142" rx="0" fill="#b98a4a" />
+<text x="846" y="356" font-size="15" class="t" text-anchor="start" font-weight="700" >SHOW</text>
+<text x="846" y="378" font-size="11.8" class="m" text-anchor="start" >One brief sensory picture — or an image —</text>
+<text x="846" y="394" font-size="11.8" class="m" text-anchor="start" >that builds true desire.</text>
+<line x1="846" y1="434" x2="1179" y2="434" stroke="#e4dccb" stroke-width="1"/>
+<text x="846" y="452" font-size="10.3" class="warn" text-anchor="start" >prevents the spec-dump and manufactured color</text>
+<rect x="40" y="484" width="373" height="142" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="40" y="484" width="6" height="142" rx="0" fill="#b98a4a" />
+<text x="60" y="514" font-size="15" class="t" text-anchor="start" font-weight="700" >ADVANCE</text>
+<text x="60" y="536" font-size="11.8" class="m" text-anchor="start" >Propose the next small step — always</text>
+<text x="60" y="552" font-size="11.8" class="m" text-anchor="start" >carrying {{action:commission}} in the same</text>
+<text x="60" y="568" font-size="11.8" class="m" text-anchor="start" >message.</text>
+<line x1="60" y1="592" x2="393" y2="592" stroke="#e4dccb" stroke-width="1"/>
+<text x="60" y="610" font-size="10.3" class="warn" text-anchor="start" >prevents a bare question they must answer before you</text>
+<text x="60" y="623" font-size="10.3" class="warn" text-anchor="start" >act</text>
+<rect x="433" y="484" width="373" height="142" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="433" y="484" width="6" height="142" rx="0" fill="#b98a4a" />
+<text x="453" y="514" font-size="15" class="t" text-anchor="start" font-weight="700" >REASSURE</text>
+<text x="453" y="536" font-size="11.8" class="m" text-anchor="start" >Acknowledge → isolate (“price, or fit?”) →</text>
+<text x="453" y="552" font-size="11.8" class="m" text-anchor="start" >answer with a true fact → confirm it</text>
+<text x="453" y="568" font-size="11.8" class="m" text-anchor="start" >settled.</text>
+<line x1="453" y1="592" x2="786" y2="592" stroke="#e4dccb" stroke-width="1"/>
+<text x="453" y="610" font-size="10.3" class="warn" text-anchor="start" >prevents pressure on a stall — “ask my partner”</text>
+<text x="453" y="623" font-size="10.3" class="warn" text-anchor="start" >isn’t an objection</text>
+<rect x="826" y="484" width="373" height="142" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="826" y="484" width="6" height="142" rx="0" fill="#b98a4a" />
+<text x="846" y="514" font-size="15" class="t" text-anchor="start" font-weight="700" >SPACE</text>
+<text x="846" y="536" font-size="11.8" class="m" text-anchor="start" >They signalled done — acknowledge in one</text>
+<text x="846" y="552" font-size="11.8" class="m" text-anchor="start" >line and stop.</text>
+<line x1="846" y1="592" x2="1179" y2="592" stroke="#e4dccb" stroke-width="1"/>
+<text x="846" y="610" font-size="10.3" class="warn" text-anchor="start" >prevents selling into a closed door</text>
+<rect x="40" y="642" width="1160" height="52" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="663" font-size="12" class="t" text-anchor="start" font-weight="700" >ADVANCE · three close shapes — picked by what the talk earned:</text>
+<text x="58" y="682" font-size="11" class="m" text-anchor="start" >ASSUMPTIVE “shall I open the register?” + button   ·   ALTERNATIVE “Loden or Graphit?” (a pill per cloth + button — the choice presumes the purchase)   ·   SUMMARY mirror their own words, then the button.</text>
+<text x="40" y="714" font-size="11.5" class="m" text-anchor="start" >Laddered yeses (commitment &amp; consistency): name the room → the cloth that suits it → propose the register. Small agreements compound; one big ask invites one big no.</text>
+<text x="40" y="730" font-size="10.5" class="m mono" text-anchor="start" >selling_base · exemplars_base</text>
+<text x="40" y="754" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · The dial — how hard to sell (one knob scales three things)</text>
+<rect x="40.0" y="766" width="225.6" height="26" rx="7" fill="#e7ddca" stroke="#d8c8a8" stroke-width="1" />
+<text x="152.8" y="784" font-size="13" class="t" text-anchor="middle" font-weight="700" >1</text>
+<rect x="273.6" y="766" width="225.6" height="26" rx="7" fill="#e7ddca" stroke="#d8c8a8" stroke-width="1" />
+<text x="386.40000000000003" y="784" font-size="13" class="t" text-anchor="middle" font-weight="700" >2</text>
+<rect x="507.2" y="766" width="225.6" height="26" rx="7" fill="#b98a4a" stroke="#d8c8a8" stroke-width="1" />
+<text x="620.0" y="784" font-size="13" class="" text-anchor="middle" font-weight="700" fill="#ffffff">3</text>
+<rect x="740.8" y="766" width="225.6" height="26" rx="7" fill="#e7ddca" stroke="#d8c8a8" stroke-width="1" />
+<text x="853.5999999999999" y="784" font-size="13" class="t" text-anchor="middle" font-weight="700" >4</text>
+<rect x="974.4" y="766" width="225.6" height="26" rx="7" fill="#e7ddca" stroke="#d8c8a8" stroke-width="1" />
+<text x="1087.2" y="784" font-size="13" class="t" text-anchor="middle" font-weight="700" >5</text>
+<text x="40" y="808" font-size="11" class="m" text-anchor="start" >restrained</text>
+<text x="1200" y="808" font-size="11" class="m" text-anchor="end" >closer</text>
+<text x="620" y="808" font-size="11" class="t" text-anchor="middle" font-weight="700" >3 · warm consultant (default)</text>
+<circle cx="52" cy="833" r="10" fill="#b98a4a"/>
+<text x="52" y="837" font-size="12" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">1</text>
+<text x="74" y="837" font-size="11.6" class="m" text-anchor="start" >ASK + plain answers; the button only on an unmistakable buying signal; when in doubt, SPACE.</text>
+<circle cx="52" cy="859" r="10" fill="#b98a4a"/>
+<text x="52" y="863" font-size="12" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">2</text>
+<text x="74" y="863" font-size="11.6" class="m" text-anchor="start" >Mostly answer &amp; ASK; RECOMMEND when it clearly helps; offer the order when interest is clear.</text>
+<circle cx="52" cy="885" r="10" fill="#b98a4a"/>
+<text x="52" y="889" font-size="12" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">3</text>
+<text x="74" y="889" font-size="11.6" class="m" text-anchor="start" >Mix ASK with RECOMMEND/SHOW; ladder small yeses; ADVANCE once genuine interest shows.</text>
+<circle cx="52" cy="911" r="10" fill="#b98a4a"/>
+<text x="52" y="915" font-size="12" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">4</text>
+<text x="74" y="915" font-size="11.6" class="m" text-anchor="start" >Favour RECOMMEND/SHOW/ADVANCE; build desire early; re-open a different door; graceful with a no.</text>
+<circle cx="52" cy="937" r="10" fill="#b98a4a"/>
+<text x="52" y="941" font-size="12" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">5</text>
+<text x="74" y="941" font-size="11.6" class="m" text-anchor="start" >Lead with the close from the first substantive turn; propose early and more than once (never twice in one breath).</text>
+<text x="40" y="970" font-size="10.5" class="m mono" text-anchor="start" >assertiveness (1–5) → scales prompt guidance · in-chat follow-up pace · closed-panel reach-out budget.</text>
+<text x="40" y="1000" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >4 · Price &amp; honest scarcity — the two-context rule</text>
+<rect x="40" y="1012" width="568" height="132" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="60" y="1038" font-size="13.5" class="t" text-anchor="start" font-weight="700" >COLD ASK — “how much is it?”</text>
+<text x="60" y="1056" font-size="11" class="m" text-anchor="start" >they asked; they did not object</text>
+<text x="60" y="1078" font-size="11.6" class="m" text-anchor="start" >The number plainly + EXACTLY ONE true context: the 50-year /</text>
+<text x="60" y="1094" font-size="11.6" class="m" text-anchor="start" >$12-a-year arithmetic, or a fair category comparison —</text>
+<text x="60" y="1110" font-size="11.6" class="m" text-anchor="start" >chosen by what they told you.</text>
+<text x="60" y="1132" font-size="10.6" class="warn" text-anchor="start" >A second justification reads as defending the number — a defended price sounds negotiable.</text>
+<rect x="632" y="1012" width="568" height="132" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="652" y="1038" font-size="13.5" class="t" text-anchor="start" font-weight="700" >OBJECTION — “it’s a lot of money”</text>
+<text x="652" y="1056" font-size="11" class="m" text-anchor="start" >now it is REASSURE</text>
+<text x="652" y="1078" font-size="11.6" class="m" text-anchor="start" >TWO pieces of context become legitimate — they raised the</text>
+<text x="652" y="1094" font-size="11.6" class="m" text-anchor="start" >doubt, so answering it fully is service, not defense.</text>
+<text x="652" y="1132" font-size="10.6" class="warn" text-anchor="start" >The price itself never moves — $589, no discounts, ever (tested vs. a quarter-price throw for five turns).</text>
+<rect x="40" y="1160" width="1160" height="62" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="1182" font-size="12" class="t" text-anchor="start" font-weight="700" >Scarcity, read verbatim or not at all:</text>
+<text x="58" y="1201" font-size="11" class="m" text-anchor="start" >the held number is already half theirs — “your Nº 14,231”, never “a number”; a lapse consequence is stated once, no countdown. Proof counts (“N of this year’s 15,000 are entered”) are given once, never invented.</text>
+<text x="58" y="1217" font-size="10.6" class="warn" text-anchor="start" >Banned urgency — hurry · last chance · almost gone · act now — is literally regex-checked (proof-remaining-honest eval).</text>
+<text x="40" y="1242" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >5 · What keeps it honest — three independent readers, none trust the prompt</text>
+<rect x="40" y="1254" width="373" height="150" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<circle cx="70" cy="1286" r="14" fill="#5f8f6f"/>
+<text x="70" y="1291" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">1</text>
+<text x="94" y="1284" font-size="14" class="t" text-anchor="start" font-weight="700" >The constitution</text>
+<text x="94" y="1301" font-size="10.5" class="m mono" text-anchor="start" >kb.ts HONESTY &amp; SCOPE</text>
+<text x="60" y="1328" font-size="11.6" class="m" text-anchor="start" >Binds every section: one product · no invented</text>
+<text x="60" y="1344" font-size="11.6" class="m" text-anchor="start" >facts · no discounts · no medical claims</text>
+<text x="60" y="1360" font-size="11.6" class="m" text-anchor="start" >(hedged included) · fair comparisons · never</text>
+<text x="60" y="1376" font-size="11.6" class="m" text-anchor="start" >break character.</text>
+<rect x="433" y="1254" width="373" height="150" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<circle cx="463" cy="1286" r="14" fill="#5f8f6f"/>
+<text x="463" y="1291" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">2</text>
+<text x="487" y="1284" font-size="14" class="t" text-anchor="start" font-weight="700" >The reach-out judge</text>
+<text x="487" y="1301" font-size="10.5" class="m mono" text-anchor="start" >fail-open · beat_veto audit</text>
+<text x="453" y="1328" font-size="11.6" class="m" text-anchor="start" >A second, stricter reading of every unprompted</text>
+<text x="453" y="1344" font-size="11.6" class="m" text-anchor="start" >line before the visitor sees it — vetoes</text>
+<text x="453" y="1360" font-size="11.6" class="m" text-anchor="start" >pressure, invented commerce, scorekeeping,</text>
+<text x="453" y="1376" font-size="11.6" class="m" text-anchor="start" >leaked plumbing.</text>
+<rect x="826" y="1254" width="373" height="150" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<circle cx="856" cy="1286" r="14" fill="#5f8f6f"/>
+<text x="856" y="1291" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">3</text>
+<text x="880" y="1284" font-size="14" class="t" text-anchor="start" font-weight="700" >The honesty lint</text>
+<text x="880" y="1301" font-size="10.5" class="m mono" text-anchor="start" >?lint=1 · advisory</text>
+<text x="846" y="1328" font-size="11.6" class="m" text-anchor="start" >Reads every saved edit to the method,</text>
+<text x="846" y="1344" font-size="11.6" class="m" text-anchor="start" >examples, or beat notes and flags clear</text>
+<text x="846" y="1360" font-size="11.6" class="m" text-anchor="start" >conflicts with the constitution — at write</text>
+<text x="846" y="1376" font-size="11.6" class="m" text-anchor="start" >time, never blocking.</text>
+<line x1="40" y1="1422" x2="1200" y2="1422" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="1444" font-size="10.8" class="m" text-anchor="start" >Source: SALES.md. Every save is versioned in concierge_edit_history and lint-checked; the assembled prompt is inspectable live (?preview=1). Coverage map: evals/CATALOG.md §2b.</text>
+</svg>

@@ -11,6 +11,15 @@ and stories) · [`BEHAVIOR.md`](BEHAVIOR.md) (the behavioral guardrails) ·
 [`evals/CATALOG.md`](evals/CATALOG.md) (the test-to-technique coverage map) ·
 [`docs/beat-system.svg`](docs/beat-system.svg) (the proactive machinery).
 
+The whole method on one page — the silent stage read, the six moves and the
+dial, the price/scarcity rules, and the three honesty readers:
+
+[![The selling method — one honest turn](docs/selling-method.svg)](docs/selling-method.svg)
+
+*[`docs/selling-method.svg`](docs/selling-method.svg) — the in-conversation
+companion to [`docs/beat-system.svg`](docs/beat-system.svg). Grounded in this
+document; every rule shown is live config (Tuning → Selling), not code.*
+
 The method's text is **live config, not code**: the selling rules are
 `config.selling_base`, the worked examples `config.exemplars_base` — both with
 "Load built-in to edit", version history with one-click rollback, and the
