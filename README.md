@@ -80,6 +80,7 @@ passwordless email auth.
 | Doc | What's in it |
 | --- | --- |
 | **[DESIGN.md](DESIGN.md)** | The design doc — concept, **user stories** (guest, customer, gift-giver, merchant, super admin, operator), architecture, and the key decisions & trade-offs (serial holds, semantic cache, identity/lifecycle, the engagement model). |
+| **[MRD.md](MRD.md)** · **[PRD.md](PRD.md)** · **[TRD.md](TRD.md)** | Product artifacts — the market requirements (problem, personas, competition, opportunity), the product requirements (goals, user stories, functional requirements, roadmap), and the technical requirements (architecture, NFRs, decisions, traceability). |
 | **[DEMO.md](DEMO.md)** | A 6–8 minute live walkthrough script — do-this / point-out / demonstrates, plus interviewer talking points. |
 | **[SETUP.md](SETUP.md)** | Stand it up and verify it — setup steps, custom SMTP, a `selftest`-driven checklist, troubleshooting. |
 | **[supabase/README.md](supabase/README.md)** | Backend reference — the edge functions, wire contracts (SSE frames, endpoints), rate limits. |
