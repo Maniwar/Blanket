@@ -4,7 +4,8 @@ How the concierge suppresses a bad **proactive** line before a visitor ever sees
 it: an independent second model reads the drafted line, and vetoes clear defects.
 It is **fail-open** — a quality gate is never allowed to become an availability risk.
 
-**Visual:** [`docs/reach-out-judge.svg`](docs/reach-out-judge.svg).
+![The reach-out judge — how a proactive line is suppressed](docs/reach-out-judge.svg)
+
 **Code:** `supabase/functions/concierge/index.ts` — `judgeBeatLine` (~2985–3057),
 in-panel call site (~4511–4547), closed-panel bubble call site (~5394–5411).
 **Companions:** [COACH.md](COACH.md) (the pre-draft mirror — the sales-strategist
@@ -291,9 +292,11 @@ between a drafted proactive line and the visitor. Its immediate partner is the
 line, the judge makes sure it's safe. Coach adds, judge removes; both are bounded
 by the same constitution, so neither can weaken the house's honesty.
 
-**The whole interplay in one picture:** [`docs/runtime-brains.svg`](docs/runtime-brains.svg)
-— the control plane, showing how one constitution grounds both the coach and this
-judge, with the honesty lint and evals as the surrounding guards.
+**The whole interplay in one picture** — the control plane, showing how one
+constitution grounds both the coach and this judge, with the honesty lint and
+evals as the surrounding guards:
+
+![The control plane — how the constitution, coach, and judge interlock](docs/runtime-brains.svg)
 
 ## 13. How the kit (`concierge-kit`) provisions the judge
 

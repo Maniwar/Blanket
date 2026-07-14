@@ -6,7 +6,8 @@ and privately briefs the draft with the single best play for this exact moment.
 It is the **additive mirror of the [reach-out judge](JUDGE.md)** — the judge
 subtracts defects *after* a line is drafted; the coach adds strategy *before*.
 
-**Visual:** [`docs/sales-coach.svg`](docs/sales-coach.svg).
+![The sales-strategist coach — a second brain briefs the line before it is written](docs/sales-coach.svg)
+
 **Code:** `supabase/functions/concierge/index.ts` — `coachBeatLine` /
 `coachingBlock` (next to `judgeBeatLine`), in-panel call site (the proactive
 nudge/opener path), closed-panel bubble call site (`?reengage=1`).
@@ -201,10 +202,11 @@ complementary: the coach makes the line *better*, the judge makes sure it's *saf
 Neither can weaken the house's honesty — the coach is bounded by the same
 constitution the judge enforces.
 
-**The whole interplay in one picture:** [`docs/runtime-brains.svg`](docs/runtime-brains.svg)
-— the control plane, showing how a single constitution grounds both the additive
-coach and the subtractive judge, with the honesty lint and evals as the guards
-around them.
+**The whole interplay in one picture** — the control plane, showing how a single
+constitution grounds both the additive coach and the subtractive judge, with the
+honesty lint and evals as the guards around them:
+
+![The control plane — how the constitution, coach, and judge interlock](docs/runtime-brains.svg)
 
 ## 11. How the kit (`concierge-kit`) provisions the coach
 
