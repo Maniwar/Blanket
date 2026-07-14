@@ -5,7 +5,9 @@ limited-edition (15,000-piece) German wool blanket. It explores one question
 end-to-end: *what does a genuinely attentive luxury sales associate feel like
 when it's software?*
 
-**▶ Live demo:** https://maniwar.github.io/Blanket/
+![The Mill Concierge — an AI sales concierge on Claude](docs/hero.svg)
+
+**▶ Live demo:** **https://feier-abend.co/** · mirror: https://maniwar.github.io/Blanket/
 
 > **Demo only** — nothing ships and no payment is taken. The brand, imagery, and
 > video are fictional and AI-generated.
@@ -30,9 +32,21 @@ each links a one-page diagram:
   boundary) · [scaling review](SCALING.md) + a [k6 load-test harness](loadtest/) ·
   [cost model](COST.md).
 
+**Honest by construction** is the differentiating idea — worth its own picture:
+
+![Honest by construction — three independent layers keep what is said true](docs/honesty.svg)
+
+---
+
+## How it works
+
+![How it works — one attentive conversation, safely acting on the register](docs/overview.svg)
+
 ---
 
 ## What it demonstrates
+
+![What it demonstrates — the capability pillars](docs/capabilities.svg)
 
 - **A concierge that clientels, not FAQs.** It greets returning patrons by name,
   knows their standing (lifetime value), remembers what they told you last time
@@ -76,6 +90,8 @@ Postgres + RLS + pgvector · Anthropic Claude (streaming + tool use) ·
 passwordless email auth.
 
 ## Documentation
+
+![The documentation — a map of every doc, grouped](docs/doc-map.svg)
 
 | Doc | What's in it |
 | --- | --- |

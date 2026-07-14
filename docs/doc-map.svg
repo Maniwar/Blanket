@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="430" viewBox="0 0 1240 430" font-family="'Helvetica Neue',Arial,sans-serif"><defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker><style>.t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}.cap{letter-spacing:.06em;text-transform:uppercase}.mono{font-family:'IBM Plex Mono','Courier New',monospace}.warn{fill:#8a4b32}.ok{fill:#3f6b4f}.accent{fill:#245a7e}</style></defs><rect width="1240" height="430" fill="#f6f2ea"/>
+<text x="40" y="46" font-size="22" class="t" text-anchor="start" font-weight="700" >The documentation — a map</text>
+<text x="40" y="68" font-size="13" class="m" text-anchor="start" >Everything is written down: product artifacts, the behavior/selling method, the platform &amp; operations, and the diagram set.</text>
+<rect x="40.0" y="98" width="288.0" height="300" rx="12" fill="#eef3f8" stroke="#a9c0d8" stroke-width="1" />
+<text x="58.0" y="126" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Product</text>
+<line x1="56.0" y1="136" x2="312.0" y2="136" stroke="#00000015" stroke-width="1"/>
+<rect x="56.0" y="140" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="68.0" y="156" font-size="11" class="t mono" text-anchor="start" font-weight="700" >MRD</text>
+<rect x="56.0" y="169" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="68.0" y="185" font-size="11" class="t mono" text-anchor="start" font-weight="700" >PRD</text>
+<rect x="56.0" y="198" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="68.0" y="214" font-size="11" class="t mono" text-anchor="start" font-weight="700" >TRD</text>
+<rect x="56.0" y="227" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="68.0" y="243" font-size="11" class="t mono" text-anchor="start" font-weight="700" >DESIGN</text>
+<rect x="344.0" y="98" width="288.0" height="300" rx="12" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
+<text x="362.0" y="126" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Behavior &amp; selling</text>
+<line x1="360.0" y1="136" x2="616.0" y2="136" stroke="#00000015" stroke-width="1"/>
+<rect x="360.0" y="140" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="156" font-size="11" class="t mono" text-anchor="start" font-weight="700" >SALES</text>
+<rect x="360.0" y="169" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="185" font-size="11" class="t mono" text-anchor="start" font-weight="700" >BEHAVIOR</text>
+<rect x="360.0" y="198" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="214" font-size="11" class="t mono" text-anchor="start" font-weight="700" >TOOLS</text>
+<rect x="360.0" y="227" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="243" font-size="11" class="t mono" text-anchor="start" font-weight="700" >FORMS</text>
+<rect x="360.0" y="256" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="272" font-size="11" class="t mono" text-anchor="start" font-weight="700" >KNOWLEDGE</text>
+<rect x="360.0" y="285" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="372.0" y="301" font-size="11" class="t mono" text-anchor="start" font-weight="700" >INQUIRIES</text>
+<rect x="648.0" y="98" width="288.0" height="300" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="666.0" y="126" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Platform &amp; operations</text>
+<line x1="664.0" y1="136" x2="920.0" y2="136" stroke="#00000015" stroke-width="1"/>
+<rect x="664.0" y="140" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="156" font-size="11" class="t mono" text-anchor="start" font-weight="700" >SETUP</text>
+<rect x="664.0" y="169" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="185" font-size="11" class="t mono" text-anchor="start" font-weight="700" >COST</text>
+<rect x="664.0" y="198" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="214" font-size="11" class="t mono" text-anchor="start" font-weight="700" >SCALING</text>
+<rect x="664.0" y="227" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="243" font-size="11" class="t mono" text-anchor="start" font-weight="700" >SECURITY</text>
+<rect x="664.0" y="256" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="272" font-size="11" class="t mono" text-anchor="start" font-weight="700" >PRIVACY_REVIEW</text>
+<rect x="664.0" y="285" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="301" font-size="11" class="t mono" text-anchor="start" font-weight="700" >CMS</text>
+<rect x="664.0" y="314" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="330" font-size="11" class="t mono" text-anchor="start" font-weight="700" >ATTRIBUTION</text>
+<rect x="664.0" y="343" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="676.0" y="359" font-size="11" class="t mono" text-anchor="start" font-weight="700" >SCHEMA</text>
+<rect x="952.0" y="98" width="288.0" height="300" rx="12" fill="#f6f1e7" stroke="#d9c9a6" stroke-width="1" />
+<text x="970.0" y="126" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Diagrams (docs/*.svg)</text>
+<line x1="968.0" y1="136" x2="1224.0" y2="136" stroke="#00000015" stroke-width="1"/>
+<rect x="968.0" y="140" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="156" font-size="11" class="t mono" text-anchor="start" font-weight="700" >architecture</text>
+<rect x="968.0" y="169" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="185" font-size="11" class="t mono" text-anchor="start" font-weight="700" >tool-sequence</text>
+<rect x="968.0" y="198" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="214" font-size="11" class="t mono" text-anchor="start" font-weight="700" >cost-model</text>
+<rect x="968.0" y="227" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="243" font-size="11" class="t mono" text-anchor="start" font-weight="700" >selling-method</text>
+<rect x="968.0" y="256" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="272" font-size="11" class="t mono" text-anchor="start" font-weight="700" >scaling-scorecard</text>
+<rect x="968.0" y="285" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="301" font-size="11" class="t mono" text-anchor="start" font-weight="700" >security-posture</text>
+<rect x="968.0" y="314" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="330" font-size="11" class="t mono" text-anchor="start" font-weight="700" >conversion-metrics</text>
+<rect x="968.0" y="343" width="256.0" height="24" rx="7" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="980.0" y="359" font-size="11" class="t mono" text-anchor="start" font-weight="700" >beat-system</text>
+<text x="40" y="416" font-size="11.5" class="m" text-anchor="start" >Start with README → DESIGN → the diagram set. Each subsystem has a one-page SVG aimed at a non-author reader.</text>
+</svg>

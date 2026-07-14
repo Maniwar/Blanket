@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="430" viewBox="0 0 1240 430" font-family="'Helvetica Neue',Arial,sans-serif"><defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker><style>.t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}.cap{letter-spacing:.06em;text-transform:uppercase}.mono{font-family:'IBM Plex Mono','Courier New',monospace}.warn{fill:#8a4b32}.ok{fill:#3f6b4f}.accent{fill:#245a7e}</style></defs><rect width="1240" height="430" fill="#f6f2ea"/>
+<text x="40" y="46" font-size="22" class="t" text-anchor="start" font-weight="700" >What it demonstrates</text>
+<text x="40" y="68" font-size="13" class="m" text-anchor="start" >Not a Q&amp;A bot — a seller that clientels, acts, and stays honest, with every behavior tunable as data and proven by evals.</text>
+<rect x="40.0" y="98" width="386.6666666666667" height="132" rx="12" fill="#eef3f8" stroke="#a9c0d8" stroke-width="1" />
+<rect x="40.0" y="98" width="6" height="132" rx="0" fill="#245a7e" />
+<text x="60.0" y="128" font-size="14.5" class="t" text-anchor="start" font-weight="700" >Clientels, not FAQs</text>
+<text x="60.0" y="152" font-size="11" class="m" text-anchor="start" >Greets returning patrons by name, knows their</text>
+<text x="60.0" y="168" font-size="11" class="m" text-anchor="start" >standing, remembers the last conversation, and</text>
+<text x="60.0" y="184" font-size="11" class="m" text-anchor="start" >pursues admin-set goals.</text>
+<rect x="446.6666666666667" y="98" width="386.6666666666667" height="132" rx="12" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
+<rect x="446.6666666666667" y="98" width="6" height="132" rx="0" fill="#245a7e" />
+<text x="466.6666666666667" y="128" font-size="14.5" class="t" text-anchor="start" font-weight="700" >Sells — with a method</text>
+<text x="466.6666666666667" y="152" font-size="11" class="m" text-anchor="start" >A silent stage read, SPIN-shaped discovery, six</text>
+<text x="466.6666666666667" y="168" font-size="11" class="m" text-anchor="start" >moves + three close shapes, price psychology, and</text>
+<text x="466.6666666666667" y="184" font-size="11" class="m" text-anchor="start" >a “how hard to sell” dial.</text>
+<rect x="853.3333333333334" y="98" width="386.6666666666667" height="132" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<rect x="853.3333333333334" y="98" width="6" height="132" rx="0" fill="#245a7e" />
+<text x="873.3333333333334" y="128" font-size="14.5" class="t" text-anchor="start" font-weight="700" >Honest by construction</text>
+<text x="873.3333333333334" y="152" font-size="11" class="m" text-anchor="start" >Never invents facts, urgency, discounts, or</text>
+<text x="873.3333333333334" y="168" font-size="11" class="m" text-anchor="start" >(hedged) medical claims. Two independent runtime</text>
+<text x="873.3333333333334" y="184" font-size="11" class="m" text-anchor="start" >readers enforce it.</text>
+<rect x="40.0" y="248" width="386.6666666666667" height="132" rx="12" fill="#f6f1e7" stroke="#d9c9a6" stroke-width="1" />
+<rect x="40.0" y="248" width="6" height="132" rx="0" fill="#245a7e" />
+<text x="60.0" y="278" font-size="14.5" class="t" text-anchor="start" font-weight="700" >Acts safely</text>
+<text x="60.0" y="302" font-size="11" class="m" text-anchor="start" >Reads the register, changes a cloth, cancels,</text>
+<text x="60.0" y="318" font-size="11" class="m" text-anchor="start" >captures a lead — native tool use, signed-in only,</text>
+<text x="60.0" y="334" font-size="11" class="m" text-anchor="start" >ownership-scoped, audited.</text>
+<rect x="446.6666666666667" y="248" width="386.6666666666667" height="132" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<rect x="446.6666666666667" y="248" width="6" height="132" rx="0" fill="#245a7e" />
+<text x="466.6666666666667" y="278" font-size="14.5" class="t" text-anchor="start" font-weight="700" >Everything tunable is data</text>
+<text x="466.6666666666667" y="302" font-size="11" class="m" text-anchor="start" >Voice, knowledge, selling method, tools, forms,</text>
+<text x="466.6666666666667" y="318" font-size="11" class="m" text-anchor="start" >goals, pacing, and the model — edited live, no</text>
+<text x="466.6666666666667" y="334" font-size="11" class="m" text-anchor="start" >deploy, versioned with rollback.</text>
+<rect x="853.3333333333334" y="248" width="386.6666666666667" height="132" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="853.3333333333334" y="248" width="6" height="132" rx="0" fill="#245a7e" />
+<text x="873.3333333333334" y="278" font-size="14.5" class="t" text-anchor="start" font-weight="700" >Tested behavior, not vibes</text>
+<text x="873.3333333333334" y="302" font-size="11" class="m" text-anchor="start" >A behavior-eval deck, a config-conformance report,</text>
+<text x="873.3333333333334" y="318" font-size="11" class="m" text-anchor="start" >and persona evals — CI-gated — prove it behaves as</text>
+<text x="873.3333333333334" y="334" font-size="11" class="m" text-anchor="start" >configured, and safely.</text>
+<text x="40" y="416" font-size="11.5" class="m" text-anchor="start" >And no server to run: a static site on a CDN + two stateless edge functions + managed Postgres, with RLS as the authorization boundary.</text>
+</svg>

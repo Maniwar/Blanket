@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="300" viewBox="0 0 1240 300" font-family="'Helvetica Neue',Arial,sans-serif"><defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker><style>.t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}.cap{letter-spacing:.06em;text-transform:uppercase}.mono{font-family:'IBM Plex Mono','Courier New',monospace}.warn{fill:#8a4b32}.ok{fill:#3f6b4f}.accent{fill:#245a7e}</style></defs><rect width="1240" height="300" fill="#f6f2ea"/>
+<text x="1200" y="120" font-size="72" class=" mono" text-anchor="end" font-weight="700" fill="#ece3d1">Nº 14,231</text>
+<text x="1200" y="150" font-size="20" class=" mono" text-anchor="end" fill="#ece3d1">of 15,000</text>
+<text x="60" y="110" font-size="44" class="t" text-anchor="start" font-weight="700" >The Mill Concierge</text>
+<text x="60" y="150" font-size="20" class="m" text-anchor="start" >A genuinely attentive luxury sales associate — as software.</text>
+<text x="60" y="180" font-size="13.5" class="m" text-anchor="start" >An AI sales concierge for a scarce, considered purchase · built on Anthropic Claude · Supabase · Postgres + RLS.</text>
+<rect x="60" y="217" width="127.5" height="24" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="123.75" y="233" font-size="11.5" class=" mono" text-anchor="middle" font-weight="700" fill="#245a7e">12 native tools</text>
+<rect x="197.5" y="217" width="141.3" height="24" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="268.15" y="233" font-size="11.5" class=" mono" text-anchor="middle" font-weight="700" fill="#245a7e">~70–90% token cut</text>
+<rect x="348.8" y="217" width="127.5" height="24" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="412.55" y="233" font-size="11.5" class=" mono" text-anchor="middle" font-weight="700" fill="#245a7e">24 tables · RLS</text>
+<rect x="486.3" y="217" width="120.6" height="24" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="546.6" y="233" font-size="11.5" class=" mono" text-anchor="middle" font-weight="700" fill="#245a7e">CI-gated evals</text>
+<rect x="616.9" y="217" width="175.79999999999998" height="24" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="704.8" y="233" font-size="11.5" class=" mono" text-anchor="middle" font-weight="700" fill="#245a7e">honest by construction</text>
+<text x="60" y="272" font-size="11.5" class="m" text-anchor="start" >Reference implementation: Feierabend “Decke 01”. Demo only — the brand &amp; figures are illustrative and fictional; the engineering is real.</text>
+</svg>
