@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1028" viewBox="0 0 1240 1028" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}
+  </style>
+</defs>
+<rect width="1240" height="1028" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >The concierge tool system — talk that can act</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >A signed-in patron’s concierge can read orders, change a cloth, cancel, re-send a confirmation, log a mending — every call behind two hard gates and an audit row.</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >Two kinds of tool, added two different ways. Both managed from Studio → Tools. Source: TOOLS.md.</text>
+<text x="40" y="124" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · Two kinds of tool — added two different ways</text>
+<rect x="40" y="136" width="568" height="178" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="60" y="164" font-size="15" class="t" text-anchor="start" font-weight="700" >MODEL TOOLS</text>
+<text x="60" y="182" font-size="11" class="m" text-anchor="start" >a named capability the model calls mid-conversation</text>
+<line x1="60" y1="192" x2="588" y2="192" stroke="#e4dccb" stroke-width="1"/>
+<text x="60" y="212" font-size="11" class="t" text-anchor="start" font-weight="700" >Lives in</text>
+<text x="168" y="212" font-size="10.8" class="m" text-anchor="start" >code — REGISTER_TOOLS (+ overrides in concierge_tools)</text>
+<text x="60" y="241" font-size="11" class="t" text-anchor="start" font-weight="700" >Who invokes</text>
+<text x="168" y="241" font-size="10.8" class="m" text-anchor="start" >the model, when it decides</text>
+<text x="60" y="270" font-size="11" class="t" text-anchor="start" font-weight="700" >Created by</text>
+<text x="168" y="270" font-size="10.8" class="m" text-anchor="start" >a developer — it runs real server logic, so it needs a</text>
+<text x="168" y="283" font-size="10.8" class="m" text-anchor="start" >handler</text>
+<text x="60" y="299" font-size="11" class="t" text-anchor="start" font-weight="700" >Example</text>
+<text x="168" y="299" font-size="10.8" class="m mono" text-anchor="start" >resend_confirmation · cancel_order · get_my_orders</text>
+<rect x="632" y="136" width="568" height="178" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="652" y="164" font-size="15" class="t" text-anchor="start" font-weight="700" >FORM TOOLS</text>
+<text x="652" y="182" font-size="11" class="m" text-anchor="start" >an in-chat form the concierge hands out; the patron fills it in</text>
+<line x1="652" y1="192" x2="1180" y2="192" stroke="#e4dccb" stroke-width="1"/>
+<text x="652" y="212" font-size="11" class="t" text-anchor="start" font-weight="700" >Lives in</text>
+<text x="760" y="212" font-size="10.8" class="m" text-anchor="start" >data — concierge_forms</text>
+<text x="652" y="241" font-size="11" class="t" text-anchor="start" font-weight="700" >Who invokes</text>
+<text x="760" y="241" font-size="10.8" class="m" text-anchor="start" >the patron, by submitting the form the model offered</text>
+<text x="652" y="270" font-size="11" class="t" text-anchor="start" font-weight="700" >Created by</text>
+<text x="760" y="270" font-size="10.8" class="m" text-anchor="start" >the admin, in the panel — pure config, no deploy</text>
+<text x="652" y="299" font-size="11" class="t" text-anchor="start" font-weight="700" >Example</text>
+<text x="760" y="299" font-size="10.8" class="m mono" text-anchor="start" >the address-change form</text>
+<rect x="40" y="324" width="1160" height="30" rx="9" fill="#efe7f3" stroke="#cdbfd6" stroke-width="1" />
+<text x="58" y="343" font-size="11.3" class="t" text-anchor="start" >Both appear on the Tools tab — model tools in the first card, form tools in the second. Admins manage both; only the creation path differs.</text>
+<text x="40" y="374" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · How a model tool runs — every call behind two hard gates</text>
+<rect x="40.0" y="388" width="208.0" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="52.0" y="410" font-size="11.3" class="t" text-anchor="start" font-weight="700" >Signed-in patron</text>
+<text x="52.0" y="424" font-size="11.3" class="t" text-anchor="start" font-weight="700" >chats</text>
+<text x="52.0" y="446" font-size="9.3" class="m" text-anchor="start" >verified magic-link session</text>
+<path d="M251.0,421 L275.0,421" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="278.0" y="388" width="208.0" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="290.0" y="410" font-size="11.3" class="t" text-anchor="start" font-weight="700" >Function sends the</text>
+<text x="290.0" y="424" font-size="11.3" class="t" text-anchor="start" font-weight="700" >tool list</text>
+<text x="290.0" y="446" font-size="9.3" class="m" text-anchor="start" >the model may call one</text>
+<path d="M489.0,421 L513.0,421" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="516.0" y="388" width="208.0" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="528.0" y="410" font-size="11.3" class="t" text-anchor="start" font-weight="700" >Model calls a tool</text>
+<text x="528.0" y="446" font-size="9.3" class="m" text-anchor="start" >it decides when</text>
+<path d="M727.0,421 L751.0,421" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="754.0" y="388" width="208.0" height="66" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="766.0" y="410" font-size="11.3" class="t" text-anchor="start" font-weight="700" >runRegisterTool</text>
+<text x="766.0" y="424" font-size="11.3" class="t" text-anchor="start" font-weight="700" >executes</text>
+<text x="766.0" y="446" font-size="9.3" class="m" text-anchor="start" >ownership check → write → logAction</text>
+<path d="M965.0,421 L989.0,421" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="992.0" y="388" width="208.0" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="1004.0" y="410" font-size="11.3" class="t" text-anchor="start" font-weight="700" >Model replies in</text>
+<text x="1004.0" y="424" font-size="11.3" class="t" text-anchor="start" font-weight="700" >words</text>
+<text x="1004.0" y="446" font-size="9.3" class="m" text-anchor="start" >the result, in the house voice</text>
+<rect x="436.0" y="462" width="160.0" height="22" rx="11" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="447.0" y="477" font-size="10" class="warn" text-anchor="start" font-weight="700" >GATE 1 · signed-in only</text>
+<rect x="785.0" y="462" width="226.0" height="22" rx="11" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="796.0" y="477" font-size="10" class="warn" text-anchor="start" font-weight="700" >GATE 2 · ownership-scoped + logged</text>
+<rect x="40" y="492" width="1160" height="42" rx="10" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<text x="58" y="510" font-size="11.5" class="t" text-anchor="start" font-weight="700" >Two hard rules on every tool:</text>
+<text x="58" y="527" font-size="11" class="m" text-anchor="start" >Signed-in only — anonymous shoppers get conversation, never register writes.   ·   Ownership-scoped + logged — the order must belong to the caller (ownershipFilter); every call is written to concierge_actions (the audit log).</text>
+<text x="40" y="554" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · The built-in catalog — twelve tools</text>
+<rect x="40" y="568" width="1160" height="60" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="602.0" font-size="11.5" class="t cap" text-anchor="start" font-weight="700" >READ</text>
+<rect x="132" y="576" width="184.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="143" y="594" font-size="11" class="t mono" text-anchor="start" font-weight="700" >get_my_orders</text>
+<text x="143" y="609" font-size="9.2" class="m" text-anchor="start" >called before any order answer</text>
+<rect x="326.0" y="576" width="151.60000000000002" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="337.0" y="594" font-size="11" class="t mono" text-anchor="start" font-weight="700" >recall_context</text>
+<text x="337.0" y="609" font-size="9.2" class="m" text-anchor="start" >client-book + past chats</text>
+<rect x="487.6" y="576" width="120.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="498.6" y="594" font-size="11" class="t mono" text-anchor="start" font-weight="700" >track_shipment</text>
+<text x="498.6" y="609" font-size="9.2" class="m" text-anchor="start" >status + tracking</text>
+<rect x="617.6" y="576" width="120.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="628.6" y="594" font-size="11" class="t mono" text-anchor="start" font-weight="700" >get_care_guide</text>
+<text x="628.6" y="609" font-size="9.2" class="m" text-anchor="start" >wool care</text>
+<rect x="40" y="638" width="1160" height="60" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="58" y="672.0" font-size="11.5" class="t cap" text-anchor="start" font-weight="700" >WRITE</text>
+<rect x="132" y="646" width="167.8" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="143" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >remember_customer</text>
+<text x="143" y="679" font-size="9.2" class="m" text-anchor="start" >de-dupes; refuses sensitive</text>
+<rect x="309.8" y="646" width="148.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="320.8" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >resolve_admin_note</text>
+<text x="320.8" y="679" font-size="9.2" class="m" text-anchor="start" >one open directive</text>
+<rect x="467.8" y="646" width="127.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="478.8" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >update_colorway</text>
+<text x="478.8" y="679" font-size="9.2" class="m" text-anchor="start" >placed only</text>
+<rect x="604.8" y="646" width="108.4" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="615.8" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >cancel_order</text>
+<text x="615.8" y="679" font-size="9.2" class="m" text-anchor="start" >placed + confirm</text>
+<rect x="723.1999999999999" y="646" width="113.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="734.1999999999999" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >join_waitlist</text>
+<rect x="846.1999999999999" y="646" width="155.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="857.1999999999999" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >update_gift_details</text>
+<text x="857.1999999999999" y="679" font-size="9.2" class="m" text-anchor="start" >gift, pre-ship</text>
+<rect x="1011.1999999999999" y="646" width="127.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="1022.1999999999999" y="664" font-size="11" class="t mono" text-anchor="start" font-weight="700" >request_mending</text>
+<text x="1022.1999999999999" y="679" font-size="9.2" class="m" text-anchor="start" >logs to actions</text>
+<rect x="40" y="708" width="1160" height="60" rx="12" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
+<text x="58" y="742.0" font-size="11.5" class="t cap" text-anchor="start" font-weight="700" >ACTION</text>
+<rect x="132" y="716" width="346.0" height="40" rx="8" fill="#ffffff" stroke="#e0dccf" stroke-width="1" />
+<text x="143" y="734" font-size="11" class="t mono" text-anchor="start" font-weight="700" >resend_confirmation</text>
+<text x="143" y="749" font-size="9.2" class="m" text-anchor="start" >service-key → commission ?custresend; kind must match status</text>
+<text x="40" y="780" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >4 · Config over code — overrides, and who adds what</text>
+<rect x="40" y="794" width="568" height="176" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="60" y="822" font-size="13.5" class="t" text-anchor="start" font-weight="700" >The override model — one row per deviation</text>
+<text x="60" y="846" font-size="10.6" class="m" text-anchor="start" >concierge_tools stores only your CHANGES to the built-in set:</text>
+<text x="60" y="866" font-size="10.6" class="m mono" text-anchor="start" >· name — the built-in tool   · enabled=false withholds it from the model</text>
+<text x="60" y="886" font-size="10.6" class="m mono" text-anchor="start" >· description (non-empty) replaces the model-facing instruction</text>
+<text x="60" y="906" font-size="10.6" class="m" text-anchor="start" >No row = default (enabled, built-in). Saving “enabled + default” deletes the row.</text>
+<text x="60" y="926" font-size="10.6" class="m" text-anchor="start" >buildToolsForModel merges overrides over the REGISTER_TOOLS defaults each turn</text>
+<text x="60" y="946" font-size="10.6" class="m" text-anchor="start" >(cached ~60 s). The catalog itself comes from the public GET ?tools=1 manifest.</text>
+<rect x="632" y="794" width="568" height="176" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="652" y="822" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Who adds what</text>
+<line x1="652" y1="834" x2="1180" y2="834" stroke="#e4dccb" stroke-width="1"/>
+<text x="652" y="856" font-size="12" class="t" text-anchor="start" font-weight="700" >Developer → model tools</text>
+<text x="652" y="874" font-size="10.6" class="m" text-anchor="start" >add to REGISTER_TOOLS + a handler in runRegisterTool</text>
+<text x="652" y="890" font-size="10.6" class="m" text-anchor="start" >(ownership · validate · write · logAction · result). Shows</text>
+<text x="652" y="906" font-size="10.6" class="m" text-anchor="start" >up in the Tools tab automatically.</text>
+<text x="652" y="934" font-size="12" class="t" text-anchor="start" font-weight="700" >Admin → form tools</text>
+<text x="652" y="952" font-size="10.6" class="m" text-anchor="start" >build in the panel over an existing write path — no deploy.</text>
+<line x1="40" y1="986" x2="1200" y2="986" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="1008" font-size="10.6" class="m" text-anchor="start" >Source: TOOLS.md. Address edits go through a form, not a free-text tool (the model once mis-mapped a city into the street line). SOPs (concierge_sops) tell the bot HOW to behave around each tool. Full field reference: FORMS.md.</text>
+</svg>

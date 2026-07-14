@@ -5,6 +5,13 @@ read their orders, change a cloth, cancel, re-send a confirmation, log a mending
 request, and more. This document covers what the tools are, how they're gated, and
 how an admin manages — and **creates** — them from the Studio's **Tools** tab.
 
+The whole system on one page — the two kinds of tool, the runtime lifecycle and
+its two hard gates, the built-in catalog, and the config-over-code override model:
+
+[![The concierge tool system](docs/tools-system.svg)](docs/tools-system.svg)
+
+*[`docs/tools-system.svg`](docs/tools-system.svg) — grounded in this document.*
+
 ## 0. Two kinds of tool
 
 Everything the concierge can *do* is one of two kinds, and they're **added in two
