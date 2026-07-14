@@ -141,13 +141,37 @@ Two call sites, same function, same criterion:
 
 Both guard on the same toggle and both write `beat_veto` on suppression.
 
-## 7. Control
+## 7. Configuration — one toggle; everything else is code
 
-`config.outreach.beatJudge` — **Engagement → House rules**, default **ON**. The
-check is `oj?.beatJudge !== false`, so the judge runs unless explicitly disabled;
-turning it off ships every spoken line unreviewed (kept as a lever for very
-high-volume, cost-sensitive installs). **Held beats never reach the judge**, so
-turning it off changes nothing for silence — only for spoken lines.
+The judge has a deliberately tiny configuration surface. **Exactly one thing is
+tunable at runtime: whether it runs at all.** Its model, criterion, and
+thresholds are **code** — constants in the concierge function, versioned with it
+and changed only by a developer. A safety control is intentionally *not*
+live-editable the way the selling copy is (contrast the [selling method](SALES.md),
+which is all data).
+
+| Setting | Where it lives | Type | Default |
+|---|---|---|---|
+| **On / off** | `concierge_config.outreach.beatJudge` — admin **Engagement → House rules** ("Review every reach-out before it sends") | **config** — live, no deploy | **ON** |
+| Model | `BEAT_JUDGE_MODEL` (`index.ts`) | code | `claude-haiku-4-5-20251001` |
+| Criterion (the six defects) | `BEAT_JUDGE_CRITERION` (`index.ts`) | code | §4 |
+| Temperature · max_tokens · timeout | `judgeBeatLine` (`index.ts`) | code | `0` · `150` · `4000 ms` |
+| Audit rows on/off | `beatAuditOn(config)` (writes `beat_action`/`beat_veto`) | config | on (stamped/scale installs may seed off) |
+
+So in practice, **"configuring the judge" = one switch**: *Engagement → House
+rules → "Review every reach-out before it sends."*
+
+- The check in code is `oj?.beatJudge !== false` — so the key being **absent
+  means ON**. You only ever set it to turn the judge *off*.
+- **Off** ships every spoken line unreviewed (a lever for very high-volume,
+  cost-sensitive installs). **On** (default) reviews every spoken line.
+- **Held beats never reach the judge**, so the toggle affects spoken lines only,
+  never silence.
+
+To change *what the judge catches* (the criterion) or *which model* reviews,
+edit `BEAT_JUDGE_CRITERION` / `BEAT_JUDGE_MODEL` and redeploy the function — see
+§11. That asymmetry is deliberate: the selling *style* is tuned live by
+operators; the safety *control* is changed by developers, under version control.
 
 ## 8. Observability
 

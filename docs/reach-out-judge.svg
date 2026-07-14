@@ -95,12 +95,12 @@
 <text x="666.0" y="769" font-size="9.7" class="m" text-anchor="start" >— a tally of their life reads as surveillance</text>
 <rect x="40" y="784" width="1160" height="30" rx="9" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
 <text x="58" y="803" font-size="11" class="t" text-anchor="start" >LEGITIMATE (never vetoed): warmth · brevity · one light question · {{reply:…}} / {{action:…}} pills. The rule ends: “When uncertain, pass it.”</text>
-<text x="40" y="834" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Control · observability · cost</text>
+<text x="40" y="834" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Configuration · observability · cost</text>
 <rect x="40.0" y="848" width="386.6666666666667" height="86" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
-<text x="56.0" y="872" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Control</text>
-<text x="56.0" y="892" font-size="9.6" class="m" text-anchor="start" >outreach.beatJudge — Engagement → House rules.</text>
-<text x="56.0" y="906" font-size="9.6" class="m" text-anchor="start" >Default ON. Turn off and every spoken line ships</text>
-<text x="56.0" y="920" font-size="9.6" class="m" text-anchor="start" >unreviewed. Held beats never reach the judge.</text>
+<text x="56.0" y="872" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Configuration</text>
+<text x="56.0" y="892" font-size="9.6" class="m" text-anchor="start" >ONE live knob: outreach.beatJudge (Engagement →</text>
+<text x="56.0" y="906" font-size="9.6" class="m" text-anchor="start" >House rules) — default ON (absent = on). Held beats</text>
+<text x="56.0" y="920" font-size="9.6" class="m" text-anchor="start" >skip it. Model · criterion · thresholds are CODE.</text>
 <rect x="446.6666666666667" y="848" width="386.6666666666667" height="86" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
 <text x="462.6666666666667" y="872" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Observability</text>
 <text x="462.6666666666667" y="892" font-size="9.6" class="m" text-anchor="start" >Actions tab scoreboard: spoke · held · vetoed (7-day).</text>
