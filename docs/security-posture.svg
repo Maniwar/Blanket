@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="848" viewBox="0 0 1240 848" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}.ok{fill:#3f6b4f}
+  </style>
+</defs>
+<rect width="1240" height="848" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >Security posture — RLS as the boundary, audited</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >A structured assessment against the CISSP domains and OWASP Top 10 — three independent read-only passes over the edge functions, the schema/RLS, and the browser assets.</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >A demo (no real customers, no payment data): this attests to a defensible technical posture, not an org certification. Source: SECURITY.md.</text>
+<rect x="40" y="106" width="1160" height="44" rx="10" fill="#e6f0e8" stroke="#9fc9b0" stroke-width="1" />
+<text x="58" y="125" font-size="12" class="t" text-anchor="start" font-weight="700" fill="#3f6b4f">Verdict:</text>
+<text x="132" y="125" font-size="11.4" class="t" text-anchor="start" >access control is solid — no critical/high access-control defect · one HIGH XSS found &amp; fixed · no exploitable injection.</text>
+<text x="58" y="142" font-size="10.8" class="m" text-anchor="start" >All 24 tables have RLS with correct policies · no secret reaches the browser · remaining items are low-severity or process (certification) work.</text>
+<text x="40" y="168" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · The authorization model — RLS is the boundary, enforced in the DB (not the UI)</text>
+<rect x="40" y="182" width="1160" height="42" rx="10" fill="#e6f0e8" stroke="#9fc9b0" stroke-width="1" />
+<rect x="56" y="191" width="96" height="24" rx="7" fill="#ffffff" stroke="#9fc9b0" stroke-width="1" />
+<text x="104" y="207" font-size="12.5" class="t" text-anchor="middle" font-weight="700" fill="#3f6b4f">USER</text>
+<text x="168" y="200" font-size="10.4" class="m mono" text-anchor="start" >magic-link JWT · passwordless</text>
+<text x="168" y="215" font-size="10.4" class="t" text-anchor="start" >owner-scoped tables (orders, customers) expose only the caller’s rows; every order write is ownership-scoped and audited</text>
+<rect x="40" y="230" width="1160" height="42" rx="10" fill="#eef4fb" stroke="#a9c0d8" stroke-width="1" />
+<rect x="56" y="239" width="96" height="24" rx="7" fill="#ffffff" stroke="#a9c0d8" stroke-width="1" />
+<text x="104" y="255" font-size="12.5" class="t" text-anchor="middle" font-weight="700" fill="#2f5f8f">ADMIN</text>
+<text x="168" y="248" font-size="10.4" class="m mono" text-anchor="start" >is_concierge_admin() · security definer</text>
+<text x="168" y="263" font-size="10.4" class="t" text-anchor="start" >admin tables + ?judge · ?secrets · ?tools · ?cachecheck; the super-admin row cannot be removed or demoted</text>
+<rect x="40" y="278" width="1160" height="42" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<rect x="56" y="287" width="96" height="24" rx="7" fill="#ffffff" stroke="#dcc38a" stroke-width="1" />
+<text x="104" y="303" font-size="12.5" class="t" text-anchor="middle" font-weight="700" fill="#8a6a1c">SERVICE</text>
+<text x="168" y="296" font-size="10.4" class="m mono" text-anchor="start" >service-role · server-to-server (no browser path)</text>
+<text x="168" y="311" font-size="10.4" class="t" text-anchor="start" >?custresend + the RLS-on / no-policy silent-denies (allocation_counter · serial_holds · rate_limits) — reached only via security-definer RPCs</text>
+<text x="40" y="328" font-size="10.6" class="m" text-anchor="start" >RLS is the authorization boundary. Auth is bearer-token (not cookies), so the CORS “*” fallback is not a credential-theft vector.</text>
+<text x="40" y="350" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · Findings &amp; disposition</text>
+<rect x="40" y="364" width="568" height="290" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<text x="60" y="390" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Fixed</text>
+<rect x="60" y="396" width="48" height="18" rx="9" fill="#f3d9cf" stroke="#c98a6f" stroke-width="1" />
+<text x="84.0" y="409" font-size="9.5" class="" text-anchor="middle" font-weight="700" fill="#7a2e14">HIGH</text>
+<text x="118" y="409" font-size="11" class="t mono" text-anchor="start" font-weight="700" >Stored XSS</text>
+<text x="118" y="424" font-size="9.6" class="m" text-anchor="start" >customer city rendered via innerHTML in the nav ticker →</text>
+<text x="118" y="437" font-size="9.6" class="m" text-anchor="start" >output-encode (escHtml), matching the safe textContent</text>
+<text x="118" y="450" font-size="9.6" class="m" text-anchor="start" >path</text>
+<rect x="60" y="458" width="48" height="18" rx="9" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="84.0" y="471" font-size="9.5" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">MED</text>
+<text x="118" y="471" font-size="11" class="t mono" text-anchor="start" font-weight="700" >?cachecheck=1</text>
+<text x="118" y="486" font-size="9.6" class="m" text-anchor="start" >unauthenticated but writes a probe row + runs an embedding</text>
+<text x="118" y="499" font-size="9.6" class="m" text-anchor="start" >→ admin-gated (requireAdmin)</text>
+<rect x="60" y="507" width="48" height="18" rx="9" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="84.0" y="520" font-size="9.5" class="" text-anchor="middle" font-weight="700" fill="#55606b">LOW</text>
+<text x="118" y="520" font-size="11" class="t mono" text-anchor="start" font-weight="700" >?tools=1</text>
+<text x="118" y="535" font-size="9.6" class="m" text-anchor="start" >tool manifest (prompt-surface) was public → admin-gated</text>
+<rect x="60" y="543" width="48" height="18" rx="9" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="84.0" y="556" font-size="9.5" class="" text-anchor="middle" font-weight="700" fill="#55606b">LOW</text>
+<text x="118" y="556" font-size="11" class="t mono" text-anchor="start" font-weight="700" >?wrapup=1</text>
+<text x="118" y="571" font-size="9.6" class="m" text-anchor="start" >public beacon, no rate limit → per-IP limit (can’t require</text>
+<text x="118" y="584" font-size="9.6" class="m" text-anchor="start" >auth; fires on pagehide)</text>
+<rect x="60" y="592" width="48" height="18" rx="9" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="84.0" y="605" font-size="9.5" class="" text-anchor="middle" font-weight="700" fill="#55606b">LOW</text>
+<text x="118" y="605" font-size="11" class="t mono" text-anchor="start" font-weight="700" >dead code</text>
+<text x="118" y="620" font-size="9.6" class="m" text-anchor="start" >unused safe var in commission isAdmin → removed</text>
+<rect x="632" y="364" width="568" height="290" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="652" y="390" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Accepted (documented, low severity)</text>
+<text x="652" y="410" font-size="10.5" class="ok" text-anchor="start" font-weight="700" >•</text>
+<text x="666" y="410" font-size="9.6" class="m" text-anchor="start" >?selftest=1 exposes aggregate row counts (not PII) — SETUP.md’s</text>
+<text x="666" y="423" font-size="9.6" class="m" text-anchor="start" >checklist relies on it; per-user/admin detail stays gated.</text>
+<text x="652" y="444" font-size="10.5" class="ok" text-anchor="start" font-weight="700" >•</text>
+<text x="666" y="444" font-size="9.6" class="m" text-anchor="start" >?reengage=1 &amp; ?waitlist=1 are public but rate-limited (spam</text>
+<text x="666" y="457" font-size="9.6" class="m" text-anchor="start" >surface only, by design).</text>
+<text x="652" y="478" font-size="10.5" class="ok" text-anchor="start" font-weight="700" >•</text>
+<text x="666" y="478" font-size="9.6" class="m" text-anchor="start" >CORS falls back to “*” only when ALLOWED_ORIGINS is unset; the</text>
+<text x="666" y="491" font-size="9.6" class="m" text-anchor="start" >deploy sets the site origin. No Allow-Credentials.</text>
+<text x="652" y="512" font-size="10.5" class="ok" text-anchor="start" font-weight="700" >•</text>
+<text x="666" y="512" font-size="9.6" class="m" text-anchor="start" >ReDoS on admin-authored eval regexes — compiled in the admin’s own</text>
+<text x="666" y="525" font-size="9.6" class="m" text-anchor="start" >browser/CLI, gated by that table’s admin-write RLS.</text>
+<text x="652" y="546" font-size="10.5" class="ok" text-anchor="start" font-weight="700" >•</text>
+<text x="666" y="546" font-size="9.6" class="m" text-anchor="start" >Server-side city validation is length-only — the client XSS sink</text>
+<text x="666" y="559" font-size="9.6" class="m" text-anchor="start" >is now encoded (primary fix); tightening is defense-in-depth.</text>
+<text x="40" y="670" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · Secrets — no value ever reaches the browser</text>
+<rect x="40" y="684" width="568" height="96" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="60" y="708" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Server-only (Deno.env, inside the edge functions)</text>
+<text x="60" y="728" font-size="10.2" class="m mono" text-anchor="start" >ANTHROPIC_API_KEY · SUPABASE_SERVICE_ROLE_KEY · RESEND_API_KEY · SUPABASE_DB_URL</text>
+<text x="60" y="748" font-size="10.2" class="m" text-anchor="start" >Never in any browser asset, response body, or log. Set in the Supabase</text>
+<text x="60" y="763" font-size="10.2" class="m" text-anchor="start" >dashboard or as GitHub secrets applied by the Deploy workflow.</text>
+<rect x="632" y="684" width="568" height="96" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="652" y="708" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Browser-safe by design</text>
+<text x="652" y="728" font-size="10.4" class="m" text-anchor="start" >The key committed in the frontend is the publishable key.</text>
+<text x="652" y="748" font-size="10.4" class="m" text-anchor="start" >?secrets=1 reports presence booleans only — never values,</text>
+<text x="652" y="763" font-size="10.4" class="m" text-anchor="start" >and it is itself admin-gated.</text>
+<line x1="40" y1="796" x2="1200" y2="796" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="816" font-size="10.4" class="m" text-anchor="start" >Method: three scoped read-only passes — injection · XSS/DOM · access-control/RLS/secrets. Monitoring: append-only order_events + concierge_actions + email_log; every reply logs the exact model.</text>
+<text x="40" y="831" font-size="10.4" class="m" text-anchor="start" >What a formal certification adds is mostly process, not code — policies, access reviews, centralized logging + alerting, pen-testing, SOC 2 Type II. Architect to avoid PCI (never handle raw card data).</text>
+</svg>
