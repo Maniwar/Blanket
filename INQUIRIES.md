@@ -5,6 +5,13 @@ buying is **hand the house a lead**: a serious offer, a request to view the piec
 in person, a question only the owner can answer, or a request for a callback. The
 **inquiry** primitive captures exactly that — stores it, and emails the house.
 
+The whole primitive on one page — the two entry paths, the submit_inquiry
+pipeline, the four kinds, the attribution stamp, and the lead-is-not-a-sale rule:
+
+[![Inquiries — anonymous lead capture](docs/inquiry-flow.svg)](docs/inquiry-flow.svg)
+
+*[`docs/inquiry-flow.svg`](docs/inquiry-flow.svg) — grounded in this document.*
+
 It is deliberately **anonymous-capable**. A serious buyer often has no account
 (they arrived from a listing, not a login), so an inquiry never requires sign-in.
 Inserts arrive through the edge function's service role, never a direct client
