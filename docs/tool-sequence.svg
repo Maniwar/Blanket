@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="918" viewBox="0 0 1240 918" font-family="'Helvetica Neue',Arial,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1186" viewBox="0 0 1240 1186" font-family="'Helvetica Neue',Arial,sans-serif">
 <defs>
   <marker id="a_read" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#2f6f9f"/></marker><marker id="a_write" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#b5761b"/></marker><marker id="a_model" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#6b6455"/></marker><marker id="a_ret" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#9a927f"/></marker>
   <style>
@@ -8,9 +8,9 @@
     .warn{fill:#8a4b32}
   </style>
 </defs>
-<rect width="1240" height="918" fill="#f6f2ea"/>
+<rect width="1240" height="1186" fill="#f6f2ea"/>
 <text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >How a concierge tool reads &amp; writes — one call, end to end</text>
-<text x="40" y="72" font-size="13" class="m" text-anchor="start" >The model decides to call a tool; the concierge function executes it — every read and write labelled, both hard gates shown. Source: TOOLS.md.</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >Anthropic tool use (function calling): Claude never runs code — it emits a structured tool_use request; the concierge executes it and returns a tool_result. Source: TOOLS.md.</text>
 <rect x="40" y="86" width="1160" height="32" rx="8" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
 <text x="58" y="106" font-size="12" class="t" text-anchor="start" font-weight="700" >Scenario — a signed-in patron says: “change my Loden to Graphit.”  (tool: update_colorway)</text>
 <line x1="40" y1="138" x2="66" y2="138" stroke="#2f6f9f" stroke-width="2.4"/>
@@ -51,9 +51,9 @@
 <text x="885.0" y="301" font-size="10.6" class="t" text-anchor="middle" >rows</text>
 <rect x="424" y="350" width="12" height="42" rx="3" fill="#efe7d4" stroke="#d8ccae" stroke-width="1" />
 <line x1="720" y1="350" x2="430" y2="350" stroke="#6b6455" stroke-width="2.2" fill="none" marker-end="url(#a_model)"/>
-<text x="575.0" y="343" font-size="10.6" class="t" text-anchor="middle" >messages + tool list  (buildToolsForModel)</text>
+<text x="575.0" y="343" font-size="10.6" class="t" text-anchor="middle" >messages + tools[] (name · description · input_schema)</text>
 <line x1="430" y1="392" x2="720" y2="392" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
-<text x="575.0" y="385" font-size="10.6" class="t mono" text-anchor="middle" >tool_use: update_colorway {Nº 14231 → Graphit}</text>
+<text x="575.0" y="385" font-size="10.6" class="t mono" text-anchor="middle" >stop_reason=tool_use → {name, input} (JSON, schema-validated)</text>
 <rect x="1044" y="434" width="12" height="42" rx="3" fill="#efe7d4" stroke="#d8ccae" stroke-width="1" />
 <line x1="720" y1="434" x2="1050" y2="434" stroke="#2f6f9f" stroke-width="2.2" fill="none" marker-end="url(#a_read)"/>
 <text x="885.0" y="427" font-size="10.6" class="t mono" text-anchor="middle" >ownershipFilter: SELECT WHERE serial AND owner = caller</text>
@@ -66,21 +66,67 @@
 <line x1="720" y1="584" x2="1050" y2="584" stroke="#b5761b" stroke-width="2.2" fill="none" marker-end="url(#a_write)"/>
 <text x="885.0" y="577" font-size="10.6" class="t mono" text-anchor="middle" >INSERT concierge_actions  (logAction · audit row)</text>
 <line x1="720" y1="626" x2="430" y2="626" stroke="#6b6455" stroke-width="2.2" fill="none" marker-end="url(#a_model)"/>
-<text x="575.0" y="619" font-size="10.6" class="t mono" text-anchor="middle" >tool_result: “Changed Nº 14231 to Graphit.”</text>
+<text x="575.0" y="619" font-size="10.6" class="t mono" text-anchor="middle" >tool_result {tool_use_id, content} → back to Claude</text>
 <line x1="430" y1="668" x2="720" y2="668" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
 <text x="575.0" y="661" font-size="10.6" class="t" text-anchor="middle" >final words</text>
 <line x1="720" y1="710" x2="130" y2="710" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
 <text x="280" y="703" font-size="10.6" class="t" text-anchor="middle" >streamed reply</text>
-<text x="40" y="784" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The same skeleton, two variations</text>
-<rect x="40" y="796" width="568" height="66" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
-<text x="58" y="820" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Read-only tools</text>
-<text x="58" y="838" font-size="10.8" class="m" text-anchor="start" >get_my_orders · track_shipment · get_care_guide stop at the</text>
-<text x="58" y="853" font-size="10.8" class="m" text-anchor="start" >SELECT (step 7) — the read IS the job: no UPDATE, no audit row.</text>
-<rect x="632" y="796" width="568" height="66" rx="12" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
-<text x="650" y="820" font-size="12.5" class="t" text-anchor="start" font-weight="700" >The one ACTION tool</text>
-<text x="650" y="838" font-size="10.4" class="m" text-anchor="start" >resend_confirmation adds a hop after the ownership check:</text>
-<text x="650" y="852" font-size="10.4" class="m" text-anchor="start" >Concierge → Commission fn (?custresend=1, service-key) → email —</text>
-<text x="650" y="866" font-size="10.4" class="m" text-anchor="start" >the only tool that reaches outside the concierge.</text>
-<line x1="40" y1="876" x2="1200" y2="876" stroke="#ddd3c2" stroke-width="1"/>
-<text x="40" y="898" font-size="10.6" class="m" text-anchor="start" >Source: TOOLS.md. Tools run only for a verified session and only on the caller’s own entries (ownershipFilter); every call is written to concierge_actions. SOPs (concierge_sops) govern HOW the bot behaves around each.</text>
+<text x="40" y="784" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >What “calling a tool” actually is — the function-calling JSON</text>
+<rect x="40.0" y="798" width="376.0" height="214" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="56.0" y="822" font-size="11.6" class="t" text-anchor="start" font-weight="700" >1 · You send it, in tools[]</text>
+<line x1="56.0" y1="830" x2="400.0" y2="830" stroke="#00000018" stroke-width="1"/>
+<text x="56.0" y="846" font-size="9.3" class="t mono" text-anchor="start" >{</text>
+<text x="56.0" y="860" font-size="9.3" class="t mono" text-anchor="start" >  "name": "update_colorway",</text>
+<text x="56.0" y="874" font-size="9.3" class="t mono" text-anchor="start" >  "description": "Change the cloth…",</text>
+<text x="56.0" y="888" font-size="9.3" class="t mono" text-anchor="start" >  "input_schema": {</text>
+<text x="56.0" y="902" font-size="9.3" class="t mono" text-anchor="start" >    "type": "object",</text>
+<text x="56.0" y="916" font-size="9.3" class="t mono" text-anchor="start" >    "properties": {</text>
+<text x="56.0" y="930" font-size="9.3" class="t mono" text-anchor="start" >      "serial":   {"type":"integer"},</text>
+<text x="56.0" y="944" font-size="9.3" class="t mono" text-anchor="start" >      "colorway": {"type":"string",</text>
+<text x="56.0" y="958" font-size="9.3" class="t mono" text-anchor="start" >        "enum":["loden","graphit",…]}</text>
+<text x="56.0" y="972" font-size="9.3" class="t mono" text-anchor="start" >    }, "required":["serial","colorway"]</text>
+<text x="56.0" y="986" font-size="9.3" class="t mono" text-anchor="start" >  }</text>
+<text x="56.0" y="1000" font-size="9.3" class="t mono" text-anchor="start" >}</text>
+<rect x="432.0" y="798" width="376.0" height="214" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="448.0" y="822" font-size="11.6" class="t" text-anchor="start" font-weight="700" >2 · Claude returns it (stops)</text>
+<line x1="448.0" y1="830" x2="792.0" y2="830" stroke="#00000018" stroke-width="1"/>
+<text x="448.0" y="846" font-size="9.3" class="t mono" text-anchor="start" >{</text>
+<text x="448.0" y="860" font-size="9.3" class="t mono" text-anchor="start" >  "type": "tool_use",</text>
+<text x="448.0" y="874" font-size="9.3" class="t mono" text-anchor="start" >  "id":   "toolu_01A…",</text>
+<text x="448.0" y="888" font-size="9.3" class="t mono" text-anchor="start" >  "name": "update_colorway",</text>
+<text x="448.0" y="902" font-size="9.3" class="t mono" text-anchor="start" >  "input": {</text>
+<text x="448.0" y="916" font-size="9.3" class="t mono" text-anchor="start" >    "serial": 14231,</text>
+<text x="448.0" y="930" font-size="9.3" class="t mono" text-anchor="start" >    "colorway": "graphit"</text>
+<text x="448.0" y="944" font-size="9.3" class="t mono" text-anchor="start" >  }</text>
+<text x="448.0" y="958" font-size="9.3" class="t mono" text-anchor="start" >}</text>
+<text x="448.0" y="972" font-size="9.3" class="t mono" text-anchor="start" ></text>
+<text x="448.0" y="986" font-size="9.3" class="m mono" text-anchor="start" >// stop_reason: "tool_use"</text>
+<text x="448.0" y="1000" font-size="9.3" class="m mono" text-anchor="start" >// Claude has NOT run anything</text>
+<rect x="824.0" y="798" width="376.0" height="214" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="840.0" y="822" font-size="11.6" class="t" text-anchor="start" font-weight="700" >3 · You execute + return</text>
+<line x1="840.0" y1="830" x2="1184.0" y2="830" stroke="#00000018" stroke-width="1"/>
+<text x="840.0" y="846" font-size="9.3" class="m mono" text-anchor="start" >// runRegisterTool() does the</text>
+<text x="840.0" y="860" font-size="9.3" class="m mono" text-anchor="start" >// ownership check + UPDATE + log</text>
+<text x="840.0" y="874" font-size="9.3" class="t mono" text-anchor="start" >{</text>
+<text x="840.0" y="888" font-size="9.3" class="t mono" text-anchor="start" >  "type": "tool_result",</text>
+<text x="840.0" y="902" font-size="9.3" class="t mono" text-anchor="start" >  "tool_use_id": "toolu_01A…",</text>
+<text x="840.0" y="916" font-size="9.3" class="t mono" text-anchor="start" >  "content":</text>
+<text x="840.0" y="930" font-size="9.3" class="t mono" text-anchor="start" >    "Changed Nº 14231 to Graphit."</text>
+<text x="840.0" y="944" font-size="9.3" class="t mono" text-anchor="start" >}</text>
+<text x="840.0" y="958" font-size="9.3" class="t mono" text-anchor="start" ></text>
+<text x="840.0" y="972" font-size="9.3" class="m mono" text-anchor="start" >// append to messages, send back</text>
+<text x="840.0" y="986" font-size="9.3" class="m mono" text-anchor="start" >// → loop while tool_use (≤4)</text>
+<text x="40" y="1020" font-size="10.4" class="m" text-anchor="start" >The loop is Claude → tool_use → your code executes → tool_result → Claude, repeating while stop_reason is “tool_use” (capped at ~4 rounds), then Claude replies in words. index.ts:4622.</text>
+<text x="40" y="1052" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The same skeleton, two variations</text>
+<rect x="40" y="1064" width="568" height="66" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="1088" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Read-only tools</text>
+<text x="58" y="1106" font-size="10.8" class="m" text-anchor="start" >get_my_orders · track_shipment · get_care_guide stop at the</text>
+<text x="58" y="1121" font-size="10.8" class="m" text-anchor="start" >SELECT (step 7) — the read IS the job: no UPDATE, no audit row.</text>
+<rect x="632" y="1064" width="568" height="66" rx="12" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
+<text x="650" y="1088" font-size="12.5" class="t" text-anchor="start" font-weight="700" >The one ACTION tool</text>
+<text x="650" y="1106" font-size="10.4" class="m" text-anchor="start" >resend_confirmation adds a hop after the ownership check:</text>
+<text x="650" y="1120" font-size="10.4" class="m" text-anchor="start" >Concierge → Commission fn (?custresend=1, service-key) → email —</text>
+<text x="650" y="1134" font-size="10.4" class="m" text-anchor="start" >the only tool that reaches outside the concierge.</text>
+<line x1="40" y1="1144" x2="1200" y2="1144" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="1166" font-size="10.6" class="m" text-anchor="start" >Source: TOOLS.md. Tools run only for a verified session and only on the caller’s own entries (ownershipFilter); every call is written to concierge_actions. SOPs (concierge_sops) govern HOW the bot behaves around each.</text>
 </svg>
