@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1040" viewBox="0 0 1240 1040" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}.ok{fill:#3f6b4f}
+  </style>
+</defs>
+<rect width="1240" height="1040" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >The sales-strategist coach — a second brain briefs the line before it is written</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >Before every DRAFTED proactive line, a focused sales strategist reads the whole situation and privately names the single best play. It only ever</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >improves a draft, never blocks one — advisory and fail-open. It is the ADDITIVE mirror of the reach-out judge: coach adds strategy pre-draft, judge removes defects post-draft.</text>
+<text x="40" y="108" font-size="12.5" class="m" text-anchor="start" >Source: COACH.md · supabase/functions/concierge/index.ts (coachBeatLine + coachingBlock, next to judgeBeatLine; the two proactive call sites).</text>
+<text x="40" y="140" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The pipeline — plan → draft → check on one proactive line</text>
+<rect x="300" y="154" width="640" height="50" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="320" y="179" font-size="13.5" class="t" text-anchor="start" font-weight="700" >1 · Beat engine decides WHEN</text>
+<text x="320" y="199" font-size="10.4" class="m" text-anchor="start" >a spoken beat is due (from the Sales Ledger + Action Table) — see BEHAVIOR.md</text>
+<path d="M620.0,204 L620.0,218" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="300" y="218" width="640" height="90" rx="14" fill="#f3ede1" stroke="#c9a54e" stroke-width="2" />
+<text x="320" y="244" font-size="15" class="t" text-anchor="start" font-weight="700" fill="#8a6d1f">2 · SALES-STRATEGIST COACH</text>
+<text x="320" y="263" font-size="10.6" class="m mono" text-anchor="start" >coachBeatLine(apiKey, model, system, messages) — reuses the drafter’s FULL system</text>
+<text x="320" y="280" font-size="10.2" class="m mono" text-anchor="start" >conversation model · temperature 0.4 · max_tokens 220 · AbortSignal.timeout(5000)</text>
+<text x="320" y="297" font-size="10.2" class="m mono" text-anchor="start" >forced tool_choice: coach_note → { move, tactic, avoid } · null on any trouble ⇒ skipped</text>
+<path d="M620.0,308 L620.0,324" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<text x="632.0" y="321" font-size="9.5" class="m" text-anchor="start" >appended as a private [SALES STRATEGIST] block</text>
+<rect x="300" y="324" width="640" height="52" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="320" y="349" font-size="13.5" class="t" text-anchor="start" font-weight="700" >3 · Main model DRAFTS the line</text>
+<text x="320" y="369" font-size="10.4" class="m" text-anchor="start" >acts on the brief; never quotes it. beat_line tool → { speak, line }</text>
+<path d="M620.0,376 L620.0,390" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="300" y="390" width="640" height="50" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="320" y="415" font-size="13.5" class="t" text-anchor="start" font-weight="700" >4 · Sanitize + hold-gate</text>
+<text x="320" y="435" font-size="10.4" class="m" text-anchor="start" >stripPlumbing · [HOLD] scrub · a bare hold ⇒ nothing ships (coach + judge skipped)</text>
+<path d="M620.0,440 L620.0,454" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="300" y="454" width="640" height="52" rx="12" fill="#e6f0e8" stroke="#7fae90" stroke-width="1" />
+<text x="320" y="479" font-size="13.5" class="t" text-anchor="start" font-weight="700" fill="#2f6f4f">5 · REACH-OUT JUDGE</text>
+<text x="320" y="499" font-size="10.4" class="m" text-anchor="start" >reviews the drafted line → SPEAK / VETO / FAIL-OPEN (see JUDGE.md)</text>
+<text x="40" y="532" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >What the strategist hands the draft — three short fields, grounded in the house’s own method</text>
+<rect x="40.0" y="546" width="386.6666666666667" height="74" rx="11" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="56.0" y="570" font-size="12" class="t mono" text-anchor="start" font-weight="700" >BEST MOVE</text>
+<text x="56.0" y="590" font-size="9.7" class="m" text-anchor="start" >the single best play now, named in the</text>
+<text x="56.0" y="603" font-size="9.7" class="m" text-anchor="start" >house’s own selling vocabulary (≤16 words)</text>
+<rect x="446.6666666666667" y="546" width="386.6666666666667" height="74" rx="11" fill="#f3ede1" stroke="#d8c69a" stroke-width="1" />
+<text x="462.6666666666667" y="570" font-size="12" class="t mono" text-anchor="start" font-weight="700" >TACTIC</text>
+<text x="462.6666666666667" y="590" font-size="9.7" class="m" text-anchor="start" >one concrete tactic for THIS patron &amp; moment</text>
+<text x="462.6666666666667" y="603" font-size="9.7" class="m" text-anchor="start" >— from their register, history, stage (≤32</text>
+<text x="462.6666666666667" y="616" font-size="9.7" class="m" text-anchor="start" >words)</text>
+<rect x="853.3333333333334" y="546" width="386.6666666666667" height="74" rx="11" fill="#f6ece8" stroke="#d9b7a6" stroke-width="1" />
+<text x="869.3333333333334" y="570" font-size="12" class="t mono" text-anchor="start" font-weight="700" >AVOID</text>
+<text x="869.3333333333334" y="590" font-size="9.7" class="m" text-anchor="start" >the one thing NOT to do here (≤16 words)</text>
+<rect x="40" y="636" width="1160" height="30" rx="9" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="655" font-size="10.6" class="t" text-anchor="start" >GROUNDED, NOT INVENTED: the coach reasons over the drafter’s entire system — method, dial, register, stage — so it can only ever coach a HOW, never a new WHAT. It is told: never a discount, claim, or pressure the house forbids.</text>
+<text x="40" y="686" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The design decision — a focused second-brain prompt, NOT a tool the model may call</text>
+<rect x="40" y="700" width="590.0" height="150" rx="12" fill="#e9f1ea" stroke="#7fae90" stroke-width="1" />
+<rect x="40" y="700" width="590.0" height="26" rx="12" fill="#7fae90" />
+<rect x="40" y="713" width="590.0" height="13" rx="0" fill="#7fae90" />
+<text x="56" y="718" font-size="11.5" class="" text-anchor="start" font-weight="700" fill="#ffffff">CHOSEN — focused prompt, coupled to the proactive beats</text>
+<text x="56" y="746.0" font-size="9.7" class="m" text-anchor="start" >• A model drafting a weak line won’t think to ask for help — an</text>
+<text x="56" y="761.5" font-size="9.7" class="m" text-anchor="start" >   always-on read catches exactly the overconfident-and-wrong case.</text>
+<text x="56" y="777.0" font-size="9.7" class="m" text-anchor="start" >• Deterministic + auditable: you can eval “was it coached, did it help.”</text>
+<text x="56" y="792.5" font-size="9.7" class="m" text-anchor="start" >• Proactive beats are OFF the shopper’s critical path — a pre-call is</text>
+<text x="56" y="808.0" font-size="9.7" class="m" text-anchor="start" >   nearly free; a mid-reply tool round-trip is not.</text>
+<text x="56" y="823.5" font-size="9.7" class="m" text-anchor="start" >• Coach (add, pre-draft) mirrors judge (remove, post-draft): clean.</text>
+<rect x="650.0" y="700" width="590.0" height="150" rx="12" fill="#f4efe6" stroke="#cdbfa6" stroke-width="1" />
+<rect x="650.0" y="700" width="590.0" height="26" rx="12" fill="#b6a06e" />
+<rect x="650.0" y="713" width="590.0" height="13" rx="0" fill="#b6a06e" />
+<text x="666.0" y="718" font-size="11.5" class="" text-anchor="start" font-weight="700" fill="#ffffff">REJECTED — a silent tool the model calls when it “needs” tactics</text>
+<text x="666.0" y="746.0" font-size="9.7" class="m" text-anchor="start" >• Self-elective coaching is ABSENT exactly when it’s needed most</text>
+<text x="666.0" y="761.5" font-size="9.7" class="m" text-anchor="start" >   (the off-track model doesn’t know it’s off track).</text>
+<text x="666.0" y="777.0" font-size="9.7" class="m" text-anchor="start" >• Fires unpredictably — you can’t grade a call that may not happen.</text>
+<text x="666.0" y="792.5" font-size="9.7" class="m" text-anchor="start" >• Its one merit (spend only when invoked) is better won by scoping</text>
+<text x="666.0" y="808.0" font-size="9.7" class="m" text-anchor="start" >   the coach to the already-rare proactive beats.</text>
+<text x="666.0" y="823.5" font-size="9.7" class="m" text-anchor="start" >• Reactive coaching stays a deliberate backlog item (latency-gated).</text>
+<text x="40" y="870" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Configuration · observability · cost</text>
+<rect x="40.0" y="884" width="386.6666666666667" height="102" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="56.0" y="908" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Configuration</text>
+<text x="56.0" y="928" font-size="9.5" class="m" text-anchor="start" >ONE live knob: outreach.beatCoach (Engagement →</text>
+<text x="56.0" y="942" font-size="9.5" class="m" text-anchor="start" >House rules) — default ON (absent = on). Model ·</text>
+<text x="56.0" y="956" font-size="9.5" class="m" text-anchor="start" >task · thresholds are CODE; the context it reasons</text>
+<text x="56.0" y="970" font-size="9.5" class="m" text-anchor="start" >over is DERIVED from the drafter’s system.</text>
+<rect x="446.6666666666667" y="884" width="386.6666666666667" height="102" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="462.6666666666667" y="908" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Observability</text>
+<text x="462.6666666666667" y="928" font-size="9.5" class="m" text-anchor="start" >No new row — the { move, tactic, avoid } brief rides</text>
+<text x="462.6666666666667" y="942" font-size="9.5" class="m" text-anchor="start" >the beat audit payload (spoke · held · vetoed). One</text>
+<text x="462.6666666666667" y="956" font-size="9.5" class="m" text-anchor="start" >row shows the brief AND the line it produced — the</text>
+<text x="462.6666666666667" y="970" font-size="9.5" class="m" text-anchor="start" >judge-vetoed pairing is the most useful for tuning.</text>
+<rect x="853.3333333333334" y="884" width="386.6666666666667" height="102" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="869.3333333333334" y="908" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Cost &amp; cache</text>
+<text x="869.3333333333334" y="928" font-size="9.5" class="m" text-anchor="start" >Reuses the drafter’s system verbatim ⇒ the big</text>
+<text x="869.3333333333334" y="942" font-size="9.5" class="m" text-anchor="start" >cached prefix is a cache READ (~10%); output ~150</text>
+<text x="869.3333333333334" y="956" font-size="9.5" class="m" text-anchor="start" >tokens. One small call per proactive beat (the rare</text>
+<text x="869.3333333333334" y="970" font-size="9.5" class="m" text-anchor="start" >surface). Off for the highest-volume installs.</text>
+<line x1="40" y1="1000" x2="1200" y2="1000" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="1020" font-size="10.5" class="m" text-anchor="start" >The coach and the judge are the two runtime proactive-line controls — the coach makes the line BETTER (add), the judge makes it SAFE (remove). Both are bounded by the same constitution. See COACH.md · JUDGE.md · docs/reach-out-judge.svg.</text>
+</svg>

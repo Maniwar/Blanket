@@ -254,6 +254,15 @@ Three independent layers, none of which trust the prompt to police itself:
    method, examples, or beat notes and flags clear conflicts with the
    constitution — advisory, at the moment of writing, never blocking.
 
+Alongside these honesty layers — which keep the selling *true* — there is a
+selling-*quality* layer on the proactive surface: **the sales-strategist coach**.
+Before each unprompted line is written, a focused "second brain" reads the whole
+situation and privately briefs the draft with the single best move/tactic for the
+moment. It's the pre-draft partner of the reach-out judge (coach adds the play,
+judge removes defects) and is bounded by the same constitution, so it raises
+tactical quality without ever loosening honesty. Full spec + diagram:
+[COACH.md](COACH.md) · [`docs/sales-coach.svg`](docs/sales-coach.svg).
+
 ## 14 · Where each piece lives
 
 | piece | config key | admin surface |
@@ -266,6 +275,8 @@ Three independent layers, none of which trust the prompt to police itself:
 | Objection playbook (`{trigger, response}` for REASSURE) | `objections` | Tuning → Selling |
 | Section on/off (selling, exemplars, …) | `prompt_sections` | Tuning → "Assembled prompt" card |
 | Proactive pacing & budgets | `outreach.*` | Tuning → Engagement (see §2.10 / BEHAVIOR.md) |
+| Coach every reach-out (sales strategist, pre-draft) | `outreach.beatCoach` (default on) | Tuning → Engagement → House rules (COACH.md) |
+| Review every reach-out (reach-out judge, post-draft) | `outreach.beatJudge` (default on) | Tuning → Engagement → House rules (JUDGE.md) |
 
 Every save is versioned in `concierge_edit_history` and lint-checked; the
 assembled result is inspectable live via Tuning → "See the assembled prompt"

@@ -59,6 +59,15 @@ pennies per hundred reach-outs. Held beats skip it (nothing to review), and it
 fails open, so a judge outage costs quality review, never availability. Turn
 it off in Engagement → House rules if even that margin matters.
 
+The sales-strategist coach (`outreach.beatCoach`, default on) adds **one call
+per proactive beat**, but a cheap one: it reuses the drafter's system *verbatim*,
+so the large brand/KB/method prefix is a cache **read** (~10% of full price), and
+its own output is tiny (~150 tokens). By default it runs on the conversation model
+(the value is smart tactical reasoning — a dedicated tier can be pinned via
+`BEAT_COACH_MODEL`). It is proactive-only (the rare surface), advisory, and
+fail-open. For the highest-volume installs, turn it off in the same panel; for
+most, reach-out tactical quality is worth the marginal call. See [COACH.md](COACH.md).
+
 The semantic answer cache now **flushes on every knowledge/config/SOP save**
 (a Postgres trigger — an edited fact must never keep serving its stale cached
 answer). The cost is a brief re-warm: the first anonymous asker of each common

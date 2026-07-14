@@ -216,6 +216,19 @@ every knob to the admin card that owns it.*
   `[HOLD]` sentinel class (decorated holds like `**[HOLD]**` slipping regex
   scrubbing into the transcript) is structurally impossible. One terminal
   scrub remains as defense-in-depth against old saved rule overrides.
+- **A sales-strategist coach briefs every proactive line before it's written.**
+  *(Full technical spec + diagram: [COACH.md](COACH.md) · [`docs/sales-coach.svg`](docs/sales-coach.svg).)*
+  Before the model drafts an unprompted line, a focused "second brain" reads the
+  whole situation — the selling method, this patron's register and history, the
+  stage — and privately hands the draft the single best **move / tactic / avoid**
+  for this exact moment. It only ever *improves* a draft (advisory, **fail-open**:
+  coach trouble just means the line drafts un-briefed), stays strictly inside the
+  house's honesty rules (never a discount/claim/pressure the house forbids), and
+  never speaks to the visitor — the concierge does. The brief that shaped each
+  line rides the beat audit payload. It is the **pre-draft mirror** of the judge
+  below: coach *adds* the play, judge *removes* defects. Toggle: Engagement →
+  House rules ("Coach every reach-out with a sales strategist", `outreach.beatCoach`,
+  default on).
 - **A reach-out judge reviews every spoken proactive line before it ships.**
   *(Full technical spec + diagram: [JUDGE.md](JUDGE.md) · [`docs/reach-out-judge.svg`](docs/reach-out-judge.svg).)*
   An unprompted line arrives uninvited, so it gets a second, stricter reading

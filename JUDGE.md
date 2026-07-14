@@ -7,7 +7,9 @@ It is **fail-open** — a quality gate is never allowed to become an availabilit
 **Visual:** [`docs/reach-out-judge.svg`](docs/reach-out-judge.svg).
 **Code:** `supabase/functions/concierge/index.ts` — `judgeBeatLine` (~2985–3057),
 in-panel call site (~4511–4547), closed-panel bubble call site (~5394–5411).
-**Companions:** [BEHAVIOR.md](BEHAVIOR.md) (the beat system) · [SALES.md](SALES.md) §13
+**Companions:** [COACH.md](COACH.md) (the pre-draft mirror — the sales-strategist
+coach that *adds* strategy before the line is written, where this judge *removes*
+defects after) · [BEHAVIOR.md](BEHAVIOR.md) (the beat system) · [SALES.md](SALES.md) §13
 (the three honesty layers) · [COST.md](COST.md) · [`docs/beat-system.svg`](docs/beat-system.svg)
 (stage 5).
 
@@ -279,11 +281,15 @@ persona evals. See [`evals/CATALOG.md`](evals/CATALOG.md).
 | Layer | Reads | When | On failure |
 |---|---|---|---|
 | **Constitution** (`kb.ts`) | the prompt | assembly | shapes the draft |
-| **Reach-out judge** (this doc) | the model's **actual line** | runtime, pre-send | **suppresses** (fail-open) |
+| **Sales coach** ([COACH.md](COACH.md)) | the full situation | runtime, **pre-draft** | **adds** the best play (advisory, fail-open) |
+| **Reach-out judge** (this doc) | the model's **actual line** | runtime, **post-draft** | **suppresses** defects (fail-open) |
 | **Honesty lint** (`?lint=1`) | a **saved edit** to method/examples/beats | at save | advisory flag |
 
-The judge is the only runtime, output-inspecting control — the last thing
-between a drafted proactive line and the visitor.
+The judge is the only runtime *output-inspecting* control — the last thing
+between a drafted proactive line and the visitor. Its immediate partner is the
+[sales coach](COACH.md), the *pre-draft* runtime control: the coach improves the
+line, the judge makes sure it's safe. Coach adds, judge removes; both are bounded
+by the same constitution, so neither can weaken the house's honesty.
 
 ## 13. How the kit (`concierge-kit`) provisions the judge
 

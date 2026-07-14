@@ -901,7 +901,12 @@ claim is still a claim; no invented facts, prices, or urgency), and two
 independent readers keep it that way at runtime: the **reach-out judge** vetoes
 any proactive line that slips into pressure or invented commerce, and the
 **honesty lint** flags a saved rule edit that conflicts with the constitution
-(see §2.10 and [`BEHAVIOR.md`](BEHAVIOR.md)).
+(see §2.10 and [`BEHAVIOR.md`](BEHAVIOR.md)). On the proactive surface a third
+runtime brain raises *quality* rather than policing it: the **sales-strategist
+coach** ([`COACH.md`](COACH.md)) reads the whole situation before each unprompted
+line is written and privately briefs the draft with the best move — the additive
+pre-draft mirror of the (subtractive, post-draft) judge, and bounded by the same
+constitution so it lifts tactics without loosening honesty.
 
 Admin-editable selling inputs (all config keys, all versioned in
 `concierge_edit_history`, all lint-checked on save): `assertiveness` (the

@@ -97,6 +97,28 @@ house may claim/price/offer is read at call time from that house's constitution
 - **(Scope) Judge reactive replies too**, not only proactive lines — at a
   per-turn latency/cost the current design deliberately avoids.
 
+## Sales-strategist coach — the pre-draft "second brain" ([COACH.md](COACH.md))
+
+The additive mirror of the judge: before each proactive line is written, a focused
+sales strategist reads the full situation and privately briefs the draft with the
+best move/tactic. Grounded in the drafter's own system (method + register + stage),
+bounded by the same constitution, advisory + fail-open. Shipped; the coach code is
+vendored byte-identical by the kit and defaults ON (`outreach.beatCoach`).
+
+- **Eval the coach's lift** *(near-term).* Add a persona-eval pairing that runs a
+  proactive scenario coach-on vs. coach-off and grades the tactical-quality delta,
+  so the feature's value is measured, not assumed (the judge already has a
+  verify-judge eval; the coach has none yet).
+- **(Scope) Reactive coaching at stage transitions.** Today only *proactive* lines
+  are coached. A stricter product could coach reactive replies too — but on the
+  shopper's critical path, so gated to high-value moments (a detected stage advance,
+  a first price objection) rather than every turn, to bound latency.
+- **(Small) Configurable coach model tier** — expose `BEAT_COACH_MODEL` per install
+  for cost/quality trade-offs (a cheaper strategist at very high volume).
+- **(Small) Surface the brief in the transcript viewer** — the coaching already
+  rides the audit payload; render it inline next to the line it shaped, the way
+  vetoes already show the killed line and reason.
+
 ## Deferred by choice
 
 - **Lifecycle beats package.** Weave-milestone updates, post-delivery
