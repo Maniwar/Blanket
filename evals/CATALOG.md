@@ -11,7 +11,7 @@ Four layers, in the order they run on a deploy:
 
 | layer | cases | gate? | what it can catch |
 | --- | --- | --- | --- |
-| Beat-engine unit tests | 17 assertions | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain |
+| Beat-engine unit tests | 20 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain + the coach feedback-loop digest |
 | Behavior deck | 18 scenarios / 37 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture |
 | Config conformance | 15 live rows + 4 named skips + 3 inquiry rows (admin-token-gated) | pass/fail report | knobs that stopped being connected to the live widget |
 | Persona evals | 4 personas / 22 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
@@ -49,6 +49,16 @@ Each test builds a synthetic ledger and asserts the table's decision:
 | companion brief names the held cloths and carries the book facts + never-reveal reminder | enriched briefs quote the register, and the discipline line travels with the data |
 | gift brief carries book facts; both briefs stay plain when the ledger has none | no invented colour when the register is empty |
 | extractSubjects marks the sign-in invitation as a spent subject | a sign-in offer isn't re-made every beat |
+| digest with signal renders a weighted 'what's landing' block | the coach feedback loop (`renderLearningDigest`) formats reply-rate-by-move correctly and carries the restraint cue |
+| honest on thin data: below the spoke floor ⇒ empty | the loop's honesty floor — a quiet or brand-new house gets an **empty** block, never an invented "pattern" |
+| digest caps at six buckets and tolerates missing fields | the block stays bounded and degrades gracefully on partial rows |
+
+The last three pin the **coach feedback loop's** presentation half (COACH.md §5):
+the `beat_learning_digest` SQL is exercised live (its output is aggregate and
+observable via `?insights=1`), and the pure formatter — including the *honest on
+thin data* guarantee — is unit-tested here so a fresh house provably gets no
+fabricated signal. *(The coach's actual sales **lift** is not yet evalled — a
+coach-on/off/inline persona pairing is the named backlog item; see [COACH.md](../COACH.md) §13.)*
 
 ---
 

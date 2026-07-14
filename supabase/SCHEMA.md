@@ -687,7 +687,7 @@ flowchart LR
     direction TB
     CP["PUBLIC (rate-limited)<br/>?config · ?site · ?selftest<br/>POST chat · ?reengage · ?wrapup"]
     CU["SIGNED-IN<br/>?starters · POST ?form"]
-    CA["ADMIN<br/>?tools · ?evals · ?secrets · ?export<br/>?cachecheck · POST ?judge · ?regrade"]
+    CA["ADMIN<br/>?tools · ?evals · ?secrets · ?export · ?insights<br/>?cachecheck · POST ?judge · ?regrade"]
   end
 
   subgraph COMMISSION["commission — Deno edge function"]

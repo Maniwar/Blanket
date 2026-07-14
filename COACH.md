@@ -229,6 +229,14 @@ line, and whether the shopper answered all hang off `concierge_actions`. That jo
 is exactly what the feedback loop's `beat_learning_digest()` reads back — and what
 makes grading the coach's lift a query, not a guess.
 
+**The loop itself is inspectable.** `GET ?insights=1` (admin-only) returns the
+*same* digest the coach reads — reply rate by move × kind — plus the rendered
+brief it would be handed right now (honesty floor applied, so you see exactly what
+the coach sees, empty and all). `?days=` widens the window; `?fresh=1` bypasses
+the cache to recompute. It is **aggregate-only by construction** — counts and
+rates by move, never a shopper, a message, or any PII — so it is safe to surface
+in the studio (see the privacy data-flow's ROPA row for the loop).
+
 ## 9. Cost
 
 One coaching call **per spoken-or-held proactive beat**. It is cheaper than it

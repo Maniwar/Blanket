@@ -1034,6 +1034,31 @@ happening.** Stories with acceptance criteria:
   passes a second, stricter reading (the **reach-out judge**) before I see
   it — a line that keeps score of my silence, invents a discount, or leaks
   internal wording is killed and logged, never shown.
+- **As a shopper, I want each proactive line to be the house's *best* attempt at
+  this moment, so that when it does reach out it earns the interruption.**
+  *Accepted when:* before the line is written, a focused **sales-strategist
+  coach** ([`COACH.md`](COACH.md)) reads the whole situation and privately briefs
+  the draft with the single best move/tactic — bounded by the same constitution,
+  so it lifts the tactics without ever loosening the honesty; and it is advisory
+  and fail-open, so a coach hiccup never silences or delays a good line.
+- **As the merchant, I want the concierge to *learn* which reach-outs actually
+  work for my house and lean into them, so that outreach gets better over time
+  rather than repeating what falls flat.**
+  *Accepted when:* the coach reads a **feedback digest** of the house's own
+  outcomes — the reply rate after each proactive move over a trailing window
+  (`beat_learning_digest`, `outreach.coachLearning`, default on) — and weighs it
+  when choosing the next play, biasing toward what's landing and treating a move
+  that keeps getting ignored as a cue for a lighter touch. It is **honest about
+  thin data**: until my house has real outreach history the digest is empty and
+  the coach falls back to the method alone — no invented "pattern" on a quiet or
+  brand-new store.
+- **As the operator, I want to see exactly what the coach is learning, so that
+  the feedback loop is inspectable, not a black box.**
+  *Accepted when:* `GET ?insights=1` (admin-only) returns the same digest the
+  coach reads — reply rate by move × kind, plus the rendered brief it would be
+  handed right now — and it is **aggregate-only by construction** (counts and
+  rates by move; never a shopper, a message, or any PII), so surfacing it in the
+  studio leaks nothing about any individual.
 - **As a shopper, I want the concierge to wait while I read its last reply, so
   that a follow-up lands as attentiveness, never impatience.**
   *Accepted when:* the first follow-up after a reply is floored to that
