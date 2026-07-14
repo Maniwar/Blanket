@@ -57,7 +57,7 @@ might still emit.
 
 ## 3. The judge call — the technical contract
 
-`judgeBeatLine(apiKey, line, kind)` makes one Anthropic Messages API call:
+`judgeBeatLine(apiKey, line, kind, houseRules)` makes one Anthropic Messages API call:
 
 | Parameter | Value | Why |
 |---|---|---|
@@ -83,10 +83,20 @@ The function returns `{ veto: input.pass === false, reason }`. The `kind`
 ("nudge" | "opener" | "bubble" | "bubble-postsale") is passed to the judge as
 context but does not change the criterion.
 
+The **`houseRules`** argument is what makes the judge house-accurate rather than
+Feierabend-specific — see §4a. Both call sites compute it with
+`houseHonestyRules(config)` and append it to the user message under a
+`HOUSE RULES (authoritative for this house)` heading. It is optional: absent, the
+judge falls back to the six universal defects alone.
+
 ## 4. The criterion — what a veto *is*
 
-`BEAT_JUDGE_CRITERION` is deliberately narrow. The judge **vetoes only if the
-line clearly exhibits at least one** of six defects:
+The criterion has **two parts**: six **universal defects** that are hardcoded and
+apply to every house (`BEAT_JUDGE_CRITERION`), and a **per-house grounding** block
+injected at call time (§4a). The judge **vetoes if the line clearly exhibits at
+least one universal defect, OR clearly contradicts the house rules it is given.**
+
+The six universal defects (`BEAT_JUDGE_CRITERION`, always in force):
 
 1. **Plumbing / meta leak** — mentions instructions, prompts, rules, beats,
    tools, holding, being an AI/model, or narrates its own outreach
@@ -94,8 +104,11 @@ line clearly exhibits at least one** of six defects:
 2. **Scorekeeping / guilt** — counts its own messages or points at the shopper's
    silence ("I've reached out twice", "since you haven't replied").
 3. **Invented commerce** — a discount, price cut, sale, coupon, free shipping,
-   or limited-time offer. The house never discounts; the numbered edition is the
-   only real scarcity.
+   urgency, or countdown **the house rules do not authorize**. *If the house holds
+   a firm price, any discount is a veto; if the house rules permit offers or
+   negotiation, inviting one is legitimate, not invented.* (This clause used to
+   hardcode "the house never discounts" — a Feierabend assumption; it is now
+   resolved against the house's actual price posture, §4a.)
 4. **Pressure / desperation** — begging, "last chance", manufactured countdowns.
 5. **Broken output** — cut off mid-sentence, raw JSON or code, gibberish,
    visibly duplicated text.
@@ -108,6 +121,43 @@ and `{{reply:…}}` / `{{action:…}}` pills. The criterion ends with the tie-br
 that keeps it high-precision: **"When uncertain, pass it."** The judge is a
 defect filter, not a taste critic — false vetoes (silencing good lines) are
 treated as worse than a rare miss, which is why the whole design is precision-biased.
+
+## 4a. House grounding — dynamic, per-house, from the constitution
+
+The six defects are universal, but *what a given house may claim, how it prices,
+and what it may offer* is house-specific. Rather than bake Feierabend's answers
+into the gate, the judge is grounded at call time in the **effective
+constitution's HONESTY & SCOPE** — the same source of truth that binds the
+drafting prompt:
+
+```
+houseHonestyRules(config)                       (index.ts, next to judgeBeatLine)
+  · base = config.voice_base   (admin-editable override in the studio)
+           else BRAND_SYSTEM    (the code fallback — stamped per-product by the kit)
+  · slice from the "HONESTY & SCOPE" heading onward
+  · strip {{TOKENS}}, cap 1600 chars
+  ▼
+appended to the judge's user message under
+"HOUSE RULES (authoritative for this house)"
+```
+
+This is deliberately **not** the assertiveness/selling dial. The judge reads the
+house's *truth* — price posture ("$589 and it never moves; no discounts" for
+Feierabend, or "offers welcome" for a private car sale), medical/claim
+boundaries, one-product scope — never how hard the house is selling. A harder or
+softer sell can therefore never move the gate; only the house's honesty rules do.
+Two consequences:
+
+- **Fewer false vetoes.** For a house whose rules permit negotiation, an
+  invitation to make an offer is no longer misread as "invented commerce".
+- **More true vetoes.** A house-specific claim the rules forbid (a medical claim,
+  a product outside scope, a fabricated figure) is now catchable, because the
+  judge can see what this house is actually allowed to say.
+
+Because `voice_base` is admin-editable and `BRAND_SYSTEM` is the block the kit
+stamps per product (§13), the grounding stays accurate for every house **with no
+change to the judge code** — the gate is dynamic without becoming operator-weakenable
+(the six universal defects remain a fixed floor the constitution cannot remove).
 
 ## 5. Outcomes & their semantics
 
@@ -143,18 +193,22 @@ Both guard on the same toggle and both write `beat_veto` on suppression.
 
 ## 7. Configuration — one toggle; everything else is code
 
-The judge has a deliberately tiny configuration surface. **Exactly one thing is
-tunable at runtime: whether it runs at all.** Its model, criterion, and
+The judge has a deliberately tiny *knob* surface. **Exactly one thing is a
+toggle: whether it runs at all.** Its model, its six universal defects, and its
 thresholds are **code** — constants in the concierge function, versioned with it
-and changed only by a developer. A safety control is intentionally *not*
-live-editable the way the selling copy is (contrast the [selling method](SALES.md),
-which is all data).
+and changed only by a developer. The one part that *does* vary per house — the
+house-rules grounding (§4a) — is not a judge knob at all: it is **derived** from
+the effective constitution (`voice_base` else `BRAND_SYSTEM`), the same honesty
+text that already binds the drafting prompt. So the gate tracks each house's
+truth without exposing a control the merchant could use to *weaken* it (contrast
+the [selling method](SALES.md), which is all live-editable data).
 
 | Setting | Where it lives | Type | Default |
 |---|---|---|---|
 | **On / off** | `concierge_config.outreach.beatJudge` — admin **Engagement → House rules** ("Review every reach-out before it sends") | **config** — live, no deploy | **ON** |
 | Model | `BEAT_JUDGE_MODEL` (`index.ts`) | code | `claude-haiku-4-5-20251001` |
-| Criterion (the six defects) | `BEAT_JUDGE_CRITERION` (`index.ts`) | code | §4 |
+| Universal defects (the six) | `BEAT_JUDGE_CRITERION` (`index.ts`) | code | §4 |
+| House-rules grounding | `houseHonestyRules(config)` — the HONESTY & SCOPE slice of `voice_base` else `BRAND_SYSTEM` | **derived** from the constitution (not a judge knob) | §4a |
 | Temperature · max_tokens · timeout | `judgeBeatLine` (`index.ts`) | code | `0` · `150` · `4000 ms` |
 | Audit rows on/off | `beatAuditOn(config)` (writes `beat_action`/`beat_veto`) | config | on (stamped/scale installs may seed off) |
 
@@ -168,10 +222,15 @@ rules → "Review every reach-out before it sends."*
 - **Held beats never reach the judge**, so the toggle affects spoken lines only,
   never silence.
 
-To change *what the judge catches* (the criterion) or *which model* reviews,
-edit `BEAT_JUDGE_CRITERION` / `BEAT_JUDGE_MODEL` and redeploy the function — see
-§11. That asymmetry is deliberate: the selling *style* is tuned live by
-operators; the safety *control* is changed by developers, under version control.
+To change the *universal* defects or *which model* reviews, edit
+`BEAT_JUDGE_CRITERION` / `BEAT_JUDGE_MODEL` and redeploy the function — see §11.
+To change what's *house-specific* (this house's price posture, claim boundaries,
+scope), edit the **constitution** — `voice_base` in the studio, live — and the
+judge picks it up on the next reach-out, because it reads that same HONESTY &
+SCOPE text (§4a). That split is the whole point: the universal floor is
+developer-owned code; the house-specific truth is the constitution the operator
+already maintains; neither is a dedicated "judge criterion" knob the merchant can
+loosen.
 
 ## 8. Observability
 
@@ -204,13 +263,16 @@ persona evals. See [`evals/CATALOG.md`](evals/CATALOG.md).
 - **Fail-open, not fail-closed.** A stricter product could hold on judge error;
   this one ships, because for a *sales* concierge a missed reach-out is a worse
   outcome than a rare unreviewed line, and the base rate of defects is low.
-- **The criterion is code, not config** (unlike the selling method). It's a
-  safety control, so it's versioned with the function and changed by a developer,
-  not tuned live — a deliberate asymmetry with the rest of the "everything is
-  data" design.
-- **Extending it:** add a defect category to `BEAT_JUDGE_CRITERION`; add a new
-  `kind` at a new call site; or (future) make the model tier configurable. Any
-  change should keep the forced-`verdict` contract and the fail-open guarantee.
+- **The universal defects are code; the house grounding is derived, not a knob.**
+  The six defects are versioned with the function and changed by a developer. The
+  house-specific truth is read from the constitution (§4a) — dynamic per house,
+  but sourced from the honesty text the operator already maintains, never a
+  dedicated judge criterion the merchant can loosen. The safety floor stays a
+  floor; only the house's *own honesty rules* move the house-specific part.
+- **Extending it:** add a defect category to `BEAT_JUDGE_CRITERION`; refine what
+  `houseHonestyRules` extracts from the constitution; add a new `kind` at a new
+  call site; or (future) make the model tier configurable. Any change should keep
+  the forced-`verdict` contract and the fail-open guarantee.
 
 ## 12. Relationship to the other honesty layers
 
@@ -229,40 +291,44 @@ The judge is part of the **reusable engine**, and the kit —
 [Maniwar/concierge-kit](https://github.com/Maniwar/concierge-kit) — stamps that
 engine onto a new storefront. As of this writing, its handling of the judge:
 
-- **Vendored unchanged.** `judgeBeatLine`, `BEAT_JUDGE_MODEL`, and
-  `BEAT_JUDGE_CRITERION` live in the pristine `engine/` snapshot and appear in
-  **neither** stamp manifest (`stamp/tokens.manifest.json`,
-  `stamp/blocks.manifest.json`). Every stamped product gets the judge
-  **byte-identical**, pinned to `ENGINE_VERSION`. This is deliberate — the judge
-  is a safety backstop, kept uniform and versioned rather than regenerated per
-  brand (the same reasoning as §7).
+- **Judge code vendored unchanged.** `judgeBeatLine`, `BEAT_JUDGE_MODEL`, and
+  `BEAT_JUDGE_CRITERION` (the six universal defects) live in the pristine
+  `engine/` snapshot and appear in **neither** stamp manifest
+  (`stamp/tokens.manifest.json`, `stamp/blocks.manifest.json`). Every stamped
+  product gets the judge **byte-identical**, pinned to `ENGINE_VERSION`. This is
+  deliberate — the universal floor is a safety backstop, kept uniform and
+  versioned rather than regenerated per brand (the same reasoning as §7).
+- **House grounding rides the constitution the kit already stamps.** The
+  house-specific half (§4a) is read from `voice_base` else `BRAND_SYSTEM`, and
+  `BRAND_SYSTEM` **is** a Class-2 block the kit rewrites per product
+  (`blocks.manifest.json`). So a stamped store's judge is grounded in *that
+  store's* HONESTY & SCOPE — price posture, claim boundaries, scope — with no
+  judge-specific stamp step. The 996 pilot's "offers welcome" posture, for
+  instance, reaches the judge through its stamped constitution automatically.
 - **Defaults ON with no seed.** `beatJudge !== false` means absent = on; the
   stamp does not need to seed it.
-- **Gate-clean.** The criterion uses only generic terms, so it carries no brand
-  string and passes `stamp/forbidden-strings.txt` (the leakage gate) untouched.
+- **Gate-clean.** The universal defects use only generic terms, so they carry no
+  brand string and pass `stamp/forbidden-strings.txt` (the leakage gate)
+  untouched; the house grounding is derived at runtime from the already-stamped
+  constitution, so it introduces no new leakage surface.
 - **Exercised per product.** `adopt generate` writes a product-specific eval deck
   (judge-adjacent scenarios like *no-scarcity-theater*), and `adopt verify` runs
   it against the new deployment — so the reach-out judge is *tested* against each
-  brand even though its rules are not rewritten. *(The `judge:` fields in that
-  deck are the eval grader — a separate mechanism from this reach-out judge.)*
-
-**Known seam.** Defect (3)'s parenthetical — *"the house never discounts; the
-edition's numbered scarcity is the only real urgency"* — encodes a Feierabend
-assumption. It leaks no brand string (so it stamps clean), but for a non-scarce
-or negotiable product (e.g. the porsche996turbo pilot, whose adoption asks the
-owner about offer posture) that rationale can contradict the stamped selling
-method. The six defects still function; only the wording is coupled. See §14.
+  brand even though its universal rules are not rewritten. *(The `judge:` fields
+  in that deck are the eval grader — a separate mechanism from this reach-out
+  judge.)*
 
 ## 14. Backlog / open ideas
 
 Recorded so the current design is intentional and the options are on the record;
 mirrored in [BACKLOG.md](BACKLOG.md).
 
-- **Generalize defect (3) in the engine** *(near-term, low-risk).* Replace the
-  numbered-edition wording with a product-neutral form — e.g. *"invented commerce
-  — a discount / price cut / urgency the house has not authorized"*. One engine
-  edit; flows to the kit on the next `vendor-update`. Removes the seam above
-  without making the judge stampable.
+- **[Shipped] Dynamic per-house grounding.** Defect (3) no longer hardcodes "the
+  house never discounts"; it now reads against the house's actual price posture,
+  and the judge is grounded per call in the effective constitution's HONESTY &
+  SCOPE (`houseHonestyRules`, §4a). This both removed the Feierabend seam and
+  made the judge catch house-specific claim violations — without adding an
+  operator-weakenable knob (the six universal defects remain a fixed floor).
 - **Per-product criterion via the block manifest** *(considered).* Make
   `BEAT_JUDGE_CRITERION` a Class-2 block the kit rewrites per brand. Trade-off: it
   adds a brand-authored surface to a *safety* control and weakens the "one uniform

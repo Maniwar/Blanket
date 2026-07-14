@@ -69,19 +69,23 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Reach-out judge — the proactive-line safety gate ([JUDGE.md](JUDGE.md))
 
-The judge is a fixed safety backstop: model + criterion are code, versioned with
-the engine, and the kit ([Maniwar/concierge-kit](https://github.com/Maniwar/concierge-kit))
-vendors it byte-identical to every stamped product (it's in the pristine
-`engine/` snapshot, in neither stamp manifest). Design detail: [JUDGE.md](JUDGE.md)
-§13–14.
+The judge is a fixed safety floor with a dynamic per-house layer: its six
+universal defects + model are code (versioned with the engine, vendored
+byte-identical by the kit — [Maniwar/concierge-kit](https://github.com/Maniwar/concierge-kit)
+— in the pristine `engine/` snapshot, in neither stamp manifest), while what each
+house may claim/price/offer is read at call time from that house's constitution
+(the kit-stamped `BRAND_SYSTEM` / admin `voice_base`). Design detail:
+[JUDGE.md](JUDGE.md) §4a, §13–14.
 
-- **Generalize the "invented commerce" clause** *(near-term, low-risk).*
-  `BEAT_JUDGE_CRITERION` still says *"the house never discounts; the edition's
-  numbered scarcity is the only real urgency"* — a Feierabend assumption that
-  ships to every stamped product. Replace it with a product-neutral form (e.g.
-  *"a discount / price cut / urgency the house has not authorized"*) so it reads
-  correctly for non-scarce or negotiable products (e.g. the 996 pilot). One engine
-  edit; flows to the kit on the next `vendor-update`. No per-stamp change.
+- **[Shipped] Dynamic per-house grounding.** The judge no longer hardcodes *"the
+  house never discounts"*. Defect (3) now reads against the house's actual price
+  posture, and every call injects the effective constitution's HONESTY & SCOPE
+  (`houseHonestyRules` → `voice_base` else `BRAND_SYSTEM`) as authoritative
+  "house rules" — the same honesty text that binds the drafting prompt and that
+  the kit stamps per product. This fixed the Feierabend seam *and* let the judge
+  catch house-specific claim violations (medical claims, out-of-scope products,
+  fabricated figures), while the six universal defects stay a fixed floor the
+  merchant cannot weaken. See [JUDGE.md](JUDGE.md) §4a.
 - **(Considered) Stampable criterion.** Make `BEAT_JUDGE_CRITERION` a Class-2
   block the kit rewrites per brand. Held — it adds a brand-authored surface to a
   safety control and weakens the uniform-backstop guarantee.

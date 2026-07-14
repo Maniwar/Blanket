@@ -2984,25 +2984,47 @@ function stripPlumbing(t: string): string {
 // Every veto writes a beat_veto row (Actions tab: spoke · held · vetoed).
 const BEAT_JUDGE_MODEL = "claude-haiku-4-5-20251001";
 const BEAT_JUDGE_CRITERION =
-  "The line is fit to send as an unprompted concierge reach-out. VETO (pass=false) ONLY if it " +
-  "clearly exhibits at least one of these defects: " +
+  "You review ONE line a sales concierge is about to send UNPROMPTED. VETO (pass=false) if it " +
+  "clearly exhibits at least one UNIVERSAL defect below, OR clearly contradicts the HOUSE RULES you " +
+  "are given. The HOUSE RULES are authoritative for what THIS house may claim, how it prices, and " +
+  "what it may offer; the universal defects always apply regardless of the house. " +
+  "UNIVERSAL DEFECTS: " +
   "(1) plumbing or meta leak — it mentions instructions, prompts, rules, beats, tools, holding, " +
   "being an AI or model, or narrates its own outreach ('reach-out #2', 'checking in as instructed'); " +
   "(2) scorekeeping or guilt — it counts its own messages or points at the shopper's silence " +
   "('I've reached out twice', 'since you haven't replied'); " +
-  "(3) invented commerce — a discount, price cut, sale, coupon, free shipping, or limited-time " +
-  "offer (the house never discounts; the edition's numbered scarcity is the only real urgency); " +
+  "(3) invented commerce — it invents a discount, price cut, sale, coupon, free shipping, urgency, or " +
+  "countdown the HOUSE RULES do not authorize (if the house holds a firm price, any discount is a veto; " +
+  "if the house rules permit offers or negotiation, INVITING one is legitimate, not invented); " +
   "(4) pressure or desperation — begging, 'last chance', manufactured countdowns; " +
   "(5) broken output — cut off mid-sentence, raw JSON or code, gibberish, visibly duplicated text; " +
   "(6) inventorying the shopper — reciting their own stored data back at them in aggregate " +
-  "('you're furnishing five rooms across two cities', 'your third order this month'): one remembered " +
-  "detail worn lightly is service, a tally of their life is surveillance. " +
+  "('you're furnishing five rooms across two cities'): one remembered detail worn lightly is service, " +
+  "a tally of their life is surveillance. " +
+  "AGAINST THE HOUSE RULES: also veto if the line asserts a price, figure, count, product, guarantee, " +
+  "or claim the house rules forbid or do not support — a fabricated number, a medical/therapeutic claim " +
+  "the rules bar, a product outside the house's scope, a fact not grounded in what the house sells. If " +
+  "the house rules PERMIT something, offering it is LEGITIMATE — never veto an authorized move as invented. " +
   "Warmth, brevity, one light question, and {{reply:…}}/{{action:…}} pills are all LEGITIMATE. " +
   "When uncertain, pass it.";
+// The judge is grounded per-house in the effective constitution's HONESTY & SCOPE
+// (the admin-editable voice_base, else the BRAND_SYSTEM fallback — the same honesty
+// source that binds the drafting prompt, and the block the kit stamps per product).
+// It reads the house's TRUTH (price posture, scope, what may be claimed/offered),
+// never the selling dial — so a harder or softer sell can never move the gate.
+function houseHonestyRules(cfg: { voice_base?: unknown } | null | undefined): string {
+  const base = (cfg && typeof cfg.voice_base === "string" && cfg.voice_base.trim())
+    ? cfg.voice_base
+    : BRAND_SYSTEM;
+  const i = base.search(/HONESTY\s*&\s*SCOPE/i);
+  const slice = i >= 0 ? base.slice(i) : base;
+  return slice.replace(/\{\{[A-Z_]+\}\}/g, "").trimEnd().slice(0, 1600);
+}
 async function judgeBeatLine(
   apiKey: string,
   line: string,
   kind: string,
+  houseRules = "",
 ): Promise<{ veto: boolean; reason: string }> {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -3039,8 +3061,9 @@ async function judgeBeatLine(
         }],
         messages: [{
           role: "user",
-          content: "CRITERION:\n" + BEAT_JUDGE_CRITERION + "\n\nBEAT KIND: " + kind +
-            "\n\nTHE LINE:\n" + line,
+          content: "CRITERION:\n" + BEAT_JUDGE_CRITERION +
+            (houseRules ? "\n\nHOUSE RULES (authoritative for this house):\n" + houseRules : "") +
+            "\n\nBEAT KIND: " + kind + "\n\nTHE LINE:\n" + line,
         }],
       }),
     });
@@ -4516,9 +4539,10 @@ async function handleChatPost(req: Request): Promise<Response> {
         let vetoReason: string | null = null;
         if (!held) {
           try {
-            const oj = (await loadConciergeData()).config?.outreach as Record<string, unknown> | undefined;
+            const jcfg = (await loadConciergeData()).config;
+            const oj = jcfg?.outreach as Record<string, unknown> | undefined;
             if (oj?.beatJudge !== false) {
-              const v = await judgeBeatLine(apiKey, text, isNudge ? "nudge" : "opener");
+              const v = await judgeBeatLine(apiKey, text, isNudge ? "nudge" : "opener", houseHonestyRules(jcfg));
               if (v.veto) vetoReason = v.reason || "vetoed by the reach-out judge";
             }
           } catch { /* fail-open */ }
@@ -5404,7 +5428,7 @@ async function handleReengage(req: Request): Promise<Response> {
     try {
       const oj = data.config?.outreach as Record<string, unknown> | undefined;
       if (oj?.beatJudge !== false) {
-        const v = await judgeBeatLine(apiKey, text, postSale ? "bubble-postsale" : "bubble");
+        const v = await judgeBeatLine(apiKey, text, postSale ? "bubble-postsale" : "bubble", houseHonestyRules(data.config));
         if (v.veto) {
           if (beatAuditOn(data.config)) pgInsert("concierge_actions", {
             conversation_id: cid, user_id: customer?.id ?? null, email: customer?.email ?? null,
