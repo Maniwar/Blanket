@@ -12,6 +12,26 @@ when it's software?*
 
 ---
 
+## The Claude craft in 60 seconds
+
+If you're evaluating this as applied-AI engineering, the LLM substance lives here —
+each links a one-page diagram:
+
+- **Native Anthropic tool use** — 12 JSON-schema tools + an agentic `tool_use` loop,
+  every call ownership-scoped (RLS) and audited → [docs/tool-sequence.svg](docs/tool-sequence.svg)
+- **Prompt caching** — a static cached prefix + a dynamic suffix (tools→system→messages,
+  5-min TTL) for a ~70–90% input-token cut → [docs/cost-model.svg](docs/cost-model.svg)
+- **Honest by construction** — a constitution + a second-reader judge + an honesty
+  lint; persuasion shapes *when and how* true things are said, never *what* is true;
+  hedged medical claims are blocked → [SALES.md](SALES.md) · [docs/selling-method.svg](docs/selling-method.svg)
+- **Evals over vibes** — a behavioral eval harness that doubles as guardrail-regression,
+  CI-gated → [evals/](evals/) · [docs/testing-flows.svg](docs/testing-flows.svg)
+- **Engineered end-to-end** — [security review](SECURITY.md) (RLS as the authorization
+  boundary) · [scaling review](SCALING.md) + a [k6 load-test harness](loadtest/) ·
+  [cost model](COST.md).
+
+---
+
 ## What it demonstrates
 
 - **A concierge that clientels, not FAQs.** It greets returning patrons by name,
@@ -68,7 +88,11 @@ passwordless email auth.
 | **[BEHAVIOR.md](BEHAVIOR.md)** | The concierge's behavior rules — read-the-register invariants, selling/pacing/re-engagement (the beat system), quiet mode, and the console diagnostics for a deliberately quiet widget. |
 | **[KNOWLEDGE.md](KNOWLEDGE.md)** | How the knowledge base & SOPs work — where the knowledge lives, how it's injected whole into the prompt each turn (the `{{KB}}` block + named sections + precedence), why it's **not RAG**, the semantic answer cache (the one embedding use), per-customer memory, and how you manage it. |
 | **[INQUIRIES.md](INQUIRIES.md)** | The inquiry lead-capture primitive — the `concierge_inquiries` table, the anonymous-capable `submit_inquiry` tool (with its per-session rate limit and fail-soft house email), the make-an-offer / book-a-viewing forms, and the admin Inquiries panel. |
-| **[docs/](docs/)** | The diagram set (SVG): [architecture](docs/architecture.svg) · [prompt assembly](docs/prompt-assembly.svg) · [conversation flow](docs/conversation-flow.svg) · [beat system + every knob](docs/beat-system.svg) · [conversion metrics](docs/conversion-metrics.svg) · [the test surface](docs/testing-flows.svg). |
+| **[TOOLS.md](TOOLS.md)** | The concierge's tools — the two kinds (model vs form), the native Anthropic function-calling mechanism, the built-in catalog, and the config-over-code override model. Diagrams: [tool read/write sequence](docs/tool-sequence.svg) · [tool system map](docs/tools-system.svg). |
+| **[FORMS.md](FORMS.md)** | In-chat forms — anatomy (slug + submit tool + fields), the token→render→audited-write lifecycle, and the field schema. Diagram: [forms flow](docs/forms-flow.svg). |
+| **[COST.md](COST.md)** | Model cost & efficiency — every Claude call, the prompt-cache mechanism, and the six cost levers. Diagram: [cost model](docs/cost-model.svg). |
+| **[CMS.md](CMS.md)** | Storefront CMS — DB-backed copy/images/SEO edited without a deploy (hydrate over the HTML defaults) + the two-layer SEO bake. Diagram: [CMS flow](docs/cms-flow.svg). |
+| **[docs/](docs/)** | The full diagram set (SVG): [architecture](docs/architecture.svg) · [prompt assembly](docs/prompt-assembly.svg) · [conversation flow](docs/conversation-flow.svg) · [beat system + every knob](docs/beat-system.svg) · [selling method](docs/selling-method.svg) · [tool sequence](docs/tool-sequence.svg) · [conversion metrics](docs/conversion-metrics.svg) · [scaling scorecard](docs/scaling-scorecard.svg) · [security posture](docs/security-posture.svg) · [privacy data-flow](docs/privacy-dataflow.svg) · [the test surface](docs/testing-flows.svg). |
 | **[ATTRIBUTION.md](ATTRIBUTION.md)** | Revenue attribution & conversion tracking — the three attribution tiers (✳ concierge-initiated / chat-assisted / unassisted), how every Conversion-tab number is computed, honest limits, and the levers that raise conversion. |
 | **[evals/README.md](evals/README.md)** | The test surface — behavior evals (deterministic checks + a pinned binary LLM judge, reported as a pass rate), the **config-conformance** report (configured ↔ live widget, dial scaling and observed timings included), and **persona evals** (multi-turn simulated shoppers, graded whole). CLI, admin **Evals** tab, or GitHub Actions. Every individual case — setup, checks, design rationale, and the sales-psychology coverage map — is enumerated in **[evals/CATALOG.md](evals/CATALOG.md)**; the visual flow is [docs/testing-flows.svg](docs/testing-flows.svg). |
 | **[SECURITY.md](SECURITY.md)** | Security review — CISSP/OWASP-framed audit (injection, XSS, access control, RLS, secrets): what was found and fixed, residual risks, and the path to a formal certification. |
