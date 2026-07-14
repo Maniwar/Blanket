@@ -4,6 +4,13 @@ Where the concierge spends Claude tokens, and the levers that keep it cheap. All
 model work runs through the **concierge** edge function; the commission function
 makes no model calls.
 
+The whole picture on one page — every Claude call and its cost, the prompt-cache
+mechanism, and the six levers:
+
+[![Model cost & efficiency](docs/cost-model.svg)](docs/cost-model.svg)
+
+*[`docs/cost-model.svg`](docs/cost-model.svg) — grounded in this document.*
+
 ## Every Claude call, and when it fires
 
 | Call | Trigger | Notes |

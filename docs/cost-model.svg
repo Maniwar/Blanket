@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="917" viewBox="0 0 1240 917" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}
+  </style>
+</defs>
+<rect width="1240" height="917" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >Model cost &amp; efficiency — where the tokens go, and the levers</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >All model work runs through the concierge function (the commission function makes no model calls). Prompt caching does the heavy lifting; five more levers keep it cheap.</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >Source: COST.md.</text>
+<text x="40" y="122" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · Every Claude call — and when it fires</text>
+<rect x="40" y="134" width="1160" height="193" rx="10" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<text x="56" y="151" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Signed-in chat (agentic loop)</text>
+<text x="430" y="151" font-size="10.6" class="m" text-anchor="start" >each message from a signed-in visitor</text>
+<rect x="980" y="138" width="98.60000000000001" height="20" rx="10" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="1029.3" y="152" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#8a4b32">up to 4 / msg</text>
+<line x1="52" y1="161" x2="1188" y2="161" stroke="#efe9dc" stroke-width="1"/>
+<text x="56" y="178" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Anonymous chat</text>
+<text x="430" y="178" font-size="10.6" class="m" text-anchor="start" >each message when signed out</text>
+<rect x="980" y="165" width="148.20000000000002" height="20" rx="10" fill="#e6f0e8" stroke="#8fb89b" stroke-width="1" />
+<text x="1054.1" y="179" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#3f6b4f">1 — or 0 on cache hit</text>
+<line x1="52" y1="188" x2="1188" y2="188" stroke="#efe9dc" stroke-width="1"/>
+<text x="56" y="205" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Proactive nudge / opener</text>
+<text x="430" y="205" font-size="10.6" class="m" text-anchor="start" >idle in-panel nudge, or greeting on open</text>
+<rect x="980" y="192" width="154.4" height="20" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="1057.2" y="206" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">1 each · budget-capped</text>
+<line x1="52" y1="215" x2="1188" y2="215" stroke="#efe9dc" stroke-width="1"/>
+<text x="56" y="232" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Re-engagement line (?reengage)</text>
+<text x="430" y="232" font-size="10.6" class="m" text-anchor="start" >closed-panel bubble fires</text>
+<rect x="980" y="219" width="191.6" height="20" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="1075.8" y="233" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">1 · max_tokens 90 · fallback</text>
+<line x1="52" y1="242" x2="1188" y2="242" stroke="#efe9dc" stroke-width="1"/>
+<text x="56" y="259" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Goal grading (scheduleGoalEval)</text>
+<text x="430" y="259" font-size="10.6" class="m" text-anchor="start" >after a turn, sampled by goal_sample_rate</text>
+<rect x="980" y="246" width="154.4" height="20" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="1057.2" y="260" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">+1 · out 320+goals×160</text>
+<line x1="52" y1="269" x2="1188" y2="269" stroke="#efe9dc" stroke-width="1"/>
+<text x="56" y="286" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Directive reconciliation</text>
+<text x="430" y="286" font-size="10.6" class="m" text-anchor="start" >signed-in turn ONLY with an open directive</text>
+<rect x="980" y="273" width="222.6" height="20" rx="10" fill="#e6f0e8" stroke="#8fb89b" stroke-width="1" />
+<text x="1091.3" y="287" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#3f6b4f">+1 small · background · 0 usually</text>
+<line x1="52" y1="296" x2="1188" y2="296" stroke="#efe9dc" stroke-width="1"/>
+<text x="56" y="313" font-size="11.4" class="t" text-anchor="start" font-weight="700" >Wrap-up note</text>
+<text x="430" y="313" font-size="10.6" class="m" text-anchor="start" >signed-in visitor leaves after a real exchange</text>
+<rect x="980" y="300" width="123.4" height="20" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="1041.7" y="314" font-size="10" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">1 small · ~90 tok</text>
+<text x="40" y="341" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · The big lever — Anthropic prompt caching (≈70–90% input cut)</text>
+<path d="M40,371 L40,365 L780,365 L780,371" fill="none" stroke="#5f8f6f" stroke-width="1.4"/>
+<text x="410" y="361" font-size="10.5" class="" text-anchor="middle" font-weight="700" fill="#3f6b4f">CACHED PREFIX — hashed to the byte</text>
+<rect x="40" y="379" width="140" height="56" rx="8" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="110.0" y="403" font-size="11.5" class="t mono" text-anchor="middle" font-weight="700" >tools</text>
+<text x="110.0" y="419" font-size="9" class="m" text-anchor="middle" >signed-in tool defs</text>
+<rect x="180" y="379" width="600" height="56" rx="8" fill="#e6f0e8" stroke="#8fb89b" stroke-width="1" />
+<text x="480.0" y="403" font-size="11.5" class="t mono" text-anchor="middle" font-weight="700" >system · PREFIX</text>
+<text x="480.0" y="419" font-size="9" class="m" text-anchor="middle" >brand · KB · tool guidance · SOPs · selling · tuning</text>
+<rect x="780" y="379" width="260" height="56" rx="8" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="910.0" y="403" font-size="11.5" class="t mono" text-anchor="middle" font-weight="700" >system · SUFFIX</text>
+<text x="910.0" y="419" font-size="9" class="m" text-anchor="middle" >LIVE STATE + goal agenda</text>
+<rect x="1040" y="379" width="160" height="56" rx="8" fill="#eceae2" stroke="#d5cbbb" stroke-width="1" />
+<text x="1120.0" y="403" font-size="11.5" class="t mono" text-anchor="middle" font-weight="700" >messages</text>
+<text x="1120.0" y="419" font-size="9" class="m" text-anchor="middle" >the turn</text>
+<line x1="780" y1="373" x2="780" y2="451" stroke="#8a4b32" stroke-width="1.6" stroke-dasharray="5 4"/>
+<rect x="688" y="451" width="184" height="20" rx="10" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="780" y="465" font-size="10" class="warn mono" text-anchor="middle" font-weight="700" >◆ cache_control: ephemeral</text>
+<text x="940" y="465" font-size="10" class="m" text-anchor="start" >← dynamic; never busts the prefix</text>
+<rect x="40" y="483" width="1160" height="50" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="503" font-size="11.2" class="t" text-anchor="start" font-weight="700" >Cache order tools → system → messages, so the signed-in tool array rides the same entry for free.</text>
+<text x="58" y="521" font-size="10.8" class="m" text-anchor="start" >1st call establishes the prefix → cache-WRITE ≈ 1.25× · every reuse within the 5-min sliding TTL (agentic rounds · nudges · back-to-back turns) → cache-READ ≈ 0.1×. A byte changes → new hash → one fresh write.</text>
+<text x="40" y="553" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · The levers in place</text>
+<rect x="40" y="567" width="373" height="104" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="40" y="567" width="6" height="104" rx="0" fill="#5f8f9f" />
+<text x="60" y="593" font-size="12.8" class="t" text-anchor="start" font-weight="700" >Prompt caching</text>
+<text x="60" y="612" font-size="10.4" class="m" text-anchor="start" >static prefix cached ephemeral</text>
+<text x="60" y="657" font-size="10.4" class="t" text-anchor="start" font-weight="700" fill="#2f6f5f">→ ~70–90% cut on input tokens</text>
+<rect x="433" y="567" width="373" height="104" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="433" y="567" width="6" height="104" rx="0" fill="#5f8f9f" />
+<text x="453" y="593" font-size="12.8" class="t" text-anchor="start" font-weight="700" >Semantic answer cache</text>
+<text x="453" y="612" font-size="10.4" class="m" text-anchor="start" >anonymous single-turn embedded locally (gte-small,</text>
+<text x="453" y="626" font-size="10.4" class="m" text-anchor="start" >not a Claude call)</text>
+<text x="453" y="657" font-size="10.4" class="t" text-anchor="start" font-weight="700" fill="#2f6f5f">→ 0 model calls on a hit</text>
+<rect x="826" y="567" width="373" height="104" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="826" y="567" width="6" height="104" rx="0" fill="#5f8f9f" />
+<text x="846" y="593" font-size="12.8" class="t" text-anchor="start" font-weight="700" >goal_sample_rate</text>
+<text x="846" y="612" font-size="10.4" class="m" text-anchor="start" >grade 1-in-N turns, not every turn (admin, no</text>
+<text x="846" y="626" font-size="10.4" class="m" text-anchor="start" >deploy)</text>
+<text x="846" y="657" font-size="10.4" class="t" text-anchor="start" font-weight="700" fill="#2f6f5f">→ a whole class of calls falls away</text>
+<rect x="40" y="685" width="373" height="104" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="40" y="685" width="6" height="104" rx="0" fill="#5f8f9f" />
+<text x="60" y="711" font-size="12.8" class="t" text-anchor="start" font-weight="700" >Trimmed CUSTOMER block</text>
+<text x="60" y="730" font-size="10.4" class="m" text-anchor="start" >&gt;3 orders collapse to a cloth tally + the 2 most</text>
+<text x="60" y="744" font-size="10.4" class="m" text-anchor="start" >recent</text>
+<text x="60" y="775" font-size="10.4" class="t" text-anchor="start" font-weight="700" fill="#2f6f5f">→ leaner uncached per-turn tail</text>
+<rect x="433" y="685" width="373" height="104" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="433" y="685" width="6" height="104" rx="0" fill="#5f8f9f" />
+<text x="453" y="711" font-size="12.8" class="t" text-anchor="start" font-weight="700" >Rolling client-book summary</text>
+<text x="453" y="730" font-size="10.4" class="m" text-anchor="start" >fold notes into one summary + the 2 newest</text>
+<text x="453" y="775" font-size="10.4" class="t" text-anchor="start" font-weight="700" fill="#2f6f5f">→ ~5–8× cut on the book’s slice</text>
+<rect x="826" y="685" width="373" height="104" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<rect x="826" y="685" width="6" height="104" rx="0" fill="#5f8f9f" />
+<text x="846" y="711" font-size="12.8" class="t" text-anchor="start" font-weight="700" >Config cache</text>
+<text x="846" y="730" font-size="10.4" class="m" text-anchor="start" >config / KB / SOPs held 60 s in module memory</text>
+<text x="846" y="775" font-size="10.4" class="t" text-anchor="start" font-weight="700" fill="#2f6f5f">→ no DB round-trip · stable prefix</text>
+<rect x="40" y="805" width="1160" height="50" rx="12" fill="#efe7f3" stroke="#cdbfd6" stroke-width="1" />
+<text x="58" y="826" font-size="12" class="t" text-anchor="start" font-weight="700" >Cost intuition:</text>
+<text x="180" y="826" font-size="11.2" class="t" text-anchor="start" >a signed-in order question (~3 agentic rounds) is mostly system-prefix input.</text>
+<text x="58" y="844" font-size="10.8" class="m" text-anchor="start" >Uncached ≈ 3× the full prompt; cached ≈ 1 write + 2 reads ≈ 1.2× — and across a conversation’s turns/nudges the prefix is written once, hit thereafter. Output tokens are never cached: keep max_tokens sane.</text>
+<line x1="40" y1="875" x2="1200" y2="875" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="897" font-size="10.6" class="m" text-anchor="start" >Source: COST.md. The reach-out judge adds one small Haiku call per SPOKEN proactive line (held beats skip it; fails open). The semantic cache flushes on every KB/config/SOP save — a brief re-warm is the honest trade.</text>
+</svg>
