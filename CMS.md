@@ -5,6 +5,13 @@ deploy**, using the pattern already proven by the concierge config, bot images,
 and selling style: **DB-backed content → function delivery → admin editor →
 client hydration with the hardcoded HTML as the fallback.**
 
+The whole pattern on one page — the DB→function→hydrator round-trip, the client
+hydrator, the two-layer SEO, the slot model, and the safety rules:
+
+[![Storefront CMS](docs/cms-flow.svg)](docs/cms-flow.svg)
+
+*[`docs/cms-flow.svg`](docs/cms-flow.svg) — grounded in this document.*
+
 Decisions (locked):
 - **Scope:** everything — section copy, swappable images, and SEO/meta
   (`<title>`, description, Open Graph).

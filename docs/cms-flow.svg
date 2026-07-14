@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="824" viewBox="0 0 1240 824" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}
+  </style>
+</defs>
+<rect width="1240" height="824" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >Storefront CMS — edit copy, images &amp; SEO without a deploy</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >The proven pattern: DB-backed content → function delivery → admin editor → client hydration, with the hardcoded HTML as the fallback.</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >Source: CMS.md. Phase 1 is shipped.</text>
+<text x="40" y="122" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · The pattern — one round-trip, the HTML as the floor</text>
+<rect x="40.0" y="136" width="220.8" height="72" rx="10" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="52.0" y="156" font-size="10.6" class="t" text-anchor="start" font-weight="700" >Admin · Website panel</text>
+<text x="52.0" y="182" font-size="8.8" class="m" text-anchor="start" >edits slots, grouped by</text>
+<text x="52.0" y="193" font-size="8.8" class="m" text-anchor="start" >section</text>
+<path d="M261.8,172 L272.8,172" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="274.8" y="136" width="220.8" height="72" rx="10" fill="#f6f1e7" stroke="#d9c9a6" stroke-width="1" />
+<text x="286.8" y="156" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >site_content</text>
+<text x="286.8" y="182" font-size="8.8" class="m" text-anchor="start" >slug · kind · value · alt</text>
+<text x="286.8" y="193" font-size="8.8" class="m" text-anchor="start" >(RLS admin-write)</text>
+<path d="M496.6,172 L507.6,172" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="509.6" y="136" width="220.8" height="72" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="521.6" y="156" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >GET ?site=1</text>
+<text x="521.6" y="182" font-size="8.8" class="m" text-anchor="start" >{ slots } · 60 s cache ·</text>
+<text x="521.6" y="193" font-size="8.8" class="m" text-anchor="start" >service role · separate from</text>
+<text x="521.6" y="204" font-size="8.8" class="m" text-anchor="start" >?config</text>
+<path d="M731.4000000000001,172 L742.4000000000001,172" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="744.4000000000001" y="136" width="220.8" height="72" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="756.4000000000001" y="156" font-size="10.6" class="t" text-anchor="start" font-weight="700" >Hydrator · index.html</text>
+<text x="756.4000000000001" y="169" font-size="10.6" class="t" text-anchor="start" font-weight="700" >&lt;head&gt;</text>
+<text x="756.4000000000001" y="182" font-size="8.8" class="m" text-anchor="start" >localStorage → fetch → apply</text>
+<path d="M966.2,172 L977.2,172" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="979.2" y="136" width="220.8" height="72" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="991.2" y="156" font-size="10.6" class="t" text-anchor="start" font-weight="700" >Live page</text>
+<text x="991.2" y="182" font-size="8.8" class="m" text-anchor="start" >[data-cms] slots:</text>
+<text x="991.2" y="193" font-size="8.8" class="m" text-anchor="start" >textContent / src·alt /</text>
+<text x="991.2" y="204" font-size="8.8" class="m" text-anchor="start" >seo.*</text>
+<rect x="40" y="220" width="1160" height="44" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="58" y="239" font-size="11.6" class="t" text-anchor="start" font-weight="700" >The HTML is the floor:</text>
+<text x="240" y="239" font-size="10.9" class="t" text-anchor="start" >defaults give instant paint + an SEO baseline. A slot overrides only when it has a value — an empty/failed fetch never blanks the page.</text>
+<text x="58" y="256" font-size="10.6" class="m" text-anchor="start" >Anonymous visitors never read the table; reads go through the function (service role), exactly like concierge_config.</text>
+<text x="40" y="284" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · The client hydrator — an early inline &lt;head&gt; script</text>
+<rect x="40.0" y="298" width="376.0" height="64" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="54.0" y="322" font-size="12" class="t" text-anchor="start" font-weight="700" >1 · Pre-paint</text>
+<text x="54.0" y="340" font-size="9.8" class="m" text-anchor="start" >apply localStorage-cached slots immediately — no</text>
+<text x="54.0" y="353" font-size="9.8" class="m" text-anchor="start" >flash on repeat visits</text>
+<path d="M418.0,330 L430.0,330" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="432.0" y="298" width="376.0" height="64" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="446.0" y="322" font-size="12" class="t" text-anchor="start" font-weight="700" >2 · Fetch ?site=1</text>
+<text x="446.0" y="340" font-size="9.8" class="m" text-anchor="start" >set textContent (copy) / src·alt (images) /</text>
+<text x="446.0" y="353" font-size="9.8" class="m" text-anchor="start" >document.title + meta·OG (seo.*)</text>
+<path d="M810.0,330 L822.0,330" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="824.0" y="298" width="376.0" height="64" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="838.0" y="322" font-size="12" class="t" text-anchor="start" font-weight="700" >3 · Refresh cache</text>
+<text x="838.0" y="340" font-size="9.8" class="m" text-anchor="start" >store the fetched slots for next visit</text>
+<text x="40" y="382" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · Two-layer SEO/OG — so every audience sees it</text>
+<rect x="40" y="396" width="568" height="92" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="60" y="422" font-size="13" class="t" text-anchor="start" font-weight="700" >Runtime hydrate (instant)</text>
+<text x="60" y="442" font-size="10.4" class="m" text-anchor="start" >The hydrator sets document.title and the meta/OG tags live</text>
+<text x="60" y="457" font-size="10.4" class="m" text-anchor="start" >— covers the browser tab and Google (it runs JS).</text>
+<rect x="632" y="396" width="568" height="92" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="652" y="422" font-size="13" class="t" text-anchor="start" font-weight="700" >Deploy-time &lt;head&gt; bake (on publish)</text>
+<text x="652" y="442" font-size="10.4" class="m" text-anchor="start" >scripts/bake_seo.py reads ?site=1 and writes</text>
+<text x="652" y="457" font-size="10.4" class="m" text-anchor="start" >title/description/OG into index.html before Pages serves</text>
+<text x="652" y="472" font-size="10.4" class="m" text-anchor="start" >it — covers social unfurlers (Slack · iMessage · X) that</text>
+<text x="652" y="487" font-size="10.4" class="m" text-anchor="start" >don’t run JS. Runs in deploy-pages.yml (best-effort).</text>
+<rect x="40" y="500" width="1160" height="26" rx="9" fill="#efe7f3" stroke="#cdbfd6" stroke-width="1" />
+<text x="58" y="517" font-size="10.6" class="t" text-anchor="start" >Copy &amp; images hydrate instantly (no deploy). Only seo.* changes need a republish to reach social crawlers — the tab title still updates live meanwhile.</text>
+<text x="40" y="546" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >4 · The slots &amp; the data model</text>
+<rect x="40" y="560" width="568" height="128" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="60" y="584" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Slot inventory — 59 copy slots by section</text>
+<rect x="60" y="595" width="43" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="81.5" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >SEO</text>
+<rect x="111" y="595" width="50" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="136.0" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >Hero</text>
+<rect x="169" y="595" width="43" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="190.5" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >Why</text>
+<rect x="220" y="595" width="78" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="259.0" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >Benefits</text>
+<rect x="306" y="595" width="57" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="334.5" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >Specs</text>
+<rect x="371" y="595" width="64" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="403.0" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >Ritual</text>
+<rect x="443" y="595" width="71" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="478.5" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >Arrival</text>
+<rect x="522" y="595" width="43" height="22" rx="7" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="543.5" y="610" font-size="10.5" class="t" text-anchor="middle" font-weight="700" >CTA</text>
+<text x="60" y="658" font-size="10" class="m" text-anchor="start" >Tag each element:</text>
+<text x="60" y="674" font-size="10.2" class="warn mono" text-anchor="start" >&lt;h2 data-cms="benefits.headline"&gt;…&lt;/h2&gt;</text>
+<rect x="632" y="560" width="568" height="128" rx="12" fill="#f6f1e7" stroke="#d9c9a6" stroke-width="1" />
+<text x="652" y="584" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Data model — site_content</text>
+<text x="652" y="604" font-size="10" class="t mono" text-anchor="start" font-weight="700" >slug</text>
+<text x="762" y="604" font-size="9.6" class="m" text-anchor="start" >text pk — “benefits.headline” · “ritual.image”</text>
+<text x="652" y="621" font-size="10" class="t mono" text-anchor="start" font-weight="700" >kind</text>
+<text x="762" y="621" font-size="9.6" class="m" text-anchor="start" >text · | image | meta</text>
+<text x="652" y="638" font-size="10" class="t mono" text-anchor="start" font-weight="700" >value</text>
+<text x="762" y="638" font-size="9.6" class="m" text-anchor="start" >copy · image src (http/data:) · or meta value</text>
+<text x="652" y="655" font-size="10" class="t mono" text-anchor="start" font-weight="700" >alt</text>
+<text x="762" y="655" font-size="9.6" class="m" text-anchor="start" >image alt (kind=image)</text>
+<text x="652" y="672" font-size="10" class="t mono" text-anchor="start" font-weight="700" >updated_at</text>
+<text x="762" y="672" font-size="9.6" class="m" text-anchor="start" >timestamptz — per-slot audit</text>
+<rect x="40" y="704" width="1160" height="48" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="724" font-size="12" class="t" text-anchor="start" font-weight="700" >Safety:</text>
+<text x="130" y="724" font-size="10.8" class="t" text-anchor="start" >plain-text only (rendered via textContent — no HTML injection / XSS) · per-slot length caps · image src validated to http(s) / data:image.</text>
+<text x="58" y="742" font-size="10.8" class="m" text-anchor="start" >Per-slot reset-to-default · anonymous reads only via the function · RLS admin-write on the table.</text>
+<line x1="40" y1="772" x2="1200" y2="772" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="792" font-size="10.4" class="m" text-anchor="start" >Shipped (Phase 1): site_content · 59 data-cms slots · ?site=1 delivery · runtime hydrator (localStorage + HTML fallback) · Website admin tab · deploy-time head bake (bake_seo.py in deploy-pages.yml).</text>
+<text x="40" y="807" font-size="10.4" class="m" text-anchor="start" >Deferred: the stylized wordmark &amp; section images (image uploads via Supabase Storage) · live-preview iframe · per-slot change history / rollback.</text>
+</svg>
