@@ -906,7 +906,9 @@ runtime brain raises *quality* rather than policing it: the **sales-strategist
 coach** ([`COACH.md`](COACH.md)) reads the whole situation before each unprompted
 line is written and privately briefs the draft with the best move — the additive
 pre-draft mirror of the (subtractive, post-draft) judge, and bounded by the same
-constitution so it lifts tactics without loosening honesty.
+constitution so it lifts tactics without loosening honesty. How all of these
+interlock — the constitution grounding both coach and judge, with the lint and
+evals as guards — is one picture: [`docs/runtime-brains.svg`](docs/runtime-brains.svg).
 
 Admin-editable selling inputs (all config keys, all versioned in
 `concierge_edit_history`, all lint-checked on save): `assertiveness` (the

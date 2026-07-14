@@ -201,6 +201,11 @@ complementary: the coach makes the line *better*, the judge makes sure it's *saf
 Neither can weaken the house's honesty — the coach is bounded by the same
 constitution the judge enforces.
 
+**The whole interplay in one picture:** [`docs/runtime-brains.svg`](docs/runtime-brains.svg)
+— the control plane, showing how a single constitution grounds both the additive
+coach and the subtractive judge, with the honesty lint and evals as the guards
+around them.
+
 ## 11. How the kit (`concierge-kit`) provisions the coach
 
 - **Vendored unchanged.** `coachBeatLine`, `coachingBlock`, `BEAT_COACH_MODEL`,

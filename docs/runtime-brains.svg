@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="618" viewBox="0 0 1240 618" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <marker id="arrg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#b08d3a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+  </style>
+</defs>
+<rect width="1240" height="618" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >The control plane — how the constitution, coach, and judge interlock</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >One proactive line passes through four independent controls. The key idea: a SINGLE honesty source — the constitution — grounds BOTH the additive coach</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >(which adds the best play before the line is written) and the subtractive judge (which removes defects after). Coach and judge are mirror images, not duplicates.</text>
+<text x="40" y="108" font-size="12.5" class="m" text-anchor="start" >Source: DESIGN.md · SALES.md §13 · COACH.md · JUDGE.md · supabase/functions/concierge/{kb.ts, index.ts}.</text>
+<text x="40" y="132" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The source of truth — one honesty text, stamped per house by the kit</text>
+<rect x="40" y="146" width="1160" height="60" rx="12" fill="#f3ede1" stroke="#c9a54e" stroke-width="2" />
+<text x="60" y="172" font-size="14" class="t" text-anchor="start" font-weight="700" fill="#8a6d1f">THE CONSTITUTION</text>
+<text x="60" y="191" font-size="10.6" class="m mono" text-anchor="start" >kb.ts HONESTY &amp; SCOPE  ·  admin-editable as voice_base  ·  the block the kit stamps per product</text>
+<text x="720" y="172" font-size="10" class="m" text-anchor="start" >one product · no invented facts, prices, or urgency · price posture · claim</text>
+<text x="720" y="186" font-size="10" class="m" text-anchor="start" >boundaries · scope · fair comparisons · never break character. It is the WHAT.</text>
+<text x="40" y="236" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Runtime — one proactive line, left to right (plan → draft → check)</text>
+<rect x="40.0" y="254" width="219.2" height="86" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="149.6" y="280" font-size="12.5" class="t" text-anchor="middle" font-weight="700" >BEAT ENGINE</text>
+<text x="149.6" y="299" font-size="10.4" class="m" text-anchor="middle" font-weight="700" >decides WHEN</text>
+<text x="149.6" y="315" font-size="9.6" class="m" text-anchor="middle" >from the Sales Ledger</text>
+<text x="149.6" y="329" font-size="9.2" class="m" text-anchor="middle" >(deterministic)</text>
+<rect x="275.2" y="254" width="219.2" height="86" rx="12" fill="#e9f1ea" stroke="#7fae90" stroke-width="2" />
+<text x="384.79999999999995" y="280" font-size="12.5" class="t" text-anchor="middle" font-weight="700" fill="#2f6f4f">COACH</text>
+<text x="384.79999999999995" y="299" font-size="10.4" class="m" text-anchor="middle" font-weight="700" >+ ADD strategy</text>
+<text x="384.79999999999995" y="315" font-size="9.6" class="m" text-anchor="middle" >best move / tactic</text>
+<text x="384.79999999999995" y="329" font-size="9.2" class="m" text-anchor="middle" >pre-draft · advisory</text>
+<path d="M261.2,297.0 L273.2,297.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="510.4" y="254" width="219.2" height="86" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="620.0" y="280" font-size="12.5" class="t" text-anchor="middle" font-weight="700" >DRAFT</text>
+<text x="620.0" y="299" font-size="10.4" class="m" text-anchor="middle" font-weight="700" >the model writes</text>
+<text x="620.0" y="315" font-size="9.6" class="m" text-anchor="middle" >acts on the brief</text>
+<text x="620.0" y="329" font-size="9.2" class="m" text-anchor="middle" >beat_line → line</text>
+<path d="M496.4,297.0 L508.4,297.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="745.5999999999999" y="254" width="219.2" height="86" rx="12" fill="#f6ece8" stroke="#c98a6f" stroke-width="2" />
+<text x="855.1999999999999" y="280" font-size="12.5" class="t" text-anchor="middle" font-weight="700" fill="#9a4b2f">JUDGE</text>
+<text x="855.1999999999999" y="299" font-size="10.4" class="m" text-anchor="middle" font-weight="700" >− REMOVE defects</text>
+<text x="855.1999999999999" y="315" font-size="9.6" class="m" text-anchor="middle" >veto / pass</text>
+<text x="855.1999999999999" y="329" font-size="9.2" class="m" text-anchor="middle" >post-draft · fail-open</text>
+<path d="M731.5999999999999,297.0 L743.5999999999999,297.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="980.8" y="254" width="219.2" height="86" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="1090.3999999999999" y="280" font-size="12.5" class="t" text-anchor="middle" font-weight="700" >SHIP / HOLD</text>
+<text x="1090.3999999999999" y="299" font-size="10.4" class="m" text-anchor="middle" font-weight="700" >to the visitor</text>
+<text x="1090.3999999999999" y="315" font-size="9.6" class="m" text-anchor="middle" >or suppressed</text>
+<text x="1090.3999999999999" y="329" font-size="9.2" class="m" text-anchor="middle" >+ audit row</text>
+<path d="M966.8,297.0 L978.8,297.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<path d="M620,206 C384.79999999999995,220 384.79999999999995,238 384.79999999999995,252" stroke="#b08d3a" stroke-width="1.8" fill="none" stroke-dasharray="4 3" marker-end="url(#arrg)"/>
+<path d="M660,206 C855.1999999999999,220 855.1999999999999,238 855.1999999999999,252" stroke="#b08d3a" stroke-width="1.8" fill="none" stroke-dasharray="4 3" marker-end="url(#arrg)"/>
+<text x="384.79999999999995" y="248" font-size="9" class="m" text-anchor="middle" fill="#b08d3a">grounded by</text>
+<text x="855.1999999999999" y="248" font-size="9" class="m" text-anchor="middle" fill="#b08d3a">grounded by</text>
+<text x="40" y="356" font-size="10" class="m" text-anchor="start" >The coach can only ever coach a HOW; the judge only ever removes a defect the house rules forbid. Neither can add or bless a WHAT the constitution doesn’t — so persuasion never bends the truth.</text>
+<text x="40" y="396" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The two other guards (off the hot path)</text>
+<text x="636" y="396" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Four controls at a glance</text>
+<rect x="40" y="412" width="568" height="70" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="436" font-size="11.5" class="t" text-anchor="start" font-weight="700" >HONESTY LINT  (?lint=1)</text>
+<text x="58" y="454" font-size="9.7" class="m" text-anchor="start" >reads every SAVED edit to the selling method, examples, or beat</text>
+<text x="58" y="468" font-size="9.7" class="m" text-anchor="start" >notes; flags conflicts with the constitution. Advisory, at save.</text>
+<rect x="40" y="492" width="568" height="70" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="516" font-size="11.5" class="t" text-anchor="start" font-weight="700" >EVALS  (verify-judge · persona · CI)</text>
+<text x="58" y="534" font-size="9.7" class="m" text-anchor="start" >prove it offline: the judge vetoes planted defects &amp; passes clean</text>
+<text x="58" y="548" font-size="9.7" class="m" text-anchor="start" >lines; personas play shoppers graded whole. Runs in the gauntlet.</text>
+<rect x="636" y="412" width="564" height="150" rx="10" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="636" y="412" width="564" height="30" rx="10" fill="#efe8d8" />
+<rect x="636" y="432" width="564" height="10" rx="0" fill="#efe8d8" />
+<text x="650" y="432" font-size="9.6" class="t" text-anchor="start" font-weight="700" >control</text>
+<text x="786" y="432" font-size="9.6" class="t" text-anchor="start" font-weight="700" >when</text>
+<text x="936" y="432" font-size="9.6" class="t" text-anchor="start" font-weight="700" >effect</text>
+<text x="1066" y="432" font-size="9.6" class="t" text-anchor="start" font-weight="700" >config</text>
+<line x1="636" y1="442" x2="1200" y2="442" stroke="#e6ddc9" stroke-width="1"/>
+<text x="650" y="462" font-size="9.6" class="m" text-anchor="start" font-weight="700" >Constitution</text>
+<text x="786" y="462" font-size="9.6" class="m" text-anchor="start" >assembly</text>
+<text x="936" y="462" font-size="9.6" class="m" text-anchor="start" >shapes ✎</text>
+<text x="1066" y="462" font-size="9.6" class="m mono" text-anchor="start" >voice_base (live)</text>
+<line x1="636" y1="472" x2="1200" y2="472" stroke="#e6ddc9" stroke-width="1"/>
+<text x="650" y="492" font-size="9.6" class="m" text-anchor="start" font-weight="700" >Coach</text>
+<text x="786" y="492" font-size="9.6" class="m" text-anchor="start" >runtime · pre-draft</text>
+<text x="936" y="492" font-size="9.6" class="m" text-anchor="start" >+ add play</text>
+<text x="1066" y="492" font-size="9.6" class="m mono" text-anchor="start" >outreach.beatCoach</text>
+<line x1="636" y1="502" x2="1200" y2="502" stroke="#e6ddc9" stroke-width="1"/>
+<text x="650" y="522" font-size="9.6" class="m" text-anchor="start" font-weight="700" >Judge</text>
+<text x="786" y="522" font-size="9.6" class="m" text-anchor="start" >runtime · post-draft</text>
+<text x="936" y="522" font-size="9.6" class="m" text-anchor="start" >− remove defect</text>
+<text x="1066" y="522" font-size="9.6" class="m mono" text-anchor="start" >outreach.beatJudge</text>
+<line x1="636" y1="532" x2="1200" y2="532" stroke="#e6ddc9" stroke-width="1"/>
+<text x="650" y="552" font-size="9.6" class="m" text-anchor="start" font-weight="700" >Honesty lint</text>
+<text x="786" y="552" font-size="9.6" class="m" text-anchor="start" >at save</text>
+<text x="936" y="552" font-size="9.6" class="m" text-anchor="start" >flag ⚑</text>
+<text x="1066" y="552" font-size="9.6" class="m mono" text-anchor="start" >always (advisory)</text>
+<line x1="40" y1="578" x2="1200" y2="578" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="598" font-size="10.5" class="m" text-anchor="start" >Diagrams: the coach pipeline → docs/sales-coach.svg · the judge suppression → docs/reach-out-judge.svg · the beat engine (WHEN) → docs/beat-system.svg.</text>
+</svg>

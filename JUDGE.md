@@ -291,6 +291,10 @@ between a drafted proactive line and the visitor. Its immediate partner is the
 line, the judge makes sure it's safe. Coach adds, judge removes; both are bounded
 by the same constitution, so neither can weaken the house's honesty.
 
+**The whole interplay in one picture:** [`docs/runtime-brains.svg`](docs/runtime-brains.svg)
+— the control plane, showing how one constitution grounds both the coach and this
+judge, with the honesty lint and evals as the surrounding guards.
+
 ## 13. How the kit (`concierge-kit`) provisions the judge
 
 The judge is part of the **reusable engine**, and the kit —
