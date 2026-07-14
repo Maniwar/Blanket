@@ -67,6 +67,32 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
   a polarity guard refuses a cached hit whose negation signature differs from
   the incoming question's. See SCHEMA.md → `concierge_cache`.
 
+## Reach-out judge — the proactive-line safety gate ([JUDGE.md](JUDGE.md))
+
+The judge is a fixed safety backstop: model + criterion are code, versioned with
+the engine, and the kit ([Maniwar/concierge-kit](https://github.com/Maniwar/concierge-kit))
+vendors it byte-identical to every stamped product (it's in the pristine
+`engine/` snapshot, in neither stamp manifest). Design detail: [JUDGE.md](JUDGE.md)
+§13–14.
+
+- **Generalize the "invented commerce" clause** *(near-term, low-risk).*
+  `BEAT_JUDGE_CRITERION` still says *"the house never discounts; the edition's
+  numbered scarcity is the only real urgency"* — a Feierabend assumption that
+  ships to every stamped product. Replace it with a product-neutral form (e.g.
+  *"a discount / price cut / urgency the house has not authorized"*) so it reads
+  correctly for non-scarce or negotiable products (e.g. the 996 pilot). One engine
+  edit; flows to the kit on the next `vendor-update`. No per-stamp change.
+- **(Considered) Stampable criterion.** Make `BEAT_JUDGE_CRITERION` a Class-2
+  block the kit rewrites per brand. Held — it adds a brand-authored surface to a
+  safety control and weakens the uniform-backstop guarantee.
+- **(Declined) Operator-editable criterion.** A safety gate the controlled party
+  can weaken isn't a control (JUDGE.md §7). House-specific rules go in the
+  constitution/SOPs instead.
+- **(Small) Configurable judge model tier** — expose `BEAT_JUDGE_MODEL` per
+  install for cost/quality trade-offs at scale.
+- **(Scope) Judge reactive replies too**, not only proactive lines — at a
+  per-turn latency/cost the current design deliberately avoids.
+
 ## Deferred by choice
 
 - **Lifecycle beats package.** Weave-milestone updates, post-delivery

@@ -222,3 +222,57 @@ persona evals. See [`evals/CATALOG.md`](evals/CATALOG.md).
 
 The judge is the only runtime, output-inspecting control — the last thing
 between a drafted proactive line and the visitor.
+
+## 13. How the kit (`concierge-kit`) provisions the judge
+
+The judge is part of the **reusable engine**, and the kit —
+[Maniwar/concierge-kit](https://github.com/Maniwar/concierge-kit) — stamps that
+engine onto a new storefront. As of this writing, its handling of the judge:
+
+- **Vendored unchanged.** `judgeBeatLine`, `BEAT_JUDGE_MODEL`, and
+  `BEAT_JUDGE_CRITERION` live in the pristine `engine/` snapshot and appear in
+  **neither** stamp manifest (`stamp/tokens.manifest.json`,
+  `stamp/blocks.manifest.json`). Every stamped product gets the judge
+  **byte-identical**, pinned to `ENGINE_VERSION`. This is deliberate — the judge
+  is a safety backstop, kept uniform and versioned rather than regenerated per
+  brand (the same reasoning as §7).
+- **Defaults ON with no seed.** `beatJudge !== false` means absent = on; the
+  stamp does not need to seed it.
+- **Gate-clean.** The criterion uses only generic terms, so it carries no brand
+  string and passes `stamp/forbidden-strings.txt` (the leakage gate) untouched.
+- **Exercised per product.** `adopt generate` writes a product-specific eval deck
+  (judge-adjacent scenarios like *no-scarcity-theater*), and `adopt verify` runs
+  it against the new deployment — so the reach-out judge is *tested* against each
+  brand even though its rules are not rewritten. *(The `judge:` fields in that
+  deck are the eval grader — a separate mechanism from this reach-out judge.)*
+
+**Known seam.** Defect (3)'s parenthetical — *"the house never discounts; the
+edition's numbered scarcity is the only real urgency"* — encodes a Feierabend
+assumption. It leaks no brand string (so it stamps clean), but for a non-scarce
+or negotiable product (e.g. the porsche996turbo pilot, whose adoption asks the
+owner about offer posture) that rationale can contradict the stamped selling
+method. The six defects still function; only the wording is coupled. See §14.
+
+## 14. Backlog / open ideas
+
+Recorded so the current design is intentional and the options are on the record;
+mirrored in [BACKLOG.md](BACKLOG.md).
+
+- **Generalize defect (3) in the engine** *(near-term, low-risk).* Replace the
+  numbered-edition wording with a product-neutral form — e.g. *"invented commerce
+  — a discount / price cut / urgency the house has not authorized"*. One engine
+  edit; flows to the kit on the next `vendor-update`. Removes the seam above
+  without making the judge stampable.
+- **Per-product criterion via the block manifest** *(considered).* Make
+  `BEAT_JUDGE_CRITERION` a Class-2 block the kit rewrites per brand. Trade-off: it
+  adds a brand-authored surface to a *safety* control and weakens the "one uniform
+  backstop" guarantee — held unless a product needs genuinely different defects.
+- **Operator-editable criterion (admin)** *(declined, by design).* A merchant
+  editing the gate that constrains their own bot is the failure mode the gate
+  prevents (§7). House-specific "never say X" belongs in the constitution/SOPs,
+  which shape the draft.
+- **Configurable judge model tier** *(small).* Expose `BEAT_JUDGE_MODEL` as a
+  per-install setting for cost/quality trade-offs at scale.
+- **Judge reactive replies too** *(scope).* Today only *proactive* lines are
+  judged; a stricter product could extend the same gate to reactive answers, at a
+  per-turn latency/cost the current design deliberately avoids.
