@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="918" viewBox="0 0 1240 918" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="a_read" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#2f6f9f"/></marker><marker id="a_write" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#b5761b"/></marker><marker id="a_model" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#6b6455"/></marker><marker id="a_ret" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#9a927f"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}
+  </style>
+</defs>
+<rect width="1240" height="918" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >How a concierge tool reads &amp; writes — one call, end to end</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >The model decides to call a tool; the concierge function executes it — every read and write labelled, both hard gates shown. Source: TOOLS.md.</text>
+<rect x="40" y="86" width="1160" height="32" rx="8" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="106" font-size="12" class="t" text-anchor="start" font-weight="700" >Scenario — a signed-in patron says: “change my Loden to Graphit.”  (tool: update_colorway)</text>
+<line x1="40" y1="138" x2="66" y2="138" stroke="#2f6f9f" stroke-width="2.4"/>
+<text x="74" y="142" font-size="10.8" class="m" text-anchor="start" >READ (SELECT)</text>
+<line x1="195.8" y1="138" x2="221.8" y2="138" stroke="#b5761b" stroke-width="2.4"/>
+<text x="229.8" y="142" font-size="10.8" class="m" text-anchor="start" >WRITE (UPDATE / INSERT)</text>
+<line x1="417.6" y1="138" x2="443.6" y2="138" stroke="#6b6455" stroke-width="2.4"/>
+<text x="451.6" y="142" font-size="10.8" class="m" text-anchor="start" >model round-trip</text>
+<line x1="593.2" y1="138" x2="619.2" y2="138" stroke="#9a927f" stroke-width="2.4" stroke-dasharray="5 4"/>
+<text x="627.2" y="142" font-size="10.8" class="m" text-anchor="start" >return</text>
+<rect x="702.8000000000001" y="127" width="150" height="18" rx="9" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="714.8000000000001" y="140" font-size="10.3" class="warn" text-anchor="start" font-weight="700" >GATE · guard</text>
+<rect x="52" y="162" width="156" height="44" rx="10" fill="#eef3f8" stroke="#a9c0d8" stroke-width="1" />
+<text x="130" y="182" font-size="13" class="t" text-anchor="middle" font-weight="700" >Patron</text>
+<text x="130" y="198" font-size="10" class="m" text-anchor="middle" >browser widget</text>
+<line x1="130" y1="206" x2="130" y2="760" stroke="#c9beac" stroke-width="1.3" stroke-dasharray="3 4"/>
+<rect x="352" y="162" width="156" height="44" rx="10" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
+<text x="430" y="182" font-size="13" class="t" text-anchor="middle" font-weight="700" >Claude</text>
+<text x="430" y="198" font-size="10" class="m" text-anchor="middle" >the model</text>
+<line x1="430" y1="206" x2="430" y2="760" stroke="#c9beac" stroke-width="1.3" stroke-dasharray="3 4"/>
+<rect x="642" y="162" width="156" height="44" rx="10" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="720" y="182" font-size="13" class="t" text-anchor="middle" font-weight="700" >Concierge fn</text>
+<text x="720" y="198" font-size="10" class="m" text-anchor="middle" >Deno · edge</text>
+<line x1="720" y1="206" x2="720" y2="760" stroke="#c9beac" stroke-width="1.3" stroke-dasharray="3 4"/>
+<rect x="972" y="162" width="156" height="44" rx="10" fill="#f6f1e7" stroke="#d9c9a6" stroke-width="1" />
+<text x="1050" y="182" font-size="13" class="t" text-anchor="middle" font-weight="700" >Postgres</text>
+<text x="1050" y="198" font-size="10" class="m" text-anchor="middle" >RLS boundary</text>
+<line x1="1050" y1="206" x2="1050" y2="760" stroke="#c9beac" stroke-width="1.3" stroke-dasharray="3 4"/>
+<rect x="714" y="206" width="12" height="506" rx="3" fill="#e7ddc9" stroke="#cdbf9f" stroke-width="1" />
+<line x1="130" y1="206" x2="720" y2="206" stroke="#6b6455" stroke-width="2.2" fill="none" marker-end="url(#a_model)"/>
+<text x="280" y="199" font-size="10.6" class="t" text-anchor="middle" >chat message · signed-in session</text>
+<rect x="592" y="222" width="256" height="20" rx="10" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="720" y="236" font-size="10.4" class="warn" text-anchor="middle" font-weight="700" >GATE 1 · signed-in only (verified magic-link)</text>
+<rect x="1044" y="266" width="12" height="42" rx="3" fill="#efe7d4" stroke="#d8ccae" stroke-width="1" />
+<line x1="720" y1="266" x2="1050" y2="266" stroke="#2f6f9f" stroke-width="2.2" fill="none" marker-end="url(#a_read)"/>
+<text x="885.0" y="259" font-size="10.6" class="t" text-anchor="middle" >read: notes · last convo · orders  (customerBlock)</text>
+<line x1="1050" y1="308" x2="720" y2="308" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
+<text x="885.0" y="301" font-size="10.6" class="t" text-anchor="middle" >rows</text>
+<rect x="424" y="350" width="12" height="42" rx="3" fill="#efe7d4" stroke="#d8ccae" stroke-width="1" />
+<line x1="720" y1="350" x2="430" y2="350" stroke="#6b6455" stroke-width="2.2" fill="none" marker-end="url(#a_model)"/>
+<text x="575.0" y="343" font-size="10.6" class="t" text-anchor="middle" >messages + tool list  (buildToolsForModel)</text>
+<line x1="430" y1="392" x2="720" y2="392" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
+<text x="575.0" y="385" font-size="10.6" class="t mono" text-anchor="middle" >tool_use: update_colorway {Nº 14231 → Graphit}</text>
+<rect x="1044" y="434" width="12" height="42" rx="3" fill="#efe7d4" stroke="#d8ccae" stroke-width="1" />
+<line x1="720" y1="434" x2="1050" y2="434" stroke="#2f6f9f" stroke-width="2.2" fill="none" marker-end="url(#a_read)"/>
+<text x="885.0" y="427" font-size="10.6" class="t mono" text-anchor="middle" >ownershipFilter: SELECT WHERE serial AND owner = caller</text>
+<line x1="1050" y1="476" x2="720" y2="476" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
+<text x="885.0" y="469" font-size="10.6" class="t" text-anchor="middle" >order · owned · placed</text>
+<rect x="580" y="492" width="280" height="20" rx="10" fill="#f6ece8" stroke="#e0c3b6" stroke-width="1" />
+<text x="720" y="506" font-size="10.4" class="warn" text-anchor="middle" font-weight="700" >GATE 2 · caller’s own order · status = placed</text>
+<line x1="720" y1="542" x2="1050" y2="542" stroke="#b5761b" stroke-width="2.2" fill="none" marker-end="url(#a_write)"/>
+<text x="885.0" y="535" font-size="10.6" class="t mono" text-anchor="middle" >UPDATE orders SET colorway = Graphit</text>
+<line x1="720" y1="584" x2="1050" y2="584" stroke="#b5761b" stroke-width="2.2" fill="none" marker-end="url(#a_write)"/>
+<text x="885.0" y="577" font-size="10.6" class="t mono" text-anchor="middle" >INSERT concierge_actions  (logAction · audit row)</text>
+<line x1="720" y1="626" x2="430" y2="626" stroke="#6b6455" stroke-width="2.2" fill="none" marker-end="url(#a_model)"/>
+<text x="575.0" y="619" font-size="10.6" class="t mono" text-anchor="middle" >tool_result: “Changed Nº 14231 to Graphit.”</text>
+<line x1="430" y1="668" x2="720" y2="668" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
+<text x="575.0" y="661" font-size="10.6" class="t" text-anchor="middle" >final words</text>
+<line x1="720" y1="710" x2="130" y2="710" stroke="#9a927f" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a_ret)"/>
+<text x="280" y="703" font-size="10.6" class="t" text-anchor="middle" >streamed reply</text>
+<text x="40" y="784" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The same skeleton, two variations</text>
+<rect x="40" y="796" width="568" height="66" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="820" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Read-only tools</text>
+<text x="58" y="838" font-size="10.8" class="m" text-anchor="start" >get_my_orders · track_shipment · get_care_guide stop at the</text>
+<text x="58" y="853" font-size="10.8" class="m" text-anchor="start" >SELECT (step 7) — the read IS the job: no UPDATE, no audit row.</text>
+<rect x="632" y="796" width="568" height="66" rx="12" fill="#f3eef7" stroke="#cabbd8" stroke-width="1" />
+<text x="650" y="820" font-size="12.5" class="t" text-anchor="start" font-weight="700" >The one ACTION tool</text>
+<text x="650" y="838" font-size="10.4" class="m" text-anchor="start" >resend_confirmation adds a hop after the ownership check:</text>
+<text x="650" y="852" font-size="10.4" class="m" text-anchor="start" >Concierge → Commission fn (?custresend=1, service-key) → email —</text>
+<text x="650" y="866" font-size="10.4" class="m" text-anchor="start" >the only tool that reaches outside the concierge.</text>
+<line x1="40" y1="876" x2="1200" y2="876" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="898" font-size="10.6" class="m" text-anchor="start" >Source: TOOLS.md. Tools run only for a verified session and only on the caller’s own entries (ownershipFilter); every call is written to concierge_actions. SOPs (concierge_sops) govern HOW the bot behaves around each.</text>
+</svg>

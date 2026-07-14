@@ -5,12 +5,17 @@ read their orders, change a cloth, cancel, re-send a confirmation, log a mending
 request, and more. This document covers what the tools are, how they're gated, and
 how an admin manages — and **creates** — them from the Studio's **Tools** tab.
 
-The whole system on one page — the two kinds of tool, the runtime lifecycle and
-its two hard gates, the built-in catalog, and the config-over-code override model:
+**How a tool actually reads and writes** — one call traced end to end (patron →
+model → concierge → Postgres), every read and write labelled and both gates shown:
+
+[![How a concierge tool reads and writes](docs/tool-sequence.svg)](docs/tool-sequence.svg)
+
+And the whole system on one page — the two kinds of tool, the runtime lifecycle,
+the built-in catalog, and the config-over-code override model:
 
 [![The concierge tool system](docs/tools-system.svg)](docs/tools-system.svg)
 
-*[`docs/tools-system.svg`](docs/tools-system.svg) — grounded in this document.*
+*[`docs/tool-sequence.svg`](docs/tool-sequence.svg) · [`docs/tools-system.svg`](docs/tools-system.svg) — both grounded in this document.*
 
 ## 0. Two kinds of tool
 
