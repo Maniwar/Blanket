@@ -31,6 +31,13 @@ found and fixed. No exploitable injection. All 24 tables have RLS with correct
 policies. No secret reaches the browser.** Remaining items are low-severity or
 operational-process (certification) work.
 
+The whole review on one page — the verdict, the USER/ADMIN/SERVICE authorization
+model over the RLS boundary, the fixed/accepted findings, and where each secret lives:
+
+[![Security posture](docs/security-posture.svg)](docs/security-posture.svg)
+
+*[`docs/security-posture.svg`](docs/security-posture.svg) — grounded in this document.*
+
 ## Findings & disposition
 
 ### Fixed
