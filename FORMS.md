@@ -10,6 +10,13 @@ Forms are defined in the **admin studio → Tools → Form tools**, stored in th
 concierge config. Everything below is editable without a deploy. (Forms are one
 of the two kinds of tool the concierge can use — see [`TOOLS.md`](TOOLS.md).)
 
+The whole flow on one page — the form’s anatomy, its lifecycle from token to
+audited write, the submit tools, and the field schema:
+
+[![In-chat forms](docs/forms-flow.svg)](docs/forms-flow.svg)
+
+*[`docs/forms-flow.svg`](docs/forms-flow.svg) — grounded in this document.*
+
 ---
 
 ## 1. What a form is

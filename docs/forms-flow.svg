@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="782" viewBox="0 0 1240 782" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+    .warn{fill:#8a4b32}
+  </style>
+</defs>
+<rect width="1240" height="782" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >In-chat forms — a low-error edit inside the conversation</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >When collecting an address field-by-field in prose is risky, the concierge hands over a small labelled form. It crosses the same trust boundary as a tool call.</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >Defined in Studio → Tools → Form tools · stored in concierge_forms · delivered with the config. Source: FORMS.md.</text>
+<text x="40" y="122" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · A form is three things bound together — and one rendered example</text>
+<rect x="40" y="136" width="568" height="200" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="56" y="158" width="150" height="32" rx="8" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="131" y="178" font-size="12.5" class="t" text-anchor="middle" font-weight="700" >slug</text>
+<text x="220" y="171" font-size="11.3" class="t" text-anchor="start" >the handle in the token</text>
+<text x="220" y="186" font-size="10" class="m mono" text-anchor="start" >concierge_forms.slug — “address-change”</text>
+<rect x="56" y="204" width="150" height="32" rx="8" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="131" y="224" font-size="12.5" class="t" text-anchor="middle" font-weight="700" >submit tool</text>
+<text x="220" y="217" font-size="11.3" class="t" text-anchor="start" >the register write path it runs</text>
+<text x="220" y="232" font-size="10" class="m mono" text-anchor="start" >concierge_forms.submit_tool</text>
+<rect x="56" y="250" width="150" height="32" rx="8" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="131" y="270" font-size="12.5" class="t" text-anchor="middle" font-weight="700" >fields</text>
+<text x="220" y="263" font-size="11.3" class="t" text-anchor="start" >the labelled inputs (JSON array)</text>
+<text x="220" y="278" font-size="10" class="m mono" text-anchor="start" >concierge_forms.fields</text>
+<text x="56" y="318" font-size="10.6" class="m" text-anchor="start" >On its own line the bot emits a token → the widget renders the form:</text>
+<text x="640" y="150" font-size="12" class="warn mono" text-anchor="start" font-weight="700" >{{form:address-change:1287}}</text>
+<path d="M882,146 L932,146" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<text x="944" y="150" font-size="11" class="m" text-anchor="start" >widget renders →</text>
+<rect x="632" y="160" width="568" height="176" rx="12" fill="#ffffff" stroke="#d8d2c6" stroke-width="1" />
+<rect x="632" y="160" width="568" height="34" rx="12" fill="#f3ede2" />
+<rect x="632" y="180" width="568" height="14" rx="0" fill="#f3ede2" />
+<text x="650" y="182" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Change delivery address</text>
+<text x="650" y="206" font-size="9.6" class="m" text-anchor="start" >Street address</text>
+<rect x="650" y="211" width="532" height="22" rx="6" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="1" />
+<text x="650" y="246" font-size="9.6" class="m" text-anchor="start" >Apt, suite — if needed</text>
+<rect x="650" y="251" width="532" height="22" rx="6" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="1" />
+<text x="650" y="286" font-size="9.6" class="m" text-anchor="start" >City</text>
+<rect x="650" y="291" width="300" height="22" rx="6" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="1" />
+<text x="966" y="286" font-size="9.6" class="m" text-anchor="start" >State</text>
+<rect x="966" y="291" width="70" height="22" rx="6" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="1" />
+<text x="1052" y="286" font-size="9.6" class="m" text-anchor="start" >ZIP</text>
+<rect x="1052" y="291" width="130" height="22" rx="6" fill="#fbfaf7" stroke="#d8d2c6" stroke-width="1" />
+<rect x="1072" y="302" width="110" height="24" rx="7" fill="#b98a4a" />
+<text x="1127" y="318" font-size="11.5" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">Submit</text>
+<text x="40" y="350" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · From token to audited write — same boundary as a tool call</text>
+<rect x="40.0" y="364" width="180.0" height="70" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="51.0" y="384" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Bot emits the</text>
+<text x="51.0" y="397" font-size="10.8" class="t" text-anchor="start" font-weight="700" >token</text>
+<text x="51.0" y="414" font-size="8.7" class="m mono" text-anchor="start" >{{form:slug:serial}}</text>
+<text x="51.0" y="425" font-size="8.7" class="m mono" text-anchor="start" >on its own line</text>
+<path d="M222.0,399 L234.0,399" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="236.0" y="364" width="180.0" height="70" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="247.0" y="384" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Widget renders</text>
+<text x="247.0" y="414" font-size="8.7" class="m" text-anchor="start" >the labelled fields</text>
+<text x="247.0" y="425" font-size="8.7" class="m" text-anchor="start" >for that order</text>
+<path d="M418.0,399 L430.0,399" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="432.0" y="364" width="180.0" height="70" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="443.0" y="384" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Patron submits</text>
+<text x="443.0" y="414" font-size="8.7" class="m" text-anchor="start" >values POSTed back</text>
+<path d="M614.0,399 L626.0,399" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="628.0" y="364" width="180.0" height="70" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="639.0" y="384" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Edge fn re-</text>
+<text x="639.0" y="397" font-size="10.8" class="t" text-anchor="start" font-weight="700" >validates</text>
+<text x="639.0" y="414" font-size="8.7" class="m" text-anchor="start" >each field, against</text>
+<text x="639.0" y="425" font-size="8.7" class="m" text-anchor="start" >the form’s own defs</text>
+<path d="M810.0,399 L822.0,399" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="824.0" y="364" width="180.0" height="70" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="835.0" y="384" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Runs the submit</text>
+<text x="835.0" y="397" font-size="10.8" class="t" text-anchor="start" font-weight="700" >tool</text>
+<text x="835.0" y="414" font-size="8.7" class="m" text-anchor="start" >as signed-in patron;</text>
+<text x="835.0" y="425" font-size="8.7" class="m" text-anchor="start" >ownership guard</text>
+<path d="M1006.0,399 L1018.0,399" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="1020.0" y="364" width="180.0" height="70" rx="10" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="1031.0" y="384" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Write + audit</text>
+<text x="1031.0" y="414" font-size="8.7" class="m mono" text-anchor="start" >order updated · logged</text>
+<text x="1031.0" y="425" font-size="8.7" class="m mono" text-anchor="start" >to concierge_actions</text>
+<text x="40" y="454" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · Submit tools &amp; the field schema</text>
+<rect x="40" y="468" width="568" height="182" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="60" y="494" font-size="13" class="t" text-anchor="start" font-weight="700" >Submit tools — order-scoped register writes</text>
+<text x="60" y="525" font-size="11.5" class="t mono" text-anchor="start" font-weight="700" >update_shipping_address</text>
+<text x="60" y="540" font-size="10.6" class="m" text-anchor="start" >change the delivery address</text>
+<text x="588" y="525" font-size="9.8" class="warn" text-anchor="end" >only before shipment</text>
+<text x="60" y="565" font-size="11.5" class="t mono" text-anchor="start" font-weight="700" >update_colorway</text>
+<text x="60" y="580" font-size="10.6" class="m" text-anchor="start" >change the cloth</text>
+<text x="588" y="565" font-size="9.8" class="warn" text-anchor="end" >only while status = placed</text>
+<line x1="60" y1="596" x2="588" y2="596" stroke="#e4dccb" stroke-width="1"/>
+<text x="60" y="615" font-size="12" class="t" text-anchor="start" font-weight="700" >The inquiry exception — submit_inquiry</text>
+<text x="60" y="631" font-size="10.2" class="m" text-anchor="start" >lead capture, not a register write: NO serial · NO sign-in ·</text>
+<text x="60" y="646" font-size="10.2" class="m" text-anchor="start" >works for anonymous visitors (make-an-offer · book-a-viewing). See INQUIRIES.md.</text>
+<rect x="632" y="468" width="568" height="182" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="652" y="494" font-size="13" class="t" text-anchor="start" font-weight="700" >The field schema — one JSON object per input</text>
+<text x="652" y="514" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >name</text>
+<text x="782" y="514" font-size="10.2" class="m" text-anchor="start" >key sent to the submit tool — must match</text>
+<text x="652" y="535" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >label</text>
+<text x="782" y="535" font-size="10.2" class="m" text-anchor="start" >shown above the input (keep it short)</text>
+<text x="652" y="556" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >type</text>
+<text x="782" y="556" font-size="10.2" class="m mono" text-anchor="start" >text · state (^[A-Z]{2}$) · zip (12345[-6789])</text>
+<text x="652" y="577" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >required</text>
+<text x="782" y="577" font-size="10.2" class="m" text-anchor="start" >true blocks submit; server re-checks</text>
+<text x="652" y="598" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >maxlength</text>
+<text x="782" y="598" font-size="10.2" class="m" text-anchor="start" >soft UI cap; server trims to 200</text>
+<text x="652" y="619" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >autocomplete</text>
+<text x="782" y="619" font-size="10.2" class="m" text-anchor="start" >browser autofill hint (postal-code…)</text>
+<text x="652" y="638" font-size="10" class="warn" text-anchor="start" >No select/radio type yet · at least one field required.</text>
+<rect x="40" y="666" width="1160" height="54" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="688" font-size="12" class="t" text-anchor="start" font-weight="700" >Trust &amp; audit — a submission is not a shortcut around the tools:</text>
+<text x="58" y="707" font-size="10.8" class="m" text-anchor="start" >Verified JWT (register-edit forms) · ownership filter (only the patron’s own orders) · server-side field re-validation · shares the register rate limiter · every submission logged to concierge_actions (Register-actions tab).</text>
+<line x1="40" y1="740" x2="1200" y2="740" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="762" font-size="10.6" class="m" text-anchor="start" >Source: FORMS.md. Slug + submit tool freeze on save (referenced by the token &amp; SOPs); title/fields/enabled stay editable. You steer WHEN the bot offers a form via SOPs + tuning notes — it never invents slugs.</text>
+</svg>
