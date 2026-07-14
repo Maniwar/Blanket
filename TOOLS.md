@@ -43,6 +43,15 @@ array). When a signed-in patron chats, the function sends the model the tool lis
 the model may call one, the function **executes** it (`runRegisterTool`) and feeds
 the result back, then the model replies in words.
 
+These are **Anthropic tool use (native function calling)** — not a custom
+mechanism. Each tool is a `{ name, description, input_schema }` definition sent
+in the API's `tools[]` array; Claude never runs code — it stops with
+`stop_reason: "tool_use"` and returns a structured `tool_use` block (`{ name,
+input }`, JSON validated against the schema). The function executes that request
+and appends a `tool_result` block, and the loop repeats while
+`stop_reason === "tool_use"` (capped at ~4 rounds). See
+[`docs/tool-sequence.svg`](docs/tool-sequence.svg) for the exact JSON at each step.
+
 Two hard rules apply to every tool:
 
 - **Signed-in only.** Tools run only for a verified magic-link session. Anonymous
