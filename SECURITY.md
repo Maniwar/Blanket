@@ -81,6 +81,9 @@ model over the RLS boundary, the fixed/accepted findings, and where each secret 
   gated USER / ADMIN / SERVICE. `?judge` and `?secrets` are admin-only; `?custresend`
   is service-to-server only (unreachable from the browser); order writes are
   ownership-scoped and audited. Auth is passwordless magic-link (no password store).
+  Chat-injected tool-call JSON can't forge a tool invocation — tool calls are
+  structured API channels (not text the server parses) and identity is JWT-derived,
+  not taken from the message; see [`TOOLS.md`](TOOLS.md#can-a-user-forge-a-tool-call-by-typing-json-into-the-chat).
 - **Secure Software Development (OWASP)** — **A01** access control enforced in the
   DB, not just the UI; **A02** secrets server-only, TLS by the platform; **A03**
   no exploitable injection (numeric coercion, whitelists, UUID validation,

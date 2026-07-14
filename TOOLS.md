@@ -52,6 +52,40 @@ and appends a `tool_result` block, and the loop repeats while
 `stop_reason === "tool_use"` (capped at ~4 rounds). See
 [`docs/tool-sequence.svg`](docs/tool-sequence.svg) for the exact JSON at each step.
 
+### Can a user forge a tool call by typing JSON into the chat?
+
+**No.** A user can only ever produce a `user` message with **`text`** content, so
+pasting `{"type":"tool_use","name":"cancel_order",…}` (or a fake `tool_result`)
+lands as *text that happens to contain JSON* — Claude reads it as characters, not
+as an invocation. Tool calls are separate **structured channels**, not patterns
+parsed out of prose: a `tool_use` block is only ever emitted by the model
+(returned by the API with `stop_reason: "tool_use"`), and a `tool_result` is only
+ever produced by the server. The execution trigger is `stop_reason` on the
+*assistant* turn, never a scan of the user's words — so typed JSON reaches no code
+path that writes anything.
+
+The stronger case — *prompt-injecting the model into actually calling a tool* —
+also fails, by defense in depth that doesn't trust the model:
+
+- **Identity comes from the session, not the chat.** `runRegisterTool(name,
+  input, customer, cid)` derives `customer` from the verified magic-link JWT; the
+  model's `input` only supplies parameters (a serial, a colorway). Every write is
+  scoped by `ownershipFilter(customer)`, which ANDs `user_id = <the caller>` into
+  the query — so a tool aimed at someone else's order matches **zero rows**.
+- **Anonymous sessions get no tools at all** — a logged-out visitor can't call
+  anything.
+- **Server-side revalidation** — `input` is schema-validated by the API *and*
+  re-checked in `runRegisterTool` (colorway enum whitelist, integer serials,
+  status guards like "only while `placed`").
+- **Everything is logged** to `concierge_actions`.
+
+The one residual is cosmetic: a pasted fake `tool_result` might make the model
+*narrate* a success in words, but **no write occurs** — the database never
+changed, and it's the source of truth (`get_my_orders` reads real state, so the
+claim is immediately contradicted). That's a truthfulness annoyance, not a breach.
+The boundary is architectural (structured channels + JWT-derived identity + RLS
+ownership), not "the model is clever enough not to be fooled."
+
 Two hard rules apply to every tool:
 
 - **Signed-in only.** Tools run only for a verified magic-link session. Anonymous
