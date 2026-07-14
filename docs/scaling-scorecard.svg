@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1308" viewBox="0 0 1240 1308" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}.h{font-weight:700}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+  </style>
+</defs>
+<rect width="1240" height="1308" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >Scaling scorecard — what holds, what breaks at millions of users</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >The shape is sound: static front end on a CDN · stateless edge functions · Postgres with RLS as the boundary. Nothing here needs a rewrite to scale.</text>
+<rect x="40" y="86" width="1160" height="46" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="106" font-size="12.5" class="t" text-anchor="start" font-weight="700" >Short version:</text>
+<text x="160" y="106" font-size="12.5" class="t" text-anchor="start" >the four blockers (#1–#4) are addressed — shared rate limiting · bounded-growth retention · indexed admin search · estimate-based counts.</text>
+<text x="58" y="123" font-size="12" class="m" text-anchor="start" >The remaining items (#5–#8) are “plan for them”, not blockers. Ranked below, worst first. Written against the code as of this review.</text>
+<text x="40" y="168" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Scales fine as-is — no change needed</text>
+<rect x="40.0" y="180" width="340" height="60" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58.0" y="205" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Front end · CDN</text>
+<text x="58.0" y="223" font-size="10.6" class="m" text-anchor="start" >GitHub Pages · static, cache-busted — millions of</text>
+<text x="58.0" y="237" font-size="10.6" class="m" text-anchor="start" >readers is what a CDN is for</text>
+<path d="M386.0,210 L444.0,210" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="450.0" y="180" width="340" height="60" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="468.0" y="205" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Edge functions</text>
+<text x="468.0" y="223" font-size="10.6" class="m" text-anchor="start" >stateless Deno — autoscale horizontally; each</text>
+<text x="468.0" y="237" font-size="10.6" class="m" text-anchor="start" >request independent</text>
+<path d="M796.0,210 L854.0,210" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="860.0" y="180" width="340" height="60" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="878.0" y="205" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Postgres · RLS</text>
+<text x="878.0" y="223" font-size="10.6" class="m" text-anchor="start" >the boundary; correctness doesn’t degrade with</text>
+<text x="878.0" y="237" font-size="10.6" class="m" text-anchor="start" >volume</text>
+<rect x="40" y="250" width="1160" height="34" rx="9" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="58" y="265" font-size="11.5" class="t" text-anchor="start" >Semantic cache — match_cached_answer rides the HNSW index (~log-time) and offloads the LLM on common questions.</text>
+<text x="58" y="279" font-size="10.6" class="m" text-anchor="start" >It gets MORE valuable at scale, not less.</text>
+<text x="40" y="304" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >Capacity ladder — how far each tier goes, and what unlocks the next</text>
+<rect x="40.0" y="318" width="278.0" height="176" rx="12" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="56.0" y="340" font-size="11" class="t cap" text-anchor="start" font-weight="700" >TODAY</text>
+<text x="56.0" y="358" font-size="10.8" class="t" text-anchor="start" font-weight="700" >Demo / pilot</text>
+<text x="56.0" y="380" font-size="10" class="m" text-anchor="start" >Everything as-is. No action —</text>
+<text x="56.0" y="394" font-size="10" class="m" text-anchor="start" >the demo’s volume is a rounding</text>
+<text x="56.0" y="408" font-size="10" class="m" text-anchor="start" >error for this shape.</text>
+<path d="M320.0,406.0 L331.0,406.0" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="334.0" y="318" width="278.0" height="176" rx="12" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="350.0" y="340" font-size="11" class="t cap" text-anchor="start" font-weight="700" >STEADY</text>
+<text x="350.0" y="358" font-size="10.8" class="t" text-anchor="start" font-weight="700" >~thousands concurrent</text>
+<text x="350.0" y="380" font-size="10" class="m" text-anchor="start" >CDN + stateless functions +</text>
+<text x="350.0" y="394" font-size="10" class="m" text-anchor="start" >semantic cache carry it. Ensure</text>
+<text x="350.0" y="408" font-size="10" class="m" text-anchor="start" >retention runs nightly (#2) and</text>
+<text x="350.0" y="422" font-size="10" class="m" text-anchor="start" >PostgREST goes through the</text>
+<text x="350.0" y="436" font-size="10" class="m" text-anchor="start" >Supavisor pooler (#5).</text>
+<path d="M614.0,406.0 L625.0,406.0" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="628.0" y="318" width="278.0" height="176" rx="12" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="644.0" y="340" font-size="11" class="t cap" text-anchor="start" font-weight="700" >HIGH</text>
+<text x="644.0" y="358" font-size="10.8" class="t" text-anchor="start" font-weight="700" >~tens of thousands</text>
+<text x="644.0" y="372" font-size="10.8" class="t" text-anchor="start" font-weight="700" >concurrent · low-millions</text>
+<text x="644.0" y="386" font-size="10.8" class="t" text-anchor="start" font-weight="700" >of users</text>
+<text x="644.0" y="408" font-size="10" class="m" text-anchor="start" >Collapse per-request fan-out</text>
+<text x="644.0" y="422" font-size="10" class="m" text-anchor="start" >into one customer-bundle RPC</text>
+<text x="644.0" y="436" font-size="10" class="m" text-anchor="start" >(#5). Admin search (#3) and</text>
+<text x="644.0" y="450" font-size="10" class="m" text-anchor="start" >estimated counts (#4) are</text>
+<text x="644.0" y="464" font-size="10" class="m" text-anchor="start" >already in place.</text>
+<path d="M908.0,406.0 L919.0,406.0" stroke="#8a7a5a" stroke-width="1.8" fill="none" marker-end="url(#arr)"/>
+<rect x="922.0" y="318" width="278.0" height="176" rx="12" fill="#efe7f3" stroke="#cdbfd6" stroke-width="1" />
+<text x="938.0" y="340" font-size="11" class="t cap" text-anchor="start" font-weight="700" >WEB-SCALE</text>
+<text x="938.0" y="358" font-size="10.8" class="t" text-anchor="start" font-weight="700" >≥100k concurrent · many</text>
+<text x="938.0" y="372" font-size="10.8" class="t" text-anchor="start" font-weight="700" >millions of users</text>
+<text x="938.0" y="394" font-size="10" class="m" text-anchor="start" >Partition the high-write tables</text>
+<text x="938.0" y="408" font-size="10" class="m" text-anchor="start" >(#2 next). Serial lock (#6)</text>
+<text x="938.0" y="422" font-size="10" class="m" text-anchor="start" >only matters if reused for a</text>
+<text x="938.0" y="436" font-size="10" class="m" text-anchor="start" >high-volume product. The</text>
+<text x="938.0" y="450" font-size="10" class="m" text-anchor="start" >binding limit becomes token</text>
+<text x="938.0" y="464" font-size="10" class="m" text-anchor="start" >cost + provider quotas (#8).</text>
+<rect x="40" y="504" width="1160" height="34" rx="9" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="58" y="518" font-size="10.6" class="m" text-anchor="start" >Order-of-magnitude, architecture-limited — not load-tested. Real concurrency ceilings depend on the Supabase plan (pooled connections, egress) and</text>
+<text x="58" y="532" font-size="10.6" class="m" text-anchor="start" >Anthropic quotas (#8) — capacity planning with the providers, not a code change. The shape itself has no fixed ceiling; it scales with DB write capacity + quotas.</text>
+<text x="40" y="558" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >The eight items — worst first</text>
+<text x="40" y="574" font-size="12" class="t" text-anchor="start" font-weight="700" >BLOCKERS — fix before real scale</text>
+<text x="632" y="574" font-size="12" class="t" text-anchor="start" font-weight="700" >NEEDS ATTENTION — plan for them, not blockers</text>
+<rect x="40" y="586" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="40" y="586" width="6" height="136" rx="0" fill="#5f8f6f" />
+<circle cx="74" cy="616" r="15" fill="#5f8f6f"/>
+<text x="74" y="621" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">1</text>
+<text x="98" y="613" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Rate limiting — per-instance</text>
+<rect x="536.5" y="600" width="55.5" height="20" rx="10" fill="#e6f0e8" stroke="#8fb89b" stroke-width="1" />
+<text x="564.25" y="614" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#3f6b4f">FIXED</text>
+<text x="62" y="638" font-size="11.2" class="m" text-anchor="start" >A per-warm-instance Map() meant ~no real limit at scale. Now a shared</text>
+<text x="62" y="653" font-size="11.2" class="m" text-anchor="start" >fixed-window rate_hit() RPC (atomic upsert); fails over to the in-memory</text>
+<text x="62" y="668" font-size="11.2" class="m" text-anchor="start" >counter if the DB blips, so an outage never blocks traffic.</text>
+<line x1="62" y1="698" x2="588" y2="698" stroke="#ece5d6" stroke-width="1"/>
+<text x="62" y="713" font-size="10.3" class="m mono" text-anchor="start" >migration 0025 · setup.sql</text>
+<rect x="40" y="736" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="40" y="736" width="6" height="136" rx="0" fill="#b98a4a" />
+<circle cx="74" cy="766" r="15" fill="#b98a4a"/>
+<text x="74" y="771" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">2</text>
+<text x="98" y="763" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Unbounded high-write tables</text>
+<rect x="402.5" y="750" width="189.5" height="20" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="497.25" y="764" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">BOUNDED · NEXT: PARTITION</text>
+<text x="62" y="788" font-size="11.2" class="m" text-anchor="start" >Every turn / tool-call writes forever. Now prune_high_write(days)</text>
+<text x="62" y="803" font-size="11.2" class="m" text-anchor="start" >enforces a retention window (nightly pg_cron). At web-scale: monthly</text>
+<text x="62" y="818" font-size="11.2" class="m" text-anchor="start" >range partitions → retention becomes an instant drop.</text>
+<line x1="62" y1="848" x2="588" y2="848" stroke="#ece5d6" stroke-width="1"/>
+<text x="62" y="863" font-size="10.3" class="m mono" text-anchor="start" >migration 0030 · setup.sql</text>
+<rect x="40" y="886" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="40" y="886" width="6" height="136" rx="0" fill="#5f8f6f" />
+<circle cx="74" cy="916" r="15" fill="#5f8f6f"/>
+<text x="74" y="921" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">3</text>
+<text x="98" y="913" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Admin panel couldn’t search</text>
+<rect x="456.1" y="900" width="135.9" height="20" rx="10" fill="#e6f0e8" stroke="#8fb89b" stroke-width="1" />
+<text x="524.05" y="914" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#3f6b4f">FIXED · THIS PASS</text>
+<text x="62" y="938" font-size="11.2" class="m" text-anchor="start" >Loaders fetched only the latest N with no filter — an old order or a</text>
+<text x="62" y="953" font-size="11.2" class="m" text-anchor="start" >specific customer was unfindable. Now server-side date / email / keyword</text>
+<text x="62" y="968" font-size="11.2" class="m" text-anchor="start" >filters + keyset pagination + trigram indexes.</text>
+<line x1="62" y1="998" x2="588" y2="998" stroke="#ece5d6" stroke-width="1"/>
+<text x="62" y="1013" font-size="10.3" class="m mono" text-anchor="start" >migrations 0024 · 0027 · 0028</text>
+<rect x="40" y="1036" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="40" y="1036" width="6" height="136" rx="0" fill="#5f8f6f" />
+<circle cx="74" cy="1066" r="15" fill="#5f8f6f"/>
+<text x="74" y="1071" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">4</text>
+<text x="98" y="1063" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Analytics full-table counts</text>
+<rect x="536.5" y="1050" width="55.5" height="20" rx="10" fill="#e6f0e8" stroke="#8fb89b" stroke-width="1" />
+<text x="564.25" y="1064" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#3f6b4f">FIXED</text>
+<text x="62" y="1088" font-size="11.2" class="m" text-anchor="start" >count(exact) meant full scans on feedback / orders. Now date-bounded</text>
+<text x="62" y="1103" font-size="11.2" class="m" text-anchor="start" >counts stay exact &amp; cheap; whole-table totals use count(estimated) from</text>
+<text x="62" y="1118" font-size="11.2" class="m" text-anchor="start" >the planner → O(1) regardless of size.</text>
+<line x1="62" y1="1148" x2="588" y2="1148" stroke="#ece5d6" stroke-width="1"/>
+<text x="62" y="1163" font-size="10.3" class="m mono" text-anchor="start" >PostgREST reltuples</text>
+<rect x="632" y="586" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="632" y="586" width="6" height="136" rx="0" fill="#8792a0" />
+<circle cx="666" cy="616" r="15" fill="#8792a0"/>
+<text x="666" y="621" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">5</text>
+<text x="690" y="613" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Per-request query fan-out</text>
+<rect x="1108.4" y="600" width="75.6" height="20" rx="10" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="1146.2" y="614" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#55606b">PLAN FOR</text>
+<text x="654" y="638" font-size="11.2" class="m" text-anchor="start" >~3 sequential queries per chat (notes · last convo · orders), and the</text>
+<text x="654" y="653" font-size="11.2" class="m" text-anchor="start" >tool loop adds more. Fix: collapse into one customer-bundle RPC, and</text>
+<text x="654" y="668" font-size="11.2" class="m" text-anchor="start" >route PostgREST through the Supavisor pooler.</text>
+<line x1="654" y1="698" x2="1180" y2="698" stroke="#ece5d6" stroke-width="1"/>
+<text x="654" y="713" font-size="10.3" class="m mono" text-anchor="start" >customerBlock</text>
+<rect x="632" y="736" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="632" y="736" width="6" height="136" rx="0" fill="#8792a0" />
+<circle cx="666" cy="766" r="15" fill="#8792a0"/>
+<text x="666" y="771" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">6</text>
+<text x="690" y="763" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Serial allocation — one-row lock</text>
+<rect x="1108.4" y="750" width="75.6" height="20" rx="10" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="1146.2" y="764" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#55606b">PLAN FOR</text>
+<text x="654" y="788" font-size="11.2" class="m" text-anchor="start" >hold_serial / commission take FOR UPDATE on allocation_counter (id=1). A</text>
+<text x="654" y="803" font-size="11.2" class="m" text-anchor="start" >non-issue for a 15,000-piece edition (scarcity is the point); switch to</text>
+<text x="654" y="818" font-size="11.2" class="m" text-anchor="start" >a sequence / sharded counter only if reused for a high-volume product.</text>
+<line x1="654" y1="848" x2="1180" y2="848" stroke="#ece5d6" stroke-width="1"/>
+<text x="654" y="863" font-size="10.3" class="m mono" text-anchor="start" >allocation_counter</text>
+<rect x="632" y="886" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="632" y="886" width="6" height="136" rx="0" fill="#b98a4a" />
+<circle cx="666" cy="916" r="15" fill="#b98a4a"/>
+<text x="666" y="921" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">7</text>
+<text x="690" y="913" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Async LLM work per conversation</text>
+<rect x="1115.1" y="900" width="68.9" height="20" rx="10" fill="#f7edd8" stroke="#dcc38a" stroke-width="1" />
+<text x="1149.55" y="914" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#8a6a1c">SAMPLED</text>
+<text x="654" y="938" font-size="11.2" class="m" text-anchor="start" >Goal scoring fired every signed-in turn. Now a substance gate + admin</text>
+<text x="654" y="953" font-size="11.2" class="m" text-anchor="start" >goal_sample_rate (grade 1-in-N). The client-book note stays always-on</text>
+<text x="654" y="968" font-size="11.2" class="m" text-anchor="start" >(per-customer product value, not analytics). Batch/queue if needed.</text>
+<line x1="654" y1="998" x2="1180" y2="998" stroke="#ece5d6" stroke-width="1"/>
+<text x="654" y="1013" font-size="10.3" class="m mono" text-anchor="start" >goal_sample_rate</text>
+<rect x="632" y="1036" width="568" height="136" rx="12" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="632" y="1036" width="6" height="136" rx="0" fill="#8792a0" />
+<circle cx="666" cy="1066" r="15" fill="#8792a0"/>
+<text x="666" y="1071" font-size="14" class="t" text-anchor="middle" font-weight="700" fill="#ffffff">8</text>
+<text x="690" y="1063" font-size="13.5" class="t" text-anchor="start" font-weight="700" >Cost &amp; third-party quotas</text>
+<rect x="1108.4" y="1050" width="75.6" height="20" rx="10" fill="#e9edf2" stroke="#c2ccd6" stroke-width="1" />
+<text x="1146.2" y="1064" font-size="10.3" class="" text-anchor="middle" font-weight="700" fill="#55606b">CAPACITY</text>
+<text x="654" y="1088" font-size="11.2" class="m" text-anchor="start" >At millions of chats the binding limit is Anthropic token cost + per-</text>
+<text x="654" y="1103" font-size="11.2" class="m" text-anchor="start" >account limits, plus Supabase plan limits — not architecture. The</text>
+<text x="654" y="1118" font-size="11.2" class="m" text-anchor="start" >semantic cache is the main lever; the rest is capacity planning.</text>
+<line x1="654" y1="1148" x2="1180" y2="1148" stroke="#ece5d6" stroke-width="1"/>
+<text x="654" y="1163" font-size="10.3" class="m mono" text-anchor="start" >providers · not a code change</text>
+<rect x="40" y="1190" width="1160" height="56" rx="12" fill="#efe7f3" stroke="#cdbfd6" stroke-width="1" />
+<text x="58" y="1212" font-size="12.5" class="t" text-anchor="start" font-weight="700" >What this review closed now — admin filtering:</text>
+<text x="58" y="1231" font-size="11.3" class="m" text-anchor="start" >server-side filtering by date / email / keyword (incl. message content) + pagination, backed by btree + pg_trgm GIN indexes on every ILIKE column — so a match is found even if it’s the millionth row.</text>
+<line x1="40" y1="1266" x2="1200" y2="1266" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="1288" font-size="10.8" class="m" text-anchor="start" >Source: SCALING.md. Status as of this review; re-check as the code changes. ✅ addressed  ·  amber = partial / next step  ·  slate = plan-for.</text>
+</svg>

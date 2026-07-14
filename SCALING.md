@@ -11,6 +11,16 @@ to scale. A handful of things were built for a demo's volume; the blockers below
 indexed admin search, and estimate-based dashboard counts. The remaining items
 (#5–#8) are "plan for them," not blockers. Ranked below, worst first.
 
+The whole review on one page — what scales as-is, the capacity ladder (how far
+each tier goes and what unlocks the next), and the eight items with their status:
+
+[![Scaling scorecard](docs/scaling-scorecard.svg)](docs/scaling-scorecard.svg)
+
+*[`docs/scaling-scorecard.svg`](docs/scaling-scorecard.svg) — grounded in this
+document. The capacity bands are order-of-magnitude and architecture-limited
+(not load-tested); real concurrency ceilings depend on the Supabase plan and
+Anthropic quotas (#8), which are capacity planning, not code.*
+
 ---
 
 ## Scales fine as-is
