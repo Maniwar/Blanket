@@ -68,7 +68,7 @@ API call:
 | Parameter | Value | Why |
 |---|---|---|
 | `model` | `BEAT_COACH_MODEL || model` — **the conversation model by default** | its value is smart, house-grounded tactical reasoning; a dedicated tier can be pinned in code |
-| `system` | **the drafter's own system, verbatim**, + one coaching-task block | the coach sees the *identical* house context — and reuses the cached prefix (§9) |
+| `system` | **the drafter's own system, verbatim**, + one coaching-task block | the coach sees the *identical* house context — and reuses the cached prefix (§10) |
 | `temperature` | `0.4` | a little latitude to find a genuinely good play, not just the obvious one |
 | `max_tokens` | `220` | it returns three short fields, nothing more |
 | timeout | `AbortSignal.timeout(5000)` (5 s) | bounds the added latency; a slow coach is skipped, not waited on |
@@ -111,7 +111,62 @@ already inside the house's honesty rules, price posture, and scope. Its task
 prompt says so explicitly: *never coach a discount, a claim, or a pressure the
 house forbids.* The coaching is a *how*, never a new *what*.
 
-## 5. The design decision — a focused prompt, not a silent tool
+## 5. The feedback loop — the coach's real edge over the drafter
+
+Everything above still describes a coach reasoning over the *same* inputs the
+drafter has. What makes it a genuine second brain rather than a mirror is this:
+the coach also sees **what has actually worked for this house lately** — outcome
+data the drafter never gets.
+
+Every proactive beat that speaks is already audited (`beat_action`,
+`payload.outcome = "spoke"` — see *Observability* below). The loop reads that
+trail back:
+
+- **The signal.** For each spoken beat, did the shopper *answer* — a user turn in
+  the same conversation within 30 minutes? That reply-or-not is a cheap, honest
+  engagement proxy, computed entirely from the existing audit + message tables
+  (no new write-path instrumentation).
+- **The digest.** `beat_learning_digest()` (a `security definer` SQL function)
+  buckets that reply rate by **beat kind × move** over a trailing 14-day window
+  and caches the result in `concierge_insights` with a 20-minute TTL — so the hot
+  path reads one row and the join recomputes only occasionally.
+- **The injection.** `beatLearningBlock()` formats it into a short *"what's
+  landing lately"* block and appends it to the **coach's** context (not the
+  drafter's). The coach weighs it and distills it into the move/tactic it hands
+  down:
+
+  ```
+  [WHAT'S LANDING LATELY — this house's OWN outcomes over the last 14 days …]
+  - PROPOSE_COMPANION on a nudge: 42% replied (n=19)
+  - REASSURE on a bubble: 12% replied (n=8)
+  Weigh it: lean toward what's landing … a move that keeps getting ignored — a
+  lighter touch, or holding, may beat repeating it.
+  ```
+
+Three properties make this the *honest* version of "learning":
+
+1. **It's real reaction, not theory** — this house's own shoppers, this
+   fortnight; the one thing the static selling method can't encode.
+2. **It's honest about thin data.** Below a floor of spoken beats
+   (`COACH_LEARN_MIN_SPOKE`), or with every bucket under `p_min_n`, the block is
+   **empty** and the coach falls back to method-only. A quiet house — including a
+   fresh demo — gets no fabricated "pattern"; small n is shown, never hidden.
+3. **It can argue for restraint.** The block explicitly tells the coach that
+   persistent silence after a move is itself a signal, so the loop can push the
+   coach *down* to a lighter touch or a hold — not only toward another push. That
+   is the direct fix for the coach's one real risk (a bias toward always doing
+   something) on a restraint-valued house.
+
+**Config:** `outreach.coachLearning` (default on; set false to feed the coach the
+situation but not the outcomes). It rides the same `beatCoach` master switch, and
+is **fail-open** — any digest error yields an empty block and the coach still runs.
+
+This is also what makes the coach *measurable*: the audit now carries the coaching
+brief **and** the reply outcome on the same rows, so tactic → outcome is queryable
+— the raw material for grading the coach's lift and, eventually, letting the
+digest drive selection directly (a bandit). See the *Backlog*.
+
+## 6. The design decision — a focused prompt, not a silent tool
 
 This was a genuine fork: make coaching a **focused second-brain prompt** coupled
 to the proactive beats, or a **tool the model may call** when it feels it needs
@@ -140,7 +195,7 @@ we get that more predictably by **scoping the coach to the proactive beats**
 (already rare) rather than every turn. Extending coaching to *reactive* replies is
 a deliberate, documented backlog item (§12), gated on the latency cost.
 
-## 6. Configuration — one toggle; grounding is derived
+## 7. Configuration — one toggle; grounding is derived
 
 Like the judge, the coach has exactly one runtime knob — whether it runs — and
 everything else is code or derived:
@@ -157,7 +212,7 @@ The check is `oc?.beatCoach !== false`, so **absent means ON**; you only ever se
 it to turn coaching *off* (a lever for very cost-sensitive or very high-volume
 installs). Held beats never draft a line, so they never invoke the coach.
 
-## 7. Observability
+## 8. Observability
 
 The coach doesn't get its own audit row — it rides the **beat audit payload** that
 already records every proactive outcome. When beat auditing is on
@@ -168,7 +223,13 @@ strategist gave and the line that resulted** — including when the judge then
 vetoed it, which is the most useful pairing for tuning. (It is *advisory* context,
 so it lives on the existing rows rather than adding a new high-volume action.)
 
-## 8. Cost
+Because the reply outcome is derivable from the same trail (a following user turn,
+§5), **tactic → outcome is now queryable end-to-end**: the coaching brief, the
+line, and whether the shopper answered all hang off `concierge_actions`. That join
+is exactly what the feedback loop's `beat_learning_digest()` reads back — and what
+makes grading the coach's lift a query, not a guess.
+
+## 9. Cost
 
 One coaching call **per spoken-or-held proactive beat**. It is cheaper than it
 looks: because the coach reuses the drafter's system *verbatim*, the large cached
@@ -178,7 +239,7 @@ of each proactive beat — and proactive beats are the rare surface, not every t
 Turn it off for the highest-volume installs; leave it on where reach-out quality
 is worth pennies per hundred. See [COST.md](COST.md).
 
-## 9. Prompt-cache interaction
+## 10. Prompt-cache interaction
 
 The coach is deliberately built to be cache-friendly:
 
@@ -188,7 +249,7 @@ The coach is deliberately built to be cache-friendly:
 - The strategy block it produces is appended to the drafter's system **after** the
   cached prefix, so injecting coaching never invalidates the cache for the draft.
 
-## 10. Relationship to the judge and the other honesty layers
+## 11. Relationship to the judge and the other honesty layers
 
 | Control | Reads | When | Effect |
 |---|---|---|---|
@@ -208,7 +269,7 @@ honesty lint and evals as the guards around them:
 
 ![The control plane — how the constitution, coach, and judge interlock](docs/runtime-brains.svg)
 
-## 11. How the kit (`concierge-kit`) provisions the coach
+## 12. How the kit (`concierge-kit`) provisions the coach
 
 - **Vendored unchanged.** `coachBeatLine`, `coachingBlock`, `BEAT_COACH_MODEL`,
   and `BEAT_COACH_TASK` live in the pristine `engine/` snapshot and appear in
@@ -224,18 +285,28 @@ honesty lint and evals as the guards around them:
 - **Gate-clean.** The task prompt is brand-neutral, so it introduces no leakage
   surface for `stamp/forbidden-strings.txt`.
 
-## 12. Backlog / open ideas
+## 13. Backlog / open ideas
 
 Mirrored in [BACKLOG.md](BACKLOG.md).
 
+- **[Shipped] The feedback loop (§5).** The coach now reads the house's own
+  outcome digest (`beat_learning_digest` → reply rate per move/kind), so it
+  reasons over real reactions the drafter never sees — the change that makes it a
+  second brain rather than a mirror.
+- **Bandit-driven selection** *(the loop's natural next step).* Today the digest
+  *informs* the coach's judgement; a stricter version could let reply-rate drive
+  move selection directly (Thompson sampling over moves per segment), with the
+  coach explaining and the constitution still bounding it. Needs the eval below to
+  guard against optimising for replies over the *right* replies.
 - **Reactive coaching at stage transitions** *(scope).* Today only *proactive*
   lines are coached. A stricter product could coach reactive replies too — but on
   the shopper's critical path, so gated to high-value moments (a detected stage
   advance, a first price objection) rather than every turn, to bound latency.
-- **Eval the coach's lift** *(near-term).* Add a persona-eval pairing that runs a
-  proactive scenario coach-on vs. coach-off and grades the tactical quality delta,
-  so the feature's value is measured, not assumed. (Today the judge has a
-  verify-judge eval; the coach has none yet.)
+- **Eval the coach's lift** *(near-term — now measurable, §8).* Add a persona-eval
+  pairing that runs a proactive scenario coach-on vs. coach-off vs. inline-planning
+  and grades the tactical-quality delta. The loop makes the *field* signal
+  (tactic → reply rate) queryable too, so lift can be measured live, not only in
+  the eval harness.
 - **Configurable coach model tier** *(small).* `BEAT_COACH_MODEL` is a code
   constant; expose it per install for cost/quality trade-offs (e.g. a cheaper
   strategist at very high volume).

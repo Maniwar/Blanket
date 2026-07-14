@@ -464,6 +464,20 @@ SOURCE, so any edit empties it (it re-warms from live traffic; an edited fact
 never keeps serving its stale cached answer). **Diagnosed by:**
 `GET ?cachecheck=1`. **Read by:** admin (Cache tab).
 
+### `concierge_insights` — cached "what's working" digests (coach feedback loop)
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `kind` | text PK | Digest name (currently `'beat_learning'`). |
+| `payload` | jsonb | The computed digest: `{ window_days, total_spoke, buckets:[{beat, move, n, reply_rate}] }`. |
+| `computed_at` | timestamptz | When it was last recomputed (drives the TTL). |
+
+A cache for the **sales-strategist coach's feedback loop** ([`COACH.md`](../COACH.md)
+§5). **Written & read by:** `beat_learning_digest()` only — the function serves
+the cached `payload` while it is fresher than the TTL, else recomputes and
+upserts. RLS is **enabled with no policy**, so it is reachable only through that
+`security definer` function (the service role / definer bypasses RLS); direct
+anon/authenticated reads are denied. Tiny (one row per digest kind); not pruned.
+
 ### `concierge_flags` — knowledge gaps
 | Column | Type | Purpose |
 | --- | --- | --- |
@@ -644,6 +658,7 @@ Seeded with a starter deck (only when empty), mirroring `evals/scenarios.mjs`.
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
 | `rate_hit(p_key, p_limit, p_window_seconds)` | → bool | Counts one request for `p_key` in the current fixed window (atomic upsert into `rate_limits`) and returns true when over `p_limit`. Shared across all edge instances. | both functions' rate limiters. |
+| `beat_learning_digest(p_days, p_ttl_min, p_min_n)` | → jsonb | The coach's **feedback loop** ([`COACH.md`](../COACH.md) §5): buckets the reply rate after each proactive move (a following user turn within 30 min) by beat kind × move over a trailing window, so the coach reasons over what actually landed. Self-caching into `concierge_insights` with a TTL; drops buckets under `p_min_n`. | concierge coach path (`beatLearningBlock`). |
 | `get_edition()` | → (next, run, claimed, remaining) | Reads the edition counter. Raises unless `is_concierge_admin()`. | admin Edition card. |
 | `set_edition(p_next_serial, p_run_size)` | → void | Sets `next_serial`/`run_size` (validates `next ≤ run+1`). Raises unless `is_concierge_admin()`. | admin Edition card. |
 

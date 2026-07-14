@@ -105,10 +105,20 @@ best move/tactic. Grounded in the drafter's own system (method + register + stag
 bounded by the same constitution, advisory + fail-open. Shipped; the coach code is
 vendored byte-identical by the kit and defaults ON (`outreach.beatCoach`).
 
-- **Eval the coach's lift** *(near-term).* Add a persona-eval pairing that runs a
-  proactive scenario coach-on vs. coach-off and grades the tactical-quality delta,
-  so the feature's value is measured, not assumed (the judge already has a
-  verify-judge eval; the coach has none yet).
+- **[Shipped] The feedback loop.** The coach now reads the house's own outcome
+  digest (`beat_learning_digest` → reply rate per move × kind, DB-cached in
+  `concierge_insights`), so it reasons over real reactions the drafter never sees
+  — the change that turns it from a mirror into a learning layer. Honest about
+  thin data (empty below a floor; a fresh house gets no invented pattern) and can
+  push the coach *down* to restraint. `outreach.coachLearning`, default on.
+  See [COACH.md](COACH.md) §5.
+- **Bandit-driven selection** *(the loop's next step).* Today the digest *informs*
+  the coach; a stricter version could let reply-rate drive move selection directly
+  (Thompson sampling per segment), coach explaining, constitution still bounding.
+  Gated on the eval below, to avoid optimising for replies over the *right* replies.
+- **Eval the coach's lift** *(near-term — now measurable).* A persona-eval pairing
+  running coach-on vs. coach-off vs. inline-planning, grading the tactical-quality
+  delta; plus the live tactic → reply-rate signal the loop now records.
 - **(Scope) Reactive coaching at stage transitions.** Today only *proactive* lines
   are coached. A stricter product could coach reactive replies too — but on the
   shopper's critical path, so gated to high-value moments (a detected stage advance,
