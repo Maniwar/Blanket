@@ -52,19 +52,28 @@ Overhead (aggregate attribution only):
 Same guard as `nps_metrics` (concierge admin JWT or service role), aggregate
 only. Returns per-purpose×model token totals with QA splits (including cache
 splits), conversation-attributed totals by model, distinct customer/QA
-conversation counts, and per-day buckets.
+conversation counts, and per-day buckets grouped **by model** — so per-day
+dollars are priced exactly rather than blended.
 
-The admin surface is the **Model spend** card (Conversion tab):
+The admin surface is the dedicated **Spend tab** — the API-consumption view a
+merchant expects:
 
-- **Customer spend** — every non-QA call in the range, priced.
-- **Per conversation** — customer spend on conversation-attributed calls ÷
-  distinct customer conversations that made model calls in the range.
-- **QA / dev spend** — `qa-` sessions only. The eval deck runs on **every
-  deploy** (multi-turn persona simulations plus judge grading), so heavy
-  shipping days spike HERE — this is the first place to look when the
-  provider's daily chart jumps.
-- Tokens-per-day chart (customer vs QA), a costliest-first purpose table, and
-  the editable price table.
+- **KPI row**: Customer spend (with a delta vs the prior window), Per
+  conversation, Per reply, Testing & deploys (with delta), Cache savings
+  (what prompt caching avoided), and a Monthly pace projection from days
+  that actually have data.
+- **Four trend charts** with Range + View-by (day/week/month): estimated
+  spend, model calls, tokens in/out, and cache hit rate — customer and
+  testing series drawn apart.
+- **Where the money goes** — purposes rolled up to merchant language:
+  *Serving customers* (chat + register tool rounds), *Proactive selling*
+  (beats, re-engage, coach, judge), *Satisfaction (NPS)*, *Studio &
+  housekeeping*, and *Testing & deploys* (ALL `qa-` spend plus the eval
+  grader, wherever it occurred). The eval deck runs on **every deploy**, so
+  heavy shipping days spike in Testing — the first place to look when the
+  provider's chart jumps.
+- **By model** tier split, the full costliest-first purpose table, and the
+  editable price table.
 
 ## Pricing — estimates, labeled as such
 

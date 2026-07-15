@@ -670,8 +670,8 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   model spend goes**, so a spike on the provider's bill is explainable in one
   glance. *Accepted when:* every model call is metered at the source with a
   purpose (`concierge_llm_usage`; the meter never blocks serving), QA/CI
-  traffic is split from customer traffic at write time, the Model spend card
-  (Conversion tab) shows customer spend / per-conversation cost / QA spend
+  traffic is split from customer traffic at write time, the dedicated Spend tab
+  shows customer spend / per-conversation cost / QA spend
   with an editable price table (tokens stored, dollars estimated), and the
   card is fail-visible. *(COSTS.md; `llm_cost_metrics()`.)*
 
