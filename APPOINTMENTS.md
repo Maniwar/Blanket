@@ -1,4 +1,4 @@
-# Appointments & callbacks — specification (v3, not yet built)
+# Appointments & callbacks — specification (v3.1, not yet built)
 
 The concierge's next act: turning buying intent into a **booked moment** — a
 viewing, a fitting, a table, a consultation — or a **callback request** when
@@ -291,8 +291,31 @@ never occupies a visitor's slot.
 
 `confirm_appointment(p_id)` (admin/queue): `requested → booked`, confirmation
 email fires. `cancel_appointment(p_id, p_cancel_token | admin)` flips status
-and frees the slot. v1 reschedule = cancel + rebook (one SOP-guided motion,
-two audited writes).
+and frees the slot.
+
+```
+reschedule_appointment(p_id, p_new_location text, p_new_starts_at timestamptz,
+                       …ownership proof…) → jsonb
+```
+**Atomic, never-stranding.** One transaction takes advisory locks on BOTH
+slots (ordered by hash, no deadlock), re-verifies the new slot via
+`appointment_slots`, then moves the booking. If the new slot is `taken`, the
+transaction rolls back and **the original booking stands untouched** — a
+failed move must never leave the guest with nothing. Manual-confirm types
+keep the same guarantee across the human step: the move lands as a
+`requested` row while the original stays `booked` until the house confirms;
+confirming completes the swap, declining leaves the original in place (the
+"no gap" rule). The confirmation email reuses the **same ICS `UID`**, so the
+guest's calendar app updates the existing event instead of duplicating it.
+
+```
+update_appointment(p_id, p_party smallint?, p_notes text?, p_name text?,
+                   p_contact text?, p_contact_kind text?, …ownership proof…) → jsonb
+```
+Non-time edits — party size (re-validated against `max_party` and slot
+capacity), the intake answer, a name or contact correction (masked in the
+tool result like everywhere else). Callback rows accept window/number
+updates through the same function. Every field change is audited.
 
 ## 5. The tools (model tools — code-backed, admin-toggleable, Tools tab)
 
@@ -305,6 +328,8 @@ other tool. **Anonymous visitors may book** (name + contact collected in-chat)
 | `get_available_times` | `type_slug?`, `location_slug?`, `from_date?`, `days? (≤14)` | Lists enabled types (and, when more than one, enabled locations) when unscoped; with a type at multiple locations and none chosen, returns the location choice FIRST — the model asks, never assumes. Then `appointment_slots` with the visitor timezone; slots carry §2 labels with the location named. The ONLY source of times (and locations) the model may utter. |
 | `book_appointment` | `type_slug`, `starts_at` (must echo a returned slot), `name`, `contact`, `contact_kind`, `party_size?`, `notes?` | Calls the SQL fn. `booked` ⇒ confirmation email to visitor (+ `.ics`, cancel link) and owner notification. `requested` ⇒ "request received" email; the model says the house will confirm (SOP step 5). Either way: audit row, attribution event, queue entry. On `taken`: returns the 3 nearest still-open slots so the model recovers in one turn. |
 | `get_my_appointments` | — (signed-in, or same-session anonymous) | The visitor's upcoming/past bookings, contact masked. Powers "when am I coming in again?" and §6 continuity. |
+| `reschedule_appointment` | `appointment_id`, `new_starts_at` (must echo a returned slot), `new_location_slug?` | The atomic move. On `taken`: the original stands, and the result says so with fresh alternatives — the model reassures first ("your Saturday time is still yours"), then re-offers. Manual mode: the "no gap" framing from SOP step 7. |
+| `update_appointment` | `appointment_id`, `party_size?`, `notes?`, `name?`, `contact?` | Non-time edits; party re-validated; contact masked in the result. Also fixes callback windows/numbers. |
 | `cancel_appointment` | `appointment_id` (theirs: matched via customer_id or session) | Verified cancel; frees the slot; both emails. |
 | `request_callback` | `phone`, `window_pref`, `name`, `notes?` | Inserts a `callback` row, notifies the owner, joins the queue. No slot math. |
 
@@ -442,9 +467,15 @@ NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
    spoke: say so plainly and warmly, then offer the nearest alternatives the
    register returned. Never argue, never blame, never promise to "squeeze
    them in".
-7. Rescheduling and cancelling are always granted graciously: confirm which
-   booking (the register lists theirs), cancel it, then offer fresh times if
-   they want them. Never guilt.
+7. Changes are always granted graciously — moving, resizing, correcting, or
+   cancelling. First confirm WHICH booking (the register lists theirs); then
+   make exactly the change they asked, and restate the result in one line.
+   When moving a time: their existing slot is safe until the new one is
+   theirs — if the new time was just taken, say their original still stands
+   and offer the alternatives the register returned. When the house confirms
+   moves by hand, say both truths plainly: the current booking holds; the
+   new time awaits the house's confirmation. Never guilt, never a
+   cancellation they didn't ask for.
 8. A CALLBACK request needs their number (via the form), a preferred window
    in their words, and one honest promise: "someone will call you then" —
    never a precise minute you cannot guarantee, never "right away". When the
@@ -509,6 +540,9 @@ quietly).
 | Type windows never escape business hours | `appointment_slots` clamp (unit test) + inline editor warning |
 | Location never assumed | Tool returns the choice when ambiguous; eval: two locations ⇒ the bot asks where before offering times |
 | A toggle is never a cancellation | Cascade semantics (§3b); unit test: disabling a location hides slots, keeps bookings |
+| A reschedule never strands the guest | Atomic dual-lock move; failed move ⇒ original untouched (unit test: concurrent take of the target slot); manual mode holds the original until confirmation |
+| Calendar apps update, never duplicate | Stable ICS `UID` across reschedules |
+| Edits re-validate what booking validated | party change re-checks `max_party`/capacity; time change re-derives the slot (unit tests) |
 | Two locations, two clocks | Per-location tz expansion (DST tests run per location) |
 | Callback promises fit open hours | Register-provided phrasing; eval: callback at Saturday close ⇒ promise names the next opening, never "tomorrow morning" on a closed Sunday |
 | "Are you open?" answered from data | HOURS context block outranks KB prose (conformance row: hours flow bot-visible) |
@@ -539,7 +573,10 @@ is already inside `chat-tools`.
   adversarial ("just pencil me in for Sunday 9pm"), timezone recital,
   manual-confirm framing, double-book recovery (`taken` path),
   contact-privacy ("read me back my number"), boundary (past-horizon date
-  declined with nearest real option), party-too-large grace, open-hours
+  declined with nearest real option), party-too-large grace, the
+  modification flows ("move my Tuesday to Thursday" happy path; reschedule
+  race ⇒ reassurance that the original stands + fresh options; party bump
+  past the cap declined with the cap named), open-hours
   honesty ("are you open Sunday?" against a closed Sunday + a stale KB
   paragraph claiming otherwise — the table must win).
 - **Conformance rows**: timezone, master toggle, per-type enabled flags,
@@ -563,7 +600,7 @@ RFC — locations are now in scope, §3a/3b).
 
 DESIGN.md §2 stories (drafted below), PRD KPI row ("Booking rate —
 instrumented by the appointments audit"), BACKLOG [Shipped] entry, TOOLS.md
-catalog rows for the five tools, this file flipped from "not yet built" to
+catalog rows for the seven tools, this file flipped from "not yet built" to
 shipped-status with any drift corrected, kit vendor + 996 patch + ADOPTING.md
 note + `adopt generate` industry presets (§10), eval CATALOG rows.
 
@@ -583,10 +620,14 @@ note + `adopt generate` industry presets (§10), eval CATALOG rows.
   "someone will call you in that window", the request appears in the queue
   instantly, and my number is never echoed in chat.
 - **As a returning patron**, I want the house to **remember my booking** —
-  "see you Saturday at 10" — and let me check, cancel, or move it in chat.
-  *Accepted when:* the upcoming appointment rides the customer context
-  (contact masked), `get_my_appointments` answers in one turn, and cancel
-  from chat / email link / patron drawer all mutate the same row.
+  "see you Saturday at 10" — and let me check, move, resize, correct, or
+  cancel it in chat as easily as I made it. *Accepted when:* the upcoming
+  appointment rides the customer context (contact masked),
+  `get_my_appointments` answers in one turn, a move is atomic (my old time
+  is mine until the new one is), a failed move tells me my booking still
+  stands before offering alternatives, my calendar app updates the existing
+  event rather than adding a second, and cancel from chat / email link /
+  patron drawer all mutate the same row.
 - **As the merchant**, I want to run bookings across **more than one
   location** — each with its own address, hours, and timezone — or switch
   the whole feature (or one location, or one type) **off** without losing a
