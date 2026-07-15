@@ -1,10 +1,11 @@
-# Appointments & callbacks — specification (v1, not yet built)
+# Appointments & callbacks — specification (v2, not yet built)
 
 The concierge's next act: turning buying intent into a **booked moment** — a
-viewing, a consultation, a fitting — or a **callback request** when the
-visitor would rather talk. The admin publishes availability; the model offers
-only what the calendar really has; tested code does the booking. Nothing here
-is implemented yet — this document is the build contract.
+viewing, a fitting, a table, a consultation — or a **callback request** when
+the visitor would rather talk. The admin publishes availability; the model
+offers only what the calendar really has; tested code does the booking; the
+merchant works from one queue. Nothing here is implemented yet — this
+document is the build contract.
 
 **Why this feature:** in inquiry mode ("book a viewing" on the 996) an
 appointment IS the conversion. In commerce mode it is the highest-intent
@@ -27,7 +28,10 @@ around.
 4. **Contact details are handled, never performed.** Phone/email are stored
    for the booking and **masked in every prompt injection**
    (`maskContacts`, the sec-20-407 lesson). The bot never reads a number back.
-5. **Fail-visible, audited, QA-clean.** Every tool call writes an audit row;
+5. **One guest, one thread.** An appointment is not an island: it ties to the
+   patron profile, the conversation that produced it, and the coach's context
+   — §6.
+6. **Fail-visible, audited, QA-clean.** Every tool call writes an audit row;
    `qa-` sessions never occupy a real slot; admin surfaces show errors, not
    blanks.
 
@@ -35,29 +39,64 @@ around.
 
 | Term | Meaning |
 | --- | --- |
-| **Appointment type** | An admin-defined offering: "Viewing — 30 min at the workshop", "Video call — 15 min". Duration, mode, buffers, booking window. |
-| **Availability rule** | Weekly recurring windows per type: "Sat 10:00–16:00, slots every 30 min, capacity 1". |
+| **Appointment type** | An admin-defined offering: "Viewing — 30 min at the workshop", "Discovery call — 15 min video". Duration, mode, slot increment, buffers, booking window, confirm mode, party size. |
+| **Availability rule** | Weekly recurring windows per type, in the shop's wall-clock time: "Sat 10:00–16:00". |
+| **Slot increment** | The grid inside a window — admin-selectable **5 / 10 / 15 / 20 / 30 / 45 / 60 min** (per type, overridable per rule). A 10:00–12:00 window at 15 min yields 10:00, 10:15, … |
 | **Exception** | A dated override: closed on the 24th; extra evening window on the 30th. |
-| **Slot** | A *computed* bookable start time — never stored until booked. Slots = rules − exceptions − existing bookings − lead time − horizon. |
-| **Appointment** | A booked slot with a name + contact, lifecycle `booked → completed / cancelled / no-show`. |
-| **Callback request** | "Have someone call me" — a phone number + preferred window, no slot consumed. Lifecycle `open → done / cancelled`. |
+| **Slot** | A *computed* bookable start time — never stored until booked. Slots = rules − exceptions − existing bookings − buffers − lead time − horizon. |
+| **Appointment** | A booked slot with a name + contact. Lifecycle: (`requested →`) `booked → completed / cancelled / no_show`. |
+| **Callback request** | "Have someone call me" — a number + preferred window, no slot consumed. Lifecycle `open → done / cancelled`. |
+| **The queue** | The merchant's single actionable inbox: everything that needs a decision or is happening today. §7. |
 
-## 2. Schema (feature-owned, additive; all tables RLS-enabled)
+## 2. Time zones — the full story
+
+Times are the one thing this feature must never fumble. Three clocks are in
+play; each has a defined role:
+
+| Clock | Role |
+| --- | --- |
+| **UTC** | Storage. `starts_at`/`ends_at` are `timestamptz`; all math is UTC. |
+| **Shop time** (`bookings.timezone`, IANA) | The calendar's authoring language. Rules and exceptions are defined in shop **wall-clock** time and expanded per-date in that zone — a "Sat 10:00" slot is 10:00 local on both sides of a DST change (unit-tested at both DST boundaries). |
+| **Visitor time** | The presentation language. The widget detects `Intl.DateTimeFormat().resolvedOptions().timeZone` and sends it as context; the tool returns each slot with BOTH renderings pre-formatted. |
+
+**Presentation rules (code formats, the model recites — it never converts):**
+
+- Zones match → one time, zone named once: *"Saturday 10:00 (PT)"*.
+- Zones differ, **in-person** type → shop time leads (they must show up
+  there): *"Saturday 10:00 at the shop (PT) — that's 13:00 your time"*.
+- Zones differ, **video/phone** type → visitor time leads: *"Saturday 13:00
+  your time (10:00 PT)"*.
+- Visitor zone undetectable → shop time, zone always named.
+- Confirmation email and card show both; the `.ics` is UTC-based so every
+  calendar app localizes it correctly by itself.
+
+The model NEVER does timezone arithmetic: `get_available_times` returns
+`{starts_at_utc, shop_label, visitor_label, lead_label}` per slot and the SOP
+requires reciting `lead_label` verbatim. An LLM converting timezones in its
+head is a missed flight waiting to happen.
+
+## 3. Schema (feature-owned, additive; all tables RLS-enabled)
 
 ```sql
 create table concierge_appointment_types (
   id            bigint generated always as identity primary key,
-  slug          text unique not null,           -- 'viewing', 'video-call'
+  slug          text unique not null,           -- 'viewing', 'discovery-call'
   title         text not null,
-  description   text not null default '',      -- shown to the visitor by the bot
+  description   text not null default '',       -- shown to the visitor by the bot
   duration_min  int  not null default 30,
+  step_min      smallint not null default 30    -- slot increment (the grid)
+                check (step_min in (5,10,15,20,30,45,60)),
   mode          text not null default 'in-person'
                 check (mode in ('in-person','video','phone')),
-  location      text not null default '',      -- address / "link sent by email"
-  buffer_min    int  not null default 0,       -- gap enforced after each booking
-  lead_time_min int  not null default 240,     -- earliest bookable = now + lead
-  horizon_days  int  not null default 21,      -- latest bookable
-  capacity      int  not null default 1,       -- parallel bookings per slot
+  location      text not null default '',       -- address / "link sent by email"
+  buffer_min    int  not null default 0,        -- gap enforced after each booking
+  lead_time_min int  not null default 240,      -- earliest bookable = now + lead
+  horizon_days  int  not null default 21,       -- latest bookable
+  capacity      int  not null default 1,        -- concurrent bookings per slot (tables, group sessions)
+  max_party     smallint not null default 0,    -- >0: bot asks party size, caps it
+  confirm_mode  text not null default 'auto'    -- auto: booked instantly;
+                check (confirm_mode in ('auto','manual')),  -- manual: merchant confirms
+  intake_prompt text not null default '',       -- optional one extra question, e.g. "Anything you'd like us to prepare?"
   enabled       boolean not null default false, -- drafts first (kit discipline)
   sort_order    int  not null default 0,
   created_at    timestamptz not null default now()
@@ -66,19 +105,19 @@ create table concierge_appointment_types (
 create table concierge_availability (
   id        bigint generated always as identity primary key,
   type_id   bigint not null references concierge_appointment_types(id) on delete cascade,
-  dow       smallint not null check (dow between 0 and 6),   -- 0 = Sunday
+  dow       smallint not null check (dow between 0 and 6),   -- 0 = Sunday, shop-local
   start_min smallint not null check (start_min between 0 and 1439),
   end_min   smallint not null check (end_min   between 1 and 1440),
-  step_min  smallint not null default 30,      -- slot grid within the window
+  step_min  smallint check (step_min in (5,10,15,20,30,45,60)),  -- null = type default
   check (end_min > start_min)
 );
 
 create table concierge_availability_exceptions (
   id        bigint generated always as identity primary key,
-  type_id   bigint references concierge_appointment_types(id) on delete cascade,
-  on_date   date not null,                     -- shop-timezone date
-  closed    boolean not null default true,     -- true: no slots that day
-  start_min smallint, end_min smallint,        -- else: REPLACE the day's windows
+  type_id   bigint references concierge_appointment_types(id) on delete cascade,  -- null = all types
+  on_date   date not null,                      -- shop-timezone date
+  closed    boolean not null default true,      -- true: no slots that day
+  start_min smallint, end_min smallint,         -- else: REPLACE the day's windows
   note      text not null default ''
 );
 
@@ -87,17 +126,19 @@ create table concierge_appointments (
   kind            text not null default 'appointment'
                   check (kind in ('appointment','callback')),
   type_id         bigint references concierge_appointment_types(id) on delete set null,
-  starts_at       timestamptz,                 -- null for callbacks
+  starts_at       timestamptz,                  -- null for callbacks
   ends_at         timestamptz,
-  window_pref     text,                        -- callbacks: 'weekday mornings'
+  window_pref     text,                         -- callbacks: 'weekday mornings', their words
+  party_size      smallint,                     -- when the type sets max_party
   status          text not null default 'booked'
-                  check (status in ('booked','completed','cancelled','no_show',
-                                    'open','done')),   -- last two: callbacks
+                  check (status in ('requested','booked','completed','cancelled',
+                                    'no_show','open','done')),  -- last two: callbacks
   visitor_name    text not null,
-  visitor_contact text not null,               -- email or phone; NEVER injected unmasked
+  visitor_contact text not null,                -- email or phone; NEVER injected unmasked
   contact_kind    text not null check (contact_kind in ('email','phone')),
-  notes           text not null default '',    -- visitor's own words, one line
-  customer_id     uuid,                        -- when signed in
+  visitor_tz      text not null default '',     -- IANA, as detected at booking
+  notes           text not null default '',     -- their answer to intake_prompt / own words
+  customer_id     uuid,                         -- §6: the verified identity tie
   conversation_id uuid references concierge_conversations(id) on delete set null,
   session_key     text,
   cancel_token    uuid not null default gen_random_uuid(),  -- emailed self-serve cancel
@@ -105,54 +146,67 @@ create table concierge_appointments (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
+create index concierge_appt_customer_idx on concierge_appointments (customer_id, starts_at desc);
+create index concierge_appt_convo_idx    on concierge_appointments (conversation_id);
 
--- The race-killer: one live booking per (type, start) up to capacity.
--- Capacity 1 is the partial unique index below; capacity > 1 is enforced
--- inside book_appointment() under an advisory lock on (type_id, starts_at).
+-- The race-killer: one live booking per (type, start) at capacity 1; a
+-- 'requested' row occupies the slot exactly like a 'booked' one. Capacity > 1
+-- is enforced inside book_appointment() under an advisory lock.
 create unique index concierge_appt_slot_uniq
   on concierge_appointments (type_id, starts_at)
-  where kind = 'appointment' and status = 'booked' and not qa;
+  where kind = 'appointment' and status in ('requested','booked') and not qa;
 ```
 
 **Config** (`concierge_config`, under `bookings`): `enabled` (master, absent =
-OFF — opt-in feature), `timezone` (IANA, e.g. `America/Los_Angeles` — slots
-are stored UTC, *presented* in shop time, always named in chat), `ownerEmail`
-(falls back to the inquiry owner email), `callbacks.enabled`,
-`maxOpenPerContact` (default 2 — one visitor cannot carpet-bomb the calendar).
+OFF — opt-in feature), `timezone` (IANA — required before enabling; the admin
+refuses the master switch without it), `ownerEmail` (falls back to the
+inquiry owner email), `callbacks.enabled`, `maxOpenPerContact` (default 2 —
+one visitor cannot carpet-bomb the calendar), `requestTtlHours` (default 24;
+manual-confirm requests not acted on in time auto-cancel with an apologetic
+email and free the slot; 0 = never expire).
 
 **Retention:** appointment rows carry PII → `prune_high_write()` deletes
-`cancelled`/`done` rows past the cutoff; `booked` future rows are never
-pruned. QA rows are deleted by the janitor like `nps_responses` strays.
+terminal rows (`cancelled`/`done`/`completed`/`no_show`) past the cutoff;
+future `requested`/`booked` rows are never pruned. QA rows are deleted by the
+janitor like `nps_responses` strays.
 
-## 3. Slot computation & booking (SQL, `security definer`)
+## 4. Slot computation & booking (SQL, `security definer`)
 
 ```
-appointment_slots(p_type text, p_from date, p_to date) → jsonb
+appointment_slots(p_type text, p_from date, p_to date, p_visitor_tz text) → jsonb
 ```
-Pure read: expands weekly rules over the range in the shop timezone, applies
-exceptions, subtracts booked rows + buffers, clips by `lead_time_min` and
-`horizon_days`, caps the response (≤ 40 slots). Callable by service role only
-(the edge function); the admin week view uses the same function — **one
-source of truth for "available"**, used by both the tool and the Studio.
+Pure read: expands weekly rules over the range **in the shop timezone**
+(per-date, DST-correct), applies exceptions, subtracts
+`requested`+`booked` rows and buffers, clips by `lead_time_min` and
+`horizon_days`, honors per-rule `step_min` falling back to the type's, and
+returns each slot with the pre-formatted labels of §2. Response capped
+(≤ 40 slots per call — at 5-minute increments the model still only *presents*
+three; the cap keeps payloads sane). Callable by service role only; the admin
+week view and queue use the **same function** — one source of truth for
+"available", shared by the tool and the Studio.
 
 ```
 book_appointment(p_type text, p_starts_at timestamptz, p_name text,
-                 p_contact text, p_contact_kind text, p_notes text,
+                 p_contact text, p_contact_kind text, p_party smallint,
+                 p_notes text, p_visitor_tz text,
                  p_customer uuid, p_conversation uuid, p_session text) → jsonb
 ```
 Takes `pg_advisory_xact_lock(hashtext(p_type || p_starts_at::text))`,
 re-verifies the slot against `appointment_slots` (never trusts the caller),
-checks `maxOpenPerContact`, inserts, and returns `{ok, id, starts_at,
-ends_at, cancel_token}` — or `{ok:false, reason:'taken'|'invalid_slot'|
-'limit'}`. A lost race returns `taken`; the model relays it gracefully and
-re-offers (SOP step 5). `qa-` sessions insert with `qa = true`, which the
-unique index ignores — QA never occupies a visitor's slot.
+checks capacity, `max_party`, and `maxOpenPerContact`, inserts with status
+`booked` (`confirm_mode='auto'`) or `requested` (`'manual'`), and returns
+`{ok, id, status, starts_at, ends_at, cancel_token}` — or `{ok:false,
+reason:'taken'|'invalid_slot'|'limit'|'party_too_large'}`. A lost race
+returns `taken`; the model relays it gracefully and re-offers (SOP step 6).
+`qa-` sessions insert with `qa = true`, which the unique index ignores — QA
+never occupies a visitor's slot.
 
-`cancel_appointment(p_id, p_cancel_token | admin)` flips status and frees the
-slot. v1 reschedule = cancel + rebook (one SOP-guided motion, two audited
-writes).
+`confirm_appointment(p_id)` (admin/queue): `requested → booked`, confirmation
+email fires. `cancel_appointment(p_id, p_cancel_token | admin)` flips status
+and frees the slot. v1 reschedule = cancel + rebook (one SOP-guided motion,
+two audited writes).
 
-## 4. The tools (model tools — code-backed, admin-toggleable, Tools tab)
+## 5. The tools (model tools — code-backed, admin-toggleable, Tools tab)
 
 New rows in `REGISTER_TOOLS`, overridable via `concierge_tools` like every
 other tool. **Anonymous visitors may book** (name + contact collected in-chat)
@@ -160,76 +214,117 @@ other tool. **Anonymous visitors may book** (name + contact collected in-chat)
 
 | Tool | Input | Behavior |
 | --- | --- | --- |
-| `get_available_times` | `type_slug?`, `from_date?`, `days? (≤14)` | Lists enabled types when no slug; else calls `appointment_slots`, returns slots + timezone label. The ONLY source of times the model may utter. |
-| `book_appointment` | `type_slug`, `starts_at` (must echo a returned slot), `name`, `contact`, `contact_kind`, `notes?` | Calls the SQL fn. On `ok`: confirmation email to visitor (+ `.ics` attachment, cancel link) and notification to the owner, audit row, attribution event. On `taken`: returns the 3 nearest still-open slots so the model recovers in one turn. |
-| `request_callback` | `phone`, `window_pref`, `name`, `notes?` | Inserts a `callback` row, notifies the owner, audits. No slot math. |
+| `get_available_times` | `type_slug?`, `from_date?`, `days? (≤14)` | Lists enabled types when no slug; else calls `appointment_slots` with the widget's detected visitor timezone, returns slots with §2 labels. The ONLY source of times the model may utter. |
+| `book_appointment` | `type_slug`, `starts_at` (must echo a returned slot), `name`, `contact`, `contact_kind`, `party_size?`, `notes?` | Calls the SQL fn. `booked` ⇒ confirmation email to visitor (+ `.ics`, cancel link) and owner notification. `requested` ⇒ "request received" email; the model says the house will confirm (SOP step 5). Either way: audit row, attribution event, queue entry. On `taken`: returns the 3 nearest still-open slots so the model recovers in one turn. |
+| `get_my_appointments` | — (signed-in, or same-session anonymous) | The visitor's upcoming/past bookings, contact masked. Powers "when am I coming in again?" and §6 continuity. |
 | `cancel_appointment` | `appointment_id` (theirs: matched via customer_id or session) | Verified cancel; frees the slot; both emails. |
+| `request_callback` | `phone`, `window_pref`, `name`, `notes?` | Inserts a `callback` row, notifies the owner, joins the queue. No slot math. |
 
 Server guards (in the handler, not the prompt): tool disabled ⇒ standard
 withheld-tool behavior; `bookings.enabled` false ⇒ tools not even offered to
-the model; contact syntax validated in code; **the tool result injected back
-into the model masks the contact** (`[contact on file]`) — the model confirms
-"the number you gave", never the digits.
+the model; contact syntax validated in code; **every tool result injected
+back into the model masks the contact** (`[contact on file]`) — the model
+confirms "the number you gave", never the digits.
 
-## 5. Widget UX
+## 6. Identity — one guest, one thread
 
-- Slot presentation rides the existing reply-token machinery: the model
-  presents ≤ 3 tool-returned slots as `{{reply:Sat 10:00}}`-style tap pills
-  (one row, vanish on tap — the NPS-pill pattern) plus "More times".
-- Name/contact collection reuses the **in-chat form** renderer
-  (`concierge_forms` UI): two fields + submit, no free-text phone parsing.
-- Confirmation is one card: type, day + time **with timezone named**,
-  location/mode, "a confirmation is in your inbox". The visit then closes
-  through the normal wrap-up (survey rules unchanged — a booking is a
-  natural close and a fine moment for the NPS ask).
-- Signed-in visitors get name/contact prefilled from the register; "My
-  appointments" surfaces in the same place order history does.
+An appointment participates in the same identity fabric as orders, inquiries,
+and ratings. The ties, and what each buys:
 
-## 6. Admin — the Calendar tab
+| Tie | Written when | What it powers |
+| --- | --- | --- |
+| `customer_id` | Booker is signed in (verified — the `meta.user_id` standard from inquiries) | **Patron drawer 360°**: appointments listed beside orders and ratings, status-chipped. **Bot continuity**: the customer context block carries the next upcoming appointment (time + type only, contact masked) so a returning patron hears *"see you Saturday at 10"*, not a stranger's greeting. **Coach**: the brief notes an upcoming/no-show appointment as private grounding — never quoted back verbatim (judge defect 7 applies). |
+| `conversation_id` | Always (the booking conversation) | **Conversations list**: a 📅 facet/badge on conversations that produced a booking; from the queue, one click opens the transcript that led to the appointment — the merchant walks in knowing what was discussed. |
+| `session_key` | Always | Same-session self-service for anonymous bookers ("actually, cancel that") without an account. |
+| Email/phone match | Anonymous booking whose contact later matches a patron | **Patrons book**: shown like inquiries — `Appointment ✓` when verified by `customer_id`, `Appointment (unverified)` on bare contact match. Unverified ties NEVER grant the bot recall of that patron's history (the impersonation rule). |
+
+Practical consequences worth naming: cancelling from the patron drawer, the
+queue, or the chat all mutate the same row; the NPS coach sees a no-show as
+context; attribution ties the eventual sale back through the conversation
+that booked the viewing.
+
+## 7. Admin — the Calendar tab, queue-first
 
 New Studio tab (`data-tab="calendar"`, after Conversion), fail-visible like
-NPS/Spend:
+NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
 
+- **The queue** — one actionable inbox, oldest-first within groups:
+  1. **Awaiting confirmation** — `requested` rows (manual mode) with age and
+     TTL countdown; ✓ confirm / ✗ decline (both email the visitor).
+  2. **Callbacks** — `open` rows with age; > 24 h highlighted (an ignored
+     promise is a broken one); "done" clears.
+  3. **Today** — today's bookings in shop time, with the visitor's name,
+     type, party size, notes, and a link to the source conversation.
+  4. **Needs closing** — past-dated `booked` rows awaiting `completed` /
+     `no_show` (one tap each; this is what makes the show-rate KPI honest).
+  A queue-count badge on the tab itself (like unread counts) so a pending
+  request is never invisible.
 - **Week view** — 7 columns rendered from `appointment_slots` + booked rows:
-  open slots dim, booked solid (name + type on hover), exceptions hatched.
-  Range pager (this week / next / date).
-- **Upcoming list** — chronological bookings with status chips; one-tap
-  `completed` / `no_show` / cancel (cancel emails the visitor); CSV export
-  (register-export conventions).
-- **Callback queue** — open callbacks with age; `done` clears; ageing > 24 h
-  highlighted (fail-visible: an ignored promise is a broken one).
-- **Types & hours editor** — types CRUD (drafts by default), weekly windows
-  per type, exception dates. Plain language: "Saturdays, 10:00–16:00, every
-  30 minutes."
-- **House rules block** — master switch, timezone, owner email, callback
-  toggle, per-contact cap.
+  open slots dim, booked solid (name + type on hover), requested striped,
+  exceptions hatched. Range pager (this week / next / date). Times in shop
+  timezone, labeled.
+- **Types & hours editor** — types CRUD (drafts by default): duration, mode,
+  location, **increment picker (5/10/15/20/30/45/60)**, buffer, lead time,
+  horizon, capacity, max party, confirm mode, intake question. Weekly windows
+  per type with optional per-window increment override; exception dates.
+  Plain language everywhere: "Saturdays 10:00–16:00, every 15 minutes."
+- **House rules block** — master switch (refused until a timezone is set),
+  timezone picker, owner email, callback toggle, per-contact cap, request
+  TTL.
+- **Export** — bookings CSV (register-export conventions).
 
-## 7. SOPs (seeded versioned in `setup.sql`; operator edits never overwritten)
+## 8. Widget UX
 
-**`booking` — Appointments & viewings — etiquette** (audience: concierge):
+- Slot presentation rides the existing reply-token machinery: the model
+  presents ≤ 3 tool-returned slots as tap pills (one row, vanish on tap —
+  the NPS-pill pattern) plus "More times". Labels come from the tool (§2),
+  already localized.
+- Name/contact collection reuses the **in-chat form** renderer
+  (`concierge_forms` UI): name + contact (+ party size when the type asks,
+  + the intake question when set) — no free-text phone parsing, tap targets
+  ≥ 44 px, autocomplete attributes set.
+- Confirmation is one card: type, day + time in the visitor's terms with
+  both zones when they differ, location/mode, party size, and either "a
+  confirmation is in your inbox" or "the house will confirm shortly — you'll
+  have an email either way" (manual mode). The visit then closes through the
+  normal wrap-up (survey rules unchanged — a booking is a natural close and
+  a fine moment for the NPS ask).
+- Signed-in visitors get name/contact prefilled from the register;
+  `get_my_appointments` answers "when am I coming in?" in one turn.
 
-1. Offer a visit when interest is CONCRETE — asked to see/try/inspect it, a
-   serious question answered, price discussed without a balk. One line, once:
-   an invitation, never a push. If they decline, the calendar is closed for
-   this visit.
+## 9. SOPs (seeded versioned in `setup.sql`; operator edits never overwritten)
+
+**`booking` — Appointments & visits — etiquette** (audience: concierge):
+
+1. Offer a visit when interest is CONCRETE — asked to see/try/taste/inspect,
+   a serious question answered, price discussed without a balk. One line,
+   once: an invitation, never a push. If they decline, the calendar is
+   closed for this visit.
 2. NEVER name a time you were not given. Call `get_available_times` first;
-   present at most THREE returned slots, verbatim, with the shop's timezone
-   named; offer "more times" rather than a wall of options.
+   present at most THREE returned slots, using EXACTLY the time labels the
+   register provides (they already speak the visitor's timezone); offer
+   "more times" rather than a wall of options.
 3. Collect the name and contact through the form the register provides —
-   never ask them to type a phone number into open chat.
-4. Confirm in ONE line: what, when (day, time, timezone), where. Say the
-   confirmation email is on its way. Do not restate their contact details —
-   "the number you gave" is as specific as you get, ever.
-5. If the register answers `taken`, the slot went to someone else while you
+   never ask them to type a phone number into open chat. If the register
+   asks a party size or an extra question, ask it plainly, once.
+4. Confirm in ONE line: what, when (recite the register's label — never
+   convert times yourself), where. Say the confirmation email is on its way.
+   Do not restate their contact details — "the number you gave" is as
+   specific as you get, ever.
+5. If the register answers that the house confirms requests, promise exactly
+   that: "the house will confirm shortly — you'll have an email either way."
+   Never present a request as a done deal.
+6. If the register answers `taken`, the slot went to someone else while you
    spoke: say so plainly and warmly, then offer the nearest alternatives the
    register returned. Never argue, never blame, never promise to "squeeze
    them in".
-6. Rescheduling and cancelling are always granted graciously: confirm which
-   booking, cancel it, then offer fresh times if they want them. Never guilt.
-7. A CALLBACK request needs their number (via the form), a preferred window
+7. Rescheduling and cancelling are always granted graciously: confirm which
+   booking (the register lists theirs), cancel it, then offer fresh times if
+   they want them. Never guilt.
+8. A CALLBACK request needs their number (via the form), a preferred window
    in their words, and one honest promise: "someone will call you then" —
    never a precise minute you cannot guarantee, never "right away".
-8. The calendar is never used for pressure ("slots are going fast") unless
+9. The calendar is never used for pressure ("slots are going fast") unless
    the register genuinely shows scarcity — and even then, state the fact
    once, plainly.
 
@@ -242,84 +337,126 @@ a beat when intent signals are strong — through the same judge gate, with the
 calendar consulted BEFORE the beat speaks (a beat that offers times it
 doesn't have is defect 2 with a diary).
 
-## 8. Honesty & safety invariants (each becomes a test or eval case)
+## 10. Industry fit — one engine, many houses (the PM/UX pass)
+
+The same six knobs — duration, increment, mode, capacity, party, confirm —
+compose into very different businesses without code changes. Worked examples
+(these become the kit's `adopt generate` presets):
+
+| Industry | Type config | Notes |
+| --- | --- | --- |
+| **Private car sale** (the 996) | Viewing · 30 min · in-person · step 30 · capacity 1 · auto | The pilot. Booking = the conversion. |
+| **Atelier / boutique** (Blanket) | Fitting · 45 min · in-person · step 15 · buffer 15 · auto | Buffer protects reset time between guests. |
+| **Restaurant / tasting room** | Table · 90 min · in-person · step 15 · capacity 6 · max party 8 · auto | Capacity = concurrent tables per slot; party size asked in-chat. |
+| **Consultant / agency** | Discovery call · 15 min · video · step 5 · lead 60 min · manual | 5-min grid packs a calendar; manual confirm protects the human's day. |
+| **Salon / studio** | Session · 60 min · in-person · step 10 · buffer 10 · auto | Increment ≠ duration: fine-grained starts, hour-long service. |
+| **Home services** | Arrival window · 120 min · in-person · step 60 · manual + callbacks | Long slots read as windows; callbacks carry the triage load. |
+
+UX invariants across all of them: the visitor never sees an internal slug
+(titles/descriptions are merchant copy); vocabulary in SOPs stays
+industry-neutral ("a visit", "the house") and the kit stamps brand nouns;
+dates render locale-aware; three-choices-then-more keeps every industry's
+picker scannable; scarcity talk is fact-gated (SOP 9) — no dark patterns in
+any vertical. Deliberately NOT built: per-staff calendars, resource routing,
+deposits — the single-diary assumption keeps v1 honest (multi-staff is the
+A3+ question, and it changes the schema, so it must not be retrofitted
+quietly).
+
+## 11. Honesty & safety invariants (each becomes a test or eval case)
 
 | Invariant | Enforced by |
 | --- | --- |
 | No invented times — ever | Tool-only availability; eval: ask to book when calendar is empty ⇒ must say none + offer callback, never a fabricated slot |
-| No double-booking | Partial unique index + advisory-lock rebook check (unit test: two concurrent books ⇒ one `taken`) |
+| No model timezone math | Labels pre-formatted in code; eval: visitor in another zone asks "what's that my time?" ⇒ recites the provided label, never computes |
+| DST never shifts a shop slot | Rules expand per-date in shop zone; unit tests at both DST boundaries |
+| No double-booking | Partial unique index (covers `requested`+`booked`) + advisory-lock recheck (unit test: two concurrent books ⇒ one `taken`) |
 | Offer = write | `book_appointment` re-derives the slot from the same `appointment_slots` fn the offer used |
-| Contact never spoken | `maskContacts` on all tool-result injections; judge defect 7 already covers reading records aloud; eval: "what's my number?" ⇒ "the number you gave" |
-| QA never occupies a slot | `qa` flag excluded from the unique index + admin views; janitor deletes strays |
-| Timezone never ambiguous | Label required in `get_available_times` output AND the SOP; conformance row checks the config value flows to the widget |
+| A request is never sold as a booking | `status` in the tool result + SOP step 5; eval: manual-confirm type ⇒ reply must contain the "house will confirm" framing |
+| Contact never spoken | `maskContacts` on all tool-result injections; judge defect 7; eval: "read me back my number" ⇒ "the number you gave" |
+| Unverified ties grant nothing | Email-match shows in the Patrons book only; recall requires `customer_id` (the inquiries rule) |
+| QA never occupies a slot | `qa` excluded from the unique index + queue/views; janitor deletes strays |
 | Anonymous cap | `maxOpenPerContact` in the booking fn (unit test) |
-| Every action audited | `concierge_actions` rows for offer/book/cancel/callback (Actions tab facets) |
+| Every action audited | `concierge_actions` rows for offer/book/confirm/cancel/callback (Actions tab facets) |
 
-## 9. Attribution & metrics
+## 12. Attribution & metrics
 
 A booked appointment (non-qa) is a **conversion event** (`kind:
 'appointment'`, the inquiry-attribution pattern): Conversion tab gains it in
-the funnel; on inquiry-mode sites it is the primary conversion. KPIs: bookings
-/ week, booking rate (bookings ÷ conversations that saw an offer — offers are
-audited, so the denominator is honest), show rate (`completed` ÷ past-dated),
-callback median time-to-done. The Spend meter needs no new purposes — booking
-tools are code, not model calls; their cost is already inside `chat-tools`.
+the funnel; on inquiry-mode sites it is the primary conversion. KPIs:
+bookings / week, booking rate (bookings ÷ conversations that saw an offer —
+offers are audited, so the denominator is honest), show rate (`completed` ÷
+past-dated — powered by the queue's "needs closing" discipline), median
+time-to-confirm (manual mode), callback median time-to-done. The Spend meter
+needs no new purposes — booking tools are code, not model calls; their cost
+is already inside `chat-tools`.
 
-## 10. Evals & tests
+## 13. Evals & tests
 
-- **beats.ts pure fns** (unit-tested like the NPS suite): slot expansion
-  (rules × exceptions × bookings), lead/horizon clipping, `maxOpenPerContact`
-  gate, buffer math.
+- **Pure fns** (unit-tested like the NPS suite): slot expansion (rules ×
+  exceptions × bookings × buffers × increments), DST boundaries, lead/horizon
+  clipping, capacity & `max_party` & `maxOpenPerContact` gates, label
+  formatting for both-zone cases.
 - **Eval deck** (DB-deck rows, `qa-` sessions): happy-path book (offer →
   slots → form → confirm), calendar-empty honesty, no-invented-times
-  adversarial ("just pencil me in for Sunday 9pm"), double-book recovery
-  (`taken` path), contact-privacy ("read me back my number"), boundary
-  (past-horizon date declined with nearest real option).
-- **Conformance rows**: timezone, master toggle, per-type enabled flags.
+  adversarial ("just pencil me in for Sunday 9pm"), timezone recital,
+  manual-confirm framing, double-book recovery (`taken` path),
+  contact-privacy ("read me back my number"), boundary (past-horizon date
+  declined with nearest real option), party-too-large grace.
+- **Conformance rows**: timezone, master toggle, per-type enabled flags,
+  increment honored in offered slots.
 - **CI probe**: `select appointment_slots(...)` next to the existing
   `nps_metrics` / `llm_cost_metrics` deploy probes.
 
-## 11. Rollout
+## 14. Rollout
 
 | Phase | Scope | Definition of done |
 | --- | --- | --- |
-| **A1** | Schema + `appointment_slots` + `book_appointment` + tools + SOP + widget pills/form + confirmation emails + Calendar tab (week view, upcoming, types & hours) + docs/stories/evals | Both sites deployed; eval cases green; a real booking round-trips (book → email → admin → cancel) on Blanket and the 996 |
-| **A2** | Callback queue polish, reminder email (pg_cron, T-24h), reschedule links in email, ICS refinements | reminders observed in email_log |
-| **A3** | Beat-driven viewing offers (judge-gated), capacity > 1 group slots, external calendar feed (read-only ICS URL for the owner) | — |
+| **A1** | Schema + `appointment_slots` + `book_appointment`/confirm/cancel + all five tools + `booking` SOP + widget pills/form + emails (+`.ics`) + Calendar tab (queue, week view, types & hours) + identity ties (§6) + docs/stories/evals | Both sites deployed; eval cases green; a real booking round-trips (book → email → queue → confirm → patron drawer → cancel) on Blanket and the 996 |
+| **A2** | Reminder email (pg_cron, T-24h), reschedule links in email, queue niceties (bulk close, day notes), ICS refinements | reminders observed in `email_log` |
+| **A3** | Beat-driven viewing offers (judge-gated), external read-only ICS feed for the owner, multi-staff exploration (schema RFC first) | — |
 
-**Deliberately out of scope:** two-way Google/Outlook sync, SMS, payments or
-deposits, staff-member routing (single-calendar assumption — one house, one
-diary).
+**Deliberately out of scope for v1:** two-way Google/Outlook sync, SMS,
+payments or deposits, per-staff routing.
 
-## 12. Documentation obligations on build (the checklist that bit us on NPS)
+## 15. Documentation obligations on build (the checklist that bit us on NPS)
 
-DESIGN.md §2 stories (guest books / guest callback / merchant calendar /
-house honesty — drafted below), PRD KPI row ("Booking rate — instrumented by
-the appointments audit"), BACKLOG [Shipped] entry, TOOLS.md catalog rows for
-the four tools, this file flipped from "not yet built" to shipped-status with
-any drift corrected, kit vendor + 996 patch + ADOPTING.md note (the 996's
-"book a viewing" goal finally lands), eval CATALOG rows.
+DESIGN.md §2 stories (drafted below), PRD KPI row ("Booking rate —
+instrumented by the appointments audit"), BACKLOG [Shipped] entry, TOOLS.md
+catalog rows for the five tools, this file flipped from "not yet built" to
+shipped-status with any drift corrected, kit vendor + 996 patch + ADOPTING.md
+note + `adopt generate` industry presets (§10), eval CATALOG rows.
 
 ### Draft user stories (move to DESIGN.md §2 at build time)
 
-- **As a guest**, when I'm seriously interested I want to **book a viewing in
-  the chat in under a minute**, choosing from times that are genuinely free,
-  so I don't play email tag. *Accepted when:* every offered time came from
-  the calendar tool verbatim (≤ 3 + "more"), the timezone is named, my
+- **As a guest**, when I'm seriously interested I want to **book a visit in
+  the chat in under a minute**, choosing from times that are genuinely free
+  and shown **in my own timezone**, so I don't play email tag or do clock
+  math. *Accepted when:* every offered time came from the calendar tool
+  verbatim (≤ 3 + "more") with visitor-and-shop zones labeled per §2, my
   contact is collected by a form (never free-typed), the confirmation email
-  with an `.ics` and a cancel link arrives, and a lost race is recovered in
-  one turn with real alternatives.
+  with an `.ics` and a cancel link arrives, a manual-confirm request is
+  never framed as a done deal, and a lost race is recovered in one turn with
+  real alternatives.
 - **As a guest**, I want to **ask for a callback** with my preferred window,
   so the house calls me instead. *Accepted when:* the promise made is exactly
-  "someone will call you in that window", the request appears in the admin
-  queue instantly, and my number is never echoed in chat.
-- **As the merchant**, I want to **publish my availability once** — weekly
-  hours, exceptions, slot length, lead time — and have every booking appear
-  in a week view with statuses I can act on, so the calendar runs itself.
-  *Accepted when:* drafts ship disabled, the week view and the bot compute
-  slots from the same function, double-booking is impossible by construction,
-  cancelling notifies the visitor, and the callback queue ages visibly.
+  "someone will call you in that window", the request appears in the queue
+  instantly, and my number is never echoed in chat.
+- **As a returning patron**, I want the house to **remember my booking** —
+  "see you Saturday at 10" — and let me check, cancel, or move it in chat.
+  *Accepted when:* the upcoming appointment rides the customer context
+  (contact masked), `get_my_appointments` answers in one turn, and cancel
+  from chat / email link / patron drawer all mutate the same row.
+- **As the merchant**, I want to **publish availability once** — types,
+  weekly hours, a slot increment I choose (5–60 min), exceptions, lead time
+  — and then **work from one queue**: confirm requests, mark today's
+  visits done or no-show, clear callbacks before they age. *Accepted when:*
+  drafts ship disabled, the master switch refuses to turn on without a
+  timezone, the week view and the bot compute slots from the same function,
+  double-booking is impossible by construction, the queue badges pending
+  work on the tab, and every queue row links to the conversation that
+  produced it.
 - **As the house**, I want booking conduct governed like everything else —
-  offer etiquette in an editable SOP, availability decided by code, every
-  offer/book/cancel audited, QA traffic never touching real slots — so the
-  calendar earns trust instead of spending it.
+  offer etiquette in an editable SOP, availability and timezone math decided
+  by code, every offer/book/confirm/cancel audited, unverified contact
+  matches granting no recall, QA never touching real slots — so the calendar
+  earns trust instead of spending it.

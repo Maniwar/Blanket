@@ -27,13 +27,16 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Product / features
 
-- **[Specified — next up] Appointments & callbacks.** Admin-publishable
-  calendar (types, weekly hours, exceptions, lead time/horizon/capacity);
-  the model offers ONLY tool-returned slots; booking is a race-safe
-  `security definer` write (partial unique index + advisory lock); callbacks
-  queue; Calendar tab; `booking` SOP; contact always masked; QA never
-  occupies a slot; booked appointment = conversion event. Full build
-  contract: [APPOINTMENTS.md](APPOINTMENTS.md).
+- **[Specified — next up] Appointments & callbacks (spec v2).** Admin-
+  publishable calendar: types with **admin-picked increments (5–60 min)**,
+  weekly hours, exceptions, lead/horizon/capacity/party/confirm-mode; full
+  three-clock timezone design (UTC storage, shop wall-clock rules,
+  visitor-local presentation — the model recites labels, never converts);
+  the model offers ONLY tool-returned slots; race-safe booking; **the queue**
+  (awaiting-confirmation / callbacks / today / needs-closing) leads the
+  Calendar tab; identity ties to patron profiles, conversations, and the
+  coach (§6); industry presets (car sale → restaurant → consultant). Full
+  build contract: [APPOINTMENTS.md](APPOINTMENTS.md).
 
 - **[Shipped] The meter + Spend tab.** Every model call logged at the source
   with a purpose (`concierge_llm_usage`; fire-and-forget, never blocks
