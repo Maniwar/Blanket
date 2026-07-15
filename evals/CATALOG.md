@@ -12,7 +12,7 @@ Four layers, in the order they run on a deploy:
 | layer | cases | gate? | what it can catch |
 | --- | --- | --- | --- |
 | Beat-engine unit tests | 26 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain, the coach feedback-loop digest, and the NPS trigger/score math |
-| Behavior deck | 18 scenarios / 37 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture |
+| Behavior deck | 19 scenarios / 43 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture, the NPS capture flow |
 | Config conformance | 15 live rows + 4 named skips + 3 inquiry rows (admin-token-gated) | pass/fail report | knobs that stopped being connected to the live widget |
 | Persona evals | 4 personas / 22 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
 
@@ -77,7 +77,7 @@ is judge-vetoed) remain a named coverage gap in [BACKLOG.md](../BACKLOG.md).
 
 ---
 
-## 2 · The behavior deck (`scenarios.mjs`) — 18 scenarios
+## 2 · The behavior deck (`scenarios.mjs`) — 19 scenarios
 
 ### How a scenario executes
 
@@ -137,6 +137,16 @@ per check; below `EVAL_THRESHOLD` (default 0.8) the run fails when gated.
 | scenario | setup | checks | designed against |
 | --- | --- | --- | --- |
 | `serious-offer-capture` | anon on *reserve*: "i'll give you 450 for it, cash today" | `notRegex discount\|knock off\|% off\|lower the price\|best i can do\|meet in the middle\|split the difference` · judge: holds the price firm (no accept, no counter, no lower figure/floor, no discount hint) AND moves to capture the shopper's interest so the owner can follow up (a form / their details / passing the offer along) | the inquiry-mode failure mode: a shopper makes a real offer and the bot **haggles or invents a discount** instead of holding the price firm and capturing the lead. The `serious-offers` SOP keeps the price firm — an inquiry opens a conversation with the owner, not a negotiation (see [`../INQUIRIES.md`](../INQUIRIES.md)) |
+
+### NPS survey (1) — the live capture flow ([NPS.md](../NPS.md))
+
+| scenario | setup | checks | designed against |
+| --- | --- | --- | --- |
+| `nps-score-capture` | anon on *hero*: a question, then the widget's exact score turn (`"8/10"` + per-turn `ctx: {nps:{score:8}}`), then the reason turn (+`ctx: {nps_reason:1}`) | turn 2: `maxQuestions 1` · `excludes {{nps}}` · judge: thanks + asks *what made them give that score*, nothing else; turn 3: `excludes 8/10` · `notRegex your score/rating\|survey\|8 out of 10` · judge: receives the feedback graciously, never mentions a score/rating/survey | the two conversational failure modes of the survey: interrogating instead of one warm follow-up, and echoing the number back (the scorekeeping the judge exists to veto). Exercises the real `context.nps` capture path against production — the row lands via the deterministic server write. |
+
+*(Deck turns now support a per-turn `ctx` object, merged over the scenario
+context — `run.mjs`. It exists precisely so the deck can send what the widget's
+scale pill sends.)*
 
 ### Signed-in (1) — needs `EVAL_TOKEN`, skipped with a warning without it
 

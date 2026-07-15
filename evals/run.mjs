@@ -131,6 +131,9 @@ async function runScenario(sc, agg) {
       // nudge/opener context — exactly what the widget sends when a proactive
       // beat fires. No user message is appended.
       let context = sc.context || {};
+      // Per-turn context (e.g. the NPS survey's context.nps / context.nps_reason —
+      // exactly what the widget's scale pill sends). Merged over the scenario's.
+      if (turn.ctx && typeof turn.ctx === 'object') context = { ...context, ...turn.ctx };
       if (turn.beat) {
         context = { ...context, nudge: { seconds: turn.beat.seconds ?? 40, count: turn.beat.count ?? 1, ...(turn.beat.signedIn ? { signedIn: true } : {}) } };
       } else if (turn.opener) {

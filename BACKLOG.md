@@ -146,11 +146,16 @@ hard-gate tests) and documented with a diagram. Nothing fires live yet.
   `coachBeatLine` at both sites; the judge criterion naming quoted-rating
   scorekeeping + whitelisting the pill; `outreach.nps` config block, the
   Conversion-tab NPS card, patron + transcript badges; DFD/ROPA row.
-- **Dashboard depth** *(next)*: NPS trend-over-time chart + period comparison,
-  per-coach table, CSV export, human re-categorisation UI, an NPS segment filter
-  on the conversations list, and a privacy-notice sentence on the published page.
-- **Behavior-deck scenarios for the live flow** *(coverage gap)*: fires at close
-  / not mid-flow / not twice; a planted "you rated us low" line is judge-vetoed.
+- **[Shipped] Dashboard depth**: trend chart (segment counts per bucket, bucket
+  NPS in the tooltip), CSV export, per-coach line, segment movement (↑/↓ with
+  at-risk names), ✎ re-categorisation (`category_source='human'` + admin RLS
+  update policy), the `nps-score-capture` deck scenario (per-turn `ctx` support
+  in run.mjs), and the privacy-notice line.
+- **NPS segment filter on the conversations list** *(small)* — the per-convo map
+  already exists (`state.npsByConvo`); add the facet.
+- **Judge-veto deck scenario** *(coverage gap, hard to force)*: a planted "you
+  rated us low" line is vetoed — covered today by the criterion + unit guard;
+  a reliable live-fire case needs a way to seed the drafted line.
 - **Segment-movement widgets** *(with the tab)*: Detractor→Passive→Promoter
   cohort movement, at-risk (recent decline) list — the period-comparison
   machinery already exists.

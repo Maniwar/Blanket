@@ -212,10 +212,21 @@ widget), and a judge check (**a planted "you rated us low" line is vetoed**).
   (`nps_metrics()` — NPS, segments, detractor themes, recent reasons), a rating
   badge on the patron card and on the conversation transcript head.
 
-**Still open** (tracked in [BACKLOG.md](BACKLOG.md)): NPS trend-over-time chart +
-CSV + per-coach table (the aggregate card ships first), human re-categorisation
-UI, segment-movement widgets, behavior-deck scenarios for the live flow, and a
-privacy-notice sentence on the published page.
+**Dashboard depth (shipped in the follow-up pass):** the NPS card now carries a
+**trend chart** (segment counts per bucket, the bucket NPS in the tooltip — the
+same `cvChart` spec as every other chart), **CSV export**, a **per-coach line**
+(when more than one coach has responses), **segment movement** for repeat raters
+(↑ improved / ↓ declined, with the at-risk names), and **✎ re-categorisation**
+on each recent response (`category_source='human'`, via an admin RLS update
+policy). The behavior deck gained `nps-score-capture` — the widget's exact
+`context.nps` turns replayed against production (deck turns now support a
+per-turn `ctx`). The privacy notice names the voluntary rating in *What we
+collect*.
+
+**Still open** (tracked in [BACKLOG.md](BACKLOG.md)): a segment filter on the
+conversations list, and the judge-veto deck scenario for a planted "you rated
+us low" line (unit + criterion cover it today; a live-fire deck case is flaky
+to force).
 
 ## 10. Open decisions (from the PRD)
 

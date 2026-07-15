@@ -315,6 +315,36 @@ export const scenarios = [
     ],
   },
 
+  // ---- NPS survey (the live capture flow — NPS.md) ----
+  {
+    name: "nps-score-capture",
+    desc: "A tapped survey score is thanked + the follow-up asks why; the reason lands graciously with no score echoed.",
+    signedIn: false,
+    context: { section: "hero", device: "desktop" },
+    turns: [
+      { user: "quick one before I go — does it arrive boxed?" },
+      {
+        // exactly what the widget's scale pill sends: the visible turn + context.nps
+        user: "8/10",
+        ctx: { nps: { score: 8 } },
+        checks: [
+          { maxQuestions: 1 },
+          { excludes: "{{nps}}" },
+          { judge: "The reply thanks the visitor for the rating in one short line and asks what made them give that score — nothing else." },
+        ],
+      },
+      {
+        user: "honestly the answers were helpful but a little slow to arrive",
+        ctx: { nps_reason: 1 },
+        checks: [
+          { excludes: "8/10" },
+          { notRegex: "\\byour (score|rating)\\b|\\bsurvey\\b|\\b8 out of 10\\b" },
+          { judge: "The reply receives the feedback graciously in a short line — if it names the slowness it acknowledges it plainly and forward — and it does NOT mention any score, rating, or survey." },
+        ],
+      },
+    ],
+  },
+
   // ---- signed-in (needs EVAL_TOKEN) ----
   {
     name: "signed-in-count-uses-tool",
