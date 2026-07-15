@@ -181,6 +181,19 @@ hard-gate tests) and documented with a diagram. Nothing fires live yet.
 - **(Honesty)** claiming an intervention *caused* a segment move needs a
   holdout/A-B — same caveat as the coach-lift eval.
 
+## Privacy & service-context (from live 996 testing, sec-20-407)
+
+- **[Shipped] Deterministic PII redaction**: contact details in the house's
+  records (client-book notes, directives, recalled conversations) are masked to
+  `[contact on file]` BEFORE they reach the model — a rule can be ignored under
+  pressure, a redaction cannot. Published channels (KB/config) stay shareable.
+- **[Shipped] Judge defects 7 + 8**: (7) reading stored contact details aloud
+  is vetoed; (8) the judge now sees the shopper's latest message and vetoes
+  proactive lines that sell past an unresolved complaint or trust issue.
+- **[Shipped] Order-less patrons visible**: signed-in customers without an
+  order (the entire inquiry-mode population) now appear in the Patrons book,
+  merged from the customers table, so their house notes have a face.
+
 ## Deferred by choice
 
 - **Lifecycle beats package.** Weave-milestone updates, post-delivery
