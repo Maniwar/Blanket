@@ -249,7 +249,14 @@ offered, never a fake 0%). **By-category reporting** shows the full
 mention counts, detractor share, and bars, so the operator sees the classifier
 working at a glance. The tab keeps the trend chart, per-coach line, segment
 movement, recent responses with ✎ re-categorisation, and CSV export, over its
-own rolling range picker (7/30/90/365/all — `nps_metrics(p_days)` windows).
+own rolling range picker (7/30/90/365/all — `nps_metrics(p_days)` windows) and
+a **View-by granularity picker** (auto/day/week/month/year). An **Over time**
+card aggregates every KPI per bucket, Conversion-style: **NPS per bucket** (a
+signed −100…100 line with honest gaps — a bucket with no responses breaks the
+line rather than faking a zero), the **survey funnel** (offers vs responses,
+bucket response rate in the tooltip), **response rate per bucket**, and
+**responses by segment** (the raw quantity). Offers come from the audited
+`beat_action` rows, so the charts and the beat ledger can never disagree.
 `response_rate` is deliberately null in coach-scoped views: offer rows carry no
 coach, and the house never approximates a number it can't ground.
 
