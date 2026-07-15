@@ -324,7 +324,12 @@ code.
   correct + rating/score/survey, or rating + wrong/mistake) re-presents the
   scale with one gracious line, and the new tap **revises the existing row in
   place** (`npsCaptureAction`, unit-tested — the *offer* to revise and the
-  *write* use the same decision, so they can never disagree). The revision
+  *write* use the same decision, so they can never disagree). The model is
+  told, not trusted to know: the server injects a per-turn `[SURVEY REVISION]`
+  register note carrying the verdict (window open → re-present the scale;
+  window closed → the rating stands), and step 6 of the `closing-survey` SOP
+  instructs the concierge to follow that note — etiquette in the SOP,
+  decision in code, same as the survey ask itself. The revision
   targets this conversation's own row, or — in a fresh conversation — the
   customer's most recent row. **Past the window** the concierge declines
   kindly in one line and invites the feedback directly (still acted on, never
