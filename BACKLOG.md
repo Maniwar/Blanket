@@ -27,6 +27,14 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Product / features
 
+- **[Specified — next up] Appointments & callbacks.** Admin-publishable
+  calendar (types, weekly hours, exceptions, lead time/horizon/capacity);
+  the model offers ONLY tool-returned slots; booking is a race-safe
+  `security definer` write (partial unique index + advisory lock); callbacks
+  queue; Calendar tab; `booking` SOP; contact always masked; QA never
+  occupies a slot; booked appointment = conversion event. Full build
+  contract: [APPOINTMENTS.md](APPOINTMENTS.md).
+
 - **[Shipped] The meter + Spend tab.** Every model call logged at the source
   with a purpose (`concierge_llm_usage`; fire-and-forget, never blocks
   serving); QA/CI traffic flagged at write time; `llm_cost_metrics()` v2
