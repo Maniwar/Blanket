@@ -35,8 +35,12 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
   the model offers ONLY tool-returned slots; race-safe booking; **the queue**
   (awaiting-confirmation / callbacks / today / needs-closing) leads the
   Calendar tab; identity ties to patron profiles, conversations, and the
-  coach (§6); industry presets (car sale → restaurant → consultant). Full
-  build contract: [APPOINTMENTS.md](APPOINTMENTS.md).
+  coach (§6) with the §6a cohesion map (no dead ends — every card a
+  doorway); **multi-location** (per-location hours, timezone, and switch;
+  progressive disclosure for single-location houses) and the three-level
+  toggle cascade (master → location → type; a toggle is never a
+  cancellation); industry presets (car sale → restaurant → two-city
+  gallery). Full build contract: [APPOINTMENTS.md](APPOINTMENTS.md).
 
 - **[Shipped] The meter + Spend tab.** Every model call logged at the source
   with a purpose (`concierge_llm_usage`; fire-and-forget, never blocks

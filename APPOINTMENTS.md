@@ -1,4 +1,4 @@
-# Appointments & callbacks — specification (v2.2, not yet built)
+# Appointments & callbacks — specification (v3, not yet built)
 
 The concierge's next act: turning buying intent into a **booked moment** — a
 viewing, a fitting, a table, a consultation — or a **callback request** when
@@ -40,7 +40,9 @@ around.
 | Term | Meaning |
 | --- | --- |
 | **Appointment type** | An admin-defined offering: "Viewing — 30 min at the workshop", "Discovery call — 15 min video". Duration, mode, slot increment, buffers, booking window, confirm mode, party size. |
-| **Business hours** | House-level open hours (weekly ranges + holiday closures) — the outer boundary everything else lives inside. Powers the bot's "are you open?" answer, clamps callback promises, and caps every type's bookable windows. §3a. |
+| **Location** | A place bookings happen — name, address, **its own IANA timezone**, its own business hours, its own on/off switch. Every house has ≥ 1; a single-location house sees none of this complexity (§3b). |
+| **Business hours** | Per-location open hours (weekly ranges + holiday closures) — the outer boundary everything else lives inside. Powers the bot's "are you open?" answer, clamps callback promises, and caps every type's bookable windows. §3a. |
+| **The toggle cascade** | `bookings.enabled` (master) → `location.enabled` → `type.enabled`. Off at any level removes slots below it; standing bookings always survive a toggle (§3b). |
 | **Availability rule** | Weekly recurring windows per type, in the shop's wall-clock time: "Sat 10:00–16:00" — always intersected with business hours. |
 | **Slot increment** | The grid inside a window — admin-selectable **5 / 10 / 15 / 20 / 30 / 45 / 60 min** (per type, overridable per rule). A 10:00–12:00 window at 15 min yields 10:00, 10:15, … |
 | **Exception** | A dated override: closed on the 24th; extra evening window on the 30th. |
@@ -57,17 +59,19 @@ play; each has a defined role:
 | Clock | Role |
 | --- | --- |
 | **UTC** | Storage. `starts_at`/`ends_at` are `timestamptz`; all math is UTC. |
-| **Shop time** (`bookings.timezone`, IANA) | The calendar's authoring language. Rules and exceptions are defined in shop **wall-clock** time and expanded per-date in that zone — a "Sat 10:00" slot is 10:00 local on both sides of a DST change (unit-tested at both DST boundaries). |
+| **Location time** (each location's IANA timezone) | The calendar's authoring language. Rules and exceptions are defined in the location's **wall-clock** time and expanded per-date in that zone — a "Sat 10:00" slot is 10:00 local on both sides of a DST change (unit-tested at both DST boundaries). Two locations in two timezones are two independent clocks. |
 | **Visitor time** | The presentation language. The widget detects `Intl.DateTimeFormat().resolvedOptions().timeZone` and sends it as context; the tool returns each slot with BOTH renderings pre-formatted. |
 
 **Presentation rules (code formats, the model recites — it never converts):**
 
-- Zones match → one time, zone named once: *"Saturday 10:00 (PT)"*.
-- Zones differ, **in-person** type → shop time leads (they must show up
-  there): *"Saturday 10:00 at the shop (PT) — that's 13:00 your time"*.
+- Zones match → one time, zone named once: *"Saturday 10:00 (PT)"*. With
+  multiple locations, the location is ALWAYS named beside the time.
+- Zones differ, **in-person** type → location time leads (they must show up
+  there): *"Saturday 10:00 at the Marfa studio (CT) — that's 8:00 your
+  time"*.
 - Zones differ, **video/phone** type → visitor time leads: *"Saturday 13:00
   your time (10:00 PT)"*.
-- Visitor zone undetectable → shop time, zone always named.
+- Visitor zone undetectable → location time, zone always named.
 - Confirmation email and card show both; the `.ics` is UTC-based so every
   calendar app localizes it correctly by itself.
 
@@ -78,24 +82,60 @@ head is a missed flight waiting to happen.
 
 ## 3. Schema (feature-owned, additive; all tables RLS-enabled)
 
-### 3a. Business hours — the outer boundary
-
-The house has ONE set of open hours; appointment types live inside them.
-Multiple ranges per day are first-class (the lunch-break case: Tue 9:00–13:00
-and 14:00–18:00 is two rows). House-wide closures reuse the exceptions table
-with `type_id = null`.
+### 3a. Locations & business hours — the outer boundary
 
 ```sql
+create table concierge_locations (
+  id         bigint generated always as identity primary key,
+  slug       text unique not null,             -- 'main', 'marfa-studio'
+  title      text not null,
+  address    text not null default '',
+  timezone   text not null,                    -- IANA; each location keeps its own clock
+  directions text not null default '',         -- rides the confirmation email
+  enabled    boolean not null default true,    -- the per-location toggle
+  sort_order int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create table concierge_business_hours (
-  id        bigint generated always as identity primary key,
-  dow       smallint not null check (dow between 0 and 6),   -- 0 = Sunday, shop-local
-  open_min  smallint not null check (open_min between 0 and 1439),
-  close_min smallint not null check (close_min between 1 and 1440),
+  id          bigint generated always as identity primary key,
+  location_id bigint not null references concierge_locations(id) on delete cascade,
+  dow         smallint not null check (dow between 0 and 6),   -- 0 = Sunday, location-local
+  open_min    smallint not null check (open_min between 0 and 1439),
+  close_min   smallint not null check (close_min between 1 and 1440),
   check (close_min > open_min)
 );
--- no rows for a dow = closed that day; no rows at all = hours not configured
--- (booking master switch refuses to enable, same as the missing-timezone rule)
+-- no rows for a dow = closed that day at that location; a location with no
+-- hours at all cannot be enabled (same refusal rule as a missing timezone)
 ```
+
+Each location owns its hours; multiple ranges per day are first-class (the
+lunch-break case: Tue 9:00–13:00 and 14:00–18:00 is two rows). Location-wide
+closures reuse the exceptions table with `type_id = null` and the location
+set. Virtual types (video/phone) attach to a location too — the humans taking
+the call sit somewhere with hours and a clock.
+
+### 3b. One location or many — and the toggle cascade
+
+**Progressive disclosure.** `setup.sql` seeds one location, `main`, from the
+config timezone. A single-location house NEVER sees the dimension: no
+location column in the queue, no picker in chat, no filter in the week view.
+The moment a second location row exists, the dimension appears everywhere at
+once (queue chips, week-view filter, chat choice, email address lines).
+Multi-location is capability, not ceremony.
+
+**The toggle cascade** — three switches, one rule each:
+
+| Switch | Off means |
+| --- | --- |
+| `bookings.enabled` (master, absent = OFF) | The tools are not even offered to the model; the Calendar tab shows the queue read-only with a plain banner. |
+| `location.enabled` | That location yields no slots and is not offered in chat; its standing bookings remain in the queue and week view (flagged) — a toggle is never a cancellation. |
+| `type.enabled` | Same, scoped to the type (drafts ship disabled — the kit rule). |
+
+An off switch is always **visible honesty**: the admin shows what is off and
+why nothing is bookable, never a mysteriously empty picker. The model, for
+its part, simply doesn't have the tool or the slots — it cannot offer what
+the cascade has removed.
 
 What business hours power (each is a build requirement, not a nicety):
 
@@ -146,8 +186,10 @@ create table concierge_appointment_types (
 );
 
 create table concierge_availability (
-  id        bigint generated always as identity primary key,
-  type_id   bigint not null references concierge_appointment_types(id) on delete cascade,
+  id          bigint generated always as identity primary key,
+  type_id     bigint not null references concierge_appointment_types(id) on delete cascade,
+  location_id bigint not null references concierge_locations(id) on delete cascade,
+  -- a type is OFFERED at a location iff rules exist there; types stay global
   dow       smallint not null check (dow between 0 and 6),   -- 0 = Sunday, shop-local
   start_min smallint not null check (start_min between 0 and 1439),
   end_min   smallint not null check (end_min   between 1 and 1440),
@@ -156,8 +198,9 @@ create table concierge_availability (
 );
 
 create table concierge_availability_exceptions (
-  id        bigint generated always as identity primary key,
-  type_id   bigint references concierge_appointment_types(id) on delete cascade,  -- null = all types
+  id          bigint generated always as identity primary key,
+  location_id bigint references concierge_locations(id) on delete cascade,        -- null = every location
+  type_id     bigint references concierge_appointment_types(id) on delete cascade,  -- null = all types
   on_date   date not null,                      -- shop-timezone date
   closed    boolean not null default true,      -- true: no slots that day
   start_min smallint, end_min smallint,         -- else: REPLACE the day's windows
@@ -169,6 +212,7 @@ create table concierge_appointments (
   kind            text not null default 'appointment'
                   check (kind in ('appointment','callback')),
   type_id         bigint references concierge_appointment_types(id) on delete set null,
+  location_id     bigint references concierge_locations(id) on delete set null,
   starts_at       timestamptz,                  -- null for callbacks
   ends_at         timestamptz,
   window_pref     text,                         -- callbacks: 'weekday mornings', their words
@@ -196,13 +240,13 @@ create index concierge_appt_convo_idx    on concierge_appointments (conversation
 -- 'requested' row occupies the slot exactly like a 'booked' one. Capacity > 1
 -- is enforced inside book_appointment() under an advisory lock.
 create unique index concierge_appt_slot_uniq
-  on concierge_appointments (type_id, starts_at)
+  on concierge_appointments (type_id, location_id, starts_at)
   where kind = 'appointment' and status in ('requested','booked') and not qa;
 ```
 
 **Config** (`concierge_config`, under `bookings`): `enabled` (master, absent =
-OFF — opt-in feature), `timezone` (IANA — required before enabling; the admin
-refuses the master switch without it), `ownerEmail` (falls back to the
+OFF — opt-in feature; the full cascade is §3b), `timezone` (IANA — seeds the
+`main` location; thereafter each location owns its clock), `ownerEmail` (falls back to the
 inquiry owner email), `callbacks.enabled`, `maxOpenPerContact` (default 2 —
 one visitor cannot carpet-bomb the calendar), `requestTtlHours` (default 24;
 manual-confirm requests not acted on in time auto-cancel with an apologetic
@@ -216,7 +260,7 @@ janitor like `nps_responses` strays.
 ## 4. Slot computation & booking (SQL, `security definer`)
 
 ```
-appointment_slots(p_type text, p_from date, p_to date, p_visitor_tz text) → jsonb
+appointment_slots(p_type text, p_location text, p_from date, p_to date, p_visitor_tz text) → jsonb
 ```
 Pure read: clamps to business hours (§3a), expands weekly rules over the
 range **in the shop timezone** (per-date, DST-correct), applies exceptions,
@@ -230,7 +274,7 @@ week view and queue use the **same function** — one source of truth for
 "available", shared by the tool and the Studio.
 
 ```
-book_appointment(p_type text, p_starts_at timestamptz, p_name text,
+book_appointment(p_type text, p_location text, p_starts_at timestamptz, p_name text,
                  p_contact text, p_contact_kind text, p_party smallint,
                  p_notes text, p_visitor_tz text,
                  p_customer uuid, p_conversation uuid, p_session text) → jsonb
@@ -258,7 +302,7 @@ other tool. **Anonymous visitors may book** (name + contact collected in-chat)
 
 | Tool | Input | Behavior |
 | --- | --- | --- |
-| `get_available_times` | `type_slug?`, `from_date?`, `days? (≤14)` | Lists enabled types when no slug; else calls `appointment_slots` with the widget's detected visitor timezone, returns slots with §2 labels. The ONLY source of times the model may utter. |
+| `get_available_times` | `type_slug?`, `location_slug?`, `from_date?`, `days? (≤14)` | Lists enabled types (and, when more than one, enabled locations) when unscoped; with a type at multiple locations and none chosen, returns the location choice FIRST — the model asks, never assumes. Then `appointment_slots` with the visitor timezone; slots carry §2 labels with the location named. The ONLY source of times (and locations) the model may utter. |
 | `book_appointment` | `type_slug`, `starts_at` (must echo a returned slot), `name`, `contact`, `contact_kind`, `party_size?`, `notes?` | Calls the SQL fn. `booked` ⇒ confirmation email to visitor (+ `.ics`, cancel link) and owner notification. `requested` ⇒ "request received" email; the model says the house will confirm (SOP step 5). Either way: audit row, attribution event, queue entry. On `taken`: returns the 3 nearest still-open slots so the model recovers in one turn. |
 | `get_my_appointments` | — (signed-in, or same-session anonymous) | The visitor's upcoming/past bookings, contact masked. Powers "when am I coming in again?" and §6 continuity. |
 | `cancel_appointment` | `appointment_id` (theirs: matched via customer_id or session) | Verified cancel; frees the slot; both emails. |
@@ -338,8 +382,11 @@ NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
   horizon, capacity, max party, confirm mode, intake question. Weekly windows
   per type with optional per-window increment override; exception dates.
   Plain language everywhere: "Saturdays 10:00–16:00, every 15 minutes."
-- **House hours editor** — the business-hours grid (per day, multiple
-  ranges for split days, "closed" toggles) plus house-wide closure dates.
+- **Locations editor** — appears only when needed (§3b): add/rename
+  locations, address, timezone, directions, the per-location switch. Queue
+  and week view gain location chips the moment a second location exists.
+- **House hours editor** — the business-hours grid per location (per day,
+  multiple ranges for split days, "closed" toggles) plus closure dates.
   Sits ABOVE the types editor: types are edited in its shadow, with inline
   warnings when a type window escapes it.
 - **House rules block** — master switch (refused until BOTH a timezone and
@@ -374,7 +421,10 @@ NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
    a serious question answered, price discussed without a balk. One line,
    once: an invitation, never a push. If they decline, the calendar is
    closed for this visit.
-2. NEVER name a time you were not given. Call `get_available_times` first;
+2. When the house has more than one location, ask WHERE before WHEN — offer
+   the locations the register lists, plainly, and never assume. Confirmations
+   always name the place.
+2b. NEVER name a time you were not given. Call `get_available_times` first;
    present at most THREE returned slots, using EXACTLY the time labels the
    register provides (they already speak the visitor's timezone); offer
    "more times" rather than a wall of options.
@@ -430,6 +480,7 @@ compose into very different businesses without code changes. Worked examples
 | **Consultant / agency** | Discovery call · 15 min · video · step 5 · lead 60 min · manual | 5-min grid packs a calendar; manual confirm protects the human's day. |
 | **Salon / studio** | Session · 60 min · in-person · step 10 · buffer 10 · auto | Increment ≠ duration: fine-grained starts, hour-long service. |
 | **Home services** | Arrival window · 120 min · in-person · step 60 · manual + callbacks | Long slots read as windows; callbacks carry the triage load. |
+| **Two-city gallery** | Private showing · 45 min · in-person · step 30 · two locations, own hours & timezones | The location question comes first in chat; each city keeps its own clock and closures. |
 
 UX invariants across all of them: the visitor never sees an internal slug
 (titles/descriptions are merchant copy); vocabulary in SOPs stays
@@ -456,6 +507,9 @@ quietly).
 | QA never occupies a slot | `qa` excluded from the unique index + queue/views; janitor deletes strays |
 | Anonymous cap | `maxOpenPerContact` in the booking fn (unit test) |
 | Type windows never escape business hours | `appointment_slots` clamp (unit test) + inline editor warning |
+| Location never assumed | Tool returns the choice when ambiguous; eval: two locations ⇒ the bot asks where before offering times |
+| A toggle is never a cancellation | Cascade semantics (§3b); unit test: disabling a location hides slots, keeps bookings |
+| Two locations, two clocks | Per-location tz expansion (DST tests run per location) |
 | Callback promises fit open hours | Register-provided phrasing; eval: callback at Saturday close ⇒ promise names the next opening, never "tomorrow morning" on a closed Sunday |
 | "Are you open?" answered from data | HOURS context block outranks KB prose (conformance row: hours flow bot-visible) |
 | Every action audited | `concierge_actions` rows for offer/book/confirm/cancel/callback (Actions tab facets) |
@@ -502,7 +556,8 @@ is already inside `chat-tools`.
 | **A3** | Beat-driven viewing offers (judge-gated), external read-only ICS feed for the owner, multi-staff exploration (schema RFC first) | — |
 
 **Deliberately out of scope for v1:** two-way Google/Outlook sync, SMS,
-payments or deposits, per-staff routing.
+payments or deposits, per-staff routing (staff is the remaining A3 schema
+RFC — locations are now in scope, §3a/3b).
 
 ## 15. Documentation obligations on build (the checklist that bit us on NPS)
 
@@ -532,6 +587,14 @@ note + `adopt generate` industry presets (§10), eval CATALOG rows.
   *Accepted when:* the upcoming appointment rides the customer context
   (contact masked), `get_my_appointments` answers in one turn, and cancel
   from chat / email link / patron drawer all mutate the same row.
+- **As the merchant**, I want to run bookings across **more than one
+  location** — each with its own address, hours, and timezone — or switch
+  the whole feature (or one location, or one type) **off** without losing a
+  single standing booking. *Accepted when:* a single-location house never
+  sees the extra dimension, the location question precedes the time question
+  in chat, every confirmation names the place, each location's slots expand
+  in its own clock, and any toggle removes future slots while the queue
+  keeps every existing commitment visible.
 - **As the merchant**, I want to **set my business hours once** — per-day
   open ranges (split days included), holiday closures — and have everything
   respect them: bookable windows clamped inside them, the bot answering
