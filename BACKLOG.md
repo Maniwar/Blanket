@@ -151,14 +151,31 @@ hard-gate tests) and documented with a diagram. Nothing fires live yet.
   at-risk names), ✎ re-categorisation (`category_source='human'` + admin RLS
   update policy), the `nps-score-capture` deck scenario (per-turn `ctx` support
   in run.mjs), and the privacy-notice line.
+- **[Shipped] The NPS tab** *(NPS.md)*: a dedicated admin tab reporting the
+  whole survey funnel — offers (audited `beat_action` rows), gate holds with
+  reasons, responses, response rate (`npsResponseRate`, unit-tested) — plus
+  per-bucket charts with Conversion-style range/View-by aggregation (NPS on a
+  signed line with honest gaps, offers vs responses, rate, segments) and the
+  full category-vocabulary breakdown. Fail-visible card ("NPS unavailable —
+  reason", never a silent hide), deploy-time RPC probe, QA traffic excluded.
+- **[Shipped] The wrap-up asks** *(NPS.md)*: the "That's all" chip sends a real
+  goodbye turn and typed farewells match a phrase list, so the survey rides the
+  goodbye reply — anonymous sessions eligible on this path; offers audited; the
+  `closing-survey` SOP owns the etiquette.
+- **[Shipped] The analyst report** *(GET `?npsreport=1`)*: evidence-quoting
+  conversational analytics — detractor drivers, promoter strengths, ranked
+  fixes — from `npsAnalystCorpus` (unit-tested; refuses <3 responses), cached
+  in `concierge_insights`, generated on demand from the NPS tab.
 - **NPS segment filter on the conversations list** *(small)* — the per-convo map
   already exists (`state.npsByConvo`); add the facet.
+- **`nps_categories` vocabulary editor** *(small)* — the classifier and ✎
+  honor the table live; managing rows still takes SQL.
+- **Beat-path survey for anonymous sessions** *(small)* — the wrap-up path
+  covers anonymous; the idle `REQUEST_NPS` beat still requires a recognized
+  customer (`recall.customer`) for its cooldown lookup.
 - **Judge-veto deck scenario** *(coverage gap, hard to force)*: a planted "you
   rated us low" line is vetoed — covered today by the criterion + unit guard;
   a reliable live-fire case needs a way to seed the drafted line.
-- **Segment-movement widgets** *(with the tab)*: Detractor→Passive→Promoter
-  cohort movement, at-risk (recent decline) list — the period-comparison
-  machinery already exists.
 - **(Phase 2)** Relationship Health Score (NPS × standing/LTV × recency),
   customer self-serve history, automated playbooks, churn prediction.
 - **(Honesty)** claiming an intervention *caused* a segment move needs a

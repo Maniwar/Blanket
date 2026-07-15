@@ -22,10 +22,12 @@ in `beats_test.ts`). Schema + the aggregate calculation: `supabase/setup.sql`
 [SCHEMA.md](supabase/SCHEMA.md).
 
 > **Status: LIVE end-to-end.** The `REQUEST_NPS` beat fires through the tested
-> gate, the widget renders the 0–10 scale, score + reason capture and the LLM
-> categorizer run server-side, the customer's history grounds the coach (judge-
-> guarded), and the admin studio carries the config block, the Conversion-tab
-> NPS card, the patron badge, and the transcript badge. Default ON
+> gate — and the **wrap-up itself asks** (the "That's all" chip / a typed
+> farewell), the widget renders the 0–10 scale, score + reason capture and the
+> LLM categorizer run server-side, the customer's history grounds the coach
+> (judge-guarded), and the admin studio carries the config block, a dedicated
+> **NPS tab** (funnel, charts, categories, analyst report), the patron badge,
+> and the transcript badge. Default ON
 > (`outreach.nps.enabled !== false`); turn it off in Engagement → House rules.
 
 ---
@@ -259,6 +261,35 @@ bucket response rate in the tooltip), **response rate per bucket**, and
 `beat_action` rows, so the charts and the beat ledger can never disagree.
 `response_rate` is deliberately null in coach-scoped views: offer rows carry no
 coach, and the house never approximates a number it can't ground.
+
+**The close IS the moment (wrap-up trigger):** the survey's designed moment —
+the natural close — used to be exactly the moment it could never fire: the
+"That's all for now" chip sent only a silent lifecycle beacon and muted future
+beats, and a typed "all done" wrapped via the snooze flow. Now the chip sends a
+**real goodbye turn** (`context.wrapup=1`), typed farewells match a phrase
+list, and the ask rides the goodbye reply itself through the same pure gate
+(once per conversation — responses *and* prior offers both count — minimum
+session length, per-customer cooldown). **Anonymous sessions are eligible** on
+this path (no identity ⇒ no cooldown to check; once-per-conversation still
+binds), which closes the anonymous-shopper gap for the flow that matters. The
+widget defers the close beacon while the `{{nps}}` scale is on screen so the
+score and reason attach to the conversation being rated; walk-aways still
+close on pagehide. Every wrap-up ask writes the same audited offer row, so the
+response rate stays honest. The *etiquette* — goodbye first, one light ask,
+gracious receipt, never mention scores again — is the admin-editable
+`closing-survey` SOP; the *decision* stays in unit-tested code.
+
+**The analyst report (conversational analytics):** `GET ?npsreport=1` turns
+the numbers into actions. `npsAnalystCorpus` (unit-tested) packs the rated
+sessions — score, the customer's own reason, transcript excerpts — detractors
+first, capped, and **refuses to run on fewer than 3 responses**. The model
+then writes four sections: *what is creating detractors*, *what promoters
+praise*, *do next* (≤3 fixes ranked by impact), and *watch* — every claim
+quoting a short phrase and naming its session numbers, "Insufficient
+evidence." where the data can't support a section, never a name or an email.
+The report caches in `concierge_insights` (kind `nps_report`): the NPS tab
+loads the cached copy free, and **Generate fresh** is the deliberate,
+operator-triggered model spend, windowed to the picked range.
 
 **Still open** (tracked in [BACKLOG.md](BACKLOG.md)): a segment filter on the
 conversations list, an admin editor for the `nps_categories` vocabulary (SQL

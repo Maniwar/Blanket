@@ -112,6 +112,17 @@ Grouped by role. Each notes, in *italics*, the feature that serves it.
   (`kind=offer`, with the figure when named) and emails the house — my interest is
   captured as a **lead**, never quietly discounted.)*
 
+- **As a visitor wrapping up**, I want to rate the session 0–10 right in the
+  chat and say why in my own words, so that feedback takes seconds and never
+  feels like a survey form. *Accepted when:* the ask rides the goodbye reply —
+  the "That's all for now" chip or a typed farewell ("all done") — exactly
+  once per conversation, only after the configured minimum session length and
+  outside the per-customer cooldown; the 0–10 scale renders as tappable pills;
+  a tapped score is recorded deterministically (`context.nps`) and my next
+  message attaches as the reason; the concierge thanks me once, receives the
+  reason graciously, and never mentions scores or surveys again. *(NPS.md §3;
+  `npsTriggerGate` unit-tested; the `closing-survey` SOP owns the etiquette.)*
+
 ### 2.2 Customer — signed-in / returning patron
 
 - **As a returning patron**, I want to be recognized the moment I arrive — greeted
@@ -632,6 +643,29 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
 - **As the merchant**, I want to inspect the semantic answer cache and clear stale
   entries, so that a changed policy isn't served from an old answer. *(Cache tab:
   view entries + hit counts, evict on demand.)*
+
+- **As the merchant**, I want a dedicated **NPS tab** reporting the whole
+  survey funnel — offers, gate holds (why it was NOT asked), responses, and
+  response rate — plus NPS, segments, and category breakdown **over time with
+  the same range/granularity aggregation as Conversion**, so that satisfaction
+  is measured with the same rigor as revenue. *Accepted when:* every KPI has a
+  per-bucket chart (NPS on a signed −100…100 line with honest gaps), offers
+  come from the audited `beat_action` rows, "—" is shown when there is no
+  data (never a fake zero), QA traffic never counts, and recent responses
+  support ✎ re-categorisation and CSV export. *(NPS.md; `nps_metrics()` v2.)*
+- **As the merchant**, I want an **analyst report** that reads the rated
+  sessions — scores, the customers' own reasons, transcript excerpts — and
+  tells me *what is creating detractors and what promoters praise*, so the
+  number becomes actions. *Accepted when:* the report quotes its evidence and
+  names session numbers, states counts plainly, writes "Insufficient
+  evidence." rather than inventing, refuses to run on fewer than 3 responses
+  (`npsAnalystCorpus`, unit-tested), is generated on demand (a deliberate
+  model spend), and the cached copy loads free. *(GET `?npsreport=1`.)*
+- **As the house**, I want each customer's rating history to quietly shape the
+  concierge's next move — segment, trend, recurring concerns — without ever
+  being spoken back at them, so feedback improves service instead of becoming
+  scorekeeping. *(`npsCoachBrief` → the coach's private brief at both
+  proactive sites; the judge vetoes quoted ratings; NPS.md §5.)*
 
 ### 2.5 Super admin — owner / access control
 

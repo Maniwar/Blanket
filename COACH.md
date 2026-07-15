@@ -166,6 +166,17 @@ brief **and** the reply outcome on the same rows, so tactic → outcome is query
 — the raw material for grading the coach's lift and, eventually, letting the
 digest drive selection directly (a bandit). See the *Backlog*.
 
+### 5.1 The satisfaction signal (NPS)
+
+Since the NPS loop shipped (see [NPS.md](NPS.md)), the coach's private brief
+carries a second grounded input beside the outcome digest: **this customer's
+own rating history** — segment, trend, recurring concerns, and a forward play
+(`npsCoachBrief` → `renderCustomerNps`, joined at both proactive call sites).
+The same honesty floors apply: thin history renders as an empty string, and
+the brief opens with the never-quote guard — the coach may *use* the history,
+the drafter must never *mention* it, and the reach-out judge independently
+vetoes any quoted rating that slips through.
+
 ## 6. The design decision — a focused prompt, not a silent tool
 
 This was a genuine fork: make coaching a **focused second-brain prompt** coupled
