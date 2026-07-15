@@ -1671,3 +1671,10 @@ update public.concierge_kb
 update public.concierge_sops
   set content_md = replace(content_md, 'hello@feierabend.example', 'concierge@feier-abend.co')
   where content_md like '%hello@feierabend.example%';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- PostgREST schema-cache reload — new tables/functions (e.g. nps_metrics) are
+-- callable over REST immediately, even if the DDL event trigger missed a beat.
+-- (idempotent — a NOTIFY is always safe.)
+-- ─────────────────────────────────────────────────────────────────────────────
+notify pgrst, 'reload schema';

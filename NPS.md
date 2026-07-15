@@ -223,6 +223,17 @@ policy). The behavior deck gained `nps-score-capture` — the widget's exact
 per-turn `ctx`). The privacy notice names the voluntary rating in *What we
 collect*.
 
+**Fail-visible + deploy-proven (hardening pass):** the NPS card never hides
+silently — any `nps_metrics()` failure renders the card with an inline
+"NPS unavailable — *reason*" line (and a `console.warn`), so "not deployed" and
+"erroring" are distinguishable at a glance. Every deploy now proves the RPC
+live: after applying `setup.sql`, the workflow executes `nps_metrics(30)` in
+the database (service-role claim) **and** probes the REST path the admin uses —
+`403` for the publishable key passes (resolvable + guarded), `404` fails the
+deploy (stale PostgREST schema cache; `setup.sql` also ends with
+`notify pgrst, 'reload schema'`). The schema-apply step is now blocking — a
+SQL error fails the run instead of hiding behind `continue-on-error`.
+
 **Still open** (tracked in [BACKLOG.md](BACKLOG.md)): a segment filter on the
 conversations list, and the judge-veto deck scenario for a planted "you rated
 us low" line (unit + criterion cover it today; a live-fire deck case is flaky
