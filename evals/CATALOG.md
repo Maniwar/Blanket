@@ -56,7 +56,7 @@ Each test builds a synthetic ledger and asserts the table's decision:
 | npsScore = %promoters − %detractors; passives ignored in the numerator | the score math — all-passives ⇒ 0, empty ⇒ **null** (never a fake zero), out-of-range dropped |
 | npsResponseRate = responses ÷ offers | the survey funnel math — null when nothing was offered (never a fake 0%), uncapped so window-edge anomalies show |
 | npsAnalystCorpus: detractors lead, honesty floor, caps hold | the analyst report's evidence pack — detractors first, customers' own words quoted, <3 responses ⇒ '' (no report on thin data), session/char caps |
-| npsCaptureAction: corrections revise, never duplicate | a tap revises this conversation's row, or the customer's recent row inside the cooldown; past the cooldown (or cooldown 0) it inserts fresh |
+| npsCaptureAction: corrections revise inside the window, never duplicate, else final | revisions only inside reviseDays (0 = final); inside the cooldown past the window a tap writes NOTHING; past the cooldown it inserts fresh |
 | npsTriggerGate fires once, only at a natural close, past the cooldown | the survey trigger — every blocking condition (disabled / already-offered / mid-session / too-short / cooldown) asserted independently |
 | detractorThemes tallies only sub-promoter concerns, most frequent first | the detractor-reason signal — a promoter's mention never dilutes the concern count |
 | renderCustomerNps: detractor brief carries themes + never-quote guard; thin data ⇒ empty | the closed-loop brief — trend detection, the never-quote-a-score discipline, the honesty floor |

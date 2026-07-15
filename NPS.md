@@ -63,7 +63,8 @@ It answers **yes** only when all hold:
 
 **Config (`outreach.nps`, Engagement → House rules), with the built-in
 defaults** (`npsConfigFrom` in `index.ts`): `enabled` — absent = **ON** ·
-`minMinutes` — default **3** · `cooldownDays` — default **30** · `question` —
+`minMinutes` — default **3** · `cooldownDays` — default **30** · `reviseDays`
+(the rating change window) — default **3**, 0 = ratings are final · `question` —
 default *"Before you go — how likely are you to recommend us to a friend, 0 to
 10?"* (capped at 300 chars). Testing tip: a quick test session is usually
 shorter than 3 minutes — set `minMinutes` to 0 first.
@@ -315,20 +316,34 @@ code.
   receives praise warmly, says goodbye — and asks nothing further ("what can I
   help you with?" after a survey is a defect). The widget closes and quiets on
   that turn.
-- **Changing a rating.** "I need to change my score" is honored, not argued
-  with: a deterministic detector (change/fix/correct + rating/score/survey, or
-  rating + wrong/mistake) re-presents the scale with one gracious line — and
-  the new tap **revises the existing row in place** (`npsCaptureAction`,
-  unit-tested; `revised_at` stamps the audit trail, the dashboard's recent list
-  shows "· revised"). The revision targets this conversation's own row, or —
-  in a fresh conversation — the customer's most recent row when the tap lands
-  inside the cooldown, where the gate would never have *offered*: a duplicate
-  rating from one person inside the cooldown is structurally impossible. A
-  revision that changes segment clears the now-stale reason (and categories)
-  so the follow-up "why" re-attaches; a same-segment nudge (10 → 9) keeps the
-  reason it still describes. Anonymous corrections bind only within the same
-  conversation (no identity to tie across). The concierge never says a rating
-  "can't be changed" and never quotes the old number back.
+- **Changing a rating — inside the window only.** "I need to change my score"
+  is honored, not argued with, **while the admin-configurable change window is
+  open** (`outreach.nps.reviseDays`, Engagement → House rules, default **3
+  days** from the original rating; **0 = ratings are final** the moment
+  they're given). Inside the window, a deterministic detector (change/fix/
+  correct + rating/score/survey, or rating + wrong/mistake) re-presents the
+  scale with one gracious line, and the new tap **revises the existing row in
+  place** (`npsCaptureAction`, unit-tested — the *offer* to revise and the
+  *write* use the same decision, so they can never disagree). The revision
+  targets this conversation's own row, or — in a fresh conversation — the
+  customer's most recent row. **Past the window** the concierge declines
+  kindly in one line and invites the feedback directly (still acted on, never
+  changing the number), and a stray tap **writes nothing**: inside the
+  cooldown it can be neither a correction (window over) nor a new response
+  (the gate never offers there) — a duplicate rating from one person stays
+  structurally impossible. A revision that changes segment clears the
+  now-stale reason (and categories) so the follow-up "why" re-attaches; a
+  same-segment nudge (10 → 9) keeps the reason it still describes. Anonymous
+  corrections bind only within the same conversation.
+- **How the dashboard treats a revision.** A revision **restates history in
+  place** — the row keeps its original `created_at`, so every aggregate (the
+  NPS number, trend buckets, segments, themes, the analyst report's corpus)
+  reflects the **corrected score in the original bucket**; nothing is
+  double-counted and offers/response-rate are untouched (a revision is not a
+  new response). `revised_at` is the audit stamp: the tab's recent list marks
+  the row "· revised", and the raw stamp rides the CSV-visible row data. The
+  house shows the number the customer stands behind, in the period they said
+  it about.
 - **How soon can the survey happen again?** At most **once per conversation**
   (a response *or* a prior offer both close that door), and for a recognized
   customer never inside `cooldownDays` (default **30**) — so a new conversation
