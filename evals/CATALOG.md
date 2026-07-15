@@ -11,7 +11,7 @@ Four layers, in the order they run on a deploy:
 
 | layer | cases | gate? | what it can catch |
 | --- | --- | --- | --- |
-| Beat-engine unit tests | 26 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain, the coach feedback-loop digest, and the NPS trigger/score math |
+| Beat-engine unit tests | 27 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain, the coach feedback-loop digest, and the NPS trigger/score math |
 | Behavior deck | 19 scenarios / 43 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture, the NPS capture flow |
 | Config conformance | 15 live rows + 4 named skips + 3 inquiry rows (admin-token-gated) | pass/fail report | knobs that stopped being connected to the live widget |
 | Persona evals | 4 personas / 22 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
@@ -54,6 +54,7 @@ Each test builds a synthetic ledger and asserts the table's decision:
 | digest caps at six buckets and tolerates missing fields | the block stays bounded and degrades gracefully on partial rows |
 | npsSegment bands 0-6 / 7-8 / 9-10 correctly | the standard NPS segment boundaries ([NPS.md](../NPS.md) §3) |
 | npsScore = %promoters − %detractors; passives ignored in the numerator | the score math — all-passives ⇒ 0, empty ⇒ **null** (never a fake zero), out-of-range dropped |
+| npsResponseRate = responses ÷ offers | the survey funnel math — null when nothing was offered (never a fake 0%), uncapped so window-edge anomalies show |
 | npsTriggerGate fires once, only at a natural close, past the cooldown | the survey trigger — every blocking condition (disabled / already-offered / mid-session / too-short / cooldown) asserted independently |
 | detractorThemes tallies only sub-promoter concerns, most frequent first | the detractor-reason signal — a promoter's mention never dilutes the concern count |
 | renderCustomerNps: detractor brief carries themes + never-quote guard; thin data ⇒ empty | the closed-loop brief — trend detection, the never-quote-a-score discipline, the honesty floor |

@@ -208,9 +208,8 @@ widget), and a judge check (**a planted "you rated us low" line is vetoed**).
 - **The widget** renders `{{nps}}` as an accessible 0–10 pill row (ES5, the
   `.cx-reply` components).
 - **Admin**: Engagement → House rules NPS block (`outreach.nps` — enabled ·
-  min-minutes · cooldown-days · question), the Conversion-tab **NPS card**
-  (`nps_metrics()` — NPS, segments, detractor themes, recent reasons), a rating
-  badge on the patron card and on the conversation transcript head.
+  min-minutes · cooldown-days · question), a dedicated **NPS tab** (below), a
+  rating badge on the patron card and on the conversation transcript head.
 
 **Dashboard depth (shipped in the follow-up pass):** the NPS card now carries a
 **trend chart** (segment counts per bucket, the bucket NPS in the tooltip — the
@@ -238,10 +237,27 @@ exercise the survey conversationally but write no `nps_responses` row, and a
 `setup.sql` janitor deletes any that ever slipped in — the dashboard NPS is
 real customers only.
 
+**The NPS tab (the PRD's reporting surface, in full):** NPS moved off the
+Conversion tab onto its **own admin tab**, reporting the whole survey funnel —
+**offers** (the ask was actually spoken: `beat_action` rows with
+`REQUEST_NPS`), **gate holds** (every time the gate evaluated and correctly did
+NOT ask, with `npsTriggerGate`'s own reasons from `payload.npsGate`),
+**responses**, and **response rate** (responses ÷ offers; `npsResponseRate` in
+`beats.ts` is the unit-tested mirror of the SQL — null when nothing was
+offered, never a fake 0%). **By-category reporting** shows the full
+`nps_categories` vocabulary — zeros included, detractor-focus rows bold — with
+mention counts, detractor share, and bars, so the operator sees the classifier
+working at a glance. The tab keeps the trend chart, per-coach line, segment
+movement, recent responses with ✎ re-categorisation, and CSV export, over its
+own rolling range picker (7/30/90/365/all — `nps_metrics(p_days)` windows).
+`response_rate` is deliberately null in coach-scoped views: offer rows carry no
+coach, and the house never approximates a number it can't ground.
+
 **Still open** (tracked in [BACKLOG.md](BACKLOG.md)): a segment filter on the
-conversations list, and the judge-veto deck scenario for a planted "you rated
-us low" line (unit + criterion cover it today; a live-fire deck case is flaky
-to force).
+conversations list, an admin editor for the `nps_categories` vocabulary (SQL
+today; the classifier + ✎ honor it live), and the judge-veto deck scenario for
+a planted "you rated us low" line (unit + criterion cover it today; a
+live-fire deck case is flaky to force).
 
 ## 10. Open decisions (from the PRD)
 
