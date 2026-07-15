@@ -129,6 +129,29 @@ vendored byte-identical by the kit and defaults ON (`outreach.beatCoach`).
   rides the audit payload; render it inline next to the line it shaped, the way
   vetoes already show the killed line and reason.
 
+## NPS — closed-loop feedback ([NPS.md](NPS.md))
+
+**[Shipped] The foundation, dormant by design:** the survey trigger gate
+(`npsTriggerGate` — once, at a natural close, past cooldown), the score math
+(`npsSegment`/`npsScore`, %P−%D with honest nulls), the detractor-reason tally
+(`detractorThemes`), the judge-guarded customer brief (`renderCustomerNps`), the
+schema (`nps_responses` with a generated segment, detractor-forward
+`nps_categories`), and the SQL aggregate (`nps_metrics`) — all unit-tested (5
+hard-gate tests) and documented with a diagram. Nothing fires live yet.
+
+- **The live wiring** *(next PR — NPS.md §9)*: `REQUEST_NPS` beat →
+  `npsTriggerGate`; `submit_nps` tool + the 0–10 scale pill; the async LLM
+  categoriser; the NPS admin tab (Conversion-tab clone) + Actions-list columns;
+  `renderCustomerNps` fed into `coachBeatLine`; judge criterion extended to name
+  NPS-scorekeeping; `nps.*` config keys; DFD/ROPA + privacy-notice line.
+- **Segment-movement widgets** *(with the tab)*: Detractor→Passive→Promoter
+  cohort movement, at-risk (recent decline) list — the period-comparison
+  machinery already exists.
+- **(Phase 2)** Relationship Health Score (NPS × standing/LTV × recency),
+  customer self-serve history, automated playbooks, churn prediction.
+- **(Honesty)** claiming an intervention *caused* a segment move needs a
+  holdout/A-B — same caveat as the coach-lift eval.
+
 ## Deferred by choice
 
 - **Lifecycle beats package.** Weave-milestone updates, post-delivery

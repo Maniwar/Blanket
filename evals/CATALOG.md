@@ -11,7 +11,7 @@ Four layers, in the order they run on a deploy:
 
 | layer | cases | gate? | what it can catch |
 | --- | --- | --- | --- |
-| Beat-engine unit tests | 20 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain + the coach feedback-loop digest |
+| Beat-engine unit tests | 26 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain, the coach feedback-loop digest, and the NPS trigger/score math |
 | Behavior deck | 18 scenarios / 37 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture |
 | Config conformance | 15 live rows + 4 named skips + 3 inquiry rows (admin-token-gated) | pass/fail report | knobs that stopped being connected to the live widget |
 | Persona evals | 4 personas / 22 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
@@ -52,13 +52,27 @@ Each test builds a synthetic ledger and asserts the table's decision:
 | digest with signal renders a weighted 'what's landing' block | the coach feedback loop (`renderLearningDigest`) formats reply-rate-by-move correctly and carries the restraint cue |
 | honest on thin data: below the spoke floor ⇒ empty | the loop's honesty floor — a quiet or brand-new house gets an **empty** block, never an invented "pattern" |
 | digest caps at six buckets and tolerates missing fields | the block stays bounded and degrades gracefully on partial rows |
+| npsSegment bands 0-6 / 7-8 / 9-10 correctly | the standard NPS segment boundaries ([NPS.md](../NPS.md) §3) |
+| npsScore = %promoters − %detractors; passives ignored in the numerator | the score math — all-passives ⇒ 0, empty ⇒ **null** (never a fake zero), out-of-range dropped |
+| npsTriggerGate fires once, only at a natural close, past the cooldown | the survey trigger — every blocking condition (disabled / already-offered / mid-session / too-short / cooldown) asserted independently |
+| detractorThemes tallies only sub-promoter concerns, most frequent first | the detractor-reason signal — a promoter's mention never dilutes the concern count |
+| renderCustomerNps: detractor brief carries themes + never-quote guard; thin data ⇒ empty | the closed-loop brief — trend detection, the never-quote-a-score discipline, the honesty floor |
 
-The last three pin the **coach feedback loop's** presentation half (COACH.md §5):
-the `beat_learning_digest` SQL is exercised live (its output is aggregate and
-observable via `?insights=1`), and the pure formatter — including the *honest on
-thin data* guarantee — is unit-tested here so a fresh house provably gets no
-fabricated signal. *(The coach's actual sales **lift** is not yet evalled — a
-coach-on/off/inline persona pairing is the named backlog item; see [COACH.md](../COACH.md) §13.)*
+The three digest rows pin the **coach feedback loop's** presentation half
+(COACH.md §5): the `beat_learning_digest` SQL is exercised live (its output is
+aggregate and observable via `?insights=1`), and the pure formatter — including
+the *honest on thin data* guarantee — is unit-tested here so a fresh house
+provably gets no fabricated signal. *(The coach's actual sales **lift** is not
+yet evalled — a coach-on/off/inline persona pairing is the named backlog item;
+see [COACH.md](../COACH.md) §13.)*
+
+The five NPS rows pin the **survey trigger and the score calculation**
+([NPS.md](../NPS.md) §8) before any live wiring exists — the gate's every
+blocking condition, the %P−%D math (with its honest null on no data), the
+detractor-theme tally, and the closed-loop brief's never-quote-a-score guard.
+When the `REQUEST_NPS` beat ships, the behavior deck gains the live scenarios
+(fires at close, not mid-flow, not twice; a planted "you rated us low" line is
+judge-vetoed).
 
 ---
 

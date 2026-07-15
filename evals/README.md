@@ -160,7 +160,7 @@ back to the assistant for diagnosis. This is where each verdict lands:
 
 | suite | auditable output | where to find it |
 | --- | --- | --- |
-| Unit tests (`beats_test.ts`) | 20 deterministic tests, red/green (incl. the coach feedback-loop digest) | **Deploy Concierge** run → *Beat engine unit tests* step |
+| Unit tests (`beats_test.ts`) | 26 deterministic tests, red/green (incl. the coach feedback-loop digest + the NPS trigger/score math) | **Deploy Concierge** run → *Beat engine unit tests* step |
 | Live smoke | request/response of a real chat turn against the deployed function | **Deploy Concierge** run → *Live smoke* step |
 | Behavior deck | pass **rate** per check (e.g. `9/10`) with the judge's reason on misses | **Deploy Concierge** run → job summary table; same deck runnable in the admin **Evals** tab with inline transcripts |
 | Beat trend | 7-day spoke/held counts, drift vs the prior week | **Deploy Concierge** run → *Beat trend* step |

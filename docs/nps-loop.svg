@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="910" viewBox="0 0 1240 910" font-family="'Helvetica Neue',Arial,sans-serif">
+<defs>
+  <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L7,3 L0,6 Z" fill="#8a7a5a"/></marker>
+  <style>
+    .t{fill:#2a2620}.m{fill:#6b6455}
+    .cap{letter-spacing:.06em;text-transform:uppercase}
+    .mono{font-family:'IBM Plex Mono','Courier New',monospace}
+  </style>
+</defs>
+<rect width="1240" height="910" fill="#f6f2ea"/>
+<text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >NPS — the survey beat, the score math, and the closed loop</text>
+<text x="40" y="72" font-size="13" class="m" text-anchor="start" >A chat-native Net Promoter survey that fires ONCE at a natural close, categorizes the reason (detractor-forward), and feeds each customer’s history back</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >into the concierge’s next move — through the SAME coach + judge machinery already in production. Foundation shipped &amp; tested; live wiring is the next PR (NPS.md §9).</text>
+<text x="40" y="108" font-size="12.2" class="m" text-anchor="start" >Source: NPS.md · beats.ts (npsTriggerGate · npsScore · detractorThemes · renderCustomerNps — all unit-tested) · setup.sql (nps_responses · nps_categories · nps_metrics).</text>
+<text x="40" y="140" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · The survey trigger — a beat gate, pure and tested (npsTriggerGate)</text>
+<rect x="40.0" y="156" width="195.2" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="137.6" y="178" font-size="11.5" class="t" text-anchor="middle" font-weight="700" >enabled?</text>
+<text x="137.6" y="194" font-size="9" class="m mono" text-anchor="middle" >outreach.nps.enabled</text>
+<rect x="281.2" y="156" width="195.2" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="378.79999999999995" y="178" font-size="11.5" class="t" text-anchor="middle" font-weight="700" >natural close?</text>
+<text x="378.79999999999995" y="194" font-size="9" class="m" text-anchor="middle" >order placed · goal met ·</text>
+<text x="378.79999999999995" y="207" font-size="9" class="m" text-anchor="middle" >wrap-up/leave · “that’s all”</text>
+<path d="M238.2,189.0 L278.2,189.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<text x="258.2" y="181.0" font-size="8.8" class="m" text-anchor="middle" >yes</text>
+<rect x="522.4" y="156" width="195.2" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="620.0" y="178" font-size="11.5" class="t" text-anchor="middle" font-weight="700" >not already asked?</text>
+<text x="620.0" y="194" font-size="9" class="m" text-anchor="middle" >offer-once ledger,</text>
+<text x="620.0" y="207" font-size="9" class="m" text-anchor="middle" >per session</text>
+<path d="M479.4,189.0 L519.4,189.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<text x="499.4" y="181.0" font-size="8.8" class="m" text-anchor="middle" >yes</text>
+<rect x="763.5999999999999" y="156" width="195.2" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="861.1999999999999" y="178" font-size="11.5" class="t" text-anchor="middle" font-weight="700" >long enough?</text>
+<text x="861.1999999999999" y="194" font-size="9" class="m mono" text-anchor="middle" >duration ≥</text>
+<text x="861.1999999999999" y="207" font-size="9" class="m mono" text-anchor="middle" >minDurationMs</text>
+<path d="M720.5999999999999,189.0 L760.5999999999999,189.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<text x="740.5999999999999" y="181.0" font-size="8.8" class="m" text-anchor="middle" >yes</text>
+<rect x="1004.8" y="156" width="195.2" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
+<text x="1102.3999999999999" y="178" font-size="11.5" class="t" text-anchor="middle" font-weight="700" >past cooldown?</text>
+<text x="1102.3999999999999" y="194" font-size="9" class="m mono" text-anchor="middle" >now − last survey ≥</text>
+<text x="1102.3999999999999" y="207" font-size="9" class="m mono" text-anchor="middle" >cooldownMs</text>
+<path d="M961.8,189.0 L1001.8,189.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<text x="981.8" y="181.0" font-size="8.8" class="m" text-anchor="middle" >yes</text>
+<text x="40" y="240" font-size="10" class="m" text-anchor="start" >any “no” ⇒ hold, with the blocking reason recorded (as auditable as a held beat) · all “yes” ⇒ ask — and the invitation line itself still passes the reach-out judge, so the ask is never pushy.</text>
+<text x="40" y="262" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >2 · The chat-native flow</text>
+<text x="636" y="262" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · The calculation (npsScore — mirrored in SQL by nps_metrics)</text>
+<rect x="40" y="278" width="568" height="168" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="58" y="304" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >concierge</text>
+<text x="140" y="304" font-size="9.8" class="t" text-anchor="start" >“Would you recommend us to a friend? 0–10.”  [0][1]…[10] pills</text>
+<text x="58" y="332" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >visitor</text>
+<text x="140" y="332" font-size="9.8" class="m" text-anchor="start" >taps  {{nps:8}}  →  submit_nps(score) opens the row</text>
+<text x="58" y="360" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >concierge</text>
+<text x="140" y="360" font-size="9.8" class="t" text-anchor="start" >“Thank you. What made you give that score?”</text>
+<text x="58" y="388" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >visitor</text>
+<text x="140" y="388" font-size="9.8" class="m" text-anchor="start" >“Booking a slot took three tries.”  → reason_text, categorized async</text>
+<text x="58" y="416" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >concierge</text>
+<text x="140" y="416" font-size="9.8" class="t" text-anchor="start" >“Noted, truly — thank you.”  (skip = a pill, or simply not answering)</text>
+<rect x="636" y="278" width="564" height="168" rx="12" fill="#e9f1ea" stroke="#7fae90" stroke-width="1" />
+<text x="652" y="302" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >segment: 9–10 PROMOTER · 7–8 PASSIVE · 0–6 DETRACTOR</text>
+<text x="652" y="324" font-size="10.4" class="t mono" text-anchor="start" >NPS = %promoters − %detractors   (−100 … 100, passives dilute only)</text>
+<text x="652" y="348" font-size="9.6" class="m mono" text-anchor="start" >[10,10,9,7,0]</text>
+<text x="800" y="348" font-size="9.6" class="t mono" text-anchor="start" font-weight="700" >→ 40</text>
+<text x="872" y="348" font-size="9.2" class="m" text-anchor="start" >3 promoters, 1 detractor over 5</text>
+<text x="652" y="370" font-size="9.6" class="m mono" text-anchor="start" >[7,8,7]</text>
+<text x="800" y="370" font-size="9.6" class="t mono" text-anchor="start" font-weight="700" >→ 0</text>
+<text x="872" y="370" font-size="9.2" class="m" text-anchor="start" >all passives — there ARE responses</text>
+<text x="652" y="392" font-size="9.6" class="m mono" text-anchor="start" >[]</text>
+<text x="800" y="392" font-size="9.6" class="t mono" text-anchor="start" font-weight="700" >→ null</text>
+<text x="872" y="392" font-size="9.2" class="m" text-anchor="start" >no responses is NOT a zero</text>
+<text x="652" y="414" font-size="9.6" class="m mono" text-anchor="start" >[0,1,2]</text>
+<text x="800" y="414" font-size="9.6" class="t mono" text-anchor="start" font-weight="700" >→ −100</text>
+<text x="872" y="414" font-size="9.2" class="m" text-anchor="start" >all detractors</text>
+<text x="40" y="474" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >4 · Detractor reasons — the actionable half (detractorThemes + nps_categories)</text>
+<rect x="40" y="490" width="1160" height="86" rx="12" fill="#f6ece8" stroke="#c98a6f" stroke-width="1" />
+<text x="58" y="514" font-size="10.4" class="t" text-anchor="start" >The reason is classified into an admin-managed, DETRACTOR-FORWARD vocabulary (LLM forced-tool call; human re-categorisation logged):</text>
+<rect x="58" y="528" width="86.0" height="22" rx="11" fill="#fbf9f4" stroke="#b06a4a" stroke-width="1" />
+<text x="101.0" y="543" font-size="9.4" class="t mono" text-anchor="middle" font-weight="700" >scheduling</text>
+<rect x="154.0" y="528" width="105.2" height="22" rx="11" fill="#fbf9f4" stroke="#b06a4a" stroke-width="1" />
+<text x="206.6" y="543" font-size="9.4" class="t mono" text-anchor="middle" font-weight="700" >communication</text>
+<rect x="269.2" y="528" width="54.0" height="22" rx="11" fill="#fbf9f4" stroke="#b06a4a" stroke-width="1" />
+<text x="296.2" y="543" font-size="9.4" class="t mono" text-anchor="middle" font-weight="700" >value</text>
+<rect x="333.2" y="528" width="98.80000000000001" height="22" rx="11" fill="#fbf9f4" stroke="#b06a4a" stroke-width="1" />
+<text x="382.6" y="543" font-size="9.4" class="t mono" text-anchor="middle" font-weight="700" >expectations</text>
+<rect x="442.0" y="528" width="66.80000000000001" height="22" rx="11" fill="#fbf9f4" stroke="#b06a4a" stroke-width="1" />
+<text x="475.4" y="543" font-size="9.4" class="t mono" text-anchor="middle" font-weight="700" >outcome</text>
+<rect x="518.8" y="528" width="73.2" height="22" rx="11" fill="#fbf9f4" stroke="#b06a4a" stroke-width="1" />
+<text x="555.4" y="543" font-size="9.4" class="t mono" text-anchor="middle" font-weight="700" >guidance</text>
+<rect x="602.0" y="528" width="86.0" height="22" rx="11" fill="#fbf9f4" stroke="#cdbfa6" stroke-width="1" />
+<text x="645.0" y="543" font-size="9.4" class="m mono" text-anchor="middle" >experience</text>
+<rect x="698.0" y="528" width="66.80000000000001" height="22" rx="11" fill="#fbf9f4" stroke="#cdbfa6" stroke-width="1" />
+<text x="731.4" y="543" font-size="9.4" class="m mono" text-anchor="middle" >product</text>
+<rect x="774.8" y="528" width="60.400000000000006" height="22" rx="11" fill="#fbf9f4" stroke="#cdbfa6" stroke-width="1" />
+<text x="805.0" y="543" font-size="9.4" class="m mono" text-anchor="middle" >praise</text>
+<rect x="845.1999999999999" y="528" width="54.0" height="22" rx="11" fill="#fbf9f4" stroke="#cdbfa6" stroke-width="1" />
+<text x="872.1999999999999" y="543" font-size="9.4" class="m mono" text-anchor="middle" >other</text>
+<text x="58" y="566" font-size="9.6" class="m" text-anchor="start" >detractorThemes() tallies concerns behind SUB-PROMOTER scores only (detractors + passives) — a promoter’s mention never dilutes the concern count. Outlined chips = detractor_focus.</text>
+<text x="40" y="604" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >5 · The closed loop — reuses the coach + judge, pointed at satisfaction</text>
+<rect x="40.0" y="620" width="249.5" height="70" rx="11" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
+<text x="164.75" y="644" font-size="10.6" class="t mono" text-anchor="middle" font-weight="700" >nps_responses</text>
+<text x="164.75" y="662" font-size="9.2" class="m" text-anchor="middle" >score · reason ·</text>
+<text x="164.75" y="675" font-size="9.2" class="m" text-anchor="middle" >categories per session</text>
+<rect x="343.5" y="620" width="249.5" height="70" rx="11" fill="#f3ede1" stroke="#d8c69a" stroke-width="1" />
+<text x="468.25" y="644" font-size="10.6" class="t mono" text-anchor="middle" font-weight="700" >renderCustomerNps()</text>
+<text x="468.25" y="662" font-size="9.2" class="m" text-anchor="middle" >segment · trend · recurring</text>
+<text x="468.25" y="675" font-size="9.2" class="m" text-anchor="middle" >concerns · a forward play</text>
+<path d="M292.5,655.0 L340.5,655.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="647.0" y="620" width="249.5" height="70" rx="11" fill="#e9f1ea" stroke="#7fae90" stroke-width="1" />
+<text x="771.75" y="644" font-size="10.6" class="t" text-anchor="middle" font-weight="700" >SALES COACH brief</text>
+<text x="771.75" y="662" font-size="9.2" class="m" text-anchor="middle" >private — shapes the next</text>
+<text x="771.75" y="675" font-size="9.2" class="m" text-anchor="middle" >line; NEVER quotes a score</text>
+<path d="M596.0,655.0 L644.0,655.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<rect x="950.5" y="620" width="249.5" height="70" rx="11" fill="#f6ece8" stroke="#c98a6f" stroke-width="1" />
+<text x="1075.25" y="644" font-size="10.6" class="t" text-anchor="middle" font-weight="700" >REACH-OUT JUDGE</text>
+<text x="1075.25" y="662" font-size="9.2" class="m" text-anchor="middle" >vetoes any scorekeeping</text>
+<text x="1075.25" y="675" font-size="9.2" class="m" text-anchor="middle" >that slips through</text>
+<path d="M899.5,655.0 L947.5,655.0" stroke="#8a7a5a" stroke-width="1.9" fill="none" marker-end="url(#arr)"/>
+<path d="M1075.25,690 C1075.25,724 164.75,724 164.75,692" stroke="#b08d3a" stroke-width="1.8" fill="none" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+<text x="620.0" y="706" font-size="9.2" class="m" text-anchor="middle" fill="#b08d3a">a better next conversation → the next rating: Detractor → Passive → Promoter movement, tracked</text>
+<rect x="40" y="736" width="1160" height="32" rx="9" fill="#e6f0e8" stroke="#bcd3c2" stroke-width="1" />
+<text x="58" y="756" font-size="10.2" class="t" text-anchor="start" >THE HONESTY GUARD: NPS surfaces to the COACH, never echoes at the CUSTOMER — the brief says “never quote a past score” AND the judge independently vetoes scorekeeping. Thin history ⇒ empty brief (no invented pattern).</text>
+<text x="40" y="784" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >How we know it works — hard-gate unit tests (beats_test.ts, run on every deploy + kit CI)</text>
+<rect x="40.0" y="798" width="220.8" height="60" rx="9" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="40.0" y="798" width="4" height="60" rx="0" fill="#3f6b4f" />
+<text x="54.0" y="818" font-size="9.8" class="t mono" text-anchor="start" font-weight="700" >npsSegment</text>
+<text x="54.0" y="833" font-size="8.6" class="m" text-anchor="start" >the 0-6 / 7-8 / 9-10 bands</text>
+<rect x="274.8" y="798" width="220.8" height="60" rx="9" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="274.8" y="798" width="4" height="60" rx="0" fill="#3f6b4f" />
+<text x="288.8" y="818" font-size="9.8" class="t mono" text-anchor="start" font-weight="700" >npsScore</text>
+<text x="288.8" y="833" font-size="8.6" class="m" text-anchor="start" >%P−%D · passives diluted ·</text>
+<text x="288.8" y="845" font-size="8.6" class="m" text-anchor="start" >empty ⇒ null · junk dropped</text>
+<rect x="509.6" y="798" width="220.8" height="60" rx="9" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="509.6" y="798" width="4" height="60" rx="0" fill="#3f6b4f" />
+<text x="523.6" y="818" font-size="9.8" class="t mono" text-anchor="start" font-weight="700" >npsTriggerGate</text>
+<text x="523.6" y="833" font-size="8.6" class="m" text-anchor="start" >fires once, at a close, past</text>
+<text x="523.6" y="845" font-size="8.6" class="m" text-anchor="start" >cooldown — each block asserted</text>
+<rect x="744.4000000000001" y="798" width="220.8" height="60" rx="9" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="744.4000000000001" y="798" width="4" height="60" rx="0" fill="#3f6b4f" />
+<text x="758.4000000000001" y="818" font-size="9.8" class="t mono" text-anchor="start" font-weight="700" >detractorThemes</text>
+<text x="758.4000000000001" y="833" font-size="8.6" class="m" text-anchor="start" >sub-promoter concerns only,</text>
+<text x="758.4000000000001" y="845" font-size="8.6" class="m" text-anchor="start" >most frequent first</text>
+<rect x="979.2" y="798" width="220.8" height="60" rx="9" fill="#fbf9f4" stroke="#e2dccb" stroke-width="1" />
+<rect x="979.2" y="798" width="4" height="60" rx="0" fill="#3f6b4f" />
+<text x="993.2" y="818" font-size="9.8" class="t mono" text-anchor="start" font-weight="700" >renderCustomerNps</text>
+<text x="993.2" y="833" font-size="8.6" class="m" text-anchor="start" >trend + themes + never-quote</text>
+<text x="993.2" y="845" font-size="8.6" class="m" text-anchor="start" >guard · thin ⇒ empty</text>
+<line x1="40" y1="872" x2="1200" y2="872" stroke="#ddd3c2" stroke-width="1"/>
+<text x="40" y="890" font-size="10.4" class="m" text-anchor="start" >Foundation only — the REQUEST_NPS beat, submit_nps tool, scale pill, categorizer, and the NPS dashboard tab are the wiring PR (NPS.md §9). See COACH.md · JUDGE.md · docs/runtime-brains.svg.</text>
+</svg>
