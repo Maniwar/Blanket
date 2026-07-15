@@ -17,6 +17,13 @@ the built-in catalog, and the config-over-code override model:
 
 *[`docs/tool-sequence.svg`](docs/tool-sequence.svg) · [`docs/tools-system.svg`](docs/tools-system.svg) — both grounded in this document.*
 
+> **Not a tool, by design: the satisfaction survey.** The bot can never write,
+> change, or block an NPS rating, so there is no survey tool to list here — only
+> the customer's tap writes or revises a score, through unit-tested server code
+> ([`NPS.md`](NPS.md)). The survey's knobs (question, timing, cooldown, rating
+> change window) live under **Engagement → House rules**; its wording is the
+> **closing-survey SOP**; results are on the **NPS** tab.
+
 ## 0. Two kinds of tool
 
 Everything the concierge can *do* is one of two kinds, and they're **added in two
