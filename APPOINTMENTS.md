@@ -1,4 +1,4 @@
-# Appointments & callbacks — specification (v2, not yet built)
+# Appointments & callbacks — specification (v2.1, not yet built)
 
 The concierge's next act: turning buying intent into a **booked moment** — a
 viewing, a fitting, a table, a consultation — or a **callback request** when
@@ -40,7 +40,8 @@ around.
 | Term | Meaning |
 | --- | --- |
 | **Appointment type** | An admin-defined offering: "Viewing — 30 min at the workshop", "Discovery call — 15 min video". Duration, mode, slot increment, buffers, booking window, confirm mode, party size. |
-| **Availability rule** | Weekly recurring windows per type, in the shop's wall-clock time: "Sat 10:00–16:00". |
+| **Business hours** | House-level open hours (weekly ranges + holiday closures) — the outer boundary everything else lives inside. Powers the bot's "are you open?" answer, clamps callback promises, and caps every type's bookable windows. §3a. |
+| **Availability rule** | Weekly recurring windows per type, in the shop's wall-clock time: "Sat 10:00–16:00" — always intersected with business hours. |
 | **Slot increment** | The grid inside a window — admin-selectable **5 / 10 / 15 / 20 / 30 / 45 / 60 min** (per type, overridable per rule). A 10:00–12:00 window at 15 min yields 10:00, 10:15, … |
 | **Exception** | A dated override: closed on the 24th; extra evening window on the 30th. |
 | **Slot** | A *computed* bookable start time — never stored until booked. Slots = rules − exceptions − existing bookings − buffers − lead time − horizon. |
@@ -76,6 +77,48 @@ requires reciting `lead_label` verbatim. An LLM converting timezones in its
 head is a missed flight waiting to happen.
 
 ## 3. Schema (feature-owned, additive; all tables RLS-enabled)
+
+### 3a. Business hours — the outer boundary
+
+The house has ONE set of open hours; appointment types live inside them.
+Multiple ranges per day are first-class (the lunch-break case: Tue 9:00–13:00
+and 14:00–18:00 is two rows). House-wide closures reuse the exceptions table
+with `type_id = null`.
+
+```sql
+create table concierge_business_hours (
+  id        bigint generated always as identity primary key,
+  dow       smallint not null check (dow between 0 and 6),   -- 0 = Sunday, shop-local
+  open_min  smallint not null check (open_min between 0 and 1439),
+  close_min smallint not null check (close_min between 1 and 1440),
+  check (close_min > open_min)
+);
+-- no rows for a dow = closed that day; no rows at all = hours not configured
+-- (booking master switch refuses to enable, same as the missing-timezone rule)
+```
+
+What business hours power (each is a build requirement, not a nicety):
+
+1. **The clamp.** `appointment_slots` intersects every type window with
+   business hours before anything else. A type window that falls outside
+   open hours yields nothing — and the Types & hours editor warns inline
+   ("Saturday 18:00–20:00 is outside Saturday hours 10:00–16:00") instead of
+   failing silently.
+2. **The bot knows when the house is open.** Hours are injected into the
+   concierge's context as a structured HOURS block (source-of-truth
+   precedence over free-text KB claims — a stale "open Sundays" paragraph
+   loses to the table). "Are you open Sunday?" is answered from data,
+   including the next opening time when currently closed.
+3. **Callback promises live inside open hours.** The register clamps the
+   promised window: a callback requested Saturday night is promised for
+   "Monday morning, when the house opens" — the exact phrasing is provided
+   by the tool result, recited by the model (same no-arithmetic rule as
+   timezones).
+4. **Queue ageing counts open hours.** The callbacks "overdue" highlight
+   ages in business time — a request over a closed Sunday is not "ignored".
+5. **Bookings already made stand.** Shrinking hours never auto-cancels
+   existing bookings; they remain visible in the week view (flagged
+   "outside current hours") for the merchant to handle personally.
 
 ```sql
 create table concierge_appointment_types (
@@ -175,8 +218,9 @@ janitor like `nps_responses` strays.
 ```
 appointment_slots(p_type text, p_from date, p_to date, p_visitor_tz text) → jsonb
 ```
-Pure read: expands weekly rules over the range **in the shop timezone**
-(per-date, DST-correct), applies exceptions, subtracts
+Pure read: clamps to business hours (§3a), expands weekly rules over the
+range **in the shop timezone** (per-date, DST-correct), applies exceptions,
+subtracts
 `requested`+`booked` rows and buffers, clips by `lead_time_min` and
 `horizon_days`, honors per-rule `step_min` falling back to the type's, and
 returns each slot with the pre-formatted labels of §2. Response capped
@@ -268,9 +312,13 @@ NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
   horizon, capacity, max party, confirm mode, intake question. Weekly windows
   per type with optional per-window increment override; exception dates.
   Plain language everywhere: "Saturdays 10:00–16:00, every 15 minutes."
-- **House rules block** — master switch (refused until a timezone is set),
-  timezone picker, owner email, callback toggle, per-contact cap, request
-  TTL.
+- **House hours editor** — the business-hours grid (per day, multiple
+  ranges for split days, "closed" toggles) plus house-wide closure dates.
+  Sits ABOVE the types editor: types are edited in its shadow, with inline
+  warnings when a type window escapes it.
+- **House rules block** — master switch (refused until BOTH a timezone and
+  business hours are set), timezone picker, owner email, callback toggle,
+  per-contact cap, request TTL.
 - **Export** — bookings CSV (register-export conventions).
 
 ## 8. Widget UX
@@ -323,7 +371,12 @@ NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
    they want them. Never guilt.
 8. A CALLBACK request needs their number (via the form), a preferred window
    in their words, and one honest promise: "someone will call you then" —
-   never a precise minute you cannot guarantee, never "right away".
+   never a precise minute you cannot guarantee, never "right away". When the
+   house is closed, promise what the register provides — "when the house
+   opens Monday at 9" — never a window the house cannot keep.
+8a. Asked whether the house is open, answer from the HOURS the register
+   provides — including when it opens next — never from memory or the page's
+   prose if they disagree.
 9. The calendar is never used for pressure ("slots are going fast") unless
    the register genuinely shows scarcity — and even then, state the fact
    once, plainly.
@@ -376,6 +429,9 @@ quietly).
 | Unverified ties grant nothing | Email-match shows in the Patrons book only; recall requires `customer_id` (the inquiries rule) |
 | QA never occupies a slot | `qa` excluded from the unique index + queue/views; janitor deletes strays |
 | Anonymous cap | `maxOpenPerContact` in the booking fn (unit test) |
+| Type windows never escape business hours | `appointment_slots` clamp (unit test) + inline editor warning |
+| Callback promises fit open hours | Register-provided phrasing; eval: callback at Saturday close ⇒ promise names the next opening, never "tomorrow morning" on a closed Sunday |
+| "Are you open?" answered from data | HOURS context block outranks KB prose (conformance row: hours flow bot-visible) |
 | Every action audited | `concierge_actions` rows for offer/book/confirm/cancel/callback (Actions tab facets) |
 
 ## 12. Attribution & metrics
@@ -401,7 +457,9 @@ is already inside `chat-tools`.
   adversarial ("just pencil me in for Sunday 9pm"), timezone recital,
   manual-confirm framing, double-book recovery (`taken` path),
   contact-privacy ("read me back my number"), boundary (past-horizon date
-  declined with nearest real option), party-too-large grace.
+  declined with nearest real option), party-too-large grace, open-hours
+  honesty ("are you open Sunday?" against a closed Sunday + a stale KB
+  paragraph claiming otherwise — the table must win).
 - **Conformance rows**: timezone, master toggle, per-type enabled flags,
   increment honored in offered slots.
 - **CI probe**: `select appointment_slots(...)` next to the existing
@@ -446,6 +504,13 @@ note + `adopt generate` industry presets (§10), eval CATALOG rows.
   *Accepted when:* the upcoming appointment rides the customer context
   (contact masked), `get_my_appointments` answers in one turn, and cancel
   from chat / email link / patron drawer all mutate the same row.
+- **As the merchant**, I want to **set my business hours once** — per-day
+  open ranges (split days included), holiday closures — and have everything
+  respect them: bookable windows clamped inside them, the bot answering
+  "are you open?" from them, callback promises never landing in a closed
+  hour. *Accepted when:* the master switch refuses without hours, a type
+  window outside hours warns at edit time and yields no slots, and the
+  HOURS block outranks stale page prose in the bot's answers.
 - **As the merchant**, I want to **publish availability once** — types,
   weekly hours, a slot increment I choose (5–60 min), exceptions, lead time
   — and then **work from one queue**: confirm requests, mark today's
