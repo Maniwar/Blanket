@@ -139,11 +139,18 @@ schema (`nps_responses` with a generated segment, detractor-forward
 `nps_categories`), and the SQL aggregate (`nps_metrics`) — all unit-tested (5
 hard-gate tests) and documented with a diagram. Nothing fires live yet.
 
-- **The live wiring** *(next PR — NPS.md §9)*: `REQUEST_NPS` beat →
-  `npsTriggerGate`; `submit_nps` tool + the 0–10 scale pill; the async LLM
-  categoriser; the NPS admin tab (Conversion-tab clone) + Actions-list columns;
-  `renderCustomerNps` fed into `coachBeatLine`; judge criterion extended to name
-  NPS-scorekeeping; `nps.*` config keys; DFD/ROPA + privacy-notice line.
+- **[Shipped] The live wiring** *(NPS.md §9)*: the `REQUEST_NPS` beat through
+  the tested gate (post-sale / goal-met, service-first, pending-ask-suppressed);
+  deterministic `context.nps` score + reason capture; the async LLM categorizer;
+  the `{{nps}}` 0–10 scale pill in the widget; `npsCoachBrief` into
+  `coachBeatLine` at both sites; the judge criterion naming quoted-rating
+  scorekeeping + whitelisting the pill; `outreach.nps` config block, the
+  Conversion-tab NPS card, patron + transcript badges; DFD/ROPA row.
+- **Dashboard depth** *(next)*: NPS trend-over-time chart + period comparison,
+  per-coach table, CSV export, human re-categorisation UI, an NPS segment filter
+  on the conversations list, and a privacy-notice sentence on the published page.
+- **Behavior-deck scenarios for the live flow** *(coverage gap)*: fires at close
+  / not mid-flow / not twice; a planted "you rated us low" line is judge-vetoed.
 - **Segment-movement widgets** *(with the tab)*: Detractor→Passive→Promoter
   cohort movement, at-risk (recent decline) list — the period-comparison
   machinery already exists.

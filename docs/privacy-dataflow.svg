@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1381" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1443" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
 <defs>
   <marker id="arw" markerWidth="10" markerHeight="10" refX="7.5" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9a927f"/></marker>
   <style>
@@ -65,18 +65,20 @@
 <text x="474" y="331" font-size="9.6" class="m" text-anchor="start" >Both use the service-role key (bypass RLS); secrets server-only.</text>
 <rect x="474" y="342" width="304" height="150" rx="10" class="db" />
 <text x="490" y="364" font-size="12" class="h" text-anchor="start" >Managed Postgres — RLS enforced</text>
-<text x="490" y="384" font-size="10" class="t mono" text-anchor="start" font-weight="700" >orders</text>
-<text x="490" y="394" font-size="8.6" class="m" text-anchor="start" >name · email · shipping/billing addr — owner+admin</text>
-<text x="490" y="402" font-size="10" class="t mono" text-anchor="start" font-weight="700" >concierge_conversations</text>
-<text x="490" y="412" font-size="8.6" class="m" text-anchor="start" >user_email · IP — admin-only</text>
-<text x="490" y="420" font-size="10" class="t mono" text-anchor="start" font-weight="700" >concierge_messages</text>
-<text x="490" y="430" font-size="8.6" class="m" text-anchor="start" >chat content — admin</text>
-<text x="490" y="438" font-size="10" class="t mono" text-anchor="start" font-weight="700" >client book</text>
-<text x="490" y="448" font-size="8.6" class="m" text-anchor="start" >room · cloth · occasion — consent</text>
-<text x="490" y="456" font-size="10" class="t mono" text-anchor="start" font-weight="700" >concierge_insights</text>
-<text x="490" y="466" font-size="8.6" class="m" text-anchor="start" >AGGREGATE reply-rate digest — NO PII</text>
-<text x="490" y="474" font-size="10" class="t mono" text-anchor="start" font-weight="700" >rate-limit store</text>
-<text x="490" y="484" font-size="8.6" class="m" text-anchor="start" >transient IP key — service-role only</text>
+<text x="490" y="382.0" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >orders</text>
+<text x="490" y="391.0" font-size="8.2" class="m" text-anchor="start" >name · email · shipping/billing addr — owner+admin</text>
+<text x="490" y="397.5" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >concierge_conversations</text>
+<text x="490" y="406.5" font-size="8.2" class="m" text-anchor="start" >user_email · IP — admin-only</text>
+<text x="490" y="413.0" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >concierge_messages</text>
+<text x="490" y="422.0" font-size="8.2" class="m" text-anchor="start" >chat content — admin</text>
+<text x="490" y="428.5" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >client book</text>
+<text x="490" y="437.5" font-size="8.2" class="m" text-anchor="start" >room · cloth · occasion — consent</text>
+<text x="490" y="444.0" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >concierge_insights</text>
+<text x="490" y="453.0" font-size="8.2" class="m" text-anchor="start" >AGGREGATE reply-rate digest — NO PII</text>
+<text x="490" y="459.5" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >nps_responses</text>
+<text x="490" y="468.5" font-size="8.2" class="m" text-anchor="start" >voluntary 0-10 rating + reason — admin</text>
+<text x="490" y="475.0" font-size="9.3" class="t mono" text-anchor="start" font-weight="700" >rate-limit store</text>
+<text x="490" y="484.0" font-size="8.2" class="m" text-anchor="start" >transient IP key — service-role only</text>
 <rect x="474" y="510" width="304" height="44" rx="10" class="proc" />
 <text x="490" y="531" font-size="11.5" class="h" text-anchor="start" >Operator / admin (admin.html)</text>
 <text x="490" y="547" font-size="9.4" class="m" text-anchor="start" >reads via service-role · sees IP/PII · transcript export is PII-gated</text>
@@ -226,5 +228,21 @@
 <text x="788" y="1319" font-size="9.2" class="m" text-anchor="start" >superseded</text>
 <text x="938" y="1295" font-size="9.2" class="m" text-anchor="start" >Admin</text>
 <text x="938" y="1307" font-size="9.2" class="m" text-anchor="start" >(?insights=1)</text>
-<text x="40" y="1363" font-size="9.5" class="m">Sources: privacy.html · supabase/SCHEMA.md · PRIVACY_REVIEW.md. Reflects the current US-only demo; production would add a signed DPA per processor and (if EU) SCCs + an Art. 27 representative.</text>
+<rect x="40" y="1341" width="1000" height="62" rx="0" class="tbl" />
+<text x="48" y="1357" font-size="9.2" class="t" text-anchor="start" font-weight="700" >Session feedback (NPS)</text>
+<text x="48" y="1369" font-size="9.2" class="m" text-anchor="start" >voluntary 0-10 rating +</text>
+<text x="48" y="1381" font-size="9.2" class="m" text-anchor="start" >free-text reason, auto-</text>
+<text x="48" y="1393" font-size="9.2" class="m" text-anchor="start" >categorized</text>
+<text x="216" y="1357" font-size="9.2" class="m" text-anchor="start" >Measure &amp; improve the service;</text>
+<text x="216" y="1369" font-size="9.2" class="m" text-anchor="start" >ground the coach (never echoed</text>
+<text x="216" y="1381" font-size="9.2" class="m" text-anchor="start" >at the customer)</text>
+<text x="424" y="1357" font-size="9.2" class="m" text-anchor="start" >Legitimate interest</text>
+<text x="424" y="1369" font-size="9.2" class="m" text-anchor="start" >(voluntary survey;</text>
+<text x="424" y="1381" font-size="9.2" class="m" text-anchor="start" >skippable)</text>
+<text x="574" y="1357" font-size="9.2" class="m" text-anchor="start" >nps_responses</text>
+<text x="788" y="1357" font-size="9.2" class="m" text-anchor="start" >Demo duration</text>
+<text x="938" y="1357" font-size="9.2" class="m" text-anchor="start" >Admin;</text>
+<text x="938" y="1369" font-size="9.2" class="m" text-anchor="start" >aggregate via</text>
+<text x="938" y="1381" font-size="9.2" class="m" text-anchor="start" >nps_metrics()</text>
+<text x="40" y="1425" font-size="9.5" class="m">Sources: privacy.html · supabase/SCHEMA.md · PRIVACY_REVIEW.md. Reflects the current US-only demo; production would add a signed DPA per processor and (if EU) SCCs + an Art. 27 representative.</text>
 </svg>

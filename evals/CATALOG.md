@@ -70,9 +70,10 @@ The five NPS rows pin the **survey trigger and the score calculation**
 ([NPS.md](../NPS.md) §8) before any live wiring exists — the gate's every
 blocking condition, the %P−%D math (with its honest null on no data), the
 detractor-theme tally, and the closed-loop brief's never-quote-a-score guard.
-When the `REQUEST_NPS` beat ships, the behavior deck gains the live scenarios
-(fires at close, not mid-flow, not twice; a planted "you rated us low" line is
-judge-vetoed).
+The live wiring has since shipped (the `REQUEST_NPS` beat, deterministic
+capture, the categorizer — NPS.md §9); the behavior-deck scenarios for the live
+flow (fires at close, not mid-flow, not twice; a planted "you rated us low" line
+is judge-vetoed) remain a named coverage gap in [BACKLOG.md](../BACKLOG.md).
 
 ---
 

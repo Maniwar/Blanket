@@ -10,8 +10,8 @@
 <rect width="1240" height="910" fill="#f6f2ea"/>
 <text x="40" y="48" font-size="24" class="t" text-anchor="start" font-weight="700" >NPS — the survey beat, the score math, and the closed loop</text>
 <text x="40" y="72" font-size="13" class="m" text-anchor="start" >A chat-native Net Promoter survey that fires ONCE at a natural close, categorizes the reason (detractor-forward), and feeds each customer’s history back</text>
-<text x="40" y="90" font-size="13" class="m" text-anchor="start" >into the concierge’s next move — through the SAME coach + judge machinery already in production. Foundation shipped &amp; tested; live wiring is the next PR (NPS.md §9).</text>
-<text x="40" y="108" font-size="12.2" class="m" text-anchor="start" >Source: NPS.md · beats.ts (npsTriggerGate · npsScore · detractorThemes · renderCustomerNps — all unit-tested) · setup.sql (nps_responses · nps_categories · nps_metrics).</text>
+<text x="40" y="90" font-size="13" class="m" text-anchor="start" >into the concierge’s next move — through the SAME coach + judge machinery already in production. Shipped end-to-end: trigger → scale pill → capture → categorize → coach.</text>
+<text x="40" y="108" font-size="12.2" class="m" text-anchor="start" >Source: NPS.md · beats.ts (npsTriggerGate · npsScore · detractorThemes · renderCustomerNps — unit-tested) · index.ts (capture · categorizer · coach grounding) · setup.sql.</text>
 <text x="40" y="140" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >1 · The survey trigger — a beat gate, pure and tested (npsTriggerGate)</text>
 <rect x="40.0" y="156" width="195.2" height="66" rx="10" fill="#eef4fb" stroke="#c3d6ea" stroke-width="1" />
 <text x="137.6" y="178" font-size="11.5" class="t" text-anchor="middle" font-weight="700" >enabled?</text>
@@ -45,15 +45,15 @@
 <text x="636" y="262" font-size="12.5" class="t cap" text-anchor="start" font-weight="700" >3 · The calculation (npsScore — mirrored in SQL by nps_metrics)</text>
 <rect x="40" y="278" width="568" height="168" rx="12" fill="#f4efe6" stroke="#ddd0b8" stroke-width="1" />
 <text x="58" y="304" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >concierge</text>
-<text x="140" y="304" font-size="9.8" class="t" text-anchor="start" >“Would you recommend us to a friend? 0–10.”  [0][1]…[10] pills</text>
+<text x="140" y="304" font-size="9.8" class="t" text-anchor="start" >“Would you recommend us to a friend, 0–10?”  + {{nps}} → the scale row</text>
 <text x="58" y="332" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >visitor</text>
-<text x="140" y="332" font-size="9.8" class="m" text-anchor="start" >taps  {{nps:8}}  →  submit_nps(score) opens the row</text>
+<text x="140" y="332" font-size="9.8" class="m" text-anchor="start" >taps 8 → “8/10” + context.nps={score:8} → the row is recorded server-side</text>
 <text x="58" y="360" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >concierge</text>
-<text x="140" y="360" font-size="9.8" class="t" text-anchor="start" >“Thank you. What made you give that score?”</text>
+<text x="140" y="360" font-size="9.8" class="t" text-anchor="start" >“Thank you. What made you give that score?”  (a private system note)</text>
 <text x="58" y="388" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >visitor</text>
-<text x="140" y="388" font-size="9.8" class="m" text-anchor="start" >“Booking a slot took three tries.”  → reason_text, categorized async</text>
+<text x="140" y="388" font-size="9.8" class="m" text-anchor="start" >“Booking a slot took three tries.”  → context.nps_reason ⇒ attached + categorized</text>
 <text x="58" y="416" font-size="9.5" class="m mono" text-anchor="start" font-weight="700" >concierge</text>
-<text x="140" y="416" font-size="9.8" class="t" text-anchor="start" >“Noted, truly — thank you.”  (skip = a pill, or simply not answering)</text>
+<text x="140" y="416" font-size="9.8" class="t" text-anchor="start" >receives it graciously — problem acknowledged forward; scores never mentioned again</text>
 <rect x="636" y="278" width="564" height="168" rx="12" fill="#e9f1ea" stroke="#7fae90" stroke-width="1" />
 <text x="652" y="302" font-size="10.6" class="t mono" text-anchor="start" font-weight="700" >segment: 9–10 PROMOTER · 7–8 PASSIVE · 0–6 DETRACTOR</text>
 <text x="652" y="324" font-size="10.4" class="t mono" text-anchor="start" >NPS = %promoters − %detractors   (−100 … 100, passives dilute only)</text>
@@ -143,5 +143,5 @@
 <text x="993.2" y="833" font-size="8.6" class="m" text-anchor="start" >trend + themes + never-quote</text>
 <text x="993.2" y="845" font-size="8.6" class="m" text-anchor="start" >guard · thin ⇒ empty</text>
 <line x1="40" y1="872" x2="1200" y2="872" stroke="#ddd3c2" stroke-width="1"/>
-<text x="40" y="890" font-size="10.4" class="m" text-anchor="start" >Foundation only — the REQUEST_NPS beat, submit_nps tool, scale pill, categorizer, and the NPS dashboard tab are the wiring PR (NPS.md §9). See COACH.md · JUDGE.md · docs/runtime-brains.svg.</text>
+<text x="40" y="890" font-size="10.4" class="m" text-anchor="start" >LIVE end-to-end: the REQUEST_NPS beat fires through this gate, the widget renders the scale, capture + categorization run server-side, and the coach reads the history (NPS.md §9). See COACH.md · JUDGE.md.</text>
 </svg>

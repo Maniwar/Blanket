@@ -492,11 +492,13 @@ anon/authenticated reads are denied. Tiny (one row per digest kind); not pruned.
 | `category_source` | `'llm'`\|`'human'` | Human re-categorization is recorded. |
 | `response_time_seconds`, `survey_version`, `created_at` | — | Survey UX metrics + bookkeeping. |
 
-**Written by:** the `submit_nps` tool (service role — the live wiring, NPS.md §9).
-**Read by:** admin (RLS `is_concierge_admin`), `nps_metrics()`, and
-`renderCustomerNps` for the coach brief. Customers never read their own rows,
-and the concierge never quotes a score back (the reach-out judge vetoes
-scorekeeping).
+**Written by:** the deterministic capture path (`captureNpsScore` on a scale-pill
+tap via `context.nps`, `attachNpsReason` on the follow-up turn, the async
+categorizer via PATCH) — service role, never model-dependent (NPS.md §9).
+**Read by:** admin (RLS `is_concierge_admin` — the Conversion-tab card, patron
+badge, transcript badge), `nps_metrics()`, and `npsCoachBrief` for the coach
+brief. Customers never read their own rows, and the concierge never quotes a
+score back (the reach-out judge vetoes scorekeeping).
 
 ### `nps_categories` — the reason-classification vocabulary
 | Column | Type | Purpose |
@@ -691,7 +693,7 @@ Seeded with a starter deck (only when empty), mirroring `evals/scenarios.mjs`.
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
 | `rate_hit(p_key, p_limit, p_window_seconds)` | → bool | Counts one request for `p_key` in the current fixed window (atomic upsert into `rate_limits`) and returns true when over `p_limit`. Shared across all edge instances. | both functions' rate limiters. |
 | `beat_learning_digest(p_days, p_ttl_min, p_min_n)` | → jsonb | The coach's **feedback loop** ([`COACH.md`](../COACH.md) §5): buckets the reply rate after each proactive move (a following user turn within 30 min) by beat kind × move over a trailing window, so the coach reasons over what actually landed. Self-caching into `concierge_insights` with a TTL; drops buckets under `p_min_n`. | concierge coach path (`beatLearningBlock`). |
-| `nps_metrics(p_days, p_coach?)` | → jsonb | The **NPS calculation** ([`NPS.md`](../NPS.md)): overall NPS (%promoters − %detractors, mirroring `npsScore` in `beats.ts`), the segment split, response count, and category frequencies with the **detractor themes broken out**. Optionally scoped to one coach. Null NPS when there are no responses — never a fake zero. | NPS dashboard tab + coach panel (the live wiring, NPS.md §9). |
+| `nps_metrics(p_days, p_coach?)` | → jsonb | The **NPS calculation** ([`NPS.md`](../NPS.md)): overall NPS (%promoters − %detractors, mirroring `npsScore` in `beats.ts`), the segment split, response count, and category frequencies with the **detractor themes broken out**. Guarded like `get_edition()` (admin JWT or service role); granted to `authenticated`. Null NPS when there are no responses — never a fake zero. | The Conversion-tab NPS card (admin studio, direct RPC). |
 | `get_edition()` | → (next, run, claimed, remaining) | Reads the edition counter. Raises unless `is_concierge_admin()`. | admin Edition card. |
 | `set_edition(p_next_serial, p_run_size)` | → void | Sets `next_serial`/`run_size` (validates `next ≤ run+1`). Raises unless `is_concierge_admin()`. | admin Edition card. |
 

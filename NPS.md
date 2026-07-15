@@ -21,11 +21,12 @@ in `beats_test.ts`). Schema + the aggregate calculation: `supabase/setup.sql`
 (the never-quote-a-score guard) · [BEHAVIOR.md](BEHAVIOR.md) (the beat system) ·
 [SCHEMA.md](supabase/SCHEMA.md).
 
-> **Status: foundation shipped, dormant.** The trigger logic, the score math,
-> the data model, and the tests are in place and green. The live wiring — the
-> `REQUEST_NPS` beat, the `submit_nps` tool, the 0–10 scale pill, the admin
-> dashboard tab — is the next step (§9), deliberately not yet enabled so nothing
-> changes in the running concierge until it's built and reviewed end-to-end.
+> **Status: LIVE end-to-end.** The `REQUEST_NPS` beat fires through the tested
+> gate, the widget renders the 0–10 scale, score + reason capture and the LLM
+> categorizer run server-side, the customer's history grounds the coach (judge-
+> guarded), and the admin studio carries the config block, the Conversion-tab
+> NPS card, the patron badge, and the transcript badge. Default ON
+> (`outreach.nps.enabled !== false`); turn it off in Engagement → House rules.
 
 ---
 
@@ -44,7 +45,7 @@ npsTriggerGate({ enabled, concluded, alreadySurveyedSession,
 
 It answers **yes** only when all hold:
 
-- **enabled** — `outreach.nps.enabled` (default off until wired).
+- **enabled** — `outreach.nps.enabled` (absent = **ON**, the house pattern; Engagement → House rules).
 - **concluded** — a natural end was reached: an order placed, a goal met, the
   wrap-up/leave signal (`?wrapup` / `pagehide`), or the visitor's "that's all for
   now". Never mid-conversation.
@@ -66,12 +67,17 @@ guilt-tripping.
 
 The prompt is part of the conversation, not a modal:
 
-1. One warm line + the 0–10 scale rendered as **quick-reply pills**
-   (`{{nps:0}}…{{nps:10}}`, the existing pill mechanism).
-2. A tap calls **`submit_nps(score)`**, opening the `nps_responses` row.
-3. The concierge asks the follow-up — *"Thank you. What made you give that
-   score?"* — and the next turn is captured as `reason_text`.
-4. A short confirmation closes it. **Skip** is a pill (or simply not answering).
+1. The beat speaks one warm line ending with the **`{{nps}}` token**, which the
+   widget renders as a tappable **0–10 scale row** (the pill mechanism).
+2. A tap sends a visible turn ("8/10") carrying `context.nps = {score}` — the
+   server records the `nps_responses` row **deterministically** (never
+   model-dependent), once per conversation, and a private system note has the
+   concierge thank them and ask the follow-up: *"what made you give that score?"*
+3. The next real message carries `context.nps_reason = 1`; the server attaches
+   it as `reason_text` on the open row and fires the **async categorizer**.
+4. The concierge receives it graciously (problem → acknowledged and addressed
+   forward; praise → light thanks) and never mentions scores again. **Skip** is
+   simply not answering — the gate never re-asks this session.
 
 It is fast, mobile-native, and accessible because it *is* the chat — the same
 components the widget already renders.
@@ -182,25 +188,34 @@ coach did: a behavior-deck scenario (survey fires at close, not mid-flow, not
 twice), a conformance row (admin question/categories reflected in the live
 widget), and a judge check (**a planted "you rated us low" line is vetoed**).
 
-## 9. What's next (the live wiring)
+## 9. The live wiring — what shipped, and how
 
-The foundation ships first; the behaviour-changing surface is the follow-up PR:
+- **The trigger** lives in the **nudge beat path**: it gathers the gate's inputs
+  (conversation age, post-sale window or a met goal as *concluded*, the offer-
+  once check, the per-customer cooldown) and calls the unit-tested
+  `npsTriggerGate`; on *ask* it overrides the beat decision with **REQUEST_NPS**
+  (service — a blocked order — always outranks it, and a pending question of
+  ours suppresses it). The gate's verdict + reason ride the beat audit.
+- **Capture is deterministic**: `context.nps` / `context.nps_reason` from the
+  widget, written server-side (`captureNpsScore` / `attachNpsReason`) with the
+  model only supplying warm language via private system notes. Both fail-open.
+- **The categorizer** (`categorizeNpsReason`) — one Haiku forced-tool call over
+  the admin-managed `nps_categories`, async, `category_source='llm'`.
+- **The coach grounding** — `npsCoachBrief` (→ `renderCustomerNps`) joins the
+  reply-rate digest in `coachBeatLine`'s private brief at both proactive sites;
+  the judge criterion now names quoting past ratings as scorekeeping and
+  whitelists the `{{nps}}` pill.
+- **The widget** renders `{{nps}}` as an accessible 0–10 pill row (ES5, the
+  `.cx-reply` components).
+- **Admin**: Engagement → House rules NPS block (`outreach.nps` — enabled ·
+  min-minutes · cooldown-days · question), the Conversion-tab **NPS card**
+  (`nps_metrics()` — NPS, segments, detractor themes, recent reasons), a rating
+  badge on the patron card and on the conversation transcript head.
 
-- **`REQUEST_NPS` beat** in the Action Table calling `npsTriggerGate`.
-- **`submit_nps(score, reason)` tool** (mirror of `submit_inquiry`) + the 0–10
-  scale **pill renderer** in the widget (the FORMS `select`-type backlog item
-  generalises to a `scale` type).
-- **The categoriser** — one Haiku-class forced-tool call, cached, async.
-- **The NPS admin tab** — cloned from the Conversion tab (KPI cards, trend +
-  period-comparison, segment/category charts, coach table, filters, CSV) and the
-  Actions-tab sessions list.
-- **The coach grounding** — feed `renderCustomerNps` into `coachBeatLine`, and
-  extend the judge criterion to name NPS-scorekeeping explicitly.
-- **Config** — `nps.question`, `nps.categories`, `outreach.nps.*` (versioned via
-  `concierge_edit_history`, previewable, lint-checked).
-- **Privacy** — an `nps_responses` store row + Art.30 ROPA line in the DFD, a
-  privacy-notice sentence ("your feedback is shared with your coach and the
-  team"), and the aggregate digest kept PII-free.
+**Still open** (tracked in [BACKLOG.md](BACKLOG.md)): NPS trend-over-time chart +
+CSV + per-coach table (the aggregate card ships first), human re-categorisation
+UI, segment-movement widgets, behavior-deck scenarios for the live flow, and a
+privacy-notice sentence on the published page.
 
 ## 10. Open decisions (from the PRD)
 
