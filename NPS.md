@@ -295,9 +295,33 @@ binds), which closes the anonymous-shopper gap for the flow that matters. The
 widget defers the close beacon while the `{{nps}}` scale is on screen so the
 score and reason attach to the conversation being rated; walk-aways still
 close on pagehide. Every wrap-up ask writes the same audited offer row, so the
-response rate stays honest. The *etiquette* — goodbye first, one light ask,
-gracious receipt, never mention scores again — is the admin-editable
-`closing-survey` SOP; the *decision* stays in unit-tested code.
+response rate stays honest. The *etiquette* — goodbye first, an **invitation**
+("would you be willing to answer one quick question?" — tapping a number
+answers, walking away declines), gracious receipt, never mention scores again —
+is the admin-editable `closing-survey` SOP; the *decision* stays in unit-tested
+code.
+
+**The two closes — conversations and surveys are separate processes:**
+
+- **The conversation close.** "That's all" (chip or typed) wraps the visit:
+  quiet mode on, the conversation row stamped `closed`. **A new conversation
+  starts on the very next message** — there is no lockout; the next thing the
+  visitor types (or a later return visit, greeted by the re-engage opener)
+  opens a fresh conversation row immediately.
+- **The survey close.** When the goodbye carries the scale, the widget holds
+  the conversation OPEN through the rating exchange so the score and reason
+  attach to the visit being rated. **The reason receipt then ends the visit**:
+  the concierge thanks them for taking the time, addresses a problem forward or
+  receives praise warmly, says goodbye — and asks nothing further ("what can I
+  help you with?" after a survey is a defect). The widget closes and quiets on
+  that turn.
+- **How soon can the survey happen again?** At most **once per conversation**
+  (a response *or* a prior offer both close that door), and for a recognized
+  customer never inside `cooldownDays` (default **30**) — so a new conversation
+  ten minutes later will NOT re-ask, even though conversations themselves
+  restart freely. Anonymous sessions carry no identity, so only the
+  once-per-conversation rule binds them. Every refusal is logged with the
+  gate's reason (the NPS tab's "Held by the gate" line).
 
 **The analyst report (conversational analytics):** `GET ?npsreport=1` turns
 the numbers into actions. `npsAnalystCorpus` (unit-tested) packs the rated
