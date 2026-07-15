@@ -14,7 +14,7 @@ when it's software?*
 
 ---
 
-## The Claude craft in 60 seconds
+## The summary in 60 seconds
 
 If you're evaluating this as applied-AI engineering, the LLM substance lives here —
 each links a one-page diagram:
