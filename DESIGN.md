@@ -666,6 +666,14 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   being spoken back at them, so feedback improves service instead of becoming
   scorekeeping. *(`npsCoachBrief` → the coach's private brief at both
   proactive sites; the judge vetoes quoted ratings; NPS.md §5.)*
+- **As the merchant**, I want to know **what a conversation costs me and where
+  model spend goes**, so a spike on the provider's bill is explainable in one
+  glance. *Accepted when:* every model call is metered at the source with a
+  purpose (`concierge_llm_usage`; the meter never blocks serving), QA/CI
+  traffic is split from customer traffic at write time, the Model spend card
+  (Conversion tab) shows customer spend / per-conversation cost / QA spend
+  with an editable price table (tokens stored, dollars estimated), and the
+  card is fail-visible. *(COSTS.md; `llm_cost_metrics()`.)*
 
 ### 2.5 Super admin — owner / access control
 
