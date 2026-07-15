@@ -259,12 +259,12 @@
       '--ck-ink:var(--wool,#F1ECE2);--ck-brass:var(--brass,#A67C3D);--ck-brass-soft:var(--brass-soft,#C49B5B);}',
 
       /* ---------- scrim ---------- */
-      '.ck-scrim{position:fixed;inset:0;z-index:90;background:rgba(23,31,26,.4);',
+      '.ck-scrim{position:fixed;inset:0;z-index:100090;background:rgba(23,31,26,.4);',
       'opacity:0;pointer-events:none;transition:opacity .35s ease;}',
       '.ck-scrim.ck-on{opacity:1;pointer-events:auto;}',
 
       /* ---------- panel ---------- */
-      '.ck-panel{position:fixed;z-index:91;display:flex;flex-direction:column;',
+      '.ck-panel{position:fixed;z-index:100091;display:flex;flex-direction:column;',
       'background:var(--ck-glass);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);',
       'color:var(--ck-ink);visibility:hidden;}',
       '.ck-panel:focus{outline:none;}',
