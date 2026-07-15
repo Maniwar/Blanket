@@ -11,7 +11,7 @@ Four layers, in the order they run on a deploy:
 
 | layer | cases | gate? | what it can catch |
 | --- | --- | --- | --- |
-| Beat-engine unit tests | 28 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain, the coach feedback-loop digest, and the NPS trigger/score math |
+| Beat-engine unit tests | 29 tests | **hard gate** (deploy stops) | logic bugs in the deterministic beat brain, the coach feedback-loop digest, and the NPS trigger/score math |
 | Behavior deck | 19 scenarios / 43 checks | advisory in CI (threshold-gated when run with reps) | wrong *replies* — regressions in selling, honesty, tools, lead capture, the NPS capture flow |
 | Config conformance | 15 live rows + 4 named skips + 3 inquiry rows (admin-token-gated) | pass/fail report | knobs that stopped being connected to the live widget |
 | Persona evals | 4 personas / 22 rows | advisory, always exit 0 | failures that only emerge over a real back-and-forth |
@@ -56,6 +56,7 @@ Each test builds a synthetic ledger and asserts the table's decision:
 | npsScore = %promoters − %detractors; passives ignored in the numerator | the score math — all-passives ⇒ 0, empty ⇒ **null** (never a fake zero), out-of-range dropped |
 | npsResponseRate = responses ÷ offers | the survey funnel math — null when nothing was offered (never a fake 0%), uncapped so window-edge anomalies show |
 | npsAnalystCorpus: detractors lead, honesty floor, caps hold | the analyst report's evidence pack — detractors first, customers' own words quoted, <3 responses ⇒ '' (no report on thin data), session/char caps |
+| npsCaptureAction: corrections revise, never duplicate | a tap revises this conversation's row, or the customer's recent row inside the cooldown; past the cooldown (or cooldown 0) it inserts fresh |
 | npsTriggerGate fires once, only at a natural close, past the cooldown | the survey trigger — every blocking condition (disabled / already-offered / mid-session / too-short / cooldown) asserted independently |
 | detractorThemes tallies only sub-promoter concerns, most frequent first | the detractor-reason signal — a promoter's mention never dilutes the concern count |
 | renderCustomerNps: detractor brief carries themes + never-quote guard; thin data ⇒ empty | the closed-loop brief — trend detection, the never-quote-a-score discipline, the honesty floor |

@@ -315,6 +315,20 @@ code.
   receives praise warmly, says goodbye — and asks nothing further ("what can I
   help you with?" after a survey is a defect). The widget closes and quiets on
   that turn.
+- **Changing a rating.** "I need to change my score" is honored, not argued
+  with: a deterministic detector (change/fix/correct + rating/score/survey, or
+  rating + wrong/mistake) re-presents the scale with one gracious line — and
+  the new tap **revises the existing row in place** (`npsCaptureAction`,
+  unit-tested; `revised_at` stamps the audit trail, the dashboard's recent list
+  shows "· revised"). The revision targets this conversation's own row, or —
+  in a fresh conversation — the customer's most recent row when the tap lands
+  inside the cooldown, where the gate would never have *offered*: a duplicate
+  rating from one person inside the cooldown is structurally impossible. A
+  revision that changes segment clears the now-stale reason (and categories)
+  so the follow-up "why" re-attaches; a same-segment nudge (10 → 9) keeps the
+  reason it still describes. Anonymous corrections bind only within the same
+  conversation (no identity to tie across). The concierge never says a rating
+  "can't be changed" and never quotes the old number back.
 - **How soon can the survey happen again?** At most **once per conversation**
   (a response *or* a prior offer both close that door), and for a recognized
   customer never inside `cooldownDays` (default **30**) — so a new conversation
