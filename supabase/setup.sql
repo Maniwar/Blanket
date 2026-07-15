@@ -330,7 +330,9 @@ begin
   foreach t in array array[
     'concierge_config','concierge_kb','concierge_conversations','concierge_messages',
     'concierge_sops','concierge_cache','concierge_forms','customer_notes','customer_addresses',
-    'concierge_goals','concierge_flags','site_content','concierge_tools','concierge_evals'
+    'concierge_goals','concierge_flags','site_content','concierge_tools','concierge_evals',
+    'concierge_locations','concierge_business_hours','concierge_appointment_types',
+    'concierge_availability','concierge_availability_exceptions'
   ] loop
     execute format('drop policy if exists "admin all" on public.%I', t);
     execute format($f$create policy "admin all" on public.%I for all to authenticated
@@ -642,6 +644,18 @@ create trigger sops_history after insert or update on public.concierge_sops
 drop trigger if exists kb_history on public.concierge_kb;
 create trigger kb_history after insert or update on public.concierge_kb
   for each row execute function public.log_edit_history();
+drop trigger if exists locations_history on public.concierge_locations;
+create trigger locations_history after insert or update on public.concierge_locations
+  for each row execute function public.log_edit_history();
+drop trigger if exists hours_history on public.concierge_business_hours;
+create trigger hours_history after insert or update on public.concierge_business_hours
+  for each row execute function public.log_edit_history();
+drop trigger if exists appt_types_history on public.concierge_appointment_types;
+create trigger appt_types_history after insert or update on public.concierge_appointment_types
+  for each row execute function public.log_edit_history();
+drop trigger if exists availability_history on public.concierge_availability;
+create trigger availability_history after insert or update on public.concierge_availability
+  for each row execute function public.log_edit_history();
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3b. AUDIT-SEARCH INDEXES — make the admin surfaces filterable at scale
@@ -815,7 +829,7 @@ create or replace function public.prune_high_write(p_days int default 180)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   cutoff   timestamptz := now() - make_interval(days => greatest(coalesce(p_days, 180), 1));
-  c_convos bigint; c_actions bigint; c_email bigint; c_rate bigint; c_events bigint; c_llm bigint;
+  c_convos bigint; c_actions bigint; c_email bigint; c_rate bigint; c_events bigint; c_llm bigint; c_appt bigint;
 begin
   delete from public.concierge_conversations where created_at < cutoff;
   get diagnostics c_convos = row_count;
@@ -827,12 +841,15 @@ begin
   get diagnostics c_events = row_count;
   delete from public.concierge_llm_usage where created_at < cutoff;
   get diagnostics c_llm = row_count;
+  delete from public.concierge_appointments
+    where status in ('completed','cancelled','no_show','done') and updated_at < cutoff;
+  get diagnostics c_appt = row_count;
   delete from public.rate_limits where window_start < now() - interval '2 hours';
   get diagnostics c_rate = row_count;
   return jsonb_build_object('cutoff', cutoff, 'conversations_deleted', c_convos,
     'actions_deleted', c_actions, 'email_log_deleted', c_email,
     'site_events_deleted', c_events, 'rate_limits_deleted', c_rate,
-    'llm_usage_deleted', c_llm);
+    'llm_usage_deleted', c_llm, 'appointments_deleted', c_appt);
 end $$;
 revoke execute on function public.prune_high_write(int) from public, anon, authenticated;
 -- Nightly with pg_cron (enable the extension first), uncomment:
@@ -1183,6 +1200,667 @@ begin
 end $$;
 grant execute on function public.llm_cost_metrics(int) to authenticated;
 revoke execute on function public.llm_cost_metrics(int) from public, anon;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Appointments & callbacks (APPOINTMENTS.md) — the calendar the concierge can
+-- book against. Slots are COMPUTED, never stored until booked; the model only
+-- recites what appointment_slots() returns; the booking write re-derives the
+-- slot from the same function, so offer and write can never disagree.
+-- Double-booking is a database impossibility (partial unique index + advisory
+-- locks), a reschedule can never strand the guest (atomic, original stands on
+-- failure), and qa- traffic never occupies a real slot.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists public.concierge_locations (
+  id         bigint generated always as identity primary key,
+  slug       text unique not null,
+  title      text not null,
+  address    text not null default '',
+  timezone   text not null,                    -- IANA; each location keeps its own clock
+  directions text not null default '',         -- rides the confirmation email
+  enabled    boolean not null default true,    -- the per-location toggle
+  sort_order int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.concierge_business_hours (
+  id          bigint generated always as identity primary key,
+  location_id bigint not null references public.concierge_locations(id) on delete cascade,
+  dow         smallint not null check (dow between 0 and 6),   -- 0 = Sunday, location-local
+  open_min    smallint not null check (open_min between 0 and 1439),
+  close_min   smallint not null check (close_min between 1 and 1440),
+  check (close_min > open_min)
+);
+create index if not exists concierge_business_hours_loc_idx
+  on public.concierge_business_hours (location_id, dow);
+
+create table if not exists public.concierge_appointment_types (
+  id            bigint generated always as identity primary key,
+  slug          text unique not null,
+  title         text not null,
+  description   text not null default '',
+  duration_min  int  not null default 30 check (duration_min between 5 and 480),
+  step_min      smallint not null default 30 check (step_min in (5,10,15,20,30,45,60)),
+  mode          text not null default 'in-person'
+                check (mode in ('in-person','video','phone')),
+  buffer_min    int  not null default 0 check (buffer_min between 0 and 240),
+  lead_time_min int  not null default 240 check (lead_time_min >= 0),
+  horizon_days  int  not null default 21 check (horizon_days between 1 and 365),
+  capacity      int  not null default 1 check (capacity between 1 and 50),
+  max_party     smallint not null default 0 check (max_party between 0 and 50),
+  confirm_mode  text not null default 'auto' check (confirm_mode in ('auto','manual')),
+  intake_prompt text not null default '',
+  enabled       boolean not null default false,   -- drafts first
+  sort_order    int  not null default 0,
+  created_at    timestamptz not null default now()
+);
+
+create table if not exists public.concierge_availability (
+  id          bigint generated always as identity primary key,
+  type_id     bigint not null references public.concierge_appointment_types(id) on delete cascade,
+  location_id bigint not null references public.concierge_locations(id) on delete cascade,
+  dow         smallint not null check (dow between 0 and 6),
+  start_min   smallint not null check (start_min between 0 and 1439),
+  end_min     smallint not null check (end_min   between 1 and 1440),
+  step_min    smallint check (step_min in (5,10,15,20,30,45,60)),  -- null = type default
+  check (end_min > start_min)
+);
+create index if not exists concierge_availability_type_idx
+  on public.concierge_availability (type_id, location_id, dow);
+
+create table if not exists public.concierge_availability_exceptions (
+  id          bigint generated always as identity primary key,
+  location_id bigint references public.concierge_locations(id) on delete cascade,      -- null = every location
+  type_id     bigint references public.concierge_appointment_types(id) on delete cascade, -- null = all types
+  on_date     date not null,
+  closed      boolean not null default true,
+  start_min   smallint check (start_min between 0 and 1439),
+  end_min     smallint check (end_min between 1 and 1440),
+  note        text not null default ''
+);
+create index if not exists concierge_avail_exc_date_idx
+  on public.concierge_availability_exceptions (on_date);
+
+create table if not exists public.concierge_appointments (
+  id              bigint generated always as identity primary key,
+  kind            text not null default 'appointment'
+                  check (kind in ('appointment','callback')),
+  type_id         bigint references public.concierge_appointment_types(id) on delete set null,
+  location_id     bigint references public.concierge_locations(id) on delete set null,
+  starts_at       timestamptz,
+  ends_at         timestamptz,
+  window_pref     text,
+  party_size      smallint,
+  status          text not null default 'booked'
+                  check (status in ('requested','booked','completed','cancelled',
+                                    'no_show','open','done')),
+  visitor_name    text not null,
+  visitor_contact text not null,               -- NEVER injected into a prompt unmasked
+  contact_kind    text not null check (contact_kind in ('email','phone')),
+  visitor_tz      text not null default '',
+  notes           text not null default '',
+  customer_id     uuid,
+  conversation_id uuid references public.concierge_conversations(id) on delete set null,
+  session_key     text,
+  reschedule_of   bigint references public.concierge_appointments(id) on delete set null,
+  cancel_token    uuid not null default gen_random_uuid(),
+  qa              boolean not null default false,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists concierge_appt_customer_idx
+  on public.concierge_appointments (customer_id, starts_at desc);
+create index if not exists concierge_appt_convo_idx
+  on public.concierge_appointments (conversation_id);
+create index if not exists concierge_appt_when_idx
+  on public.concierge_appointments (starts_at) where status in ('requested','booked');
+-- The race-killer: at capacity 1, one live row per (type, location, start).
+-- 'requested' occupies the slot exactly like 'booked'; qa never occupies.
+-- Capacity > 1 is enforced inside book_appointment() under an advisory lock
+-- (the index is dropped-and-conditional only in the sense that capacity-1
+-- types get the hard constraint AND the lock; >1 relies on the lock alone —
+-- so the index applies only where a second row is always wrong is not
+-- expressible per-type; we therefore enforce ALL capacity via the advisory
+-- lock and keep this index for the common capacity-1 case as belt&braces
+-- via a lock-ordered insert; see book_appointment()).
+create index if not exists concierge_appt_slot_idx
+  on public.concierge_appointments (type_id, location_id, starts_at)
+  where kind = 'appointment' and status in ('requested','booked') and not qa;
+
+alter table public.concierge_locations               enable row level security;
+alter table public.concierge_business_hours          enable row level security;
+alter table public.concierge_appointment_types       enable row level security;
+alter table public.concierge_availability            enable row level security;
+alter table public.concierge_availability_exceptions enable row level security;
+alter table public.concierge_appointments            enable row level security;
+-- appointments carry PII: no policies — service role writes; admins read via RPCs.
+
+-- Seed one location so a single-location house never thinks about the
+-- dimension. The admin edits the timezone on first setup (the master switch
+-- refuses to enable until hours exist and the timezone is confirmed).
+insert into public.concierge_locations (slug, title, timezone)
+  values ('main', 'Main', 'America/Los_Angeles')
+  on conflict (slug) do nothing;
+
+-- ── The slot engine — the ONE source of "available" ─────────────────────────
+-- Expands weekly availability ∩ business hours in the location's wall-clock
+-- time (per-date, DST-correct), applies exceptions, subtracts live bookings
+-- (with the type's buffer), clips by lead time and horizon, and returns each
+-- slot with pre-formatted labels: the model recites, it never converts.
+create or replace function public.appointment_slots(
+  p_type text, p_location text, p_from date, p_to date,
+  p_visitor_tz text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_type  public.concierge_appointment_types%rowtype;
+  v_loc   public.concierge_locations%rowtype;
+  v_now   timestamptz := now();
+  v_lead  timestamptz;
+  v_today date;
+  v_hzn   date;
+  v_day   date;
+  v_ex_id bigint; v_ex_closed boolean; v_ex_has_win boolean;
+  v_seg   record;
+  v_m     int;
+  v_step  int;
+  v_start timestamptz;
+  v_end   timestamptz;
+  v_busy  int;
+  v_vis_tz text := null;
+  v_multi boolean;
+  v_shop  text; v_vis text; v_lead_label text; v_abbr text; v_vabbr text;
+  v_slots jsonb := '[]'::jsonb;
+  v_n     int := 0;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select * into v_type from public.concierge_appointment_types
+    where slug = p_type and enabled;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_type'); end if;
+  select * into v_loc from public.concierge_locations
+    where slug = p_location and enabled;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_location'); end if;
+  if not exists (select 1 from public.concierge_business_hours where location_id = v_loc.id) then
+    return jsonb_build_object('ok', false, 'reason', 'no_hours');
+  end if;
+  if p_visitor_tz is not null and exists (select 1 from pg_timezone_names where name = p_visitor_tz) then
+    v_vis_tz := p_visitor_tz;
+  end if;
+  v_multi := (select count(*) > 1 from public.concierge_locations where enabled);
+  v_lead  := v_now + make_interval(mins => v_type.lead_time_min);
+  v_today := (v_now at time zone v_loc.timezone)::date;
+  v_hzn   := v_today + v_type.horizon_days;
+
+  for v_day in
+    select d::date from generate_series(
+      greatest(p_from, v_today), least(p_to, v_hzn), interval '1 day') d
+  loop
+    -- the most specific exception wins: (loc,type) > (loc,*) > (*,type) > (*,*)
+    v_ex_id := null; v_ex_closed := null; v_ex_has_win := false;
+    select e.id, e.closed, (e.start_min is not null and e.end_min is not null)
+      into v_ex_id, v_ex_closed, v_ex_has_win
+      from public.concierge_availability_exceptions e
+      where e.on_date = v_day
+        and (e.location_id is null or e.location_id = v_loc.id)
+        and (e.type_id     is null or e.type_id     = v_type.id)
+      order by (e.location_id is not null) desc, (e.type_id is not null) desc
+      limit 1;
+    -- SELECT INTO with no row overwrites the initializers with NULLs
+    v_ex_has_win := coalesce(v_ex_has_win, false);
+    if coalesce(v_ex_closed, false) then continue; end if;
+
+    -- window segments for the day: exception REPLACES the type's windows when
+    -- it carries times; otherwise the weekly rules — always ∩ business hours.
+    for v_seg in
+      with wins as (
+        select w.start_min, w.end_min, w.step_min from (
+          select e2.start_min, e2.end_min, null::smallint as step_min
+            from public.concierge_availability_exceptions e2
+            where v_ex_has_win and e2.id = v_ex_id
+          union all
+          select a.start_min, a.end_min, a.step_min
+            from public.concierge_availability a
+            where not v_ex_has_win
+              and a.type_id = v_type.id and a.location_id = v_loc.id
+              and a.dow = extract(dow from v_day)::int
+        ) w
+      )
+      select greatest(w.start_min, h.open_min)  as s,
+             least(w.end_min,  h.close_min)     as e,
+             coalesce(w.step_min, v_type.step_min) as step
+        from wins w
+        join public.concierge_business_hours h
+          on h.location_id = v_loc.id and h.dow = extract(dow from v_day)::int
+         and h.open_min < w.end_min and h.close_min > w.start_min
+        order by 1
+    loop
+      v_step := v_seg.step;
+      v_m := v_seg.s;
+      while v_m + v_type.duration_min <= v_seg.e loop
+        v_start := (v_day::timestamp + make_interval(mins => v_m)) at time zone v_loc.timezone;
+        v_end   := v_start + make_interval(mins => v_type.duration_min);
+        if v_start >= v_lead then
+          select count(*) into v_busy from public.concierge_appointments a
+            where a.kind = 'appointment' and a.status in ('requested','booked')
+              and not a.qa and a.type_id = v_type.id and a.location_id = v_loc.id
+              and a.starts_at < v_end   + make_interval(mins => v_type.buffer_min)
+              and a.ends_at   > v_start - make_interval(mins => v_type.buffer_min);
+          if v_busy < v_type.capacity then
+            perform set_config('TimeZone', v_loc.timezone, true);
+            v_shop := trim(to_char(v_start, 'Dy Mon FMDD, HH24:MI'));
+            v_abbr := trim(to_char(v_start, 'TZ'));
+            if v_vis_tz is not null and v_vis_tz <> v_loc.timezone then
+              perform set_config('TimeZone', v_vis_tz, true);
+              v_vis   := trim(to_char(v_start, 'Dy Mon FMDD, HH24:MI'));
+              v_vabbr := trim(to_char(v_start, 'TZ'));
+              if v_type.mode = 'in-person' then
+                v_lead_label := v_shop || ' ' || v_abbr || ' at ' || v_loc.title
+                             || ' — ' || v_vis || ' ' || v_vabbr || ' your time';
+              else
+                v_lead_label := v_vis || ' ' || v_vabbr || ' your time ('
+                             || v_shop || ' ' || v_abbr
+                             || case when v_multi then ', ' || v_loc.title else '' end || ')';
+              end if;
+            else
+              v_vis := v_shop; v_vabbr := v_abbr;
+              v_lead_label := v_shop || ' ' || v_abbr
+                           || case when v_multi then ' at ' || v_loc.title else '' end;
+            end if;
+            v_slots := v_slots || jsonb_build_object(
+              'starts_at', v_start, 'ends_at', v_end,
+              'shop_label', v_shop || ' ' || v_abbr,
+              'visitor_label', v_vis || ' ' || v_vabbr,
+              'lead_label', v_lead_label);
+            v_n := v_n + 1;
+            exit when v_n >= 40;
+          end if;
+        end if;
+        v_m := v_m + v_step;
+      end loop;
+      exit when v_n >= 40;
+    end loop;
+    exit when v_n >= 40;
+  end loop;
+
+  return jsonb_build_object(
+    'ok', true, 'type', v_type.slug, 'type_title', v_type.title,
+    'mode', v_type.mode, 'duration_min', v_type.duration_min,
+    'confirm_mode', v_type.confirm_mode, 'max_party', v_type.max_party,
+    'intake_prompt', v_type.intake_prompt,
+    'location', jsonb_build_object('slug', v_loc.slug, 'title', v_loc.title,
+      'address', v_loc.address, 'timezone', v_loc.timezone),
+    'capped', v_n >= 40, 'slots', v_slots);
+end $$;
+grant execute on function public.appointment_slots(text, text, date, date, text) to authenticated;
+revoke execute on function public.appointment_slots(text, text, date, date, text) from public, anon;
+
+-- ── The booking write — re-derives the slot it was offered ───────────────────
+create or replace function public.book_appointment(
+  p_type text, p_location text, p_starts_at timestamptz,
+  p_name text, p_contact text, p_contact_kind text,
+  p_party smallint default null, p_notes text default '',
+  p_visitor_tz text default null,
+  p_customer uuid default null, p_conversation uuid default null,
+  p_session text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_type public.concierge_appointment_types%rowtype;
+  v_loc  public.concierge_locations%rowtype;
+  v_slot jsonb; v_slots jsonb; v_row public.concierge_appointments%rowtype;
+  v_qa boolean := coalesce(p_session, '') like 'qa-%';
+  v_cap int; v_open int; v_status text; v_day date;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  if coalesce(trim(p_name), '') = '' or coalesce(trim(p_contact), '') = '' then
+    return jsonb_build_object('ok', false, 'reason', 'missing_contact');
+  end if;
+  select * into v_type from public.concierge_appointment_types where slug = p_type and enabled;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_type'); end if;
+  select * into v_loc from public.concierge_locations where slug = p_location and enabled;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_location'); end if;
+  if v_type.max_party > 0 and coalesce(p_party, 1) > v_type.max_party then
+    return jsonb_build_object('ok', false, 'reason', 'party_too_large', 'max_party', v_type.max_party);
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_type || '|' || p_location || '|' || p_starts_at::text));
+
+  -- one guest cannot carpet-bomb the calendar
+  v_cap := coalesce(((select value from public.concierge_config where key = 'bookings')
+                     ->>'maxOpenPerContact')::int, 2);
+  select count(*) into v_open from public.concierge_appointments a
+    where a.kind = 'appointment' and a.status in ('requested','booked')
+      and not a.qa and a.starts_at > now()
+      and lower(a.visitor_contact) = lower(trim(p_contact));
+  if not v_qa and v_open >= v_cap then
+    return jsonb_build_object('ok', false, 'reason', 'limit');
+  end if;
+
+  -- re-derive the offer: the slot must fall out of the same function
+  v_day := (p_starts_at at time zone v_loc.timezone)::date;
+  v_slots := public.appointment_slots(p_type, p_location, v_day, v_day, p_visitor_tz);
+  select s into v_slot from jsonb_array_elements(v_slots->'slots') s
+    where (s->>'starts_at')::timestamptz = p_starts_at limit 1;
+  if v_slot is null then
+    return jsonb_build_object('ok', false, 'reason', 'taken',
+      'alternatives', coalesce((select jsonb_agg(s) from (
+        select s from jsonb_array_elements(v_slots->'slots') s limit 3) alt), '[]'::jsonb));
+  end if;
+
+  v_status := case when v_type.confirm_mode = 'manual' then 'requested' else 'booked' end;
+  insert into public.concierge_appointments
+    (kind, type_id, location_id, starts_at, ends_at, party_size, status,
+     visitor_name, visitor_contact, contact_kind, visitor_tz, notes,
+     customer_id, conversation_id, session_key, qa)
+  values ('appointment', v_type.id, v_loc.id, p_starts_at,
+     p_starts_at + make_interval(mins => v_type.duration_min),
+     p_party, v_status, trim(p_name), trim(p_contact), p_contact_kind,
+     coalesce(p_visitor_tz, ''), coalesce(p_notes, ''),
+     p_customer, p_conversation, p_session, v_qa)
+  returning * into v_row;
+
+  return jsonb_build_object('ok', true, 'id', v_row.id, 'status', v_row.status,
+    'starts_at', v_row.starts_at, 'ends_at', v_row.ends_at,
+    'cancel_token', v_row.cancel_token,
+    'shop_label', v_slot->>'shop_label', 'visitor_label', v_slot->>'visitor_label',
+    'lead_label', v_slot->>'lead_label',
+    'location', jsonb_build_object('title', v_loc.title, 'address', v_loc.address,
+      'directions', v_loc.directions, 'timezone', v_loc.timezone),
+    'type_title', v_type.title, 'confirm_mode', v_type.confirm_mode);
+end $$;
+grant execute on function public.book_appointment(text,text,timestamptz,text,text,text,smallint,text,text,uuid,uuid,text) to authenticated;
+revoke execute on function public.book_appointment(text,text,timestamptz,text,text,text,smallint,text,text,uuid,uuid,text) from public, anon;
+
+-- ── The atomic move — a failed reschedule leaves the original untouched ──────
+create or replace function public.reschedule_appointment(
+  p_id bigint, p_new_location text, p_new_starts_at timestamptz,
+  p_visitor_tz text default null,
+  p_cancel_token uuid default null, p_customer uuid default null,
+  p_session text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_row  public.concierge_appointments%rowtype;
+  v_type public.concierge_appointment_types%rowtype;
+  v_loc  public.concierge_locations%rowtype;
+  v_slot jsonb; v_slots jsonb; v_day date;
+  v_new  public.concierge_appointments%rowtype;
+  k_old bigint; k_new bigint;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select * into v_row from public.concierge_appointments where id = p_id
+    and kind = 'appointment' and status in ('requested','booked');
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  -- three-valued logic guard: a NULL token must never satisfy ownership
+  if not coalesce(
+          (p_cancel_token is not null and v_row.cancel_token = p_cancel_token)
+          or (p_customer is not null and v_row.customer_id = p_customer)
+          or (p_session  is not null and v_row.session_key = p_session)
+          or public.is_concierge_admin(), false) then
+    return jsonb_build_object('ok', false, 'reason', 'not_yours');
+  end if;
+  select * into v_type from public.concierge_appointment_types where id = v_row.type_id and enabled;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_type'); end if;
+  select * into v_loc from public.concierge_locations where slug = p_new_location and enabled;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_location'); end if;
+
+  -- both slots, hash-ordered: no deadlock, and nobody can take either mid-move
+  k_old := hashtext(v_type.slug || '|' || coalesce((select slug from public.concierge_locations where id = v_row.location_id), '') || '|' || v_row.starts_at::text);
+  k_new := hashtext(v_type.slug || '|' || p_new_location || '|' || p_new_starts_at::text);
+  perform pg_advisory_xact_lock(least(k_old, k_new));
+  if k_old <> k_new then perform pg_advisory_xact_lock(greatest(k_old, k_new)); end if;
+
+  v_day := (p_new_starts_at at time zone v_loc.timezone)::date;
+  v_slots := public.appointment_slots(v_type.slug, p_new_location, v_day, v_day, p_visitor_tz);
+  select s into v_slot from jsonb_array_elements(v_slots->'slots') s
+    where (s->>'starts_at')::timestamptz = p_new_starts_at limit 1;
+  if v_slot is null then
+    -- the move fails; the original stands, and the caller gets alternatives
+    return jsonb_build_object('ok', false, 'reason', 'taken', 'original_stands', true,
+      'alternatives', coalesce((select jsonb_agg(s) from (
+        select s from jsonb_array_elements(v_slots->'slots') s limit 3) alt), '[]'::jsonb));
+  end if;
+
+  if v_type.confirm_mode = 'manual' and v_row.status = 'booked' then
+    -- the no-gap rule: the original holds until the house confirms the move
+    insert into public.concierge_appointments
+      (kind, type_id, location_id, starts_at, ends_at, party_size, status,
+       visitor_name, visitor_contact, contact_kind, visitor_tz, notes,
+       customer_id, conversation_id, session_key, reschedule_of, qa)
+    values ('appointment', v_row.type_id, v_loc.id, p_new_starts_at,
+       p_new_starts_at + make_interval(mins => v_type.duration_min),
+       v_row.party_size, 'requested', v_row.visitor_name, v_row.visitor_contact,
+       v_row.contact_kind, coalesce(p_visitor_tz, v_row.visitor_tz), v_row.notes,
+       v_row.customer_id, v_row.conversation_id, v_row.session_key, v_row.id, v_row.qa)
+    returning * into v_new;
+    return jsonb_build_object('ok', true, 'status', 'requested', 'id', v_new.id,
+      'original_id', v_row.id, 'no_gap', true,
+      'lead_label', v_slot->>'lead_label', 'shop_label', v_slot->>'shop_label',
+      'visitor_label', v_slot->>'visitor_label');
+  end if;
+
+  update public.concierge_appointments set
+      location_id = v_loc.id, starts_at = p_new_starts_at,
+      ends_at = p_new_starts_at + make_interval(mins => v_type.duration_min),
+      visitor_tz = coalesce(p_visitor_tz, visitor_tz), updated_at = now()
+    where id = v_row.id returning * into v_new;
+  return jsonb_build_object('ok', true, 'status', v_new.status, 'id', v_new.id,
+    'lead_label', v_slot->>'lead_label', 'shop_label', v_slot->>'shop_label',
+    'visitor_label', v_slot->>'visitor_label',
+    'location', jsonb_build_object('title', v_loc.title, 'address', v_loc.address));
+end $$;
+grant execute on function public.reschedule_appointment(bigint,text,timestamptz,text,uuid,uuid,text) to authenticated;
+revoke execute on function public.reschedule_appointment(bigint,text,timestamptz,text,uuid,uuid,text) from public, anon;
+
+-- ── Non-time edits, confirm, cancel ──────────────────────────────────────────
+create or replace function public.update_appointment(
+  p_id bigint, p_party smallint default null, p_notes text default null,
+  p_name text default null, p_contact text default null, p_contact_kind text default null,
+  p_window_pref text default null,
+  p_cancel_token uuid default null, p_customer uuid default null, p_session text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_row public.concierge_appointments%rowtype;
+  v_max smallint;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select * into v_row from public.concierge_appointments where id = p_id
+    and status in ('requested','booked','open');
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  -- three-valued logic guard: a NULL token must never satisfy ownership
+  if not coalesce(
+          (p_cancel_token is not null and v_row.cancel_token = p_cancel_token)
+          or (p_customer is not null and v_row.customer_id = p_customer)
+          or (p_session  is not null and v_row.session_key = p_session)
+          or public.is_concierge_admin(), false) then
+    return jsonb_build_object('ok', false, 'reason', 'not_yours');
+  end if;
+  if p_party is not null and v_row.type_id is not null then
+    select max_party into v_max from public.concierge_appointment_types where id = v_row.type_id;
+    if coalesce(v_max, 0) > 0 and p_party > v_max then
+      return jsonb_build_object('ok', false, 'reason', 'party_too_large', 'max_party', v_max);
+    end if;
+  end if;
+  update public.concierge_appointments set
+      party_size      = coalesce(p_party, party_size),
+      notes           = coalesce(p_notes, notes),
+      visitor_name    = coalesce(nullif(trim(p_name), ''), visitor_name),
+      visitor_contact = coalesce(nullif(trim(p_contact), ''), visitor_contact),
+      contact_kind    = coalesce(p_contact_kind, contact_kind),
+      window_pref     = coalesce(p_window_pref, window_pref),
+      updated_at      = now()
+    where id = p_id returning * into v_row;
+  return jsonb_build_object('ok', true, 'id', v_row.id, 'status', v_row.status);
+end $$;
+grant execute on function public.update_appointment(bigint,smallint,text,text,text,text,text,uuid,uuid,text) to authenticated;
+revoke execute on function public.update_appointment(bigint,smallint,text,text,text,text,text,uuid,uuid,text) from public, anon;
+
+create or replace function public.confirm_appointment(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_row public.concierge_appointments%rowtype;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select * into v_row from public.concierge_appointments where id = p_id and status = 'requested';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  update public.concierge_appointments set status = 'booked', updated_at = now() where id = p_id;
+  if v_row.reschedule_of is not null then
+    -- completing the swap: the original finally yields its slot
+    update public.concierge_appointments set status = 'cancelled', updated_at = now()
+      where id = v_row.reschedule_of and status in ('requested','booked');
+  end if;
+  return jsonb_build_object('ok', true, 'id', p_id, 'status', 'booked',
+    'completed_move_of', v_row.reschedule_of);
+end $$;
+grant execute on function public.confirm_appointment(bigint) to authenticated;
+revoke execute on function public.confirm_appointment(bigint) from public, anon;
+
+create or replace function public.cancel_appointment(
+  p_id bigint, p_cancel_token uuid default null,
+  p_customer uuid default null, p_session text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_row public.concierge_appointments%rowtype;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select * into v_row from public.concierge_appointments where id = p_id
+    and status in ('requested','booked','open');
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  -- three-valued logic guard: a NULL token must never satisfy ownership
+  if not coalesce(
+          (p_cancel_token is not null and v_row.cancel_token = p_cancel_token)
+          or (p_customer is not null and v_row.customer_id = p_customer)
+          or (p_session  is not null and v_row.session_key = p_session)
+          or public.is_concierge_admin(), false) then
+    return jsonb_build_object('ok', false, 'reason', 'not_yours');
+  end if;
+  update public.concierge_appointments
+    set status = case when kind = 'callback' then 'cancelled' else 'cancelled' end,
+        updated_at = now()
+    where id = p_id;
+  -- a pending move for this booking dies with it (one guest intent)
+  update public.concierge_appointments set status = 'cancelled', updated_at = now()
+    where reschedule_of = p_id and status = 'requested';
+  return jsonb_build_object('ok', true, 'id', p_id, 'status', 'cancelled');
+end $$;
+grant execute on function public.cancel_appointment(bigint,uuid,uuid,text) to authenticated;
+revoke execute on function public.cancel_appointment(bigint,uuid,uuid,text) from public, anon;
+
+-- ── The queue — the merchant's actionable inbox, one call ────────────────────
+create or replace function public.appointments_queue()
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v jsonb; v_ttl int;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  v_ttl := coalesce(((select value from public.concierge_config where key = 'bookings')
+                     ->>'requestTtlHours')::int, 24);
+  select jsonb_build_object(
+    'requested', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', a.id, 'starts_at', a.starts_at, 'type', t.title, 'location', l.title,
+        'name', a.visitor_name, 'contact', a.visitor_contact, 'contact_kind', a.contact_kind,
+        'party', a.party_size, 'notes', a.notes, 'age_min',
+        floor(extract(epoch from now() - a.created_at) / 60),
+        'ttl_deadline', case when v_ttl > 0 then a.created_at + make_interval(hours => v_ttl) end,
+        'is_move', a.reschedule_of is not null,
+        'conversation_id', a.conversation_id, 'customer_id', a.customer_id)
+        order by a.created_at)
+      from public.concierge_appointments a
+      left join public.concierge_appointment_types t on t.id = a.type_id
+      left join public.concierge_locations l on l.id = a.location_id
+      where a.status = 'requested' and not a.qa), '[]'::jsonb),
+    'callbacks', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', a.id, 'name', a.visitor_name, 'contact', a.visitor_contact,
+        'window_pref', a.window_pref, 'notes', a.notes,
+        'age_min', floor(extract(epoch from now() - a.created_at) / 60),
+        'conversation_id', a.conversation_id, 'customer_id', a.customer_id)
+        order by a.created_at)
+      from public.concierge_appointments a
+      where a.kind = 'callback' and a.status = 'open' and not a.qa), '[]'::jsonb),
+    'today', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', a.id, 'starts_at', a.starts_at, 'type', t.title, 'location', l.title,
+        'name', a.visitor_name, 'contact', a.visitor_contact,
+        'party', a.party_size, 'notes', a.notes, 'status', a.status,
+        'conversation_id', a.conversation_id, 'customer_id', a.customer_id,
+        'open_notes', coalesce((select jsonb_agg(n.note) from (
+            select note from public.customer_notes cn
+            where a.customer_id is not null and cn.user_id = a.customer_id
+              and cn.kind = 'directive' and not cn.resolved
+            order by cn.created_at desc limit 3) n), '[]'::jsonb))
+        order by a.starts_at)
+      from public.concierge_appointments a
+      left join public.concierge_appointment_types t on t.id = a.type_id
+      left join public.concierge_locations l on l.id = a.location_id
+      where a.kind = 'appointment' and a.status = 'booked' and not a.qa
+        and l.id is not null
+        and (a.starts_at at time zone l.timezone)::date
+            = (now() at time zone l.timezone)::date), '[]'::jsonb),
+    'needs_closing', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', a.id, 'starts_at', a.starts_at, 'type', t.title, 'location', l.title,
+        'name', a.visitor_name, 'conversation_id', a.conversation_id,
+        'customer_id', a.customer_id) order by a.starts_at)
+      from public.concierge_appointments a
+      left join public.concierge_appointment_types t on t.id = a.type_id
+      left join public.concierge_locations l on l.id = a.location_id
+      where a.kind = 'appointment' and a.status = 'booked' and not a.qa
+        and a.ends_at < now()), '[]'::jsonb)
+  ) into v;
+  return v;
+end $$;
+grant execute on function public.appointments_queue() to authenticated;
+revoke execute on function public.appointments_queue() from public, anon;
+
+-- admin close-out actions (completed / no_show / done for callbacks)
+create or replace function public.close_appointment(p_id bigint, p_outcome text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  if p_outcome not in ('completed','no_show','done') then
+    return jsonb_build_object('ok', false, 'reason', 'bad_outcome');
+  end if;
+  update public.concierge_appointments set status = p_outcome, updated_at = now()
+    where id = p_id and status in ('booked','open');
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true, 'id', p_id, 'status', p_outcome);
+end $$;
+grant execute on function public.close_appointment(bigint, text) to authenticated;
+revoke execute on function public.close_appointment(bigint, text) from public, anon;
+
+-- expire stale manual-confirm requests (called opportunistically by the queue
+-- endpoint in the edge function; 0 = never expire). Pending moves that expire
+-- leave their original booking untouched — the no-gap rule end to end.
+create or replace function public.expire_stale_requests()
+returns int language plpgsql security definer set search_path = '' as $$
+declare v_ttl int; v_n int;
+begin
+  v_ttl := coalesce(((select value from public.concierge_config where key = 'bookings')
+                     ->>'requestTtlHours')::int, 24);
+  if v_ttl <= 0 then return 0; end if;
+  update public.concierge_appointments set status = 'cancelled', updated_at = now()
+    where status = 'requested' and created_at < now() - make_interval(hours => v_ttl);
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+revoke execute on function public.expire_stale_requests() from public, anon, authenticated;
+
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -1884,6 +2562,9 @@ delete from public.nps_responses r
   using public.concierge_conversations c
   where r.conversation_id = c.id
     and c.session_key like 'qa-%';
+-- same hygiene for the calendar: qa bookings never linger
+delete from public.concierge_appointments where qa
+  or coalesce(session_key, '') like 'qa-%';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PostgREST schema-cache reload — new tables/functions (e.g. nps_metrics) are
