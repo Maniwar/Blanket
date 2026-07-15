@@ -666,14 +666,22 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   being spoken back at them, so feedback improves service instead of becoming
   scorekeeping. *(`npsCoachBrief` → the coach's private brief at both
   proactive sites; the judge vetoes quoted ratings; NPS.md §5.)*
-- **As the merchant**, I want to know **what a conversation costs me and where
-  model spend goes**, so a spike on the provider's bill is explainable in one
-  glance. *Accepted when:* every model call is metered at the source with a
-  purpose (`concierge_llm_usage`; the meter never blocks serving), QA/CI
-  traffic is split from customer traffic at write time, the dedicated Spend tab
-  shows customer spend / per-conversation cost / QA spend
-  with an editable price table (tokens stored, dollars estimated), and the
-  card is fail-visible. *(COSTS.md; `llm_cost_metrics()`.)*
+- **As the merchant**, I want a **Spend tab that reads like a bill I can act
+  on** — what serving customers costs me, per conversation and per reply,
+  where the money goes in my language, and whether it's trending up — so a
+  spike on the provider's bill is explainable in one glance. *Accepted when:*
+  every model call is metered at the source with a purpose
+  (`concierge_llm_usage`; the meter never blocks serving); QA/CI traffic is
+  flagged at write time and ALL of it reports under *Testing & deploys*,
+  never as customer spend; the KPI row shows Customer spend and Testing with
+  deltas vs the prior window, Per conversation (documented as a floor), Per
+  reply, Cache savings, and a Monthly pace from days that have data; purposes
+  roll up to merchant categories (Serving customers / Proactive selling /
+  Satisfaction / Studio & housekeeping / Testing & deploys); trends support
+  Range + View-by (day/week/month) with per-day dollars priced exactly per
+  model; prices are editable (tokens stored, dollars estimated, history
+  reprices); and every failure is visible, never a silent blank.
+  *(COST.md "The meter"; `llm_cost_metrics()` v2.)*
 
 ### 2.5 Super admin — owner / access control
 

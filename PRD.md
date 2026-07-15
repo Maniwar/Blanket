@@ -43,7 +43,7 @@ what is true.* Capability and honesty ship together or not at all.
 | Lead capture | inquiries per session (checkout-less) | [INQUIRIES.md](INQUIRIES.md), Leads card |
 | Behavior pass rate | eval deck pass % against the live model | eval harness (CI-gated) |
 | Config parity | configured settings == live widget behavior | conformance report |
-| Cost / conversation | model spend per converted chat | [COST.md](COST.md) |
+| Cost / conversation | model spend per customer conversation | the meter (`concierge_llm_usage`) → Spend tab; [COST.md](COST.md) |
 | Silence health | held vs. spoken vs. vetoed proactive lines | beat audit / Actions tab |
 
 ## 4. Personas & core user stories

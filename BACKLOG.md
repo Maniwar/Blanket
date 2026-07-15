@@ -27,6 +27,15 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Product / features
 
+- **[Shipped] The meter + Spend tab.** Every model call logged at the source
+  with a purpose (`concierge_llm_usage`; fire-and-forget, never blocks
+  serving); QA/CI traffic flagged at write time; `llm_cost_metrics()` v2
+  aggregates (daily buckets by model). Admin **Spend** tab: customer spend +
+  deltas, per-conversation / per-reply cost, Testing & deploys split,
+  cache savings, monthly pace, merchant-language service breakdown, editable
+  prices. The PRD's "Cost / conversation" KPI is now instrumented, not
+  aspirational. (COST.md "The meter".)
+
 - **[Shipped] Client-book consolidation (relevance by process).** Rolling
   `kind='summary'` per patron: `consolidateClientBook` folds the AI's
   fact/event/reflection notes into one tight digest (never touching directives),
