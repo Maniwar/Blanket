@@ -53,6 +53,33 @@ Blanket branch `claude/github-pages-deploy-14tf3y`.
 - ICS: build in code (BEGIN:VCALENDAR...), UID = "appt-<coalesce(reschedule_of,id)>@<site>",
   attach via Resend attachments (base64).
 
+## Progress update (post-#126/#127)
+
+- **#126 Engine DONE (`632a6f1`)**: 7 tools + branches + gate + injection +
+  labels + bookingContextBlock (HOURS + UPCOMING VISIT) + judge defect 9 +
+  emails w/ ICS (sendEmail gained optional attachments param). TS-checked.
+- **#127 Widget DONE (uncommitted with admin round)**: ctx.tz sent from both
+  widgets (anchor: `var ctx = freshState();` in liveRespond); cache-busters
+  Blanket v51 / 996 v5. DESIGN DECISION (document in APPOINTMENTS.md when
+  flipping to shipped): slot pills = existing {{reply:…}} machinery (SOP
+  instructs the model to render the ≤3 lead_labels as reply pills); contact
+  collection v1 follows the submit_inquiry chat precedent (masked, never
+  echoed); the dedicated slot-context in-chat form is A2 — spec §8 drift note
+  needed.
+- **Admin RPCs DONE**: appointments_week(p_days) + patron_appointments(uuid)
+  added to BOTH setup.sql (anchor: after expire_stale_requests revoke) and
+  locally tested green.
+- **996 has UNCOMMITTED changes**: setup.sql (full appointments block + RPCs),
+  workflow probe, concierge.js ctx.tz + index.html v5. index.ts NOT yet
+  ported (engine-identical: git apply diff 0d091ad..<engine commit> for
+  index.ts, or rerun appt_engine.py + appt_engine2.py + wart fix — scripts in
+  scratchpad are anchor-based and brand-neutral, should apply clean).
+- **Calendar admin tab**: next up (#128) — queue-first per spec §7; config
+  save mirrors `sb.from('concierge_config').upsert([{key:'bookings',...}])`
+  (pattern at admin.html:3212). Patron-drawer timeline + conversation badge
+  + tab badge DEFERRED to the ship round (drawer anchor is order-centric,
+  needs care) — note honestly in APPOINTMENTS.md if they slip past A1.
+
 ## Remaining tasks
 
 - **#126 Engine**: 7 REGISTER_TOOLS defs (get_available_times,

@@ -1861,6 +1861,60 @@ begin
 end $$;
 revoke execute on function public.expire_stale_requests() from public, anon, authenticated;
 
+-- ── Admin read RPCs: the week's bookings + one patron's timeline ─────────────
+-- (appointments are RLS-locked — admins read through these, never raw rows)
+create or replace function public.appointments_week(p_days int default 7)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v jsonb; v_days int := least(greatest(coalesce(p_days,7),1),31);
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', a.id, 'starts_at', a.starts_at, 'ends_at', a.ends_at,
+      'status', a.status, 'type', t.title, 'location', l.title,
+      'location_tz', l.timezone, 'name', a.visitor_name,
+      'contact', a.visitor_contact, 'contact_kind', a.contact_kind,
+      'party', a.party_size, 'notes', a.notes, 'is_move', a.reschedule_of is not null,
+      'conversation_id', a.conversation_id, 'customer_id', a.customer_id)
+      order by a.starts_at), '[]'::jsonb) into v
+    from public.concierge_appointments a
+    left join public.concierge_appointment_types t on t.id = a.type_id
+    left join public.concierge_locations l on l.id = a.location_id
+    where a.kind = 'appointment' and a.status in ('requested','booked') and not a.qa
+      and a.starts_at >= date_trunc('day', now())
+      and a.starts_at < date_trunc('day', now()) + make_interval(days => v_days);
+  return v;
+end $$;
+grant execute on function public.appointments_week(int) to authenticated;
+revoke execute on function public.appointments_week(int) from public, anon;
+
+create or replace function public.patron_appointments(p_customer uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v jsonb;
+begin
+  if not (public.is_concierge_admin()
+          or coalesce((select auth.jwt()->>'role'), '') = 'service_role') then
+    raise exception 'not authorized';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', a.id, 'kind', a.kind, 'starts_at', a.starts_at, 'status', a.status,
+      'type', t.title, 'location', l.title, 'window_pref', a.window_pref,
+      'party', a.party_size, 'notes', a.notes,
+      'conversation_id', a.conversation_id, 'created_at', a.created_at)
+      order by coalesce(a.starts_at, a.created_at) desc), '[]'::jsonb) into v
+    from public.concierge_appointments a
+    left join public.concierge_appointment_types t on t.id = a.type_id
+    left join public.concierge_locations l on l.id = a.location_id
+    where a.customer_id = p_customer and not a.qa
+    limit 1;
+  return v;
+end $$;
+grant execute on function public.patron_appointments(uuid) to authenticated;
+revoke execute on function public.patron_appointments(uuid) from public, anon;
+
+
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
