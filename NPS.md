@@ -232,7 +232,11 @@ the database (service-role claim) **and** probes the REST path the admin uses �
 `403` for the publishable key passes (resolvable + guarded), `404` fails the
 deploy (stale PostgREST schema cache; `setup.sql` also ends with
 `notify pgrst, 'reload schema'`). The schema-apply step is now blocking — a
-SQL error fails the run instead of hiding behind `continue-on-error`.
+SQL error fails the run instead of hiding behind `continue-on-error`. **QA
+traffic never counts**: sessions with a `qa-` key (CI smoke, the eval deck)
+exercise the survey conversationally but write no `nps_responses` row, and a
+`setup.sql` janitor deletes any that ever slipped in — the dashboard NPS is
+real customers only.
 
 **Still open** (tracked in [BACKLOG.md](BACKLOG.md)): a segment filter on the
 conversations list, and the judge-veto deck scenario for a planted "you rated

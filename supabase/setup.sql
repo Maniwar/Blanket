@@ -1673,6 +1673,17 @@ update public.concierge_sops
   where content_md like '%hello@feierabend.example%';
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- NPS hygiene: QA traffic (the "qa-" session keys used by CI smoke and the
+-- eval deck) must never count as a customer rating. The function skips these
+-- writes going forward; this janitor removes any that ever slipped in, so the
+-- dashboard NPS is never diluted by synthetic scores. (idempotent)
+-- ─────────────────────────────────────────────────────────────────────────────
+delete from public.nps_responses r
+  using public.concierge_conversations c
+  where r.conversation_id = c.id
+    and c.session_key like 'qa-%';
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- PostgREST schema-cache reload — new tables/functions (e.g. nps_metrics) are
 -- callable over REST immediately, even if the DDL event trigger missed a beat.
 -- (idempotent — a NOTIFY is always safe.)
