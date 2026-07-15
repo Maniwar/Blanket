@@ -58,7 +58,15 @@ It answers **yes** only when all hold:
   five-second bounce isn't worth a survey.
 - **past the cooldown** — `now − lastSurveyedAtMs ≥ outreach.nps.cooldownMs`;
   the same customer isn't re-surveyed too soon (over-prompting *lowers* both
-  response rate and trust).
+  response rate and trust). Anonymous sessions have no identity to look up, so
+  the cooldown is skipped for them — the once-per-conversation rule still binds.
+
+**Config (`outreach.nps`, Engagement → House rules), with the built-in
+defaults** (`npsConfigFrom` in `index.ts`): `enabled` — absent = **ON** ·
+`minMinutes` — default **3** · `cooldownDays` — default **30** · `question` —
+default *"Before you go — how likely are you to recommend us to a friend, 0 to
+10?"* (capped at 300 chars). Testing tip: a quick test session is usually
+shorter than 3 minutes — set `minMinutes` to 0 first.
 
 Every decision returns a `reason`, so a held survey is as diagnosable as a held
 beat. When it fires, the concierge's **invitation line still passes the
@@ -76,7 +84,9 @@ The prompt is part of the conversation, not a modal:
    model-dependent), once per conversation, and a private system note has the
    concierge thank them and ask the follow-up: *"what made you give that score?"*
 3. The next real message carries `context.nps_reason = 1`; the server attaches
-   it as `reason_text` on the open row and fires the **async categorizer**.
+   it as `reason_text` on the open row — only within **15 minutes** of the
+   score, so an unrelated later message is never misattached — and fires the
+   **async categorizer**.
 4. The concierge receives it graciously (problem → acknowledged and addressed
    forward; praise → light thanks) and never mentions scores again. **Skip** is
    simply not answering — the gate never re-asks this session.
@@ -152,13 +162,14 @@ low score is repellent. Two controls stop that, and they already exist:
 
 ## 6. Customer 360°
 
-NPS folds into the existing **client book** rather than a parallel store: the
-Patron drawer gains an NPS section (timeline of score badges + reason snippets +
-category chips; a status card = segment + rolling NPS + trend; themes folded into
-`consolidateClientBook`'s rolling summary). One compact NPS line joins the
-per-turn **CUSTOMER block** so the *live* conversation is NPS-aware. The
-per-customer rolling status is computed the `customer_nps_summary` way — a
-cached digest (the `concierge_insights` pattern), recomputed on each new response.
+NPS folds into the existing **client book** rather than a parallel store.
+**Shipped today:** the latest rating badge on the patron card and on the
+conversation transcript head, and the full per-customer history grounding the
+coach (`npsCoachBrief` — the *live* conversation is NPS-aware through the
+coach, never through a spoken line). **Designed, not yet built:** a full NPS
+timeline in the Patron drawer (score badges + reason snippets + category
+chips) and folding themes into `consolidateClientBook`'s rolling summary —
+tracked in [BACKLOG.md](BACKLOG.md).
 
 ## 7. Data model
 
@@ -166,7 +177,8 @@ cached digest (the `concierge_insights` pattern), recomputed on each new respons
 |---|---|---|
 | `nps_responses` | id, conversation_id, customer_id (nullable), coach_id, score (0–10), **segment** (generated), reason_text, categories jsonb, category_source, response_time_seconds, survey_version, created_at | admin-read RLS; service-role write. Linked to the conversation thread. |
 | `nps_categories` | slug, label, prompt_hint, **detractor_focus**, enabled, sort | admin-managed vocabulary; detractor-forward seed. |
-| `nps_metrics(p_days, p_coach?)` | → jsonb `{ nps, responses, promoters/passives/detractors, themes, detractor_themes }` | `security definer`; the dashboard/aggregate calculation, mirroring `npsScore`. |
+| `nps_metrics(p_days, p_coach?)` | → jsonb `{ window_days, coach, nps, responses, promoters/passives/detractors, offers, response_rate, gate_holds, themes, detractor_themes }` | `security definer`; the dashboard/aggregate calculation. `nps` mirrors `npsScore`, `response_rate` mirrors `npsResponseRate` (null when nothing offered or coach-scoped), `offers` counts audited `REQUEST_NPS` beat rows, `gate_holds` groups `payload.npsGate` refusal reasons. |
+| `concierge_insights` (kind `nps_report`) | payload `{ report, days, responses }`, computed_at | the cached analyst report (`?npsreport=1`); no RLS policy — service-role only, served through the admin-guarded endpoint. |
 
 ## 8. Tests — how we know it works
 
@@ -184,11 +196,19 @@ The trigger and the math are pure, so they're pinned in the **hard-gate** deck
 - **`renderCustomerNps`** — a detractor brief carries the themes, the trend, the
   never-quote guard, and the rebuild-trust play; a promoter brief invites a
   referral; thin history ⇒ **empty**.
+- **`npsResponseRate`** — responses ÷ offers; **null** when nothing was offered
+  (never a fake 0%), negative counts clamp, deliberately uncapped so a
+  window-edge anomaly (more responses than offers) shows instead of hiding.
+- **`npsAnalystCorpus`** — the analyst report's evidence pack: detractors lead,
+  the customer's own words are quoted, categories and transcripts ride along,
+  session/char caps hold, and **fewer than 3 responses ⇒ ''** — no report on
+  thin data.
 
-When the live surface is wired (§9), the eval harness extends the same way the
-coach did: a behavior-deck scenario (survey fires at close, not mid-flow, not
-twice), a conformance row (admin question/categories reflected in the live
-widget), and a judge check (**a planted "you rated us low" line is vetoed**).
+The behavior deck adds **`nps-score-capture`** — the widget's exact
+`context.nps` wire turns replayed against production on every deploy
+(gracious receipt, no score echoed, no `{{nps}}` leak). Still open: the
+live-fire judge-veto scenario for a planted "you rated us low" line (the
+criterion + unit guard cover it; forcing it reliably in a deck is brittle).
 
 ## 9. The live wiring — what shipped, and how
 
