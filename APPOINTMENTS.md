@@ -1,4 +1,4 @@
-# Appointments & callbacks — specification (v3.1, not yet built)
+# Appointments & callbacks — specification (v3.2, not yet built)
 
 The concierge's next act: turning buying intent into a **booked moment** — a
 viewing, a fitting, a table, a consultation — or a **callback request** when
@@ -339,6 +339,42 @@ the model; contact syntax validated in code; **every tool result injected
 back into the model masks the contact** (`[contact on file]`) — the model
 confirms "the number you gave", never the digits.
 
+### 5a. Appointments and `submit_inquiry` — a ladder, not a replacement
+
+The inquiry tool stays exactly as it is. The two capture **different
+intents**, and together they form an escalation ladder with a floor that
+never disappears:
+
+| Rung | Intent | Tool |
+| --- | --- | --- |
+| **Booked time** | "I want to see it / meet / talk *at a time*" | `book_appointment` — the strongest commitment |
+| **Callback** | "Call me" — synchronous, but the house picks the moment | `request_callback` |
+| **Inquiry** | "Answer me / here's my offer / send me the records" — asynchronous | `submit_inquiry` — unchanged |
+
+Routing is intent-based (one SOP line, step 1a): a question or an offer is an
+inquiry; a wish to talk is a callback; a wish to be there is a booking. Never
+double-capture — one ask, one instrument; if a visitor books, their question
+rides the booking's `notes`, not a parallel inquiry.
+
+**Graceful degradation is the design, not an accident:**
+
+- No slots in range → offer a callback; callbacks off or declined → take an
+  inquiry. The visitor always leaves *captured*, never bounced.
+- The whole calendar toggled off (§3b) → the system behaves exactly as it
+  does today: inquiry-first. Adopters can enable bookings when ready; nothing
+  about the inquiry path is touched by the rollout.
+- On the 996, the "book a viewing" journey goal UPGRADES from the inquiry
+  form to the booking flow when the calendar goes live; the generic inquiry
+  ("make an offer", "ask about the records") remains beside it. `adopt
+  generate` seeds a viewing type for inquiry-mode sites and points the
+  section goal at it.
+
+**Funnel accounting (no double-counting):** a conversation that produced both
+an inquiry and a booking counts ONCE in the Conversion funnel, at the deeper
+stage (`booked` > `inquiry`); the shallower event stays visible on the
+conversation record but not in the stage totals. The owner's inquiry email
+already notes an existing booking (§6a) so replies land with full context.
+
 ## 6. Identity & cohesion — one guest, one thread
 
 An appointment participates in the same identity fabric as orders, inquiries,
@@ -446,6 +482,10 @@ NPS/Spend. **The queue leads the tab** — merchants act first, browse second:
    a serious question answered, price discussed without a balk. One line,
    once: an invitation, never a push. If they decline, the calendar is
    closed for this visit.
+1a. Route by intent, one instrument per ask: a question or an offer is an
+   INQUIRY; "call me" is a CALLBACK; "I'll come by / let's meet" is a
+   BOOKING. If the calendar has nothing to give, step down the ladder —
+   callback, then inquiry — so they always leave captured, never bounced.
 2. When the house has more than one location, ask WHERE before WHEN — offer
    the locations the register lists, plainly, and never assume. Confirmations
    always name the place.
@@ -547,6 +587,7 @@ quietly).
 | Callback promises fit open hours | Register-provided phrasing; eval: callback at Saturday close ⇒ promise names the next opening, never "tomorrow morning" on a closed Sunday |
 | "Are you open?" answered from data | HOURS context block outranks KB prose (conformance row: hours flow bot-visible) |
 | Every action audited | `concierge_actions` rows for offer/book/confirm/cancel/callback (Actions tab facets) |
+| One ask, one instrument | SOP 1a + eval: a booked visitor's question must not spawn a parallel inquiry; funnel counts a conversation once, at its deepest stage |
 | No dead-end surfaces | The §6a linking rule; conformance row walks drawer → appointment → conversation → queue and back |
 | A booked guest is served, not re-sold | Beat/reengage context carries the upcoming booking; judge defect 9 (inventing times/hours) vetoes; eval: reengage bubble for a booked visitor must not pitch |
 
