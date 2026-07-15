@@ -1,4 +1,4 @@
-# Appointments & callbacks — specification (v2.1, not yet built)
+# Appointments & callbacks — specification (v2.2, not yet built)
 
 The concierge's next act: turning buying intent into a **booked moment** — a
 viewing, a fitting, a table, a consultation — or a **callback request** when
@@ -270,7 +270,7 @@ the model; contact syntax validated in code; **every tool result injected
 back into the model masks the contact** (`[contact on file]`) — the model
 confirms "the number you gave", never the digits.
 
-## 6. Identity — one guest, one thread
+## 6. Identity & cohesion — one guest, one thread
 
 An appointment participates in the same identity fabric as orders, inquiries,
 and ratings. The ties, and what each buys:
@@ -286,6 +286,32 @@ Practical consequences worth naming: cancelling from the patron drawer, the
 queue, or the chat all mutate the same row; the NPS coach sees a no-show as
 context; attribution ties the eventual sale back through the conversation
 that booked the viewing.
+
+### 6a. The cohesion map — what every subsystem shows and links
+
+The linking rule, stated once and enforced everywhere: **any surface that
+shows an appointment links to its patron, its conversation, and its queue
+entry; any surface that shows a patron or a conversation shows their
+appointments.** No dead ends — every card is a doorway.
+
+| Subsystem | Integration (build requirement) |
+| --- | --- |
+| **Patron drawer 360°** | Appointments & callbacks timeline beside orders, ratings, and notes — status-chipped, with confirm/cancel actions inline (same writes as the queue) and each row linking to its source conversation. |
+| **House notes / directives** | The queue's *Today* rows surface the patron's OPEN house notes ("give him the VIN report when he visits") — the visit is where standing instructions come due. A note resolved at the visit resolves through the existing directive reconciler. |
+| **Conversations** | 📅 facet + filter ("has booking"); the transcript view shows the booking card inline at the turn it happened; from the queue, one click lands on that turn. |
+| **Actions tab** | offer / book / confirm / cancel / no-show / callback rows with facets, like every audited action today. |
+| **Orders / register** | No hard FK in v1; the patron drawer shows both timelines side by side, and attribution (below) carries the causal chain. Post-purchase care appointments are the A3 beat. |
+| **NPS** | A booking is a natural close (survey may ride it — gate unchanged); a `completed` visit enriches the coach's brief; the survey cooldown prevents a booking-close ask AND a post-visit ask from stacking. |
+| **Coach** | The pre-draft brief carries the next appointment, recent no-shows, and visit-due house notes — private grounding, never quoted (defect 7). |
+| **Judge** | New defect (9): *naming a time, an opening hour, or availability the register did not provide this turn.* The proactive-line gate learns the calendar's honesty rule. |
+| **Beats / re-engagement** | A visitor with an upcoming booking is NOT re-sold: the re-engage bubble and openers read the appointment from context and switch to service framing ("see you Saturday — anything to prepare?"). Post-no-show rebooking is an A2 beat through the normal judge gate. |
+| **Inquiries** | Same-session inquiry + booking cross-link; the inquiry email to the owner notes the existing booking so the house replies with full context. |
+| **Emails** | Every owner notification deep-links three ways: the queue entry (`admin#calendar`), the patron, the conversation. The merchant goes from inbox to acting in one click. |
+| **Attribution / Conversion tab** | `booked` becomes a funnel stage between *conversation* and *order/inquiry*; an eventual sale after a viewing attributes through the chain chat → booking → order. |
+| **Website (CMS)** | A2: an optional `data-cms` hours slot renders the SAME business-hours table on the page — one source of truth for the footer, the bot, and the calendar. |
+| **Edit history** | `concierge_edit_history` triggers extend to types, availability, business hours — who changed Saturday's hours, and when, is answerable (bookings are commitments; their rules deserve an audit trail). |
+| **Admin search** | Queue and appointment lists searchable by name/contact fragment (masked rendering, full value on the row only — the register-search conventions). |
+| **Spend** | Nothing new needed — booking tools are code (`chat-tools` already meters the rounds that call them); noted so nobody adds a purpose out of reflex. |
 
 ## 7. Admin — the Calendar tab, queue-first
 
@@ -433,6 +459,8 @@ quietly).
 | Callback promises fit open hours | Register-provided phrasing; eval: callback at Saturday close ⇒ promise names the next opening, never "tomorrow morning" on a closed Sunday |
 | "Are you open?" answered from data | HOURS context block outranks KB prose (conformance row: hours flow bot-visible) |
 | Every action audited | `concierge_actions` rows for offer/book/confirm/cancel/callback (Actions tab facets) |
+| No dead-end surfaces | The §6a linking rule; conformance row walks drawer → appointment → conversation → queue and back |
+| A booked guest is served, not re-sold | Beat/reengage context carries the upcoming booking; judge defect 9 (inventing times/hours) vetoes; eval: reengage bubble for a booked visitor must not pitch |
 
 ## 12. Attribution & metrics
 
@@ -469,8 +497,8 @@ is already inside `chat-tools`.
 
 | Phase | Scope | Definition of done |
 | --- | --- | --- |
-| **A1** | Schema + `appointment_slots` + `book_appointment`/confirm/cancel + all five tools + `booking` SOP + widget pills/form + emails (+`.ics`) + Calendar tab (queue, week view, types & hours) + identity ties (§6) + docs/stories/evals | Both sites deployed; eval cases green; a real booking round-trips (book → email → queue → confirm → patron drawer → cancel) on Blanket and the 996 |
-| **A2** | Reminder email (pg_cron, T-24h), reschedule links in email, queue niceties (bulk close, day notes), ICS refinements | reminders observed in `email_log` |
+| **A1** | Schema + `appointment_slots` + `book_appointment`/confirm/cancel + all five tools + `booking` SOP + widget pills/form + emails (+`.ics`, deep links) + Calendar tab (queue with notes-due, week view, house hours, types & hours) + the §6/§6a cohesion set (patron drawer timeline, conversation badge + inline card, judge defect 9, beat awareness, funnel stage, edit-history triggers) + docs/stories/evals | Both sites deployed; eval cases green; a real booking round-trips (book → email → queue → confirm → patron drawer → cancel) on Blanket and the 996 |
+| **A2** | Reminder email (pg_cron, T-24h), reschedule links in email, queue niceties (bulk close, day notes), ICS refinements, post-no-show rebooking beat (judge-gated), CMS hours slot | reminders observed in `email_log` |
 | **A3** | Beat-driven viewing offers (judge-gated), external read-only ICS feed for the owner, multi-staff exploration (schema RFC first) | — |
 
 **Deliberately out of scope for v1:** two-way Google/Outlook sync, SMS,
@@ -520,6 +548,13 @@ note + `adopt generate` industry presets (§10), eval CATALOG rows.
   double-booking is impossible by construction, the queue badges pending
   work on the tab, and every queue row links to the conversation that
   produced it.
+- **As the merchant**, I want **everything about one guest one click apart**:
+  opening a patron shows their appointments beside their orders, notes, and
+  ratings; an appointment links to the conversation that created it; the
+  queue shows me the notes that come due at the visit; the owner email drops
+  me exactly where I act. *Accepted when:* the §6a linking rule holds in a
+  conformance walk (drawer → appointment → conversation → queue → drawer)
+  and no surface that mentions a booking is a dead end.
 - **As the house**, I want booking conduct governed like everything else —
   offer etiquette in an editable SOP, availability and timezone math decided
   by code, every offer/book/confirm/cancel audited, unverified contact
