@@ -45,6 +45,7 @@ what is true.* Capability and honesty ship together or not at all.
 | Config parity | configured settings == live widget behavior | conformance report |
 | Cost / conversation | model spend per customer conversation | the meter (`concierge_llm_usage`) → Spend tab; [COST.md](COST.md) |
 | Silence health | held vs. spoken vs. vetoed proactive lines | beat audit / Actions tab |
+| Booking rate | bookings ÷ conversations that saw an offer | appointments audit → Calendar queue ([APPOINTMENTS.md](APPOINTMENTS.md)) |
 
 ## 4. Personas & core user stories
 

@@ -27,7 +27,7 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
 
 ## Product / features
 
-- **[Specified — next up] Appointments & callbacks (spec v2).** Admin-
+- **[Shipped — A1, dark until enabled] Appointments & callbacks.** Admin-
   publishable calendar: types with **admin-picked increments (5–60 min)**,
   weekly hours, exceptions, lead/horizon/capacity/party/confirm-mode; full
   three-clock timezone design (UTC storage, shop wall-clock rules,

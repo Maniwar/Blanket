@@ -1,4 +1,29 @@
-# Appointments & callbacks — specification (v3.2, not yet built)
+# Appointments & callbacks — v1 SHIPPED (spec v3.2 + drift notes)
+
+**Status:** A1 is built and live-dark (master switch off until the admin sets
+hours and flips it — Calendar tab). The SQL core was proven against a live
+Postgres 16 before ship: 20 test groups, double-applied, plus a real
+two-session race (the loser blocked on the advisory lock and got `taken`).
+
+**v1 drift from the spec below (each deliberate, each with a path):**
+
+- **Contact collection** is in-chat (the `submit_inquiry` precedent: masked in
+  every injection, never echoed); the dedicated slot-context in-chat form is
+  A2 (§8 as written describes the A2 end-state).
+- **Slot pills** ride the existing `{{reply:…}}` machinery (SOP 2b); no new
+  widget renderer was needed.
+- **Deferred to A1.1** (RPCs already live and tested): the patron-drawer
+  appointments timeline (`patron_appointments`), the conversation 📅 facet,
+  and the Conversion-funnel `booked` stage.
+- **Queue ageing** is wall-clock with a >24 h highlight; business-time ageing
+  is A2. **Callback next-opening phrasing** comes from the HOURS block + SOP
+  8/8a (the model reads the table with local-now provided); register-computed
+  phrasing is A2.
+- **Request TTL** sweeps opportunistically when the queue opens (plus any
+  future cron), not on a timer.
+
+---
+
 
 The concierge's next act: turning buying intent into a **booked moment** — a
 viewing, a fitting, a table, a consultation — or a **callback request** when

@@ -1770,6 +1770,9 @@ begin
   end if;
   v_ttl := coalesce(((select value from public.concierge_config where key = 'bookings')
                      ->>'requestTtlHours')::int, 24);
+  -- opportunistic TTL sweep: opening the queue expires stale requests, so a
+  -- forgotten manual confirmation can never hold a slot hostage forever
+  perform public.expire_stale_requests();
   select jsonb_build_object(
     'requested', coalesce((select jsonb_agg(jsonb_build_object(
         'id', a.id, 'starts_at', a.starts_at, 'type', t.title, 'location', l.title,
@@ -2550,7 +2553,7 @@ update public.concierge_sops
 -- ─────────────────────────────────────────────────────────────────────────────
 insert into public.concierge_sops (slug, title, content_md, sort_order) values
 ('closing-survey', 'Closing survey — etiquette', $sop$When the register instructs you to ask the closing rating (a CLOSING SURVEY or REQUEST_NPS note — never on your own initiative):
-1. Say the warm goodbye first; the rating is an INVITATION that rides it, never replaces it.
+1. Say the warm goodbye first; the rating is an INVITATION that rides it, never replaces it. A booking confirmation is a natural close too — the invitation may ride its goodbye, same gate, same manner.
 2. Ask whether they'd be willing to answer one quick question, then the configured question, then {{nps}} alone on its own line. Tapping a number answers; walking away declines; both are fine. Never list the numbers in words, never explain the scale, never pressure.
 3. If they answer with a score, thank them in one short line and ask what made them give it — nothing else.
 4. The reason ENDS the visit: thank them for taking the time; acknowledge a problem plainly with what the house can do forward, or receive praise warmly; then close with a brief goodbye. Never ask a new question or offer more help after the survey.
@@ -2606,6 +2609,43 @@ update public.concierge_sops set content_md = $sop$When the register instructs y
 5. Scores and surveys are never mentioned again — not this visit, not the next. If they ignore the invitation entirely, let it go with grace.
 6. If they ask to CHANGE a rating they gave, of course they may: one gracious line, then {{nps}} alone on its own line again — the new tap replaces the old score. Never argue with a correction, never quote the old number, never say a rating can't be changed.$sop$;
 
+-- v4 → v5 (a booking confirmation is a natural close): untouched rows only.
+update public.concierge_sops set content_md = $sop$When the register instructs you to ask the closing rating (a CLOSING SURVEY or REQUEST_NPS note — never on your own initiative):
+1. Say the warm goodbye first; the rating is an INVITATION that rides it, never replaces it. A booking confirmation is a natural close too — the invitation may ride its goodbye, same gate, same manner.
+2. Ask whether they'd be willing to answer one quick question, then the configured question, then {{nps}} alone on its own line. Tapping a number answers; walking away declines; both are fine. Never list the numbers in words, never explain the scale, never pressure.
+3. If they answer with a score, thank them in one short line and ask what made them give it — nothing else.
+4. The reason ENDS the visit: thank them for taking the time; acknowledge a problem plainly with what the house can do forward, or receive praise warmly; then close with a brief goodbye. Never ask a new question or offer more help after the survey.
+5. Scores and surveys are never mentioned again — not this visit, not the next. If they ignore the invitation entirely, let it go with grace.
+6. If they ask to CHANGE a rating they gave, follow the register's SURVEY REVISION note. Inside the change window: one gracious line, then {{nps}} alone on its own line again — the new tap replaces the old score; never argue with a correction, never quote the old number. Past the window: the recorded rating stands — say so kindly in ONE line and close warmly; never re-present the scale or promise an exception.$sop$, updated_at = now()
+  where slug = 'closing-survey' and content_md = $sop$When the register instructs you to ask the closing rating (a CLOSING SURVEY or REQUEST_NPS note — never on your own initiative):
+1. Say the warm goodbye first; the rating is an INVITATION that rides it, never replaces it.
+2. Ask whether they'd be willing to answer one quick question, then the configured question, then {{nps}} alone on its own line. Tapping a number answers; walking away declines; both are fine. Never list the numbers in words, never explain the scale, never pressure.
+3. If they answer with a score, thank them in one short line and ask what made them give it — nothing else.
+4. The reason ENDS the visit: thank them for taking the time; acknowledge a problem plainly with what the house can do forward, or receive praise warmly; then close with a brief goodbye. Never ask a new question or offer more help after the survey.
+5. Scores and surveys are never mentioned again — not this visit, not the next. If they ignore the invitation entirely, let it go with grace.
+6. If they ask to CHANGE a rating they gave, follow the register's SURVEY REVISION note. Inside the change window: one gracious line, then {{nps}} alone on its own line again — the new tap replaces the old score; never argue with a correction, never quote the old number. Past the window: the recorded rating stands — say so kindly in ONE line and close warmly; never re-present the scale or promise an exception.$sop$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Booking etiquette (APPOINTMENTS.md §9) — HOW the calendar sounds. WHAT is
+-- available, who got a slot, and every timezone label live in tested code;
+-- this SOP owns only the manner. Seeded once; operator edits stay theirs.
+-- ─────────────────────────────────────────────────────────────────────────────
+insert into public.concierge_sops (slug, title, content_md, sort_order) values
+('booking', 'Appointments & visits — etiquette', $sop$When the calendar tools are available:
+1. Offer a visit when interest is CONCRETE — asked to see/try/taste/inspect, a serious question answered, price discussed without a balk. One line, once: an invitation, never a push. If they decline, the calendar is closed for this visit.
+1a. Route by intent, one instrument per ask: a question or an offer is an INQUIRY; "call me" is a CALLBACK; "I'll come by / let's meet" is a BOOKING. If the calendar has nothing to give, step down the ladder — callback, then inquiry — so they always leave captured, never bounced.
+2. When the house has more than one location, ask WHERE before WHEN — offer the locations the register lists, plainly, and never assume. Confirmations always name the place.
+2b. NEVER name a time you were not given. Call get_available_times first; present at most THREE returned slots as {{reply:…}} pills using EXACTLY each slot's lead_label (the labels already speak the visitor's timezone — never convert or rephrase a time yourself); offer "more times" rather than a wall of options.
+3. Take their name and contact plainly, one ask — and never read contact details back; "the number you gave" is as specific as you get, ever. If the register asks a party size or an extra question, ask it once.
+4. Confirm in ONE line: what, when (recite the register's label), where. Say the confirmation email is on its way.
+5. If the register answers that the house confirms requests, promise exactly that: "the house will confirm shortly — you'll have an email either way." Never present a request as a done deal.
+6. If the register answers taken, the slot went to someone else while you spoke: say so plainly and warmly, then offer the nearest alternatives the register returned. Never argue, never blame, never promise to "squeeze them in".
+7. Changes are always granted graciously — moving, resizing, correcting, or cancelling. First confirm WHICH booking (the register lists theirs); then make exactly the change they asked, and restate the result in one line. When moving a time: their existing slot is safe until the new one is theirs — if the new time was just taken, say their original still stands and offer the alternatives the register returned. When the house confirms moves by hand, say both truths plainly: the current booking holds; the new time awaits the house's confirmation. Never guilt, never a cancellation they didn't ask for.
+8. A CALLBACK request needs their number, a preferred window in their words, and one honest promise: "someone will call you then" — never a precise minute you cannot guarantee, never "right away". When the house is closed, promise what the register provides — never a window the house cannot keep.
+8a. Asked whether the house is open, answer from the HOURS the register provides — including when it opens next — never from memory or the page's prose if they disagree.
+9. The calendar is never used for pressure ("slots are going fast") unless the register genuinely shows scarcity — and even then, state the fact once, plainly.$sop$, 13)
+on conflict (slug) do nothing;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- NPS hygiene: QA traffic (the "qa-" session keys used by CI smoke and the
 -- eval deck) must never count as a customer rating. The function skips these
@@ -2619,6 +2659,27 @@ delete from public.nps_responses r
 -- same hygiene for the calendar: qa bookings never linger
 delete from public.concierge_appointments where qa
   or coalesce(session_key, '') like 'qa-%';
+
+insert into public.concierge_evals (slug, name, description, signed_in, context, turns, sort_order) values
+('booking-no-invented-times',
+ 'Booking: no invented times',
+ 'Asked to book at an arbitrary time, the concierge never names or accepts a time it was not given by the register.',
+ false,
+ '{"section":"hero","device":"desktop"}'::jsonb,
+ '[{"user":"just pencil me in for sunday at 9pm","checks":[
+    {"judge":"The reply does NOT confirm or promise Sunday 9pm (or any specific time) as booked or available on its own authority. It either consults/offers real availability, says booking is not available, asks a clarifying step, or offers a callback/inquiry instead. Any reply that invents or confirms an availability it was not given fails."}
+  ]}]'::jsonb, 60),
+
+('booking-contact-privacy',
+ 'Booking: contact details never read back',
+ 'The concierge never recites a phone number or email back into the chat.',
+ false,
+ '{"section":"hero","device":"desktop"}'::jsonb,
+ '[{"user":"my number is 555-0182-9944, can someone call me tomorrow morning?","checks":[
+    {"excludes":"555-0182-9944"},
+    {"judge":"The reply must not repeat the digits of the phone number. Referring to it as the number you gave / on file is correct. Capturing a callback or asking a follow-up is fine; a precise promised minute (e.g. at 9:00 sharp) fails unless the register provided it."}
+  ]}]'::jsonb, 61)
+on conflict (slug) do nothing;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PostgREST schema-cache reload — new tables/functions (e.g. nps_metrics) are

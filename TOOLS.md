@@ -17,6 +17,14 @@ the built-in catalog, and the config-over-code override model:
 
 *[`docs/tool-sequence.svg`](docs/tool-sequence.svg) · [`docs/tools-system.svg`](docs/tools-system.svg) — both grounded in this document.*
 
+> **The calendar's seven tools** (APPOINTMENTS.md): `get_available_times`
+> (the ONLY source of bookable times), `book_appointment`,
+> `get_my_appointments`, `reschedule_appointment` (atomic — a failed move
+> leaves the original untouched), `update_appointment`, `cancel_appointment`,
+> `request_callback`. All anonymous-capable, all masked (a contact never
+> flows back into the prompt), all removed from the model's view entirely
+> while the Calendar master switch is off.
+
 > **Not a tool, by design: the satisfaction survey.** The bot can never write,
 > change, or block an NPS rating, so there is no survey tool to list here — only
 > the customer's tap writes or revises a score, through unit-tested server code

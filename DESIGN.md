@@ -666,6 +666,29 @@ Knowledge, Procedures, Cache, Customers, Conversations, Website, Tools.*
   being spoken back at them, so feedback improves service instead of becoming
   scorekeeping. *(`npsCoachBrief` → the coach's private brief at both
   proactive sites; the judge vetoes quoted ratings; NPS.md §5.)*
+- **As a guest**, when I'm seriously interested I want to **book a visit in
+  the chat**, choosing from times that are genuinely free and labeled in my
+  own timezone, so I don't play email tag or do clock math. *Accepted when:*
+  every offered time came from the calendar tool verbatim (≤ 3 + "more"),
+  the model never converts a time itself, a manual-confirm request is never
+  framed as a done deal, the confirmation email carries an `.ics` whose UID
+  survives reschedules, and a lost race is recovered in one turn with real
+  alternatives. *(APPOINTMENTS.md; `appointment_slots`/`book_appointment`.)*
+- **As a returning patron**, I want the house to **remember my booking** and
+  let me check, move, resize, or cancel it in chat — with a move that can
+  never strand me (my old time is mine until the new one is). *(Atomic
+  `reschedule_appointment`; `get_my_appointments`; UPCOMING VISIT context.)*
+- **As the merchant**, I want to **publish hours and offerings once** — per
+  location, with the slot increment I choose (5–60 min) — and **work from
+  one queue** (confirm, close out, callbacks) with a badge that never lets
+  pending work hide. *Accepted when:* the master switch refuses without
+  hours, drafts ship disabled, the week view and the bot compute slots from
+  the same function, and double-booking is impossible by construction.
+  *(Calendar tab; `appointments_queue`.)*
+- **As the house**, I want booking conduct governed like everything else —
+  etiquette in an editable SOP (`booking`), availability and timezone math
+  in tested code, judge defect 9 vetoing invented times, every action
+  audited, QA never occupying a real slot. *(APPOINTMENTS.md §11.)*
 - **As the merchant**, I want a **Spend tab that reads like a bill I can act
   on** — what serving customers costs me, per conversation and per reply,
   where the money goes in my language, and whether it's trending up — so a
