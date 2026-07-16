@@ -815,3 +815,18 @@ numbers). Every calendar option now wears a tap-to-read info badge
 lead/horizon, timezone, per-person toggles). The studio nav regrouped into
 four sections (Front desk / Results / Training / The house) — one line, the
 open section's pages beneath, badge counts rolling up to their section.
+
+**Time-off requests (A2.4, 2026-07-16):** exceptions rows carry a lifecycle
+`status` — `requested` → `approved`/`denied`, and approved time can later be
+`returned` (given back to the schedule). **Only approved time off blocks
+anything**: the slot engine, the booking/reschedule/reassign candidate picks,
+and the adherence math all filter on it (T23–T25 prove a request blocks
+nothing, approval empties the day, denial restores it, and `staff_report`
+counts approved only). The studio's add form can log "a request — decide
+later"; each run wears a status chip with one-tap Approve / Decline / Return
+the time / Restore; a move (edit) keeps its decision state. Visibility rides
+every surface: requests draw hatched in the coverage lanes, each run names
+who ELSE is off in the same window, the add form shows a live "also off
+then" hint, the lane quick-add lists who is already off that day, the person
+digest separates "off ahead" from "requested", and the Team card counts
+requests awaiting a decision (deck grows to 134 checks, S19).
