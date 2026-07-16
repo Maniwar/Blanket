@@ -91,3 +91,48 @@ column, 3 locations (location selector appears), split-shift hours
 (`09:00-13:00, 14:00-18:00`), closed + special-hours exceptions, and every
 validation path (bad time range, bad availability line, two-window
 exception, empty add-location, no-date exception).
+
+---
+
+## Later rounds (the harness grew with the product)
+
+The 47-check pass above was the first sweep. The harness (same method,
+re-extracts production code on every run) has since grown with each round —
+current state: **76 / 76** across eight scenario groups:
+
+- **S1 fresh (Sam's walkthrough)** — three-step setup checklist, disabled
+  (never refusing) master switch, quick-start hour templates, auto slugs,
+  structured pickers; the only free text a first run types is a name.
+- **S2 populated** — hydrated structured editors, split shifts, invalid
+  ranges refused in plain words with nothing written, live slot preview via
+  the real `appointment_slots` RPC, queue acts firing the right RPCs.
+- **S6 the team (Marco)** — roster cards with digests, "with Maya/Jo" on
+  queue rows, offerings naming their people, one-save person creation
+  (hours grid + service ticks), personal time off never in the shop ledger,
+  no slug rendered anywhere on the tab.
+- **S7 the living calendar (A2.1)** — per-person coverage lanes (2 people ×
+  7 days), working-hours bands, the mid-day time-off hatch ("Dr
+  appointment", 13:00–14:00, right lane, right day), clickable ticks
+  opening visit cards with status-fitting acts (Confirm fires the RPC and
+  the card closes), tap-away dismissal, lane-click → two-tap time off
+  (all-day insert verified; end-before-start refused), queue-row → tick
+  flash, team toggle folding lanes away, email/phone riding the person
+  save.
+- **S8 departures (A2.2)** — unowned staffed visits flagged **needs a
+  person**, "Give it a person" / "Hand to someone else" on the visit card
+  firing `reassign_appointment`, the Team editor's "They've left" act
+  firing `staff_departure` behind a confirm dialog and reporting the
+  shuffle in plain words with the warning tone when someone still needs
+  covering.
+- **S3 error / S4 edge / S5 mobile** — fail-visible band with zero escaped
+  throws; long-text wrap, EXPIRING/aging heat, warning roll-up, no lanes
+  and a hidden toggle when there is no team; 375 px usable with native
+  pickers and no sideways scroll.
+
+Evidence: 13 screenshots + `results.json` per run (driver + harness live in
+the session scratchpad; both regenerate from the current `admin.html`).
+The SQL beneath S7/S8 is proven separately on a real local Postgres:
+`staff_tests.sql` T1–T10 (slot gating, load spread, named requests, personal
+time off, continuity moves, honest `nobody_free`, departure shuffle with
+moved/stuck counts) plus a two-session race for the last free person, and
+the full appointments block applies idempotently twice.
