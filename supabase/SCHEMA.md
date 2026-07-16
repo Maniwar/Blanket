@@ -716,8 +716,10 @@ except `concierge_appointments` itself, which carries PII and is **RPC-only**.
 | `sort_order` / `created_at` | int / timestamptz | Display order; created. |
 
 Seeded with one `main` location so a single-location house never thinks about
-the dimension. **The master switch refuses to enable until an enabled location
-has business hours.**
+the dimension — **only when the table is empty** (a fresh install). A removed
+location stays removed across deploys; the seed never resurrects it. **The
+master switch refuses to enable until an enabled location has business
+hours.**
 
 ### `concierge_business_hours` — when the house is open
 | Column | Type | Purpose |
@@ -807,6 +809,7 @@ from this, never from page prose).
 | `reschedule_of` | bigint FK → self | Manual-mode move lineage: the new `requested` row points at the original, which **stands until the swap confirms**. |
 | `cancel_token` | uuid | Emailed secret — one of the three ownership proofs (token / customer / session). |
 | `qa` | boolean | `qa-` sessions flag their rows; qa never occupies a real slot and the janitor deletes it. |
+| `acted_by` | text | Who confirmed/cancelled/closed it from the studio (the signed-in admin's email; `''` for the concierge's own actions). Feeds the callbacks report and the "closed out" fold. |
 | `created_at` / `updated_at` | timestamptz | Audit. |
 
 **Written by:** the booking RPCs only (service role via the seven chat tools,
@@ -843,27 +846,29 @@ pruned by `prune_high_write`.
 | `update_appointment(…)` | → jsonb | Party-size/notes edits, revalidated against `max_party`. | `update_appointment` tool. |
 | `confirm_appointment(p_id)` | → jsonb | Queue action: `requested`→`booked`; **completes a pending move** by cancelling the original row. | studio queue. |
 | `cancel_appointment(p_id, …)` | → jsonb | Ownership = cancel token OR signed-in customer OR session key OR admin (`coalesce(..., false)` — a null token can never bypass). Cancels pending moves with the row. | `cancel_appointment` tool; studio queue. |
-| `close_appointment(p_id, p_outcome)` | → jsonb | `completed` / `no_show` / `done` (callbacks). | studio queue. |
+| `close_appointment(p_id, p_outcome)` | → jsonb | `completed` / `no_show` / `done` (callbacks) — records **who** closed it (`acted_by`), allows corrections inside a **7-day window** (flip completed↔no_show↔done, or `reopen` back to open/booked; older rows are locked). | studio queue + "closed out" fold. |
 | `reassign_appointment(p_id, p_staff?)` | → jsonb | Hands one future visit to a different qualified free person (same candidate rules + per-person lock as booking; named person honored; excludes the current assignee). `nobody_free` when honest refusal is the answer. Admin/service-gated. | studio visit card ("Hand to someone else" / "Give it a person"). |
 | `staff_departure(p_staff_id)` | → jsonb | Someone leaves: disables the person, then reassigns every future visit of theirs nearest-first; whoever can't be covered is left standing but **unassigned** so the queue flags it. Returns `{moved, needs_attention, details}`. Admin/service-gated. | studio Team editor ("They've left"). |
 | `staff_report(p_days?)` | → jsonb | Per-person adherence & productivity over the window: scheduled minutes (their hours minus time off — the same rows the slot engine reads), booked minutes, utilization, kept/no-show counts, kept rate, days off, upcoming. Rates are NULL when there is nothing to measure. Admin/service-gated. | studio Team card ("The last 30 days"). |
-| `booking_report(p_days?, p_dim?)` | → jsonb | Productivity rollup by `offering` or `location`: booked minutes, kept, no-shows, cancelled, kept rate (NULL when nothing to measure), upcoming. Removed things labeled honestly. Admin/service-gated. | studio report card (dimension switcher + CSV export). |
-| `capacity_matrix()` | → jsonb | Promise vs coverage per enabled offering × location: configured capacity, qualified people with hours there, weekly qualified person-minutes (hours ∩ windows ∩ business hours), start-times the task shape allows, exact peak concurrent qualified people (boundary-minute evaluation), effective ceiling = least(capacity, peak) when staffed, and a plain-words warning when the promise outruns the people. Admin/service-gated. | studio "Capacity at a glance". |
+| `booking_report(p_days?, p_dim?)` | → jsonb | Productivity rollup by `offering`, `location`, or `callbacks`: booked minutes, kept, no-shows, cancelled, kept rate (NULL when nothing to measure), upcoming. **Every enabled entity appears, zeros included** — a quiet location is a fact, not a blank. The `callbacks` dimension rolls up per handler (`acted_by`, `(unattributed)` for legacy rows): done, cancelled, median minutes-to-close, plus top-level `open_now` and oldest-open age. Admin/service-gated. | studio report card (dimension switcher + CSV export + operations-review export). |
+| `capacity_matrix()` | → jsonb | Promise vs coverage per enabled offering × location: configured capacity, **designated people** (qualified + enabled + any hours at the location — headcount independent of window overlap), weekly qualified person-minutes (hours ∩ windows ∩ business hours), start-times the task shape allows, exact peak concurrent qualified people (boundary-minute evaluation), effective ceiling = least(capacity, peak) when staffed, and a plain-words warning ladder: no bookable windows yet → nobody qualified has hours here → their hours never overlap the windows → promise outruns coverage. Offerings with availability nowhere still appear. Admin/service-gated. | studio "Capacity at a glance" (cells drill into the named editor). |
 | `remove_location(p_id)` / `remove_offering(p_id)` / `remove_person(p_id)` | → jsonb | Guarded removal: refuses with `{reason:'has_visits', count}` while future live visits reference the thing; otherwise deletes children (hours/windows/service ties/scoped exceptions) then the row. Past visits keep their records (FKs SET NULL). Admin/service-gated. | studio "Remove…" acts in the three editors. |
-| `appointments_queue()` | → jsonb | The triage board: sweeps `expire_stale_requests()` first, then requested (+TTL deadline, move flag), open callbacks (+age), today (+due house notes), needs-closing. Admin-gated. | Calendar tab; deploy CI probe. |
+| `appointments_queue()` | → jsonb | The triage board: sweeps `expire_stale_requests()` first, then requested (+TTL deadline, move flag), open callbacks (+age), today (+due house notes), needs-closing, and `recently_closed` (last 7 days, ≤ 15, with `acted_by` and `closed_at` — the correction window's working set). Admin-gated. | Calendar tab; deploy CI probe. |
 | `expire_stale_requests()` | → int | Cancels `requested` rows older than the TTL (`bookings.requestTtlHours`); swept when the queue opens. | `appointments_queue()`. |
 | `appointments_week(p_days)` | → jsonb | The 7-day grid's rows (id, status, staff name, conversation id, location tz) — feeds the coverage lanes and clickable visit cards. Admin-gated. | Calendar tab. |
 | `patron_appointments(p_customer)` | → jsonb | One patron's bookings by `customers.id`. Admin/service-gated. | engine (UPCOMING VISIT context). |
 | `patron_appointments_by(p_email, p_user)` | → jsonb | Same, resolved by email/auth-user id server-side (the studio never sees `customers` ids). | patron drawer timeline. |
 | `appointment_facets(p_days)` | → jsonb | Bounded (≤ 5000) conversation/session booking facts. | 📅 badge on Conversations; the funnel's hard `Booked a visit` stage. |
+| `judge_findings(p_days?)` | → jsonb | The Judge & Coach ledger in one call: totals (spoke/held/vetoed, pre-filter kills, redraft scoreboard), per-beat-kind outcomes, veto reasons clustered into named defect classes with fresh sample kills, and the unresolved gap ledger (repeat clusters, system alerts, studio feedback each labeled). Admin/service-gated. | studio "Judge & coach" tab; weekly ops report. |
 
 `EXECUTE` on the register/cache/booking RPCs is revoked from
 `public`/`anon`/`authenticated`; only the service role calls them. The
 exceptions — granted to `authenticated` because they self-gate on
 `is_concierge_admin()` — are the studio's surfaces: the two edition RPCs,
-`nps_metrics`, `llm_cost_metrics`, and the calendar's admin set
-(`appointments_queue`, `staff_report`, `appointments_week`, the confirm/cancel/close actions,
-`reassign_appointment`, `staff_departure`,
+`nps_metrics`, `llm_cost_metrics`, `judge_findings`, and the calendar's admin set
+(`appointments_queue`, `staff_report`, `booking_report`, `capacity_matrix`,
+`appointments_week`, the confirm/cancel/close actions,
+`reassign_appointment`, `staff_departure`, the guarded `remove_*` trio,
 `patron_appointments`/`_by`, `appointment_facets`, and `appointment_slots`
 (the offering editor's live preview).
 
