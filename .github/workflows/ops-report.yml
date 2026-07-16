@@ -36,6 +36,14 @@ jobs:
           psql "$DB" -c "select coalesce(payload->>'kind','?') beat, left(coalesce(payload->>'line',''), 100) vetoed_line
             from public.concierge_actions where action = 'beat_veto'
             order by created_at desc limit 5;" || true
+      - name: redraft learning (14 days) — accepted vs still blocked
+        if: always()
+        run: |
+          psql "$DB" -c "select
+              count(*) filter (where action = 'beat_action' and payload->>'redraft' = 'true') as redraft_accepted,
+              count(*) filter (where action = 'beat_veto' and payload->>'redraft' = 'true') as redraft_still_blocked,
+              count(*) filter (where action = 'beat_veto' and coalesce(payload->>'reason','') like 'pre-filter:%') as prefilter_kills
+            from public.concierge_actions where created_at > now() - interval '14 days';"
       - name: knowledge gaps — repeats (30 days)
         if: always()
         run: |
