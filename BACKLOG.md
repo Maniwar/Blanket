@@ -45,7 +45,15 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
   (triage queue with status pills + TTL countdowns, 7-day grid, labeled
   location/offering cards) and the A1.1 cohesion round (patron-drawer
   timeline, 📅 badge on Conversations, the funnel's hard `Booked a visit`
-  stage) — drift notes at the top of APPOINTMENTS.md.
+  stage); the Day Book redesign + the structured-input pass (setup
+  checklist, pickers everywhere, live slot preview); and **the team (A2)**:
+  per-person hours/services/time off (windows included), staffed-offering
+  slots gated on a qualified free person, assignment under per-person locks,
+  coverage lanes + clickable visit cards + click-to-time-off on the week
+  view, staff contact details with engine-sent booking alerts, and
+  **departures** (`reassign_appointment` / `staff_departure` — someone
+  leaves, their book shuffles to whoever is free, the rest flagged "needs a
+  person"). Contract + drift notes: APPOINTMENTS.md §16.
 
 - **[Shipped] The meter + Spend tab.** Every model call logged at the source
   with a purpose (`concierge_llm_usage`; fire-and-forget, never blocks

@@ -593,10 +593,10 @@ UX invariants across all of them: the visitor never sees an internal slug
 industry-neutral ("a visit", "the house") and the kit stamps brand nouns;
 dates render locale-aware; three-choices-then-more keeps every industry's
 picker scannable; scarcity talk is fact-gated (SOP 9) — no dark patterns in
-any vertical. Deliberately NOT built: per-staff calendars, resource routing,
-deposits — the single-diary assumption keeps v1 honest (multi-staff is the
-A3+ question, and it changes the schema, so it must not be retrofitted
-quietly).
+any vertical. Deliberately NOT built in v1: per-staff calendars, resource
+routing, deposits — the single-diary assumption kept v1 honest. Per-staff
+calendars have since shipped as A2 with their own schema (§16); resource
+routing and deposits remain out.
 
 ## 11. Honesty & safety invariants (each becomes a test or eval case)
 
@@ -669,8 +669,8 @@ is already inside `chat-tools`.
 | **A3** | Beat-driven viewing offers (judge-gated), external read-only ICS feed for the owner, multi-staff exploration (schema RFC first) | — |
 
 **Deliberately out of scope for v1:** two-way Google/Outlook sync, SMS,
-payments or deposits, per-staff routing (staff is the remaining A3 schema
-RFC — locations are now in scope, §3a/3b).
+payments or deposits. Per-staff routing, planned here as an A3 RFC, shipped
+as A2 — see §16 for what was actually built.
 
 ## 15. Documentation obligations on build (the checklist that bit us on NPS)
 
@@ -740,3 +740,58 @@ note + `adopt generate` industry presets (§10), eval CATALOG rows.
   by code, every offer/book/confirm/cancel audited, unverified contact
   matches granting no recall, QA never touching real slots — so the calendar
   earns trust instead of spending it.
+
+## 16. The team — what shipped as A2 / A2.1 / A2.2 (drift notes, 2026-07)
+
+The rollout table above (§14) predates the build; what actually shipped under
+the A2 name is the staff dimension, in three rounds. Everything below is live
+on both sites and proven by the local-Postgres suite (`staff_tests.sql`,
+T1–T10) plus the 76-check admin QA harness.
+
+**Schema (additive, all RLS'd like §3):** `concierge_staff` (name, `email`,
+`phone`, enabled, sort order — no slug anywhere), `concierge_staff_hours`
+(per person × location × dow open/close minutes — their hours live INSIDE
+business hours), `concierge_staff_services` (who does which offering),
+`concierge_appointments.staff_id`, and personal time off as
+`concierge_availability_exceptions.staff_id` rows — a person's day off (or a
+mid-day window, the "Dr appointment" case) never reads as a shop closure;
+every shop-level query filters `staff_id is null`.
+
+**Slot semantics:** an offering with any `concierge_staff_services` row is
+*staffed* — a slot exists only when a qualified, enabled person is working
+(their hours ∩ the window ∩ business hours), not on time off, and free of
+overlapping bookings across ALL offerings (buffers respected), with total
+occupancy still under the offering's `capacity`. Unstaffed offerings behave
+exactly as v1 (§4). Slots carry the available people's first names; the
+booking write assigns one INSIDE a per-person advisory lock
+(`hashtext('staff|'||id||'|'||starts_at)`) taken after the slot lock — a race
+across two offerings can never double-book a human (T4, plus a genuine
+two-session race test). A visitor naming a person gets only that person;
+unnamed requests go to the least-loaded. Reschedules prefer the same person
+(continuity) and reassign only when they're not free.
+
+**Admin (the living calendar):** the Team card manages people — structured
+hours grid, service ticks, contact details, dated time off (all-day or a
+window). The week view grows per-person coverage lanes (toggleable): hours
+bands, red hatches for time off, their bookings as marks; clicking a lane day
+quick-adds time off; clicking any mark opens the visit card with
+status-appropriate acts; clicking a queue row flashes its mark. Queue and
+week rows say "with Maya"; a staffed visit nobody owns is flagged **needs a
+person**.
+
+**Notifications:** staff `email` receives engine-driven booking mail (request
+pending / on your calendar with `.ics` / time released) on chat-driven book,
+cancel, and move. Honest limitation: admin-queue acts (Confirm/Decline, the
+departure shuffle) run client-side against SQL RPCs and send no mail — the
+Resend key lives server-side only. Staff emails never reach model-facing
+tool results (stripped before the JSON the model sees).
+
+**Departures (A2.2 — "someone may leave"):** `reassign_appointment(id,
+person?)` hands one future visit to another qualified free person under the
+same candidate rules + per-person lock (refuses honestly with `nobody_free`);
+`staff_departure(staff_id)` retires the person and shuffles every future
+visit of theirs, nearest first — whoever can't be covered is left standing
+but **unassigned**, so the queue flags it instead of leaving it on a calendar
+nobody reads (T9/T10). In the admin: "Hand to someone else" / "Give it a
+person" on the visit card, and "They've left — hand bookings to the team" in
+the person editor, which reports the shuffle in plain words.

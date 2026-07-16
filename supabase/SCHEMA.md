@@ -697,10 +697,10 @@ by:** `llm_cost_metrics` for the admin Spend tab. No RLS policies — RPC-only.
 Pruned by `prune_high_write`. Prices live client-side (`cx_llm_prices`), so a
 price change never needs a schema migration.
 
-### The calendar ([APPOINTMENTS.md](../APPOINTMENTS.md)) — six tables
+### The calendar ([APPOINTMENTS.md](../APPOINTMENTS.md)) — nine tables
 
 Ships **dark**: `concierge_config.bookings.enabled` absent = off; offering
-rows seed `enabled=false`. All six are admin-editable on the Calendar tab
+rows seed `enabled=false`. All nine are admin-editable on the Calendar tab
 (admin-all RLS **granted inside the appointments block**, after creation),
 except `concierge_appointments` itself, which carries PII and is **RPC-only**.
 
@@ -760,10 +760,33 @@ from this, never from page prose).
 | --- | --- | --- |
 | `id` | bigint identity PK | Row id. |
 | `location_id` / `type_id` | nullable FKs | **Null = wildcard** (every location / all offerings). |
+| `staff_id` | nullable FK → `concierge_staff` | **Personal time off** (all-day or the window below) — affects only that person, never the shop; every shop-level reader filters `staff_id is null`. |
 | `on_date` | date | The day. |
 | `closed` | boolean | `true` = closed all day; `false` = the replacement window below applies instead of the weekly rules. |
 | `start_min` / `end_min` | smallint | The replacement window (special hours). |
 | `note` | text | Shown only in the studio. |
+
+### `concierge_staff` — the team (APPOINTMENTS.md §16)
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id (no slug — people are picked, never typed). |
+| `name` | text | First name shown to visitors ("with Maya") and in the studio. |
+| `email` | text | Booking alerts land here (engine-sent; **stripped from every model-facing tool result**). |
+| `phone` | text | Studio-only contact. |
+| `enabled` | boolean | Off = takes no new bookings (departures also flip this). |
+| `sort_order` / `created_at` | int / timestamptz | Roster order; audit. |
+
+### `concierge_staff_hours` — when each person works
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `staff_id` / `location_id` | FKs | Whose hours, at which place. |
+| `dow` | smallint | 0–6 (Sunday-first). |
+| `open_min` / `close_min` | smallint | Their working window — sits INSIDE business hours; a day with no row is a day off. |
+
+### `concierge_staff_services` — who does what
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `staff_id` / `type_id` | FKs | The person ↔ offering tie. Any row for an offering makes it **staffed**: slots then require a qualified free person and bookings are assigned under a per-person advisory lock. No rows = the offering books by capacity alone, exactly as before. |
 
 ### `concierge_appointments` — bookings and callbacks (PII — RPC-only)
 | Column | Type | Purpose |
@@ -780,6 +803,7 @@ from this, never from page prose).
 | `notes` | text | The visitor's ask, verbatim-ish. |
 | `customer_id` | uuid | `customers.id` when signed in — ties the booking to the patron profile. |
 | `conversation_id` / `session_key` | uuid / text | The chat that made it (📅 badge, drawer timeline, funnel). |
+| `staff_id` | bigint FK → `concierge_staff` (`set null`) | Who takes the visit (staffed offerings). Null on a staffed offering = **needs a person** (the queue flags it; departures produce these when nobody is free). |
 | `reschedule_of` | bigint FK → self | Manual-mode move lineage: the new `requested` row points at the original, which **stands until the swap confirms**. |
 | `cancel_token` | uuid | Emailed secret — one of the three ownership proofs (token / customer / session). |
 | `qa` | boolean | `qa-` sessions flag their rows; qa never occupies a real slot and the janitor deletes it. |
@@ -813,16 +837,18 @@ pruned by `prune_high_write`.
 | `get_edition()` | → (next, run, claimed, remaining) | Reads the edition counter. Raises unless `is_concierge_admin()`. | admin Edition card. |
 | `set_edition(p_next_serial, p_run_size)` | → void | Sets `next_serial`/`run_size` (validates `next ≤ run+1`). Raises unless `is_concierge_admin()`. | admin Edition card. |
 | `llm_cost_metrics(p_days)` | → jsonb | The Spend tab's rollup ([COST.md](../COST.md)): totals + daily buckets **by model** and by purpose, qa split out. Admin-gated. | admin Spend tab. |
-| `appointment_slots(p_type, p_location, p_from, p_to, p_visitor_tz?)` | → jsonb | **The one source of "available"**: weekly windows ∩ business hours, expanded per-date in the location's zone (DST-correct), minus exceptions, live bookings and buffers, clipped by lead time/horizon; ≤ 40 slots, each with pre-formatted shop/visitor/lead labels — the model recites, never converts. | `get_available_times` tool; deploy CI probe. |
-| `book_appointment(…)` | → jsonb | Advisory lock → max-open-per-contact check → **re-derives the slot through `appointment_slots`** (an offer is only ever a read of the same function) → inserts `booked` or `requested` per `confirm_mode`. `taken` returns three alternatives. | `book_appointment` tool. |
-| `reschedule_appointment(…)` | → jsonb | Atomic move under **two hash-ordered locks**; auto mode updates in place, manual mode writes a new `requested` row (`reschedule_of`) while the original stands. On a lost race the original still stands and alternatives return. | `reschedule_appointment` tool. |
+| `appointment_slots(p_type, p_location, p_from, p_to, p_visitor_tz?)` | → jsonb | **The one source of "available"**: weekly windows ∩ business hours, expanded per-date in the location's zone (DST-correct), minus exceptions, live bookings and buffers, clipped by lead time/horizon; **staffed offerings additionally require a qualified, enabled person on shift (their hours), not on time off, free of overlapping visits across all offerings** — slots carry the available first names; ≤ 40 slots, each with pre-formatted shop/visitor/lead labels — the model recites, never converts. | `get_available_times` tool; deploy CI probe. |
+| `book_appointment(…)` | → jsonb | Advisory lock → max-open-per-contact check → **re-derives the slot through `appointment_slots`** (an offer is only ever a read of the same function) → inserts `booked` or `requested` per `confirm_mode`; staffed offerings pick the least-loaded qualified free person (or exactly the person named) under a per-person advisory lock and return `staff_name`/`staff_email`. `taken` returns three alternatives. | `book_appointment` tool. |
+| `reschedule_appointment(…)` | → jsonb | Atomic move under **two hash-ordered locks**; auto mode updates in place, manual mode writes a new `requested` row (`reschedule_of`) while the original stands. On a lost race the original still stands and alternatives return. Staffed offerings keep the same person when free (continuity), else reassign. | `reschedule_appointment` tool. |
 | `update_appointment(…)` | → jsonb | Party-size/notes edits, revalidated against `max_party`. | `update_appointment` tool. |
 | `confirm_appointment(p_id)` | → jsonb | Queue action: `requested`→`booked`; **completes a pending move** by cancelling the original row. | studio queue. |
 | `cancel_appointment(p_id, …)` | → jsonb | Ownership = cancel token OR signed-in customer OR session key OR admin (`coalesce(..., false)` — a null token can never bypass). Cancels pending moves with the row. | `cancel_appointment` tool; studio queue. |
 | `close_appointment(p_id, p_outcome)` | → jsonb | `completed` / `no_show` / `done` (callbacks). | studio queue. |
+| `reassign_appointment(p_id, p_staff?)` | → jsonb | Hands one future visit to a different qualified free person (same candidate rules + per-person lock as booking; named person honored; excludes the current assignee). `nobody_free` when honest refusal is the answer. Admin/service-gated. | studio visit card ("Hand to someone else" / "Give it a person"). |
+| `staff_departure(p_staff_id)` | → jsonb | Someone leaves: disables the person, then reassigns every future visit of theirs nearest-first; whoever can't be covered is left standing but **unassigned** so the queue flags it. Returns `{moved, needs_attention, details}`. Admin/service-gated. | studio Team editor ("They've left"). |
 | `appointments_queue()` | → jsonb | The triage board: sweeps `expire_stale_requests()` first, then requested (+TTL deadline, move flag), open callbacks (+age), today (+due house notes), needs-closing. Admin-gated. | Calendar tab; deploy CI probe. |
 | `expire_stale_requests()` | → int | Cancels `requested` rows older than the TTL (`bookings.requestTtlHours`); swept when the queue opens. | `appointments_queue()`. |
-| `appointments_week(p_days)` | → jsonb | The 7-day grid's rows (status, location tz for wall-clock chips). Admin-gated. | Calendar tab. |
+| `appointments_week(p_days)` | → jsonb | The 7-day grid's rows (id, status, staff name, conversation id, location tz) — feeds the coverage lanes and clickable visit cards. Admin-gated. | Calendar tab. |
 | `patron_appointments(p_customer)` | → jsonb | One patron's bookings by `customers.id`. Admin/service-gated. | engine (UPCOMING VISIT context). |
 | `patron_appointments_by(p_email, p_user)` | → jsonb | Same, resolved by email/auth-user id server-side (the studio never sees `customers` ids). | patron drawer timeline. |
 | `appointment_facets(p_days)` | → jsonb | Bounded (≤ 5000) conversation/session booking facts. | 📅 badge on Conversations; the funnel's hard `Booked a visit` stage. |
@@ -833,7 +859,9 @@ exceptions — granted to `authenticated` because they self-gate on
 `is_concierge_admin()` — are the studio's surfaces: the two edition RPCs,
 `nps_metrics`, `llm_cost_metrics`, and the calendar's admin set
 (`appointments_queue`, `appointments_week`, the confirm/cancel/close actions,
-`patron_appointments`/`_by`, `appointment_facets`).
+`reassign_appointment`, `staff_departure`,
+`patron_appointments`/`_by`, `appointment_facets`, and `appointment_slots`
+(the offering editor's live preview).
 
 ---
 
