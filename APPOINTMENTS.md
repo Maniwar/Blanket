@@ -795,3 +795,23 @@ but **unassigned**, so the queue flags it instead of leaving it on a calendar
 nobody reads (T9/T10). In the admin: "Hand to someone else" / "Give it a
 person" on the visit card, and "They've left — hand bookings to the team" in
 the person editor, which reports the shuffle in plain words.
+
+**The operations round (A2.3, same week):** lunches and breaks — a person's
+day supports split ranges natively (a slot must fit inside ONE range, proven
+by T11: nothing can be sold across the gap) and the person editor grew a
+one-tap "daily break" that splits every working day around it. Time off was
+rebuilt for years of use: a vacation is one entry with an end date (one
+all-day row per day underneath), entries carry a reason, anything can be
+edited in place (delete-then-reinsert, same pattern as hours), consecutive
+days read as one stretch, past entries fold behind a count, and
+`prune_high_write` retires dated exceptions after 400 days (longer than any
+report window). `staff_report(p_days)` computes per-person adherence &
+productivity — scheduled minutes from the same rows the slot engine sells
+from, booked minutes, utilization, kept/no-show/kept-rate, days off,
+upcoming — with NULL (never fake-zero) rates; the Team card renders it as
+"The last 30 days" with a heat tone under 80% kept (T12 proves exact
+numbers). Every calendar option now wears a tap-to-read info badge
+(master switch, callbacks, caps, TTL, confirm mode, bookable, buffers,
+lead/horizon, timezone, per-person toggles). The studio nav regrouped into
+four sections (Front desk / Results / Training / The house) — one line, the
+open section's pages beneath, badge counts rolling up to their section.

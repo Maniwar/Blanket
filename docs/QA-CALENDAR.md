@@ -98,7 +98,7 @@ exception, empty add-location, no-date exception).
 
 The 47-check pass above was the first sweep. The harness (same method,
 re-extracts production code on every run) has since grown with each round —
-current state: **76 / 76** across eight scenario groups:
+current state: **101 / 101** across twelve scenario groups (the list below, plus **S9 breaks** — the one-tap daily break splits working days and the save writes both ranges; **S10 time off v2** — vacations as one entry, reasons, edit-in-place, past folded; **S11 the team's last 30 days** — report table with heat tones and honest dashes; **S12 the grouped nav** — four sections, roll-up badges, last-page memory, mobile rails; **S13 info-tips** — 15+ badges, tap opens a card without flipping the setting):
 
 - **S1 fresh (Sam's walkthrough)** — three-step setup checklist, disabled
   (never refusing) master switch, quick-start hour templates, auto slugs,

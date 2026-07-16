@@ -846,6 +846,7 @@ pruned by `prune_high_write`.
 | `close_appointment(p_id, p_outcome)` | → jsonb | `completed` / `no_show` / `done` (callbacks). | studio queue. |
 | `reassign_appointment(p_id, p_staff?)` | → jsonb | Hands one future visit to a different qualified free person (same candidate rules + per-person lock as booking; named person honored; excludes the current assignee). `nobody_free` when honest refusal is the answer. Admin/service-gated. | studio visit card ("Hand to someone else" / "Give it a person"). |
 | `staff_departure(p_staff_id)` | → jsonb | Someone leaves: disables the person, then reassigns every future visit of theirs nearest-first; whoever can't be covered is left standing but **unassigned** so the queue flags it. Returns `{moved, needs_attention, details}`. Admin/service-gated. | studio Team editor ("They've left"). |
+| `staff_report(p_days?)` | → jsonb | Per-person adherence & productivity over the window: scheduled minutes (their hours minus time off — the same rows the slot engine reads), booked minutes, utilization, kept/no-show counts, kept rate, days off, upcoming. Rates are NULL when there is nothing to measure. Admin/service-gated. | studio Team card ("The last 30 days"). |
 | `appointments_queue()` | → jsonb | The triage board: sweeps `expire_stale_requests()` first, then requested (+TTL deadline, move flag), open callbacks (+age), today (+due house notes), needs-closing. Admin-gated. | Calendar tab; deploy CI probe. |
 | `expire_stale_requests()` | → int | Cancels `requested` rows older than the TTL (`bookings.requestTtlHours`); swept when the queue opens. | `appointments_queue()`. |
 | `appointments_week(p_days)` | → jsonb | The 7-day grid's rows (id, status, staff name, conversation id, location tz) — feeds the coverage lanes and clickable visit cards. Admin-gated. | Calendar tab. |
@@ -858,7 +859,7 @@ pruned by `prune_high_write`.
 exceptions — granted to `authenticated` because they self-gate on
 `is_concierge_admin()` — are the studio's surfaces: the two edition RPCs,
 `nps_metrics`, `llm_cost_metrics`, and the calendar's admin set
-(`appointments_queue`, `appointments_week`, the confirm/cancel/close actions,
+(`appointments_queue`, `staff_report`, `appointments_week`, the confirm/cancel/close actions,
 `reassign_appointment`, `staff_departure`,
 `patron_appointments`/`_by`, `appointment_facets`, and `appointment_slots`
 (the offering editor's live preview).
