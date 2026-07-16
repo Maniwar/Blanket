@@ -830,3 +830,15 @@ who ELSE is off in the same window, the add form shows a live "also off
 then" hint, the lane quick-add lists who is already off that day, the person
 digest separates "off ahead" from "requested", and the Team card counts
 requests awaiting a decision (deck grows to 134 checks, S19).
+
+**Callback truth & self-service (same day):** the model's context gained an
+authoritative CALLBACKS line — the conversation's own open/handled requests
+with ids — shared by chat and the proactive beats, so "what callback?" can
+never happen honestly again; `request_callback` refuses to promise before
+the tool returns ok. And the request stays the visitor's to shape:
+`change_callback` (T26-proven ownership: same session or signed-in customer,
+open requests only) updates the window or number in chat, and
+`cancel_appointment` already covered callbacks. The Judge & Coach loop's
+control half shipped alongside: pause any beat kind from the studio, a
+self-scheduling weekly digest email, and Tier-1 coach-drafted "say it
+differently" procedures that arrive disabled (deck: 139 checks).
