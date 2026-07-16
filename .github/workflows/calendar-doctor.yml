@@ -1,0 +1,54 @@
+# Calendar doctor — one-shot live diagnosis of "why are there no slots?".
+# Reads CONFIG ONLY (titles, hours, windows, counts) — never visitor data.
+# Dispatch it whenever availability looks wrong; the log names the exact
+# choke point per offering × location, the same truth capacity_matrix sells.
+name: Calendar doctor
+on: workflow_dispatch
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capacity matrix (promise vs coverage, with warnings)
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "begin; select set_config('request.jwt.claims','{\"role\":\"service_role\"}',true);
+             select jsonb_pretty(public.capacity_matrix()); rollback;"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: Slot counts, next 7 days, per enabled offering x location
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "begin; select set_config('request.jwt.claims','{\"role\":\"service_role\"}',true);
+             select t.title as offering, l.title as location,
+                    jsonb_array_length(coalesce(public.appointment_slots(t.slug, l.slug,
+                      current_date, current_date + 7, null)->'slots', '[]'::jsonb)) as slots_next_7d
+               from public.concierge_appointment_types t
+              cross join public.concierge_locations l
+              where t.enabled and l.enabled
+              order by 1, 2; rollback;"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: The raw calendar config (hours, windows, team ranges, exceptions ahead)
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "select 'business_hours' as what, l.title, bh.dow, bh.open_min, bh.close_min, null::text as extra
+               from public.concierge_business_hours bh join public.concierge_locations l on l.id = bh.location_id
+             union all
+             select 'offering_window', t.title || ' @ ' || l.title, av.dow, av.start_min, av.end_min, null
+               from public.concierge_availability av
+               join public.concierge_appointment_types t on t.id = av.type_id
+               join public.concierge_locations l on l.id = av.location_id
+             union all
+             select 'staff_range', s.name || ' @ ' || l.title, sh.dow, sh.open_min, sh.close_min, null
+               from public.concierge_staff_hours sh
+               join public.concierge_staff s on s.id = sh.staff_id
+               join public.concierge_locations l on l.id = sh.location_id
+             union all
+             select 'staff_off_ahead', s.name, null, e.start_min, e.end_min,
+                    e.on_date::text || ' ' || e.status || (case when e.closed then ' all-day' else '' end)
+               from public.concierge_availability_exceptions e
+               join public.concierge_staff s on s.id = e.staff_id
+              where e.on_date >= current_date
+             order by 1, 2, 3;"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
