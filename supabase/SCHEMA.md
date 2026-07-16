@@ -678,6 +678,120 @@ browser; the `judge` checks go to the admin-gated `POST ?judge=1`, which runs a
 pinned binary judge server-side (so the Anthropic key stays off the client).
 Seeded with a starter deck (only when empty), mirroring `evals/scenarios.mjs`.
 
+### `concierge_llm_usage` — the meter ([COST.md](../COST.md))
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `created_at` | timestamptz | Call time — the Spend tab's date basis. |
+| `purpose` | text | Which internal caller spent the tokens: `chat`, `beat`, `judge`, `coach`, `directives`, `clientbook`, `goals`, `nps-categorize`, `nps-report`, `prompt-review`, `eval-judge`, `lint`, `starters`, `notes`, `reengage`. |
+| `model` | text | Model id as the API reported it. |
+| `input_tokens` / `output_tokens` | int | Usage from the API response. |
+| `cache_read_tokens` / `cache_write_tokens` | int | Prompt-cache usage (read ≈ 10% of input price, write ≈ 125%). |
+| `conversation_id` | uuid FK → conversations | The chat the spend belongs to, when there is one (cost per conversation). |
+| `qa` | boolean | `qa-` session traffic — the Spend tab splits it out so deploy-day eval runs don't read as customer cost. |
+
+**Written by:** `logLlmUsage` via `llmFetch`, which wraps **every**
+`api.anthropic.com/v1/messages` call in the concierge function (streamed chat
+captures usage from the SSE `message_start`/`message_delta` frames). **Read
+by:** `llm_cost_metrics` for the admin Spend tab. No RLS policies — RPC-only.
+Pruned by `prune_high_write`. Prices live client-side (`cx_llm_prices`), so a
+price change never needs a schema migration.
+
+### The calendar ([APPOINTMENTS.md](../APPOINTMENTS.md)) — six tables
+
+Ships **dark**: `concierge_config.bookings.enabled` absent = off; offering
+rows seed `enabled=false`. All six are admin-editable on the Calendar tab
+(admin-all RLS **granted inside the appointments block**, after creation),
+except `concierge_appointments` itself, which carries PII and is **RPC-only**.
+
+### `concierge_locations` — the places a visit can happen
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `slug` / `title` | text | Handle (unique) + display name. |
+| `address` | text | Rides confirmations. |
+| `timezone` | text | **IANA — each location keeps its own clock**; every slot is expanded in this zone, per-date (DST-correct). |
+| `directions` | text | Extra line for the confirmation email. |
+| `enabled` | boolean | Per-location toggle (the cascade: master `bookings.enabled` → location → offering). |
+| `sort_order` / `created_at` | int / timestamptz | Display order; created. |
+
+Seeded with one `main` location so a single-location house never thinks about
+the dimension. **The master switch refuses to enable until an enabled location
+has business hours.**
+
+### `concierge_business_hours` — when the house is open
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `location_id` | bigint FK → locations | Cascade delete. |
+| `dow` | smallint 0–6 | 0 = Sunday, **location-local**. |
+| `open_min` / `close_min` | smallint | Minutes since local midnight; several rows per day = split shifts. |
+
+Clamps **all** availability (the slot engine intersects offering windows with
+these), and feeds the model's HOURS context block ("are you open?" answers
+from this, never from page prose).
+
+### `concierge_appointment_types` — the offerings
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` / `slug` / `title` / `description` | — | Identity + display. |
+| `duration_min` | int 5–480 | Visit length. |
+| `step_min` | smallint ∈ {5,10,15,20,30,45,60} | The admin-picked start grid. |
+| `mode` | text | `in-person` · `video` · `phone`. |
+| `buffer_min` | int | Dead air after each visit (blocks the slot engine). |
+| `lead_time_min` | int | Minimum notice. |
+| `horizon_days` | int 1–365 | How far ahead booking opens. |
+| `capacity` | int 1–50 | **Concurrency** — how many can run at once (enforced under the advisory lock). |
+| `max_party` | smallint | 0 = never ask a party size. |
+| `confirm_mode` | text | `auto` (instant) or `manual` (a request occupies the slot until the house confirms or the TTL expires). |
+| `intake_prompt` | text | One optional extra question asked while booking. |
+| `enabled` | boolean | Drafts first — seeds `false`. |
+
+### `concierge_availability` — weekly offering windows
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `type_id` / `location_id` | bigint FKs | The offering × place this window belongs to. |
+| `dow` / `start_min` / `end_min` | smallint | Location-local weekly window. |
+| `step_min` | smallint nullable | Per-window override of the offering's start grid; null = type default. |
+
+### `concierge_availability_exceptions` — dated overrides
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `location_id` / `type_id` | nullable FKs | **Null = wildcard** (every location / all offerings). |
+| `on_date` | date | The day. |
+| `closed` | boolean | `true` = closed all day; `false` = the replacement window below applies instead of the weekly rules. |
+| `start_min` / `end_min` | smallint | The replacement window (special hours). |
+| `note` | text | Shown only in the studio. |
+
+### `concierge_appointments` — bookings and callbacks (PII — RPC-only)
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint identity PK | Row id. |
+| `kind` | text | `appointment` or `callback`. |
+| `type_id` / `location_id` | nullable FKs | `set null` on delete so history survives config edits. |
+| `starts_at` / `ends_at` | timestamptz | UTC instants (presentation converts; storage never does). |
+| `window_pref` | text | Callbacks: the visitor's window **in their own words**. |
+| `party_size` | smallint | When the offering asks. |
+| `status` | text | `requested` → `booked` → `completed`/`cancelled`/`no_show` (visits); `open` → `done` (callbacks). |
+| `visitor_name` / `visitor_contact` / `contact_kind` | text | **`visitor_contact` is never injected into a prompt unmasked** — every tool result says `[contact on file]`. |
+| `visitor_tz` | text | The visitor's IANA zone at booking (labels speak it). |
+| `notes` | text | The visitor's ask, verbatim-ish. |
+| `customer_id` | uuid | `customers.id` when signed in — ties the booking to the patron profile. |
+| `conversation_id` / `session_key` | uuid / text | The chat that made it (📅 badge, drawer timeline, funnel). |
+| `reschedule_of` | bigint FK → self | Manual-mode move lineage: the new `requested` row points at the original, which **stands until the swap confirms**. |
+| `cancel_token` | uuid | Emailed secret — one of the three ownership proofs (token / customer / session). |
+| `qa` | boolean | `qa-` sessions flag their rows; qa never occupies a real slot and the janitor deletes it. |
+| `created_at` / `updated_at` | timestamptz | Audit. |
+
+**Written by:** the booking RPCs only (service role via the seven chat tools,
+or the studio's queue actions). **Read by:** the queue/week/patron/facet RPCs.
+A partial index (`type_id, location_id, starts_at` where live and not qa)
+backs the slot engine; capacity is enforced under
+`pg_advisory_xact_lock(hashtext(type|location|start))`. Terminal rows are
+pruned by `prune_high_write`.
+
 ---
 
 ## Functions (RPCs) — all `security definer`, `search_path = ''`
@@ -696,11 +810,28 @@ Seeded with a starter deck (only when empty), mirroring `evals/scenarios.mjs`.
 | `nps_metrics(p_days, p_coach?)` | → jsonb | The **NPS calculation** ([`NPS.md`](../NPS.md)): overall NPS (%promoters − %detractors, mirroring `npsScore` in `beats.ts`), the segment split, response count, **offers** (spoken `REQUEST_NPS` beat rows), **response_rate** (÷, mirroring `npsResponseRate`; null when coach-scoped or nothing offered), **gate_holds** (why the gate did NOT ask, from `payload.npsGate`), and category frequencies with the **detractor themes broken out**. Guarded like `get_edition()` (admin JWT or service role); granted to `authenticated`. Null NPS when there are no responses — never a fake zero. | The admin studio **NPS tab** (direct RPC). |
 | `get_edition()` | → (next, run, claimed, remaining) | Reads the edition counter. Raises unless `is_concierge_admin()`. | admin Edition card. |
 | `set_edition(p_next_serial, p_run_size)` | → void | Sets `next_serial`/`run_size` (validates `next ≤ run+1`). Raises unless `is_concierge_admin()`. | admin Edition card. |
+| `llm_cost_metrics(p_days)` | → jsonb | The Spend tab's rollup ([COST.md](../COST.md)): totals + daily buckets **by model** and by purpose, qa split out. Admin-gated. | admin Spend tab. |
+| `appointment_slots(p_type, p_location, p_from, p_to, p_visitor_tz?)` | → jsonb | **The one source of "available"**: weekly windows ∩ business hours, expanded per-date in the location's zone (DST-correct), minus exceptions, live bookings and buffers, clipped by lead time/horizon; ≤ 40 slots, each with pre-formatted shop/visitor/lead labels — the model recites, never converts. | `get_available_times` tool; deploy CI probe. |
+| `book_appointment(…)` | → jsonb | Advisory lock → max-open-per-contact check → **re-derives the slot through `appointment_slots`** (an offer is only ever a read of the same function) → inserts `booked` or `requested` per `confirm_mode`. `taken` returns three alternatives. | `book_appointment` tool. |
+| `reschedule_appointment(…)` | → jsonb | Atomic move under **two hash-ordered locks**; auto mode updates in place, manual mode writes a new `requested` row (`reschedule_of`) while the original stands. On a lost race the original still stands and alternatives return. | `reschedule_appointment` tool. |
+| `update_appointment(…)` | → jsonb | Party-size/notes edits, revalidated against `max_party`. | `update_appointment` tool. |
+| `confirm_appointment(p_id)` | → jsonb | Queue action: `requested`→`booked`; **completes a pending move** by cancelling the original row. | studio queue. |
+| `cancel_appointment(p_id, …)` | → jsonb | Ownership = cancel token OR signed-in customer OR session key OR admin (`coalesce(..., false)` — a null token can never bypass). Cancels pending moves with the row. | `cancel_appointment` tool; studio queue. |
+| `close_appointment(p_id, p_outcome)` | → jsonb | `completed` / `no_show` / `done` (callbacks). | studio queue. |
+| `appointments_queue()` | → jsonb | The triage board: sweeps `expire_stale_requests()` first, then requested (+TTL deadline, move flag), open callbacks (+age), today (+due house notes), needs-closing. Admin-gated. | Calendar tab; deploy CI probe. |
+| `expire_stale_requests()` | → int | Cancels `requested` rows older than the TTL (`bookings.requestTtlHours`); swept when the queue opens. | `appointments_queue()`. |
+| `appointments_week(p_days)` | → jsonb | The 7-day grid's rows (status, location tz for wall-clock chips). Admin-gated. | Calendar tab. |
+| `patron_appointments(p_customer)` | → jsonb | One patron's bookings by `customers.id`. Admin/service-gated. | engine (UPCOMING VISIT context). |
+| `patron_appointments_by(p_email, p_user)` | → jsonb | Same, resolved by email/auth-user id server-side (the studio never sees `customers` ids). | patron drawer timeline. |
+| `appointment_facets(p_days)` | → jsonb | Bounded (≤ 5000) conversation/session booking facts. | 📅 badge on Conversations; the funnel's hard `Booked a visit` stage. |
 
-`EXECUTE` on the register/cache RPCs is revoked from
-`public`/`anon`/`authenticated`; only the service role calls them. The two
-edition RPCs are the exception — granted to `authenticated` (they self-gate on
-`is_concierge_admin()`) so the admin studio can call them with the user's JWT.
+`EXECUTE` on the register/cache/booking RPCs is revoked from
+`public`/`anon`/`authenticated`; only the service role calls them. The
+exceptions — granted to `authenticated` because they self-gate on
+`is_concierge_admin()` — are the studio's surfaces: the two edition RPCs,
+`nps_metrics`, `llm_cost_metrics`, and the calendar's admin set
+(`appointments_queue`, `appointments_week`, the confirm/cancel/close actions,
+`patron_appointments`/`_by`, `appointment_facets`).
 
 ---
 

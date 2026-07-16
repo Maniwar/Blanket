@@ -41,6 +41,11 @@ scaling *blockers* are done (see [SCALING.md](SCALING.md) #1–#4). This is the
   toggle cascade (master → location → type; a toggle is never a
   cancellation); industry presets (car sale → restaurant → two-city
   gallery). Full build contract: [APPOINTMENTS.md](APPOINTMENTS.md).
+  **Post-ship rounds (also live):** the Calendar tab's presentation upgrade
+  (triage queue with status pills + TTL countdowns, 7-day grid, labeled
+  location/offering cards) and the A1.1 cohesion round (patron-drawer
+  timeline, 📅 badge on Conversations, the funnel's hard `Booked a visit`
+  stage) — drift notes at the top of APPOINTMENTS.md.
 
 - **[Shipped] The meter + Spend tab.** Every model call logged at the source
   with a purpose (`concierge_llm_usage`; fire-and-forget, never blocks

@@ -87,8 +87,14 @@ also fails, by defense in depth that doesn't trust the model:
   model's `input` only supplies parameters (a serial, a colorway). Every write is
   scoped by `ownershipFilter(customer)`, which ANDs `user_id = <the caller>` into
   the query — so a tool aimed at someone else's order matches **zero rows**.
-- **Anonymous sessions get no tools at all** — a logged-out visitor can't call
-  anything.
+- **Anonymous sessions get no order tools.** A logged-out visitor can't touch
+  the register — the account-scoped tools require the verified JWT. The
+  deliberately anonymous-capable tools (`submit_inquiry`, and the booking set
+  when the calendar is on) take no identity from the model either: contact
+  details are visitor-typed parameters, masked to `[contact on file]` in every
+  result injected back into the prompt, and ownership of a booking is proven by
+  session key, signed-in customer, or the emailed cancel token — never by the
+  model's say-so.
 - **Server-side revalidation** — `input` is schema-validated by the API *and*
   re-checked in `runRegisterTool` (colorway enum whitelist, integer serials,
   status guards like "only while `placed`").
