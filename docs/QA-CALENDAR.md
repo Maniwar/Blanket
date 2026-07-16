@@ -13,16 +13,17 @@ what renders and what would have been written to the database. Zero
 both scripts; the harness re-extracts from `admin.html` on every run, so it
 always tests the current code).
 
-## Result: 123 / 123 (current deck; originally 47 / 47 after one product fix)
+## Result: 139 / 139 (current deck; originally 47 / 47 after one product fix)
 
 The deck has grown with the tab: the original 47-check core (S1–S4 below)
 plus staff & hours (S5–S8), departures (S9), breaks/time-off v2 (S10–S11),
 grouped nav (S12), reports & exports incl. the operations-review CSV
 (S13, S15), guarded removal (S14), capacity drill-in (S16), callback
 accountability & the closed-out fold (S17), and the Judge & coach page
-(S18), and the time-off request lifecycle — chips, approve/decline/return/
-restore, overlap visibility on every surface (S19). Latest run:
-**134/134, 21 screenshots**, zero page errors.
+(S18 — now including the pause switches, the coach's draft strip, and the
+digest preview/send), and the time-off request lifecycle — chips,
+approve/decline/return/restore, overlap visibility on every surface (S19).
+Latest run: **139/139, 21 screenshots**, zero page errors.
 
 **Bug found and fixed by this pass** — the out-of-hours warning ("Saved —
 but N window(s) fall entirely outside … business hours and will yield no

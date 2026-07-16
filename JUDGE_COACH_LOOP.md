@@ -107,11 +107,17 @@ automatically — only the merchant may do that.
 
 ## 9. Build order (proposed)
 
-1. #149 deterministic pre-filter (kills the biggest live cluster, ~1 day)
-2. RECENT VETOES block + bounded redraft (§5)
-3. Findings detection job + the tab's queue/health strip (§3, §6)
-4. Remedy proposals with tiers + verify-by-eval (§4)
-5. Starter answerability (§7) · weekly digest
+1. #149 deterministic pre-filter — **live** (now token-vocabulary-aware:
+   widget-renderable tokens pass; only unrenderable plumbing dies)
+2. RECENT VETOES block + bounded redraft (§5) — **live**
+3. Findings detection (`judge_findings`) + the tab's health strip — **live**
+4. Remedy tiers — **partially live**: Tier-1 coach drafts ("say it
+   differently" procedures, seeded disabled, one per defect class) ride the
+   weekly digest run; pause-a-beat-kind is the first intervention control.
+   Verify-by-eval remains open.
+5. Starter answerability (§7) — **live** · weekly digest — **live**
+   (piggybacked self-scheduler, no cron; `?judgedigest=1` previews/sends on
+   demand from the tab)
 
 **Open questions for you:** (a) Tier 1 auto-drafts — comfortable with the
 coach writing draft exemplars/KB unattended? (b) redraft budget: one retry
