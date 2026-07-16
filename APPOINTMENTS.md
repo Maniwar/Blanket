@@ -21,6 +21,11 @@ two-session race (the loser blocked on the advisory lock and got `taken`).
   phrasing is A2.
 - **Request TTL** sweeps opportunistically when the queue opens (plus any
   future cron), not on a timer.
+- **Calendar tab presentation** (post-ship, owner feedback): the queue is a
+  triage board (status pills, TTL countdowns, waiting ages), the 7-day view is
+  a real calendar grid (dashed chip = awaiting confirmation), locations/hours
+  and offerings are labeled cards ("concurrent slots", not "cap"), and the
+  add-location row is always visible. Same ids, same RPCs — rendering only.
 
 ---
 
