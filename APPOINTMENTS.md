@@ -12,9 +12,14 @@ two-session race (the loser blocked on the advisory lock and got `taken`).
   A2 (§8 as written describes the A2 end-state).
 - **Slot pills** ride the existing `{{reply:…}}` machinery (SOP 2b); no new
   widget renderer was needed.
-- **Deferred to A1.1** (RPCs already live and tested): the patron-drawer
-  appointments timeline (`patron_appointments`), the conversation 📅 facet,
-  and the Conversion-funnel `booked` stage.
+- **A1.1 SHIPPED** (the cohesion round): the patron drawer's
+  "Appointments & callbacks" timeline (via `patron_appointments_by` — the
+  drawer knows email/user id, not the customers-table id), the 📅 badge on
+  Conversations rows, and the hard `Booked a visit` stage in the Conversion
+  behavioral funnel (callbacks and cancellations excluded; hidden until the
+  calendar has ever produced a row, so a dark feature never draws a fake
+  zero line). All fed by one bounded `appointment_facets` fetch, cached per
+  session and refreshed when the Calendar tab reloads.
 - **Queue ageing** is wall-clock with a >24 h highlight; business-time ageing
   is A2. **Callback next-opening phrasing** comes from the HOURS block + SOP
   8/8a (the model reads the table with local-now provided); register-computed
