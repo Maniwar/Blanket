@@ -1,0 +1,48 @@
+# Read-only operations report: where the judge is blocking, what the beats
+# are doing, and what keeps landing in the knowledge-gap ledger. Aggregates
+# only — no visitor columns are ever selected. Dispatch on demand; the log IS
+# the report. (The agent sandbox cannot reach the database; CI can.)
+name: ops-report
+on:
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      DB: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: actions by kind (14 days)
+        run: |
+          psql "$DB" -c "select kind, count(*) n from public.concierge_actions
+            where created_at > now() - interval '14 days' group by 1 order by 2 desc;"
+      - name: beat outcomes by beat kind (14 days)
+        if: always()
+        run: |
+          psql "$DB" -c "select coalesce(payload->>'kind', payload->>'beat', '?') beat,
+              coalesce(payload->>'outcome','?') outcome, count(*) n
+            from public.concierge_actions
+            where created_at > now() - interval '14 days' and kind like 'beat%'
+            group by 1, 2 order by 1, 3 desc;"
+      - name: judge vetoes — reasons (14 days, truncated)
+        if: always()
+        run: |
+          psql "$DB" -c "select left(coalesce(payload->>'veto_reason', payload->>'reason',
+              payload#>>'{judge,reason}', payload->>'defect', 'unlabeled'), 110) reason, count(*) n
+            from public.concierge_actions
+            where created_at > now() - interval '14 days'
+              and (kind = 'beat_veto' or payload->>'outcome' = 'vetoed')
+            group by 1 order by 2 desc limit 15;"
+      - name: one raw veto payload shape (keys only)
+        if: always()
+        run: |
+          psql "$DB" -c "select jsonb_object_keys(payload) from public.concierge_actions
+            where kind = 'beat_veto' or payload->>'outcome' = 'vetoed'
+            order by created_at desc limit 1;" || true
+      - name: knowledge gaps — repeats (30 days)
+        if: always()
+        run: |
+          psql "$DB" -c "select left(question, 70) question, count(*) n, max(created_at)::date latest
+            from public.concierge_flags
+            where created_at > now() - interval '30 days'
+            group by 1 having count(*) > 1 order by 2 desc limit 12;" || true
