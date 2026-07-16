@@ -1,0 +1,43 @@
+# Probes the browser-side (publishable) Supabase credentials for both sites.
+# Publishable keys are public by design — they ship in the page source; RLS
+# decides what they can touch. This exists because the agent sandbox cannot
+# reach supabase.co, so browser-credential health is verified from CI.
+name: key-probe
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: blanket REST (kvkjxjdpqoqasiehdlcw)
+        env:
+          K: sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy
+        run: |
+          code=$(curl -s -o /tmp/b -w '%{http_code}' --max-time 20 \
+            -H "apikey: $K" -H "Authorization: Bearer $K" \
+            "https://kvkjxjdpqoqasiehdlcw.supabase.co/rest/v1/")
+          echo "REST HTTP $code"; head -c 200 /tmp/b; echo
+          test "$code" = "200"
+      - name: 996 REST (amexzypgvntohhntahuj)
+        env:
+          K: sb_publishable_zt3jU2wLqqoWBaUgajs1tw_a-Sxi1sk
+        run: |
+          code=$(curl -s -o /tmp/b -w '%{http_code}' --max-time 20 \
+            -H "apikey: $K" -H "Authorization: Bearer $K" \
+            "https://amexzypgvntohhntahuj.supabase.co/rest/v1/")
+          echo "REST HTTP $code"; head -c 200 /tmp/b; echo
+          test "$code" = "200"
+      - name: edge functions (informational — app-level codes are fine, gateway 401 is not)
+        if: always()
+        env:
+          KB: sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy
+          K9: sb_publishable_zt3jU2wLqqoWBaUgajs1tw_a-Sxi1sk
+        run: |
+          for pair in "kvkjxjdpqoqasiehdlcw $KB" "amexzypgvntohhntahuj $K9"; do
+            set -- $pair
+            code=$(curl -s -o /tmp/e -w '%{http_code}' --max-time 20 \
+              -H "apikey: $2" -H "Authorization: Bearer $2" \
+              "https://$1.supabase.co/functions/v1/concierge?defaults=1")
+            echo "edge $1 HTTP $code"; head -c 200 /tmp/e; echo
+          done
