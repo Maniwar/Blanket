@@ -49,8 +49,11 @@ It answers **yes** only when all hold:
 
 - **enabled** — `outreach.nps.enabled` (absent = **ON**, the house pattern; Engagement → House rules).
 - **concluded** — a natural end was reached: an order placed, a goal met, the
-  wrap-up/leave signal (`?wrapup` / `pagehide`), or the visitor's "that's all for
-  now". Never mid-conversation.
+  wrap-up/leave signal (`?wrapup` / `pagehide`), the visitor's "that's all for
+  now", **or the conversation ran dry** (three or more consecutive held beats —
+  the same signal that triggers the `GRACEFUL_CLOSE` goodbye, BEHAVIOR.md; when
+  the two coincide they land as one message: the outro, then the scale). Never
+  mid-conversation.
 - **not already offered this session** — the "offer once" ledger, exactly like
   the beat engine's spent-action logic; a submitted row or a recorded offer
   closes the door for the session.

@@ -182,7 +182,8 @@ every knob to the admin card that owns it.*
   placeholder-address anomalies, post-sale window, unmet goals, pending
   questions, the 30-day spoken-action log) and runs it through an ordered
   **Action Table** — `FIX_BLOCKED_ORDER → PROPOSE_COMPANION → PROPOSE_GIFT →
-  ADVANCE_GOAL → KEEP_WARM → HOLD` — choosing the ONE action the beat performs.
+  ADVANCE_GOAL → KEEP_WARM → GRACEFUL_CLOSE → HOLD` — choosing the ONE action
+  the beat performs.
   The table lives in `beats.ts` as pure functions and is **unit-tested on every
   deploy** (`deno test` gates the workflow before the type-check). "Once" is
   state, not exhortation: a spoken action writes a `beat_action` audit row.
@@ -210,6 +211,16 @@ every knob to the admin card that owns it.*
   mending promise) — warm, brief, no ask. Once per section per day; then, and
   only then, HOLD. This answers the observed failure "too much silence, not
   enough attempts to engage" without re-opening the invention door.
+- **A dry conversation earns a goodbye — `GRACEFUL_CLOSE`.** When three or
+  more beats in a row have held with nothing new to say, an endless silent
+  vigil reads as absence, not restraint: the table's last rule before HOLD
+  closes warmly — thanks for their time, the door stays open — no ask, no
+  selling, no recap. Once per 24h, then true silence. The engine counts the
+  conversation's trailing `beat_hold` rows into the ledger (`heldStreak`),
+  and a dry run also counts as "concluded" for the NPS gate (NPS.md §1) — so
+  when the goodbye and the closing survey coincide they land as ONE message:
+  the outro, then the `{{nps}}` scale. Disableable like every rule
+  (`config.beat_actions.GRACEFUL_CLOSE`).
 - **The speak/hold decision is a typed field, not a magic word.** Every
   proactive call (in-panel beats and the closed-panel bubble) forces a
   structured `beat_line` tool — `{speak: boolean, line: string}` — so the old
