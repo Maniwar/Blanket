@@ -121,7 +121,13 @@ automatically — only the merchant may do that.
    missing-knowledge findings filed into the gap ledger when invented claims
    repeat (the KB is silent where shoppers ask), and remedy-not-holding
    escalation (an ENABLED procedure whose defect class recurs is named in
-   the digest, never silently tolerated). Verify-by-eval remains open.
+   the digest, never silently tolerated). Verify-by-eval — **live**: a
+   repeating class seeds a deterministic regression eval into the deck
+   (coach-verify-<class>; the weekly eval run proves the fix keeps holding),
+   an enabled procedure with zero blocks is reported "healed and holding"
+   (observed, never declared), and the missing-knowledge finding closes
+   itself when invented claims stop — re-filing on its own if they return.
+   §4 is complete.
 5. Starter answerability (§7) — **live** · weekly digest — **live**
    (piggybacked self-scheduler, no cron; `?judgedigest=1` previews/sends on
    demand from the tab)
