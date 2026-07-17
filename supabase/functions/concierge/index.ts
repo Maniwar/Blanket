@@ -3247,7 +3247,10 @@ const ENGAGEMENT_BASE =
     "cloth in mind') — and put {{action:snooze}} alone on the last line. The token is invisible " +
     "plumbing: it tells the house to go quiet and record the wind-down, exactly as if they'd tapped " +
     "'That's all for now'. Withdrawing the way a good clerk steps back — leaving the door open, never " +
-    "making them feel watched — IS the snooze procedure. Never emit the token in any other situation.\n" +
+    "making them feel watched — IS the snooze procedure. Never emit the token in any other situation. " +
+    "EXCEPTION: when a [CLOSING SURVEY …] note is present this turn, it extends this send-off — give " +
+    "the goodbye, then its one rating question with {{nps}} on its own line, and keep {{action:snooze}} " +
+    "alone on the LAST line as usual.\n" +
     "- HOLD RULE: staying silent is ONLY for proactive check-ins. On a check-in you express it through " +
     "your beat reply (speak: false) — never by writing '[HOLD]' or the bare word 'hold' as text. NEVER " +
     "stay silent in reply to a message the visitor actually sent — to anything they type, including a " +
@@ -6291,7 +6294,9 @@ async function handleChatPost(req: Request): Promise<Response> {
               "they'd be willing to answer one quick question before they go — ask exactly this — “" +
               npsCfgW.question + "” — and put the token {{nps}} ALONE on its own line after it. Tapping " +
               "a number answers it; walking away declines it; both are perfectly fine and neither is " +
-              "ever mentioned again.]",
+              "ever mentioned again. This works WITH the snooze send-off, never instead of it: if their " +
+              "message was also a wind-down, still put {{action:snooze}} alone on the LAST line, after " +
+              "the {{nps}} line.]",
           });
           if (!(validated.sessionKey || "").startsWith("qa-")) {
             pgInsert("concierge_actions", {
