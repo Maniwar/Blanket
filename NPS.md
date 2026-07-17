@@ -389,3 +389,26 @@ live-fire deck case is flaky to force).
 - **Causation** — segment movement after an intervention is correlational; a
   holdout/A-B is the honest way to claim the coach *caused* a Detractor →
   Promoter move (the same caveat as the coach-lift eval).
+
+## The closing ask is deterministic (learned live, 2026-07-17)
+
+A live probe ("that's all for now" after a real conversation) found the
+model following the snooze send-off and dropping the scale, even though the
+wrap-up gate had offered. Three layers now guarantee the choreography:
+
+1. **The register instructs in USER position** — the same channel the
+   closing-survey SOP is trained on ("when the register instructs you…")
+   and the same position the beat path uses. A late system block loses to
+   the baked snooze exemplar; the register note beside the visitor's own
+   goodbye does not (probe: complied on the first run).
+2. **The net**: if the gate offered and the reply still lacks `{{nps}}`,
+   the stream tail appends the configured question + the scale — stream
+   and stored transcript carry identical text. The visitor can never miss
+   the survey while prompts are being tuned.
+3. **The meter**: every net catch writes a `REQUEST_NPS_APPENDED` row, so
+   model compliance is a measurable rate with a target of zero — prompt
+   work has a scoreboard, not a feeling.
+
+The `NPS probe` workflow proves the whole path against production on
+demand (real conversation, waits out the worth-rating minimum, non-qa
+session so the gate's decision is visible, deletes every row it created).
