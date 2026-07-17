@@ -1478,6 +1478,55 @@ criteria:
   external cron), can be previewed without sending or emailed on the spot,
   and says what was caught, what healed itself, and what awaits my approval.
 
+### 2.12 The graphical studio — scheduling by hand, not by form
+
+Setup was reading and typing where the work is inherently spatial. This round
+made the studio's time surfaces graphical without moving a single write path:
+every gesture lands in exactly the rows the typed editors always wrote, and
+every acting control still fires the same RPC the chat uses. Proven by the
+same headless deck (paint, resize, split, and drag are driven by real pointer
+events and asserted against both the picture and the mirrored rows).
+
+- **As the merchant, I want to paint when we're open — one week grid for
+  business hours, each person's hours, and an offering's start windows — so
+  that setting a schedule looks like a schedule, not a stack of time fields.**
+  *Accepted when:* dragging on empty space paints a block, dragging an edge
+  resizes it, dragging its middle moves it, and a tap opens exact times, a
+  break split, and removal; an offering's block can carry its own start
+  cadence; every gesture is mirrored into the typed rows beneath a "type the
+  times instead" toggle — the ledger every save reads — so saving writes the
+  same delete-then-insert rows as ever, and toggling back re-reads whatever
+  was typed.
+- **As a first-time merchant, I want five small steps to live — where, when
+  (painted), what people book, who takes it, open the doors — so that the
+  first run is a guided walk, not a scavenger hunt.**
+  *Accepted when:* the setup card edits each step right there with the same
+  table writes the cards below make; the offering step arrives prefilled from
+  the painted open hours; the last step shows the live "a visitor would be
+  offered…" preview from the real slots RPC before the switch flips; every
+  step stays editable later on the ordinary cards.
+- **As the merchant, I want to move a visit by dragging its mark — and to add
+  a booking or time off by clicking an empty stretch — so that running the
+  day book feels like touching the day, with every guardrail standing.**
+  *Accepted when:* dragging a mark shows a floating clock naming the drop,
+  releasing asks one plain question, and confirming fires the same
+  reschedule RPC the chat uses — a taken time is refused honestly with the
+  register's own alternatives, and a named person is kept when free; an empty
+  stretch offers "book a visit" (the same book_appointment, all capacity and
+  hours rules enforced) or the two-tap time-off card.
+- **As the merchant, I want the tab to open on the numbers that need my hand
+  — awaiting confirmation, callbacks owed, today, to close out, time-off
+  decisions, this week — so that the landing is a glance, not a scroll.**
+  *Accepted when:* six tiles sit under the masthead, each clicking straight
+  into the section where that work happens, zeros rendered calm instead of
+  loud, the time-off tile naming who is asking.
+- **As the merchant, I want every label in my own words — spot checks, saved
+  answers, built-in actions, in-chat forms, names "named automatically" —
+  so that nothing in the studio needs a developer's vocabulary to read.**
+  *Accepted when:* the nav and page mastheads carry the plain names (URL
+  hashes and integrations unchanged), and no merchant-facing refusal or hint
+  says "slug", "eval", or shows a raw table name.
+
 ---
 
 ## 3. Architecture

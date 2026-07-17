@@ -13,7 +13,7 @@ what renders and what would have been written to the database. Zero
 `tools/qa/` (committed, restart-proof); the harness re-extracts from
 `admin.html` on every run, so it always tests the current code.
 
-## Result: 137 / 137 (current deck; originally 47 / 47 after one product fix)
+## Result: 153 / 153 (current deck; originally 47 / 47 after one product fix)
 
 The deck has grown with the tab: the original 47-check core (S1–S4 below)
 plus staff & hours (S5–S8), departures (S9), breaks/time-off v2 (S10–S11),
@@ -21,9 +21,20 @@ grouped nav (S12), reports & exports incl. the operations-review CSV
 (S13, S15), guarded removal (S14), capacity drill-in (S16), callback
 accountability & the closed-out fold (S17), and the Judge & coach page
 (S18 — now including the pause switches, the coach's draft strip, and the
-digest preview/send), and the time-off request lifecycle — chips,
-approve/decline/return/restore, overlap visibility on every surface (S19).
-Latest run: **137/137, 20 screenshots**, zero page errors (deck rebuilt after a workspace reset; now committed under tools/qa/).
+digest preview/send), the time-off request lifecycle — chips,
+approve/decline/return/restore, overlap visibility on every surface (S19) —
+and the graphical-studio round: **S20 the painted week** (drag-create,
+edge-resize, tap card, break split, remove — each gesture driven by real
+pointer events and asserted against BOTH the picture and the typed rows the
+save reads) and **S21 the Day Book's hands** (dragging a visit's mark shows
+the floating clock, the drop card fires the same reschedule RPC the chat
+uses; the empty-stretch chooser books a walk-in through book_appointment
+with the lane's person named). S1 now walks the five-step first-run wizard
+(quick-fill paints Mon–Fri, saves write the same delete-then-insert rows,
+the offering copies the painted hours, WHO skips, Open-the-doors flips the
+config and the note confirms), and S2.3 asserts the glance landing — six
+clickable numbers, time-off decisions included, above the queue.
+Latest run: **153/153, 22 screenshots**, zero page errors.
 
 **Bug found and fixed by this pass** — the out-of-hours warning ("Saved —
 but N window(s) fall entirely outside … business hours and will yield no

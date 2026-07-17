@@ -32,66 +32,112 @@ function log(id, name, pass, detail) {
   const dbops = (pg) => pg.evaluate(() => window.DB_LOG.map((l) => l.op + ':' + l.table + (l.args.length ? '(' + l.args.join(';').slice(0, 180) + ')' : '')));
   const note = (pg) => pg.$eval('#cal-note', (n) => n.textContent);
   const reload = (pg) => pg.evaluate(() => loadCalendar());
+  // the typed rows live behind "type the times instead" — open them by scope
+  const openTyped = (pg, scope) => pg.evaluate((sc) => {
+    document.querySelectorAll(sc + ' [data-paint-toggle]').forEach((b) => {
+      const typed = b.parentElement.querySelector('.cal-typed');
+      if (typed && !typed.classList.contains('is-open')) b.click();
+    });
+  }, scope);
+  const PXM = 34 / 60;
+  async function paintDrag(pg, colSel, mFrom, mTo) {
+    const g = await pg.$eval(colSel, (col) => {
+      col.scrollIntoView({ block: 'center' });
+      const wrap = col.closest('[data-paint]');
+      const r = col.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y, lo: +wrap.getAttribute('data-lo') };
+    });
+    await pg.mouse.move(g.x, g.y + (mFrom - g.lo) * PXM);
+    await pg.mouse.down();
+    await pg.mouse.move(g.x, g.y + (mTo - g.lo) * PXM, { steps: 5 });
+    await pg.mouse.up();
+    await pg.waitForTimeout(50);
+  }
+  async function dragEdge(pg, blkSel, edge, mTo) {
+    const g = await pg.$eval(blkSel, (blk) => {
+      blk.scrollIntoView({ block: 'center' });
+      const wrap = blk.closest('[data-paint]');
+      const r = blk.getBoundingClientRect();
+      const cr = blk.parentElement.getBoundingClientRect();
+      return { x: r.x + r.width / 2, yTop: r.y, yBot: r.y + r.height, colTop: cr.y,
+               lo: +wrap.getAttribute('data-lo') };
+    });
+    await pg.mouse.move(g.x, edge === 'b' ? g.yBot - 3 : g.yTop + 3);
+    await pg.mouse.down();
+    await pg.mouse.move(g.x, g.colTop + (mTo - g.lo) * PXM, { steps: 5 });
+    await pg.mouse.up();
+    await pg.waitForTimeout(50);
+  }
+  async function tapBlk(pg, sel) {
+    const g = await pg.$eval(sel, (blk) => {
+      blk.scrollIntoView({ block: 'center' });
+      const r = blk.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await pg.mouse.click(g.x, g.y);
+    await pg.waitForTimeout(60);
+  }
 
   // ── S1 fresh install — SAM'S WALKTHROUGH (no free text but a name) ───────
   let pg = await open('fresh');
   await shot(pg, '01-fresh-checklist');
   log('S1.1', 'fresh: renders without errors', pg.errors.length === 0, pg.errors.join('; '));
-  log('S1.2', 'fresh: three-step checklist, nothing done, step 3 locked',
-    await pg.$$eval('#cal-setup .cal-step', (x) => x.length) === 3 &&
-    await pg.$$eval('#cal-setup .cal-step.done', (x) => x.length) === 0 &&
-    await pg.$eval('#cal-setup', (n) => n.textContent.includes('unlocks when 1 and 2 are done')));
+  log('S1.2', 'fresh: five-step wizard, place ticked, WHEN active with a painter',
+    await pg.$$eval('#cal-setup .cal-step', (x) => x.length) === 5 &&
+    await pg.$$eval('#cal-setup .cal-step.done', (x) => x.length) === 1 &&
+    !!(await pg.$('#cal-setup .cal-step.active')) &&
+    !!(await pg.$('#cal-setup .cal-wizbody [data-paint]')) &&
+    await pg.$eval('#cal-setup', (n) => n.textContent.includes('Unlocks when the earlier steps are done')));
   log('S1.3', 'fresh: master switch DISABLED with the reason on it (never refused)',
     await pg.$eval('#cal-on', (n) => n.disabled && n.title.includes('Unlocks')));
   log('S1.4', 'fresh: timezone is a dropdown, browser zone preselected',
     await pg.$eval('#cal-nl-tz', (n) => n.tagName === 'SELECT' &&
       n.value === (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone));
-  log('S1.5', 'fresh: hours editor auto-open with quick-start templates',
-    !!(await pg.$('#cal-locs .cal-editor:not(.is-collapsed)')) && !!(await pg.$('[data-tpl="wk"]')));
+  log('S1.5', 'fresh: WHEN offers quick fills beside the painter',
+    !!(await pg.$('#cal-setup [data-tpl="wk"]')) &&
+    !!(await pg.$('#cal-locs .cal-editor:not(.is-collapsed)')));
 
-  // step 1 — hours from a template, one tap + save
-  await pg.click('[data-tpl="wk"]');
-  log('S1.6', 'template fills Mon–Fri 9–5 as picker rows (5 ranges, weekend Closed)',
-    await pg.$$eval('#cal-locs .cal-hr-range', (x) => x.length) === 5 &&
-    await pg.$$eval('#cal-locs .cal-closed', (x) => x.length) === 2);
+  // WHEN — quick-fill paints the week, the save writes the same rows as ever
+  await pg.click('#cal-setup [data-tpl="wk"]');
+  log('S1.6', 'quick fill paints Mon–Fri 9–5 (five blocks on the grid)',
+    await pg.$eval('#cal-setup .cal-wizbody [data-paint]', (n) => {
+      const bs = n.paintBlocks();
+      return bs.length === 5 && bs.every((x) => x.a === 540 && x.b === 1020);
+    }));
   await pg.evaluate(() => { window.DB_LOG = []; });
-  await pg.click('#cal-locs .cal-editor >> text=Save hours');
-  await pg.waitForTimeout(100);
+  await pg.click('#cal-setup [data-wz="save"]');
+  await pg.waitForTimeout(120);
   const h1 = await dbops(pg);
-  log('S1.7', 'save hours = delete then insert 5 rows (540→1020)',
+  log('S1.7', 'wizard save = delete then insert 5 rows (540→1020)',
     h1[0].startsWith('delete:concierge_business_hours') &&
     h1.some((o) => o.startsWith('insert:concierge_business_hours') && o.includes('540') && o.includes('1020')));
-  log('S1.8', 'checklist: step 1 ticks itself after the save',
-    await pg.$$eval('#cal-setup .cal-step', (x) => x[0].classList.contains('done')));
+  log('S1.8', 'WHERE and WHEN tick; WHAT opens prefilled from the open hours',
+    await pg.$$eval('#cal-setup .cal-step.done', (x) => x.length) === 2 &&
+    await pg.$eval('#cal-setup .cal-wizbody [data-paint]', (n) => n.paintBlocks().length === 5));
 
-  // step 2 — an offering with a day-chip window; slug auto-generated
-  await pg.click('#cal-add-type');
-  await pg.fill('#cal-types [data-f="title"]', 'Viewing');
-  await pg.check('#cal-types [data-f="enabled"]');
-  await pg.click('#cal-types [data-add-win]');
-  await pg.click('#cal-types [data-win] .dchip[data-dow="6"]');
-  await pg.fill('#cal-types [data-win] [data-w="from"]', '10:00');
-  await pg.fill('#cal-types [data-win] [data-w="to"]', '16:00');
+  // WHAT — name it; the painted windows ride into availability rows
+  await pg.fill('#cal-setup [data-wz="title"]', 'Viewing');
   await pg.evaluate(() => { window.DB_LOG = []; });
-  await pg.click('#cal-types [data-save-type]');
+  await pg.click('#cal-setup [data-wz="save"]');
   await pg.waitForTimeout(120);
   const t1 = await dbops(pg);
-  log('S1.9', 'offering saves with an auto slug + Sat window records',
+  log('S1.9', 'offering saves with an auto slug + windows copied from the open hours',
     t1.some((o) => o.startsWith('upsert:concierge_appointment_types') && o.includes('"slug":"viewing"')) &&
-    t1.some((o) => o.startsWith('insert:concierge_availability') && o.includes('"dow":6') && o.includes('600') && o.includes('960')));
-  log('S1.10', 'checklist: step 2 ticks; switch unlocks',
-    await pg.$$eval('#cal-setup .cal-step.done', (x) => x.length) === 2 &&
+    t1.some((o) => o.startsWith('insert:concierge_availability') && o.includes('"dow":1') && o.includes('540') && o.includes('1020')));
+  log('S1.10', 'three ticked; WHO offers "just me"; the master switch unlocked beneath',
+    await pg.$$eval('#cal-setup .cal-step.done', (x) => x.length) === 3 &&
     !(await pg.$eval('#cal-on', (n) => n.disabled)));
   await shot(pg, '02-fresh-two-done', false);
 
-  // step 3 — flip it on
-  await pg.check('#cal-on');
-  await pg.evaluate(() => { window.DB_LOG = []; });
-  await pg.click('#cal-save-rules');
+  // WHO — skip; OPEN THE DOORS — preview, then the same config upsert as ever
+  await pg.click('#cal-setup [data-wz="skip"]');
   await pg.waitForTimeout(80);
-  log('S1.11', 'switch on: config upserted, note confirms',
+  await pg.evaluate(() => { window.DB_LOG = []; });
+  await pg.click('#cal-setup [data-wz="on"]');
+  await pg.waitForTimeout(140);
+  log('S1.11', 'Open the doors: config upserted enabled:true, note confirms',
     (await dbops(pg)).some((o) => o.startsWith('upsert:concierge_config') && o.includes('"enabled":true')) &&
-    (await note(pg)) === 'Bookings are ON.');
+    (await note(pg)).startsWith('Bookings are ON'));
   await reload(pg);
   await pg.waitForTimeout(80);
   log('S1.12', 'after reload: masthead live, checklist gone',
@@ -101,6 +147,7 @@ function log(id, name, pass, detail) {
 
   // structured validation: the UI cannot express bad states quietly
   await pg.click('#cal-types .cal-sum .edit');
+  await openTyped(pg, '#cal-types');
   await pg.click('#cal-types [data-add-win]');
   const win2 = '#cal-types [data-win]:last-of-type';
   await pg.click(win2 + ' .dchip[data-dow="2"]');
@@ -119,8 +166,10 @@ function log(id, name, pass, detail) {
   log('S2.2', 'populated: no checklist when live; switch enabled',
     await pg.$eval('#cal-setup', (n) => n.children.length === 0) &&
     !(await pg.$eval('#cal-on', (n) => n.disabled)));
-  log('S2.3', 'populated: pulse numbers 2/1/1/1/3',
-    await pg.$$eval('.cal-pulse-t .num', (x) => x.map((n) => n.textContent).join(',')) === '2,1,1,1,3');
+  log('S2.3', 'glance landing: six numbers up top incl. time-off decisions, before the queue',
+    await pg.$$eval('#cal-glance .cal-pulse-t .num', (x) => x.map((n) => n.textContent).join(',')) === '2,1,1,1,2,3' &&
+    (await pg.$eval('#cal-glance', (n) => n.textContent)).includes('time-off decisions') &&
+    await pg.$eval('#cal-glance', (n) => n.compareDocumentPosition(document.getElementById('cal-queue')) & Node.DOCUMENT_POSITION_FOLLOWING) > 0);
   log('S2.4', 'populated: house rules are dropdowns, hydrated (cap 2, ttl 24h)',
     await pg.$eval('#cal-cap', (n) => n.tagName === 'SELECT' && n.value === '2') &&
     await pg.$eval('#cal-ttl', (n) => n.tagName === 'SELECT' && n.value === '24'));
@@ -128,6 +177,7 @@ function log(id, name, pass, detail) {
     (await pg.$eval('#cal-types .cal-sum .dig', (n) => n.textContent)).includes('45 min · starts every 15 · in-person · you confirm'));
   // hours render as picker rows; split shift shows two ranges on Wed
   await pg.click('#cal-locs .cal-sum .edit');
+  await openTyped(pg, '#cal-locs');
   log('S2.6', 'hours are time-picker rows (5 ranges; Wed split shift = 2)',
     await pg.$$eval('#cal-locs .cal-hr-range', (x) => x.length) === 5 &&
     await pg.$$eval('#cal-locs .cal-hr-day[data-dow="3"] .cal-hr-range', (x) => x.length) === 2);
@@ -151,6 +201,7 @@ function log(id, name, pass, detail) {
     hop.some((o) => o.startsWith('insert:concierge_business_hours')));
   // availability windows render grouped with day chips + step select
   await pg.click('#cal-types .cal-sum .edit');
+  await openTyped(pg, '#cal-types');
   log('S2.10', 'windows render as day-chip rows (2 windows; Tue @30 grouped)',
     await pg.$$eval('#cal-types [data-win]', (x) => x.length) === 2 &&
     await pg.$$eval('#cal-types [data-win]', (rows) => rows.some((r) =>
@@ -218,6 +269,7 @@ function log(id, name, pass, detail) {
   await pg.click('#cal-add-staff');
   const NEWP = '#cal-staff > div:last-child ';
   await pg.fill(NEWP + '[data-f="stname"]', 'Ana');
+  await openTyped(pg, '#cal-staff');
   await pg.click(NEWP + '[data-sthrs] .cal-hr-day[data-dow="5"] [data-add-range]');
   await pg.click(NEWP + '[data-svc="1"]');
   await pg.evaluate(() => { window.DB_LOG = []; });
@@ -292,7 +344,11 @@ function log(id, name, pass, detail) {
   const joDay = await pg.$eval('.cal-lane-track[data-lane="72"]', (n) => n.getAttribute('data-day'));
   await pg.click('.cal-lane-track[data-lane="72"]');
   await pg.waitForTimeout(60);
-  log('S7.8', 'lane click opens the time-off card for that person + day',
+  log('S7.8a', 'lane click offers the choice: book a visit or time off',
+    !!(await pg.$('.cal-pop [data-ad="book"]')) && !!(await pg.$('.cal-pop [data-ad="off"]')));
+  await pg.click('.cal-pop [data-ad="off"]');
+  await pg.waitForTimeout(60);
+  log('S7.8', 'Time off opens the card for that person + day',
     await pg.$eval('.cal-pop', (n, d) => n.textContent.includes('time off — Jo') && n.textContent.includes(d), joDay));
   await shot(pg, '12-timeoff-card', false);
   await pg.evaluate(() => { window.DB_LOG = []; });
@@ -306,6 +362,8 @@ function log(id, name, pass, detail) {
       (n) => n.style.width === '100%'));
   // a window that ends before it starts is refused in plain words
   await pg.click('.cal-lane-track[data-lane="71"]');
+  await pg.waitForTimeout(60);
+  await pg.click('.cal-pop [data-ad="off"]');
   await pg.waitForTimeout(60);
   await pg.uncheck('.cal-pop [data-p="all"]');
   await pg.fill('.cal-pop [data-p="from"]', '14:00');
@@ -379,6 +437,7 @@ function log(id, name, pass, detail) {
   // ── S9 lunches & breaks: split the day, sell nothing across the gap ──────
   pg = await open('populated');
   await pg.$$eval('#cal-staff .cal-sum .edit', (btns) => btns[0].click());
+  await openTyped(pg, '#cal-staff');
   log('S9.1', 'person editor carries the daily-break control (12:00–13:00 default)',
     await pg.$eval(P1 + '[data-brk="from"]', (n) => n.value === '12:00') &&
     await pg.$eval(P1 + '[data-brk="to"]', (n) => n.value === '13:00'));
@@ -779,11 +838,113 @@ function log(id, name, pass, detail) {
   pg = await open('fresh', { width: 375, height: 812 });
   await shot(pg, '08-mobile-fresh');
   log('S5.1', 'mobile fresh: renders without errors', pg.errors.length === 0, pg.errors.join('; '));
-  log('S5.2', 'mobile: checklist + templates usable, body never sideways',
-    !!(await pg.$('#cal-setup .cal-step')) && !!(await pg.$('[data-tpl="wk"]')) &&
+  log('S5.2', 'mobile: wizard + quick fills usable, body never sideways',
+    !!(await pg.$('#cal-setup .cal-step')) && !!(await pg.$('#cal-setup [data-tpl="wk"]')) &&
     await pg.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
   log('S5.3', 'mobile: native time inputs present (picker keyboards, not text)',
     await pg.$$eval('#cal-locs input[type="time"], #cal-types input[type="time"]', (x) => x.length >= 0) !== null);
+  await pg.close();
+
+  // ── S21 the Day Book's hands — drag a visit, book on an empty stretch ────
+  pg = await open('populated');
+  // drag Jordan's mark (qid 11, booked-requested on day+2) to the NEXT day at 13:00
+  const tickBox = await pg.$eval('.cal-wk-row[data-day] .cal-ribbon .cal-tick[data-qid="11"]', (n) => {
+    n.scrollIntoView({ block: 'center' });
+    const r = n.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  const drop = await pg.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('.cal-wk-row[data-day]'));
+    const from = document.querySelector('.cal-tick[data-qid="11"]').closest('.cal-wk-row[data-day]');
+    const next = rows[rows.indexOf(from) + 1] || rows[rows.indexOf(from) - 1];
+    const rib = next.querySelector('.cal-ribbon').getBoundingClientRect();
+    const lohi = state.calWkLoHi;
+    const frac = (780 - lohi[0]) / (lohi[1] - lohi[0]);   // 13:00
+    return { x: rib.x + frac * rib.width, y: rib.y + rib.height / 2, day: next.getAttribute('data-day') };
+  });
+  await pg.mouse.move(tickBox.x, tickBox.y);
+  await pg.mouse.down();
+  await pg.mouse.move(drop.x, drop.y, { steps: 8 });
+  log('S21.1', 'mid-drag: the floating clock names the drop day and time',
+    await pg.$eval('.cal-dragtip', (n) => / 13:00 /.test(' ' + n.textContent.split('·')[1] + ' ') || n.textContent.includes('13:00')));
+  await pg.mouse.up();
+  await pg.waitForTimeout(80);
+  log('S21.2', 'release opens the move card naming both times',
+    !!(await pg.$('.cal-pop [data-mv="go"]')) &&
+    await pg.$eval('.cal-pop', (n) => n.textContent.includes('13:00') && n.textContent.includes('move this visit')));
+  await pg.evaluate(() => { window.DB_LOG = []; });
+  await pg.click('.cal-pop [data-mv="go"]');
+  await pg.waitForTimeout(150);
+  const mv = await pg.evaluate(() => window.DB_LOG.filter((l) => l.op === 'rpc' && l.table === 'reschedule_appointment')
+    .map((l) => l.args.join(';')));
+  log('S21.3', 'Move it fires reschedule_appointment (same RPC as the chat) with id + new instant',
+    mv.length === 1 && mv[0].includes('"p_id":11') && mv[0].includes('"p_new_location":"main"') &&
+    mv[0].includes(drop.day));
+  // empty stretch on Jo's lane → chooser → Book a visit → book_appointment
+  await pg.click('.cal-lane-track[data-lane="72"]');
+  await pg.waitForTimeout(60);
+  await pg.click('.cal-pop [data-ad="book"]');
+  await pg.waitForTimeout(60);
+  log('S21.4', 'Book a visit opens the mini form (offering, time, visitor, contact)',
+    !!(await pg.$('.cal-pop [data-bk="type"]')) && !!(await pg.$('.cal-pop [data-bk="at"]')));
+  await pg.fill('.cal-pop [data-bk="name"]', 'Walk-in Wynn');
+  await pg.fill('.cal-pop [data-bk="contact"]', '555-777-0000');
+  await pg.fill('.cal-pop [data-bk="at"]', '11:00');
+  await pg.evaluate(() => { window.DB_LOG = []; });
+  await pg.click('.cal-pop [data-bk="go"]');
+  await pg.waitForTimeout(150);
+  const bk = await pg.evaluate(() => window.DB_LOG.filter((l) => l.op === 'rpc' && l.table === 'book_appointment')
+    .map((l) => l.args.join(';')));
+  log('S21.5', 'Book it fires book_appointment with the lane\'s person named',
+    bk.length === 1 && bk[0].includes('"p_staff":"Jo"') && bk[0].includes('"p_name":"Walk-in Wynn"') &&
+    bk[0].includes('"p_contact_kind":"phone"'));
+  log('S21.6', 'day-book round: zero page errors', pg.errors.length === 0, pg.errors.join('; '));
+  await shot(pg, '21-daybook-hands', false);
+  await pg.close();
+
+  // ── S20 the painted week — drag-create, edge-resize, tap, split, mirror ──
+  pg = await open('populated');
+  await pg.click('#cal-locs .cal-sum .edit');
+  const PW = '#cal-locs [data-hrs-pair] [data-paint]';
+  log('S20.1', 'painter mirrors the saved hours (5 blocks incl. the Wed split)',
+    await pg.$eval(PW, (n) => n.paintBlocks().length) === 5);
+  await paintDrag(pg, PW + ' .cal-paint-col[data-dow="5"]', 600, 840);
+  log('S20.2', 'drag paints Friday 10:00–14:00 AND writes the typed rows the save reads',
+    await pg.$eval(PW, (n) => n.paintBlocks().some((x) => x.dow === 5 && x.a === 600 && x.b === 840)) &&
+    await pg.$eval('#cal-locs .cal-hr-day[data-dow="5"] [data-hr="from"]', (n) => n.value) === '10:00' &&
+    await pg.$eval('#cal-locs .cal-hr-day[data-dow="5"] [data-hr="to"]', (n) => n.value) === '14:00');
+  await dragEdge(pg, PW + ' .cal-paint-col[data-dow="5"] .cal-paint-blk', 'b', 960);
+  log('S20.3', 'dragging the bottom edge stretches it to 16:00, typed row follows',
+    await pg.$eval('#cal-locs .cal-hr-day[data-dow="5"] [data-hr="to"]', (n) => n.value) === '16:00');
+  await tapBlk(pg, PW + ' .cal-paint-col[data-dow="5"] .cal-paint-blk');
+  log('S20.4', 'a tap opens the block card: exact times, a break, remove',
+    !!(await pg.$('.cal-pop [data-bp="a"]')) && !!(await pg.$('.cal-pop [data-bp="split"]')));
+  await pg.click('.cal-pop [data-bp="split"]');
+  await pg.waitForTimeout(50);
+  log('S20.5', 'split around 12–13: two blocks, two typed rows',
+    await pg.$eval(PW, (n) => n.paintBlocks().filter((x) => x.dow === 5).length) === 2 &&
+    await pg.$$eval('#cal-locs .cal-hr-day[data-dow="5"] .cal-hr-range', (x) => x.length) === 2);
+  await tapBlk(pg, PW + ' .cal-paint-col[data-dow="5"] .cal-paint-blk');
+  await pg.click('.cal-pop [data-bp="rm"]');
+  await pg.waitForTimeout(50);
+  log('S20.6', 'Remove drops the block and its typed row',
+    await pg.$eval(PW, (n) => n.paintBlocks().filter((x) => x.dow === 5).length) === 1 &&
+    await pg.$$eval('#cal-locs .cal-hr-day[data-dow="5"] .cal-hr-range', (x) => x.length) === 1);
+  // the offering painter carries the cadence, mirrored into the window rows
+  await pg.click('#cal-types .cal-sum .edit');
+  const PT = '#cal-types [data-paint]';
+  log('S20.7', 'windows painter shows both windows with the Tue cadence',
+    await pg.$eval(PT, (n) => n.paintBlocks().some((x) => x.dow === 2 && x.step === 30)));
+  await tapBlk(pg, PT + ' .cal-paint-col[data-dow="2"] .cal-paint-blk');
+  await pg.selectOption('.cal-pop [data-bp="step"]', '45');
+  await pg.click('.cal-pop [data-bp="ok"]');
+  await pg.waitForTimeout(50);
+  log('S20.8', 'cadence change mirrors into the typed window rows the save reads',
+    await pg.$$eval('#cal-types [data-win]', (rows) => rows.some((r) =>
+      r.querySelector('.dchip[data-dow="2"]') && r.querySelector('.dchip[data-dow="2"]').classList.contains('on') &&
+      r.querySelector('[data-w="step"]').value === '45')));
+  log('S20.9', 'painted round: zero page errors', pg.errors.length === 0, pg.errors.join('; '));
+  await shot(pg, '20-painted-week', false);
   await pg.close();
 
   await b.close();
