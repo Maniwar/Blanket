@@ -46,7 +46,8 @@ jobs:
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
             select key, value->'nps' as nps_config
-              from public.concierge_config where key = 'outreach';" -P title='live survey configuration'
+              from public.concierge_config where key = 'outreach'
+            union all select key, to_jsonb(left(value::text, 60)) from public.concierge_config where key = 'engagement_base';" -P title='live survey configuration (+ engagement override presence)'
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
             select c.created_at at time zone 'utc' as conv_created_utc,
                    (select count(*) from public.concierge_messages m where m.conversation_id = c.id) as messages
@@ -61,7 +62,7 @@ jobs:
               from public.concierge_actions a
               join public.concierge_conversations c on c.id = a.conversation_id
              where c.session_key = '$SES'
-               and a.payload->>'action' = 'REQUEST_NPS'
+               and a.payload->>'action' in ('REQUEST_NPS','REQUEST_NPS_APPENDED')
              order by a.created_at;" -P title='REQUEST_NPS audit for this probe session'
           if [ "${MISSED:-0}" = "1" ]; then
             echo "The scale was not offered — the gate_reason above says why. Failing so this is never a silent pass."
