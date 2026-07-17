@@ -111,10 +111,17 @@ automatically — only the merchant may do that.
    widget-renderable tokens pass; only unrenderable plumbing dies)
 2. RECENT VETOES block + bounded redraft (§5) — **live**
 3. Findings detection (`judge_findings`) + the tab's health strip — **live**
-4. Remedy tiers — **partially live**: Tier-1 coach drafts ("say it
-   differently" procedures, seeded disabled, one per defect class) ride the
-   weekly digest run; pause-a-beat-kind is the first intervention control.
-   Verify-by-eval remains open.
+4. Remedy tiers — **live**, root cause included: Tier-1 coach drafts ("say
+   it differently" procedures, seeded disabled, one per defect class) ride
+   the weekly digest run; pause-a-beat-kind and the "Amend the judge" pen
+   are the intervention controls; the judge grades against FACTS ON FILE so
+   truth is never vetoed as invention. Root-cause repair: Tier-0 starter
+   retirement (a deterministic, unit-tested matcher retires a starter that
+   keeps feeding an unanswerable question — one revert restores it),
+   missing-knowledge findings filed into the gap ledger when invented claims
+   repeat (the KB is silent where shoppers ask), and remedy-not-holding
+   escalation (an ENABLED procedure whose defect class recurs is named in
+   the digest, never silently tolerated). Verify-by-eval remains open.
 5. Starter answerability (§7) — **live** · weekly digest — **live**
    (piggybacked self-scheduler, no cron; `?judgedigest=1` previews/sends on
    demand from the tab)
