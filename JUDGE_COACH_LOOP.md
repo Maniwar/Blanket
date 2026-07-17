@@ -112,7 +112,14 @@ Cluster the streams into **findings**:
   plain caption naming the good direction. It reads the gap-filled daily
   `series` from `judge_findings`; "gaps cleared" is powered by the
   `resolved_at` trigger. Every rule change and every gap filled should move a
-  line here — that is how the owner sees the loop closing.
+  line here — that is how the owner sees the loop closing. And it explains the
+  movement, not just shows it: each day carries its **dominant defect family**
+  (so a spike reads as "mostly invented-offer that day"), the chart draws
+  **change markers** where the merchant edited a judge-relevant setting or
+  knowledge (`judge_findings.changes`, from `concierge_edit_history`), and a
+  deterministic **"what moved & likely why"** read names the biggest rise and
+  drop, attributing each to the day's family and any setting change beside it —
+  no LLM, no invented causation, just composition and timing.
 - **Scoreboard**: veto rate by beat kind, repeat-offense rate,
   redraft acceptance, time-to-heal, gaps closed vs recurring.
 - **Weekly digest email** to the owner: what was caught, what healed
