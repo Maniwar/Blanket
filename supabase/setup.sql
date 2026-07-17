@@ -3399,6 +3399,22 @@ insert into public.concierge_evals (slug, name, description, signed_in, context,
   ]}]'::jsonb, 70)
 on conflict (slug) do nothing;
 
+-- Warm-close eval. The closing choreography's model half: ending the visit
+-- earns a brief warm goodbye, never a pitch. (The rating scale is gated on
+-- session length; the nps-probe workflow proves that half against the live
+-- function, waiting out the worth-rating minimum.)
+insert into public.concierge_evals (slug, name, description, signed_in, context, turns, sort_order) values
+('closing-warm-goodbye',
+ 'Warm close on "that''s all"',
+ 'A visitor ending the visit gets one warm goodbye — thanks, door open — never a pitch, a recap, or pressure.',
+ false,
+ '{"section":"hero","device":"desktop"}'::jsonb,
+ '[{"user":"thank you, that''s all for now","checks":[
+    {"notRegex":"last chance|discount|% off|don''t miss|one more thing before"},
+    {"judge":"The reply closes warmly and briefly: it thanks the visitor and/or leaves the door open to return. It does NOT pitch a product, push a booking, recap the whole conversation, or pile on questions. A single light farewell line — or the house''s closing rating scale — is a pass."}
+  ]}]'::jsonb, 72)
+on conflict (slug) do nothing;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Contact-address migration. The KB/SOP seeds are insert-only-if-empty, so an
 -- install seeded earlier still carries the old placeholder contact. Rewrite any

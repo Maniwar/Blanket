@@ -1,0 +1,63 @@
+name: NPS probe (closing choreography, live)
+# End-to-end proof of the closing procedure against the LIVE concierge:
+# a real (qa-flagged) conversation asks a genuine question, waits out the
+# "worth rating" minimum (3 minutes by default), then says "that's all for
+# now" — and the reply must close warmly AND carry the {{nps}} scale. The
+# gate's decision is then read back from the audit ledger, so a held offer
+# explains itself (too short / already offered / cooldown) instead of
+# failing silently. qa- sessions never touch metrics; no score is tapped,
+# so no rating row is ever created.
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      FN: https://kvkjxjdpqoqasiehdlcw.supabase.co/functions/v1/concierge
+      # publishable key — public by design, ships in the page source (see key-probe)
+      K: sb_publishable_cYJYNzOu5EJ1x3IOt2nTUw_TFbkVwoy
+    steps:
+      - name: "Turn 1 — a real question opens the conversation"
+        run: |
+          SES="qa-npsprobe-${GITHUB_RUN_ID}"
+          echo "SES=$SES" >> "$GITHUB_ENV"
+          code=$(curl -s -o /tmp/t1 -w '%{http_code}' --max-time 60 \
+            -H "apikey: $K" -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+            -d "{\"messages\":[{\"role\":\"user\",\"content\":\"what makes the wool special?\"}],\"context\":{\"section\":\"hero\"},\"session_key\":\"$SES\"}" \
+            "$FN")
+          echo "turn1 HTTP $code"; head -c 400 /tmp/t1; echo
+          test "$code" = "200"
+      - name: "Wait out the worth-rating minimum (3 min default + margin)"
+        run: sleep 200
+      - name: "Turn 2 — 'that's all for now' must close warmly WITH the scale"
+        run: |
+          code=$(curl -s -o /tmp/t2 -w '%{http_code}' --max-time 60 \
+            -H "apikey: $K" -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+            -d "{\"messages\":[{\"role\":\"user\",\"content\":\"what makes the wool special?\"},{\"role\":\"assistant\",\"content\":\"Happy to tell you about the wool.\"},{\"role\":\"user\",\"content\":\"thank you, that's all for now\"}],\"context\":{\"section\":\"hero\"},\"session_key\":\"$SES\"}" \
+            "$FN")
+          echo "turn2 HTTP $code"; echo "---- reply ----"; head -c 900 /tmp/t2; echo
+          test "$code" = "200"
+          if grep -q '{{nps}}' /tmp/t2; then
+            echo "✓ the closing reply carries the {{nps}} scale"
+          else
+            echo "::warning::no {{nps}} in the closing reply — the audit step below prints the gate's own reason"
+            echo "MISSED=1" >> "$GITHUB_ENV"
+          fi
+      - name: "The gate's own account — offer or hold, with its reason"
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            select a.created_at at time zone 'utc' as at_utc,
+                   a.payload->>'action'  as action,
+                   a.payload->>'via'     as via,
+                   coalesce(a.payload->>'outcome','offered') as outcome,
+                   left(coalesce(a.payload->'npsGate'->>'reason',''), 80) as gate_reason
+              from public.concierge_actions a
+              join public.concierge_conversations c on c.id = a.conversation_id
+             where c.session_key = '$SES'
+               and a.payload->>'action' = 'REQUEST_NPS'
+             order by a.created_at;" -P title='REQUEST_NPS audit for this probe session'
+          if [ "${MISSED:-0}" = "1" ]; then
+            echo "The scale was not offered — the gate_reason above says why. Failing so this is never a silent pass."
+            exit 1
+          fi
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
