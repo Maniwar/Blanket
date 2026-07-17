@@ -1,7 +1,9 @@
 # Production validation — every calendar case exercised against the LIVE
 # database. Step 1 commits ONE real config fix (the tour's missing weekly
 # windows at Dallas — the gap the calendar doctor found). Step 2 runs the
-# whole case deck INSIDE A TRANSACTION THAT ROLLS BACK: booking, capacity,
+# whole case deck INSIDE A TRANSACTION THAT ROLLS BACK (real, non-qa
+# sessions — qa rows never occupy slots by design, which would blind the
+# capacity case): booking, capacity,
 # named person, reschedule continuity, callback lifecycle, the time-off
 # request ladder, and the report/matrix/judge surfaces — real schema, real
 # config, real staff, zero residue. Every case prints ✓ or fails the job.
@@ -63,26 +65,26 @@ jobs:
 
             -- V2 book it (qa-flagged session), the person is assigned
             v := public.book_appointment(v_t, v_l, slot0, 'Validation Guest', 'validate@example.com',
-                   'email', null, 'prod validation', null, null, null, 'qa-prod-validate', null);
+                   'email', null, 'prod validation', null, null, null, 'prodcheck-validate', null);
             if not (v->>'ok')::boolean then raise exception 'V2: book failed %', v; end if;
             if coalesce(v->>'staff_name','') = '' then raise exception 'V2: no person assigned %', v; end if;
             bid := (v->>'id')::bigint;
-            raise notice '✓ V2 booked % with % (qa-flagged)', slot0, v->>'staff_name';
+            raise notice '✓ V2 booked % with % (real semantics, rolled back after)', slot0, v->>'staff_name';
 
             -- V3 the same moment cannot double-book the only person
             v := public.book_appointment(v_t, v_l, slot0, 'Second Guest', 'validate2@example.com',
-                   'email', null, '', null, null, null, 'qa-prod-validate', null);
+                   'email', null, '', null, null, null, 'prodcheck-validate', null);
             if (v->>'ok')::boolean then raise exception 'V3: double-booked the only person!'; end if;
             raise notice '✓ V3 capacity honored — second booking honestly refused (%)', coalesce(v->>'reason','taken');
 
             -- V4 named person honored; a stranger refused honestly
             v := public.book_appointment(v_t, v_l, slot1, 'Named Guest', 'validate3@example.com',
-                   'email', null, '', null, null, null, 'qa-prod-validate', 'Nobody Realman');
+                   'email', null, '', null, null, null, 'prodcheck-validate', 'Nobody Realman');
             if (v->>'ok')::boolean then raise exception 'V4: booked with a person who does not exist'; end if;
             raise notice '✓ V4 unknown person refused honestly (%)', coalesce(v->>'reason','no_such_person');
 
             -- V5 reschedule keeps the person
-            v := public.reschedule_appointment(bid, v_l, slot1, null, null, null, 'qa-prod-validate');
+            v := public.reschedule_appointment(bid, v_l, slot1, null, null, null, 'prodcheck-validate');
             if not (v->>'ok')::boolean then raise exception 'V5: reschedule failed %', v; end if;
             if (select a.staff_id from public.concierge_appointments a
                  where a.id = coalesce((v->>'id')::bigint, bid)) is null then
@@ -92,11 +94,11 @@ jobs:
             -- V6 callback lifecycle: change window, wrong session refused, close with actor
             insert into public.concierge_appointments
               (kind, status, visitor_name, visitor_contact, contact_kind, window_pref, session_key, qa)
-              values ('callback','open','Validation Caller','5550001111','phone','asap','qa-prod-validate', true)
+              values ('callback','open','Validation Caller','5550001111','phone','asap','prodcheck-validate', false)
               returning id into cbid;
-            v := public.change_callback(cbid, 'tomorrow morning', null, null, 'qa-wrong-session');
+            v := public.change_callback(cbid, 'tomorrow morning', null, null, 'prodcheck-wrong');
             if (v->>'ok')::boolean then raise exception 'V6: wrong session changed a callback'; end if;
-            v := public.change_callback(cbid, 'tomorrow morning', null, null, 'qa-prod-validate');
+            v := public.change_callback(cbid, 'tomorrow morning', null, null, 'prodcheck-validate');
             if not (v->>'ok')::boolean then raise exception 'V6: rightful change refused %', v; end if;
             v := public.close_appointment(cbid, 'done');
             if not (v->>'ok')::boolean then raise exception 'V6: close failed %', v; end if;
