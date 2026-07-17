@@ -1269,6 +1269,215 @@ honest** (a healthy agent holds sometimes — 0% holds at high beat counts means
 it's inventing content again) and **quiet-mode invocations stay rare** (shoppers
 asking for silence is the counter-metric for "chased").
 
+### 2.11 The staffed calendar & the operations loop — people, time, and self-repair
+
+The calendar grew a team. A visit is a promise made on a real person's time,
+so the staffing dimension, the operations desk, the shopper's own levers, and
+the concierge's self-governance shipped as one arc. Everything below is live
+and continuously proven — a headless studio harness replays every control
+against the production code (zero page errors tolerated), and a real-Postgres
+suite races the bookings and re-derives the math. Stories with acceptance
+criteria:
+
+**The team & its hours**
+
+- **As the merchant, I want my people on the calendar — who they are, how to
+  reach them, and which offerings each is designated for — so that a visit is
+  only ever sold when someone qualified is actually working.**
+  *Accepted when:* an offering with designated people yields a slot only while
+  a qualified, enabled person is on shift inside the bookable window, not on
+  approved time off, and free of overlapping bookings across **all** offerings
+  (an offering with no designations behaves exactly as before); offered times
+  carry the available first names — a visitor who asks for a person by name
+  gets only that person, and an unnamed request goes to the least-loaded; two
+  simultaneous bookings can never land on the same human — the per-person lock
+  is proven under a genuine two-session race for the last free person; a
+  reschedule prefers the same person for continuity and reassigns only when
+  they are not free.
+- **As the merchant, I want each person's week entered once — split shifts
+  included — with a one-tap daily break, so that lunch is never sold.**
+  *Accepted when:* a day holds several working ranges and a visit must fit
+  inside ONE of them — nothing can ever be offered across the gap (proven
+  directly); the one-tap daily break splits every working day that spans it —
+  any length works, a 15-minute pause splits the same way — leaves days that
+  don't span it alone, and any single day stays hand-adjustable after; a
+  person's hours live inside business hours, and the engine sells only from
+  the intersection.
+- **As a person on the team, I want my own bookings to reach my inbox, so
+  that the calendar and I always agree.**
+  *Accepted when:* chat-driven booking, cancel, and move send me the engine's
+  mail — request pending, on-your-calendar with an `.ics`, time released; my
+  address never reaches the model — it is stripped before any tool result the
+  concierge reads.
+
+**Time off — requested, decided, visible**
+
+- **As the merchant fielding a time-off request, I want to log it now and
+  decide later, so that asking never costs the schedule anything.**
+  *Accepted when:* a request never removes a slot until approved — proven: a
+  request blocks nothing, approval empties the person's day, denial restores
+  it; approved time can later be **returned** to the schedule, a returned or
+  denied entry restored, and the record survives every flip; a vacation is one
+  entry with an end date and a reason — editable in place, consecutive days
+  reading as one stretch, past entries folded behind a count; the adherence
+  numbers count approved time only.
+- **As the merchant, I want the whole team's time off ahead in one list with
+  the decisions one tap away, so that a request never ages in an inbox.**
+  *Accepted when:* the roll-up lists every submitted entry soonest-first and
+  counts the requests awaiting a decision, each row wearing its status chip
+  with one-tap Approve / Decline / Return the time / Restore; an entry can be
+  moved or reshaped right in the row and keeps its reason and its decision
+  state; overlap is visible wherever a decision is made — each run names who
+  else is off in the same window, the add form hints "also off then" live,
+  and the lane quick-add lists who is already off that day.
+
+**Departures — someone may leave**
+
+- **As the merchant, I want to hand one visit to someone else — or give an
+  unowned visit a person — so that a staffed visit always has a human behind
+  it.**
+  *Accepted when:* reassignment follows the same qualified-free-person rules
+  and per-person lock as booking, honors a named person, and excludes the
+  current assignee; when nobody else is free it refuses honestly in those
+  words rather than double-book anyone; the act appears only on future staffed
+  visits, and a staffed visit nobody owns is flagged **needs a person**.
+- **As the merchant, when someone leaves I want their calendar handed to the
+  team in one act, so that a departure never silently strands a booking.**
+  *Accepted when:* the person is retired and every future visit of theirs is
+  reassigned nearest-first; whoever can't be covered is left standing but
+  **unassigned**, so the queue flags it instead of leaving it on a calendar
+  nobody reads; the shuffle is reported in plain words — how many moved, who
+  still needs covering.
+
+**The living calendar & guarded removal**
+
+- **As the merchant, I want the week view to show my people's actual coverage
+  — hours, time off, bookings — so that the calendar is a living picture, not
+  a list.**
+  *Accepted when:* each person has a toggleable lane carrying their
+  working-hours bands, their time off as hatches (a still-undecided request
+  drawn distinctly), and their bookings as marks; clicking a lane day
+  quick-adds time off in two taps, and clicking any mark opens the visit card
+  offering only the acts that fit its status; clicking a queue row flashes its
+  mark on the grid, so the list and the picture are never two worlds.
+- **As the merchant, I want removing a location, an offering, or a person to
+  be guarded and plain about its cost, so that a cleanup can never orphan a
+  promise.**
+  *Accepted when:* the confirm names exactly what goes with the removal — a
+  location takes its business hours, offering windows, and staff hours; an
+  offering takes its windows and team designations; a person takes their
+  hours, services, and time off; the register refuses while future visits
+  still point at the thing, counting them and naming the way out (move or
+  cancel them first, or just switch it off); past visits keep their records.
+
+**Reports & capacity**
+
+- **As the merchant, I want adherence and productivity in my own units — by
+  person, offering, location, or callbacks — so that "how are we doing" is a
+  glance, not a spreadsheet project.**
+  *Accepted when:* one card computes the last week / 30 days / quarter / year
+  from the same rows the slot engine sells from — scheduled and booked
+  minutes, utilization, kept / no-show / kept rate, days off, upcoming — and a
+  rate with nothing to measure is a dash, never a fake zero; every enabled
+  entity appears, zeros included — a quiet location is a fact, not a blank;
+  the callbacks dimension rolls up per handler — done, cancelled, median
+  time-to-done — plus how many are open right now and the oldest wait; what I
+  see exports as CSV, and the **operations review** is one file — people,
+  offerings, locations, callbacks, and the closed-out ledger with who acted.
+- **As the merchant, I want capacity at a glance — what I promise against
+  what the team can actually cover — so that an offering never quietly
+  outruns its people.**
+  *Accepted when:* every enabled offering × location shows the promised
+  how-many-at-once, the designated people, the exact peak of concurrently
+  qualified people, weekly coverage and possible start times, and the
+  effective ceiling — the lesser of promise and peak; a shortfall speaks in a
+  plain-words ladder — no bookable windows yet → nobody qualified has hours
+  here → their hours never overlap the windows → the promise outruns the
+  coverage — and a warm row marks each one; a cell drills straight into the
+  named editor to fix what it names, and an offering with availability
+  nowhere still appears.
+
+**The desk — outcomes stay corrigible**
+
+- **As the merchant closing out the day, I want every outcome recorded with a
+  hand on it and mistakes correctable, so that the ledger stays honest
+  without being brittle.**
+  *Accepted when:* closing a visit or callback records **who** acted; a
+  mistake is correctable for seven days — kept ↔ no-show flips or a full
+  reopen — and older rows lock; the queue's "recently closed out" fold shows
+  the last seven days (newest first, up to 15) with the outcome, the handler,
+  and the correction acts inline; the full record rides the operations-review
+  export.
+
+**The shopper's side**
+
+- **As a shopper who asked for a call back, I want the request to stay mine —
+  visible, changeable, cancellable — so that a promise made in chat behaves
+  like a promise.**
+  *Accepted when:* the concierge always knows this conversation's own open
+  and handled requests, so being asked "what callback?" when I have one can't
+  happen; nothing is promised before the request actually exists, and the
+  only promise ever made is "someone will call you in that window"; while it
+  is open I can change the window (in my own words) or correct the number
+  right in chat — ownership is my session or my sign-in — or cancel it
+  outright, and a handled or cancelled request refuses the edit honestly; a
+  signed-in patron's name comes from the register and is **never re-asked**.
+- **As a shopper whose conversation has run dry, I want a warm goodbye
+  instead of an endless silent vigil — with the rating ask riding it — so
+  that even a quiet visit ends like a visit.**
+  *Accepted when:* after three or more held beats in a row the concierge
+  closes warmly — thanks for the time, the door stays open, no ask, no recap —
+  at most once per 24 hours, then true silence; a run-dry conversation counts
+  as concluded for the survey gate, so when the goodbye and the 0–10 ask
+  coincide they land as **one** message — the outro, then the scale; the whole
+  behavior is a rule the merchant can switch off like any other.
+
+**The Judge & Coach loop — governed, learning, verified**
+
+- **As the merchant, I want one page for the reach-out review — what got
+  through, what was blocked and why, and my levers beside the evidence — so
+  that governing the concierge is triage, not archaeology.**
+  *Accepted when:* a 14-day strip counts spoke · held · vetoed alongside the
+  pre-filter kills and the redraft scoreboard; each beat kind shows its own
+  outcomes with a **Pause / Resume** switch that keeps the concierge silent
+  for that kind until I resume it; blocked lines cluster into named defect
+  families, freshest first, each with the judge's reason and fresh sample
+  kills; the findings ledger gathers repeated unanswerable questions, system
+  alerts, and my own filed notes in one place.
+- **As the merchant, I want my own pen on the judge's standards, so that the
+  house's judgment stays the house's.**
+  *Accepted when:* a sentence or two of mine rides the judge's house rules on
+  every review — versioned like every setting, withdrawn by clearing the box;
+  the judge grades against the facts on file, so a true statement is never
+  vetoed as invention; the judge is never loosened automatically — only the
+  merchant may do that.
+- **As the house, I want a blocked line to teach the next one and a repeating
+  defect to earn a drafted remedy, so that vetoes heal instead of merely
+  count.**
+  *Accepted when:* the drafter sees its recent vetoed lines with the judge's
+  reasons and earns one bounded redraft per block; a defect class that keeps
+  repeating earns a coach-drafted "say it differently" procedure that arrives
+  **disabled** — nothing applies until the merchant enables it; an enabled
+  remedy whose defect class recurs is named in the digest, never silently
+  tolerated.
+- **As the house, I want root causes repaired at the source, so that the same
+  wound doesn't reopen weekly.**
+  *Accepted when:* a conversation starter that keeps feeding an unanswerable
+  question is retired by a deterministic, unit-tested matcher — one revert
+  restores it — and new starter candidates are dry-run at generation, dropping
+  any whose honest answer is "I don't have that"; when invented claims repeat,
+  a missing-knowledge finding is filed where the knowledge base is silent —
+  and it closes itself when the claims stop, re-filing on its own if they
+  return.
+- **As the owner, I want the loop to prove its own fixes and report to me
+  weekly, so that "healed" is observed, never declared.**
+  *Accepted when:* a repeating defect class seeds a deterministic regression
+  eval into the deck, and the weekly run proves the fix keeps holding; an
+  enabled remedy with no fresh blocks reports **healed and holding** — an
+  observation, not a declaration; the weekly digest schedules itself (no
+  external cron), can be previewed without sending or emailed on the spot,
+  and says what was caught, what healed itself, and what awaits my approval.
+
 ---
 
 ## 3. Architecture
