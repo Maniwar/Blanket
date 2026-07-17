@@ -1677,6 +1677,26 @@ line chart shows whether the changes are helping.
   `series` from `judge_findings`. Proven by the Judge trend probe (live series
   + `resolved_at` trigger) and the studio harness (metric/range redraw).
 
+### 2.19 NPS drill-in — read the responses, and the conversation behind them
+
+An NPS number is only actionable if you can see the interactions under it. So
+every count is a door.
+
+- **As the merchant, I want to click an NPS segment or category and read the
+  actual responses, so that a score becomes specific feedback.** *Accepted
+  when:* clicking Promoters / Passives / Detractors, or any by-category row,
+  opens a side panel listing the matching responses in the current range —
+  each with its score, segment, and verbatim reason.
+- **As the merchant, I want to open the conversation behind a response, so
+  that I can see what actually happened.** *Accepted when:* clicking a response
+  renders that conversation's transcript (shopper / concierge turns) in the
+  same side panel, with the rating and reason at the top and a one-click jump
+  to the full Conversations view; an anonymous response with no thread is
+  labelled as such, never a dead link. Reads `nps_responses` +
+  `concierge_messages` directly under the existing admin RLS — no new endpoint.
+  Proven by a real-browser studio harness (segment/category filter → response
+  list → transcript render → back / open-full / close).
+
 ---
 
 ## 3. Architecture
