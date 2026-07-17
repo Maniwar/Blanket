@@ -60,7 +60,9 @@ jobs:
             n0 := jsonb_array_length(coalesce(v->'slots','[]'::jsonb));
             if n0 < 2 then raise exception 'V1: expected slots on %, got %', v_day, n0; end if;
             slot0 := ((v->'slots')->0->>'starts_at')::timestamptz;
-            slot1 := ((v->'slots')->1->>'starts_at')::timestamptz;
+            -- the day's LAST slot: far from slot0 so a configured buffer
+            -- around the first booking can never shadow the move target
+            slot1 := ((v->'slots')->(n0-1)->>'starts_at')::timestamptz;
             raise notice '✓ V1 the tour is bookable — % slots on % at Dallas', n0, v_day;
 
             -- V2 book it (qa-flagged session), the person is assigned
