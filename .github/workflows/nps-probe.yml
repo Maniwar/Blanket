@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: "Turn 1 — a real question opens the conversation"
         run: |
-          SES="qa-npsprobe-${GITHUB_RUN_ID}"
+          SES="probe-nps-${GITHUB_RUN_ID}"
           echo "SES=$SES" >> "$GITHUB_ENV"
           code=$(curl -s -o /tmp/t1 -w '%{http_code}' --max-time 60 \
             -H "apikey: $K" -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
@@ -67,5 +67,17 @@ jobs:
             echo "The scale was not offered — the gate_reason above says why. Failing so this is never a silent pass."
             exit 1
           fi
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: "Zero residue — the probe conversation and every row it made are removed"
+        if: always()
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            with cids as (select id from public.concierge_conversations where session_key = '$SES')
+            , d1 as (delete from public.concierge_actions  where conversation_id in (select id from cids) returning 1)
+            , d2 as (delete from public.concierge_messages where conversation_id in (select id from cids) returning 1)
+            , d3 as (delete from public.nps_responses      where conversation_id in (select id from cids) returning 1)
+            , d4 as (delete from public.concierge_llm_usage where conversation_id in (select id from cids) returning 1)
+            delete from public.concierge_conversations where session_key = '$SES';"
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
