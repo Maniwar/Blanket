@@ -552,6 +552,48 @@ follow-up loop is armed in its place.
   change the cloth, update the gift card, care guide, show all orders) — then tops
   up with the section defaults.
 
+## When a conversation starts and ends (the case lifecycle)
+Plain version, for the merchant:
+- A conversation **starts** the moment a visitor first writes (or taps a starter).
+- It **ends** when the concierge gives its warm goodbye — the "the door's open,
+  come back anytime" line, which carries the one-tap rating question when the
+  timing allows — or when the visitor closes the chat / asks not to be messaged.
+- Once a conversation has ended, the **same visitor's next message starts a new
+  one**. Each visit is its own story in the Conversations tab, not an endless
+  thread. A finished one is marked **case closed** there.
+- The Conversations list is ordered by **latest activity** (a chat that moved five
+  minutes ago sits on top, even if it began yesterday); the date filter finds
+  every conversation that was *active* in the window, so a multi-day chat shows up
+  on any day it moved.
+- The mechanics: a spoken goodbye/survey stamps the conversation `concluded`
+  (terminal); `logUserTurn` opens a fresh row on the next real message; rating
+  taps still attach to the case they rate. Once the goodbye has spoken, a
+  **silence latch** holds every proactive line until the visitor returns (no more
+  "still furnishing the van?" after "goodbye"). Proven live by the **Case probe**
+  workflow. Full treatment: DESIGN.md §2.16, SCHEMA.md (`concierge_conversations`).
+
+## What the concierge may say on its own (the review floor)
+When the concierge speaks **unprompted** (a nudge, a check-in), a reviewer reads
+the line first and blocks anything that crosses a line — inventing an offer,
+reciting the shopper's stored data, process talk, breaking your written rules,
+an unsolicited question. **The merchant decides which of those stay blocked and
+which the concierge is allowed to say**, on the Judge & coach page under *"What
+the concierge may say on its own."*
+- Each family has an explicit **Block / Allow** control; **Block is the default**
+  and reads as protection (there is no backwards checkbox). Presets — **Strict**
+  (block everything), **Standard** (the house default), **Facts-only** (hard on
+  the honesty families, easy on courtesy/style) — set them all at once.
+- **Most shops leave this at Standard.** You only touch it to make the concierge
+  freer or stricter than the default.
+- An **allowed** line still gets sent *and* still appears in the tab's numbers as
+  **"let through by your floor"** — control without going blind. The reviewer
+  always runs; the setting only changes what a block *does*, never whether the
+  review happens. The mechanical safety pre-filter (malformed output) can never
+  be relaxed.
+- It is versioned like every setting (`concierge_config.judge.floor`) and proven
+  live by the **Judge floor probe** workflow. Full treatment: JUDGE_COACH_LOOP.md
+  §6, DESIGN.md §2.17.
+
 ## Admin console — date filters
 - The date filters on the Actions / Customers / Conversations / Waitlist tabs read
   a **local** calendar day and convert it to the matching UTC window, so a
