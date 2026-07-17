@@ -1,0 +1,38 @@
+name: Judge pulse
+# Read-only evidence for the judge-recovery watch: is the concierge SPEAKING
+# again now that the facts-grounded judge is live? Counts only — spoke/held/
+# blocked per day, block share, and the top block reasons (judge prose,
+# truncated; no visitor lines, no contact details ever printed).
+on: workflow_dispatch
+jobs:
+  pulse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Spoke / held / blocked, last 7 days
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            select to_char(created_at at time zone 'utc', 'MM-DD') as day,
+                   count(*) filter (where action = 'beat_action') as spoke,
+                   count(*) filter (where action = 'beat_hold')   as held,
+                   count(*) filter (where action = 'beat_veto')   as blocked
+              from public.concierge_actions
+             where action like 'beat_%'
+               and created_at > now() - interval '7 days'
+             group by 1 order by 1;" -P title='the week, day by day'
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            select count(*) filter (where action = 'beat_action') as spoke,
+                   count(*) filter (where action = 'beat_veto')   as blocked,
+                   round(100.0 * count(*) filter (where action = 'beat_veto')
+                     / greatest(count(*) filter (where action in ('beat_action','beat_veto')), 1)) as blocked_pct
+              from public.concierge_actions
+             where action like 'beat_%'
+               and created_at > now() - interval '7 days';" -P title='block share of judged lines'
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            select left(coalesce(payload->>'reason', result, ''), 90) as reason, count(*) as n,
+                   max(created_at at time zone 'utc') as latest_utc
+              from public.concierge_actions
+             where action = 'beat_veto'
+               and created_at > now() - interval '7 days'
+             group by 1 order by n desc, 3 desc limit 10;" -P title='top block reasons (judge prose, truncated)'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

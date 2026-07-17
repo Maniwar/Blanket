@@ -136,3 +136,24 @@ automatically — only the merchant may do that.
 coach writing draft exemplars/KB unattended? (b) redraft budget: one retry
 per veto, or none on cost-sensitive sites? (c) digest cadence — weekly or
 daily while tuning?
+
+## 10. Ops notes (learned live, 2026-07-17)
+
+- **A judged line saying a detail is on file is service, not defect 7.** A
+  live block vetoed "they have your number on file" as *reading records
+  aloud*; the criterion itself now draws the line — only reciting the ACTUAL
+  digits or text of a stored contact detail is the defect — so the rule
+  binds even on turns when no register context rides along. (The register
+  FACTS ON FILE block already said this; now the criterion agrees when that
+  block is absent.)
+- **Deploys can no longer lag the code.** The judge-grounding batch sat
+  committed-but-undeployed for hours because `deploy-concierge.yml` was
+  dispatch-only — Pages republished, the function kept running old code.
+  The workflow now ALSO triggers on any push touching `supabase/**` (both
+  sites, and the kit template emits the same trigger).
+- **The recovery watch has an evidence feed**: the `Judge pulse` workflow
+  (read-only, counts only — no lines, no contact details) prints spoke /
+  held / blocked per day, the block share, and the top block reasons for the
+  last 7 days. Expect the spoke column to rise and the block share to fall
+  now that the grounded judge is live; if a legitimate line still gets
+  blocked, the *Amend the judge* box on the tab is the pen.

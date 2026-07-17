@@ -1,7 +1,15 @@
 name: Deploy Concierge
 
+# Dispatch by hand, OR automatically whenever engine code under supabase/
+# is pushed — a judge fix must never again sit committed but undeployed
+# (that gap is exactly what happened on 7/16: the facts-grounded judge was
+# pushed, Pages republished, and the function kept running the old code).
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/github-pages-deploy-14tf3y]
+    paths:
+      - 'supabase/**'
 
 jobs:
   deploy:
