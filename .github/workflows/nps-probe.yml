@@ -45,6 +45,14 @@ jobs:
       - name: "The gate's own account — offer or hold, with its reason"
         run: |
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            select key, value->'nps' as nps_config
+              from public.concierge_config where key = 'outreach';" -P title='live survey configuration'
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            select c.created_at at time zone 'utc' as conv_created_utc,
+                   (select count(*) from public.concierge_messages m where m.conversation_id = c.id) as messages
+              from public.concierge_conversations c
+             where c.session_key = '$SES';" -P title='probe conversation continuity'
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
             select a.created_at at time zone 'utc' as at_utc,
                    a.payload->>'action'  as action,
                    a.payload->>'via'     as via,
