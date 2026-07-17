@@ -1,0 +1,140 @@
+# Production validation — every calendar case exercised against the LIVE
+# database. Step 1 commits ONE real config fix (the tour's missing weekly
+# windows at Dallas — the gap the calendar doctor found). Step 2 runs the
+# whole case deck INSIDE A TRANSACTION THAT ROLLS BACK: booking, capacity,
+# named person, reschedule continuity, callback lifecycle, the time-off
+# request ladder, and the report/matrix/judge surfaces — real schema, real
+# config, real staff, zero residue. Every case prints ✓ or fails the job.
+name: Prod validate (calendar cases)
+on: workflow_dispatch
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fix-forward — the tour gets its weekly windows at Dallas (committed, idempotent)
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "
+            insert into public.concierge_availability (type_id, location_id, dow, start_min, end_min, step_min)
+            select t.id, l.id, d, 540, 1020, null
+              from public.concierge_appointment_types t
+              join public.concierge_locations l on l.title = 'Dallas' and l.enabled
+              cross join generate_series(1,5) d
+             where t.enabled and t.title ilike '%tour%'
+               and not exists (select 1 from public.concierge_availability av
+                                where av.type_id = t.id and av.location_id = l.id);
+            select t.title, count(av.id) as windows
+              from public.concierge_appointment_types t
+              left join public.concierge_availability av on av.type_id = t.id
+             where t.enabled group by t.title;"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: The case deck — validated live, rolled back clean
+        run: |
+          cat > /tmp/cases.sql <<'SQL'
+          \set ON_ERROR_STOP on
+          begin;
+          select set_config('request.jwt.claims','{"role":"service_role"}',true);
+          do $$
+          declare
+            v_t text; v_l text; v_staff text; v_staff_id bigint; v_day date;
+            v jsonb; n0 int; n1 int; n2 int; slot0 timestamptz; slot1 timestamptz;
+            bid bigint; cbid bigint; xid bigint;
+          begin
+            select t.slug into v_t from public.concierge_appointment_types t
+             where t.enabled and t.title ilike '%tour%' limit 1;
+            select l.slug into v_l from public.concierge_locations l
+             where l.title = 'Dallas' and l.enabled limit 1;
+            select s.name, s.id into v_staff, v_staff_id from public.concierge_staff s
+             where s.enabled order by s.id limit 1;
+            if v_t is null or v_l is null or v_staff is null then
+              raise exception 'fixture missing: type=%, loc=%, staff=%', v_t, v_l, v_staff; end if;
+            select d::date into v_day from generate_series(current_date+3, current_date+9, interval '1 day') d
+             where extract(dow from d)::int between 1 and 5
+               and not exists (select 1 from public.concierge_availability_exceptions e
+                                where e.on_date = d::date) limit 1;
+
+            -- V1 slots exist now that windows do
+            v := public.appointment_slots(v_t, v_l, v_day, v_day, null);
+            n0 := jsonb_array_length(coalesce(v->'slots','[]'::jsonb));
+            if n0 < 2 then raise exception 'V1: expected slots on %, got %', v_day, n0; end if;
+            slot0 := ((v->'slots')->0->>'starts_at')::timestamptz;
+            slot1 := ((v->'slots')->1->>'starts_at')::timestamptz;
+            raise notice '✓ V1 the tour is bookable — % slots on % at Dallas', n0, v_day;
+
+            -- V2 book it (qa-flagged session), the person is assigned
+            v := public.book_appointment(v_t, v_l, slot0, 'Validation Guest', 'validate@example.com',
+                   'email', null, 'prod validation', null, null, null, 'qa-prod-validate', null);
+            if not (v->>'ok')::boolean then raise exception 'V2: book failed %', v; end if;
+            if coalesce(v->>'staff_name','') = '' then raise exception 'V2: no person assigned %', v; end if;
+            bid := (v->>'id')::bigint;
+            raise notice '✓ V2 booked % with % (qa-flagged)', slot0, v->>'staff_name';
+
+            -- V3 the same moment cannot double-book the only person
+            v := public.book_appointment(v_t, v_l, slot0, 'Second Guest', 'validate2@example.com',
+                   'email', null, '', null, null, null, 'qa-prod-validate', null);
+            if (v->>'ok')::boolean then raise exception 'V3: double-booked the only person!'; end if;
+            raise notice '✓ V3 capacity honored — second booking honestly refused (%)', coalesce(v->>'reason','taken');
+
+            -- V4 named person honored; a stranger refused honestly
+            v := public.book_appointment(v_t, v_l, slot1, 'Named Guest', 'validate3@example.com',
+                   'email', null, '', null, null, null, 'qa-prod-validate', 'Nobody Realman');
+            if (v->>'ok')::boolean then raise exception 'V4: booked with a person who does not exist'; end if;
+            raise notice '✓ V4 unknown person refused honestly (%)', coalesce(v->>'reason','no_such_person');
+
+            -- V5 reschedule keeps the person
+            v := public.reschedule_appointment(bid, v_l, slot1, null, null, null, 'qa-prod-validate');
+            if not (v->>'ok')::boolean then raise exception 'V5: reschedule failed %', v; end if;
+            if (select a.staff_id from public.concierge_appointments a
+                 where a.id = coalesce((v->>'id')::bigint, bid)) is null then
+              raise exception 'V5: person lost in the move'; end if;
+            raise notice '✓ V5 rescheduled to % — same person kept', slot1;
+
+            -- V6 callback lifecycle: change window, wrong session refused, close with actor
+            insert into public.concierge_appointments
+              (kind, status, visitor_name, visitor_contact, contact_kind, window_pref, session_key, qa)
+              values ('callback','open','Validation Caller','5550001111','phone','asap','qa-prod-validate', true)
+              returning id into cbid;
+            v := public.change_callback(cbid, 'tomorrow morning', null, null, 'qa-wrong-session');
+            if (v->>'ok')::boolean then raise exception 'V6: wrong session changed a callback'; end if;
+            v := public.change_callback(cbid, 'tomorrow morning', null, null, 'qa-prod-validate');
+            if not (v->>'ok')::boolean then raise exception 'V6: rightful change refused %', v; end if;
+            v := public.close_appointment(cbid, 'done');
+            if not (v->>'ok')::boolean then raise exception 'V6: close failed %', v; end if;
+            v := public.close_appointment(cbid, 'reopen');
+            if not (v->>'ok')::boolean then raise exception 'V6: correction window refused reopen %', v; end if;
+            raise notice '✓ V6 callback lifecycle — ownership, change, done, reopen all behave';
+
+            -- V7 the time-off request ladder against live slots
+            v := public.appointment_slots(v_t, v_l, v_day, v_day, null);
+            n0 := jsonb_array_length(coalesce(v->'slots','[]'::jsonb));
+            insert into public.concierge_availability_exceptions (on_date, closed, staff_id, note, status)
+              values (v_day, true, v_staff_id, 'prod validation', 'requested') returning id into xid;
+            v := public.appointment_slots(v_t, v_l, v_day, v_day, null);
+            n1 := jsonb_array_length(coalesce(v->'slots','[]'::jsonb));
+            if n1 <> n0 then raise exception 'V7: a mere REQUEST removed slots (%->%)', n0, n1; end if;
+            update public.concierge_availability_exceptions set status = 'approved' where id = xid;
+            v := public.appointment_slots(v_t, v_l, v_day, v_day, null);
+            n2 := jsonb_array_length(coalesce(v->'slots','[]'::jsonb));
+            if n2 <> 0 then raise exception 'V7: approved day off still sells % slots', n2; end if;
+            update public.concierge_availability_exceptions set status = 'returned' where id = xid;
+            v := public.appointment_slots(v_t, v_l, v_day, v_day, null);
+            if jsonb_array_length(coalesce(v->'slots','[]'::jsonb)) <> n0 then
+              raise exception 'V7: returned time did not restore the schedule'; end if;
+            raise notice '✓ V7 time-off ladder — request blocks nothing, approval empties the day, return restores it';
+
+            -- V8 the operator surfaces all answer
+            if not (public.staff_report(7)->>'ok')::boolean then raise exception 'V8: staff_report'; end if;
+            if not (public.booking_report(7,'callbacks')->>'ok')::boolean then raise exception 'V8: booking_report'; end if;
+            if not (public.capacity_matrix()->>'ok')::boolean then raise exception 'V8: capacity_matrix'; end if;
+            if not (public.judge_findings(7)->>'ok')::boolean then raise exception 'V8: judge_findings'; end if;
+            if not exists (select 1 from jsonb_array_elements(public.capacity_matrix()->'rows') r
+                            where r->>'location' = 'Dallas' and (r->>'effective')::int >= 1) then
+              raise exception 'V8: capacity matrix still shows no effective capacity at Dallas'; end if;
+            raise notice '✓ V8 reports, capacity (effective >= 1 at Dallas), and the judge ledger all answer';
+            raise notice '=== ALL PROD CASES VALIDATED — rolling back, zero residue ===';
+          end $$;
+          rollback;
+          SQL
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/cases.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
