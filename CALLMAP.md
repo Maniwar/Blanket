@@ -144,6 +144,7 @@ All `workflow_dispatch`, read-only unless named otherwise:
 | **Judge pulse** | Spoke / held / blocked per day, block share, top block reasons — the judge-recovery watch. Counts only; no lines, no contact details. |
 | **NPS probe** | The closing choreography END TO END against production: real conversation, waits out the worth-rating minimum, types "that's all for now", asserts the warm goodbye + `{{nps}}`, reads the gate's audited decision, then **deletes every row it created**. |
 | **Starter probe** | Baked starter answers definitively: plants a pinned row, taps it over the real wire, asserts the streamed reply is **byte-identical** to the stored answer with **ZERO** `concierge_llm_usage` rows for that conversation, watches the real starters until each is pinned or accounted for (live / needs-knowledge / queued), then deletes everything it created. |
+| **Gap probe** | The gap-to-knowledge loop end to end: plants two QA gaps, kicks the drafting pass with a zero-cost tap, watches until both gaps link to a **disabled** `origin='gap'` KB draft (and prints it), enables the draft, asserts both gaps clear (sweep or studio path, named honestly), then deletes everything it created. |
 | **Calendar doctor** | Capacity matrix + slot counts + raw hours/windows config — why is nothing bookable? |
 | **Prod validate** | The calendar case deck (V1–V8) live, inside a rolled-back transaction. Step 1 commits one idempotent fix (tour windows). |
 | **Config conformance** | Every Engagement knob vs the widget's observed behavior (weekly cron + on demand). |

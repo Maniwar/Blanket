@@ -167,6 +167,48 @@ asserts the streamed reply is **byte-identical** to the stored answer with
 real starters until every one is pinned or accounted for (live /
 needs-knowledge / queued), and deletes everything it created.
 
+## Gaps become knowledge — the drafting loop
+
+The findings ledger (Knowledge → **Knowledge gaps**) fills with questions the
+concierge could not answer — from live conversations (`knowledge_gap`), from
+starters the bake pass refused to invent an answer for (`starter_bake`), and
+from Draft-with-AI sections the knowledge couldn't support (`starter_gap`).
+The **gap-draft pass** turns that ledger into knowledge work:
+
+- **One model call per pass** clusters the open gaps into missing *topics* and
+  gives each a merchant-facing title. Per cluster it answers one question:
+  can the existing knowledge already answer this?
+  - **Grounded** — the facts are already in enabled knowledge, just not
+    findable as one entry: the model drafts content *restating those facts*
+    and citing the `[slug]`s it used. Nothing new may be claimed.
+  - **Needs your facts** — the house must supply the answer: the **server**
+    (never the model) composes a deterministic fill-in draft — the visitors'
+    own questions plus *"replace this line with the facts, then enable"*. An
+    ungrounded draft is structurally incapable of containing an invented fact.
+  - **Not knowledge** — junk and abuse are skipped, untouched.
+- **Every draft is born disabled** (`origin='gap'` — the studio shows
+  *"drafted from visitor questions"*). The gaps it covers are linked to it
+  (`kb_slug`), and each gap row shows *"draft ready below."*
+- **Enabling the draft clears its gaps** — eagerly when you press Save in the
+  studio, and swept by the pass as the net. Because the flush trigger is
+  enabled-aware, creating and editing *disabled* drafts never flushes the
+  answer cache or stales the baked starters; the flush fires only when
+  knowledge the model can actually see changes.
+- **Auto-wired**: the hourly self-scheduled pass (atomic claim, one model
+  call, 6 drafts max) plus the **Draft knowledge from gaps** button on the
+  gaps card for right-now. Costs nothing when the ledger is empty.
+
+The full circle: a starter the knowledge can't answer → filed as a gap → the
+pass drafts the fill-in entry → the merchant adds the facts and enables → the
+flush marks the related baked answers stale → the bake pass re-authors them →
+the starter serves for zero calls. Every step is automatic except the one that
+must be human: supplying the facts.
+
+**Proof.** The **Gap probe** workflow (Actions → *Gap probe*) plants two QA
+gaps, kicks the pass with a zero-cost tap, watches until both gaps are linked
+to a disabled draft (and prints it), then enables the draft and asserts both
+gaps clear — removing every row it created.
+
 ## Managing it
 
 - **Edit** in the Studio (Knowledge, Procedures, Selling, Goals). Everything is
@@ -178,6 +220,9 @@ needs-knowledge / queued), and deletes everything it created.
   one-click revertible.
 - **Honesty lint** (`?lint=1`) runs on prompt-text saves — a KB claim with no
   supporting source is flagged.
+- **Draft knowledge from gaps** (Knowledge → gaps card) turns unanswered
+  visitor questions into KB drafts — grounded restatements or fill-in
+  skeletons, never inventions; enabling a draft clears the gaps it covers.
 - **Cache flush** fires automatically on KB/config/SOP edits, so a changed policy
   is never served from an old cached answer. Learned rows flush clean; baked
   starter answers survive as **stale** and re-bake within the hour.

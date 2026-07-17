@@ -477,7 +477,7 @@ probe** workflow. **Read by:** admin (Saved answers tab).
 ### `concierge_insights` — cached "what's working" digests (coach feedback loop)
 | Column | Type | Purpose |
 | --- | --- | --- |
-| `kind` | text PK | Digest name: `'beat_learning'`, `'judge_digest'` (weekly email claim), `'starter_bake'` (hourly bake claim + per-starter ledger). |
+| `kind` | text PK | Digest name: `'beat_learning'`, `'judge_digest'` (weekly email claim), `'starter_bake'` (hourly bake claim + per-starter ledger), `'gap_draft'` (hourly gap-drafting claim + pass ledger). |
 | `payload` | jsonb | The computed digest — `beat_learning`: `{ window_days, total_spoke, buckets:[{beat, move, n, reply_rate}] }`; `starter_bake`: `{ baked, statuses:[{starter, status, kb}] }` (the ledger the Starter probe reads). |
 | `computed_at` | timestamptz | When it was last recomputed (drives the TTL / the atomic hourly-weekly claims). |
 
@@ -532,13 +532,16 @@ praise, other). Admin-managed under RLS, like goals/hooks.
 | `conversation_id` | uuid → conversations | Source thread. |
 | `question` | text | What was asked. |
 | `answer` | text | What the bot said. |
-| `reason` | text | Default `knowledge_gap`; also carries embed/diagnostic failures and `starter_bake` (a conversation starter the knowledge can't answer — add the facts or reword the starter). |
+| `reason` | text | Default `knowledge_gap`; also `starter_bake` (a starter the knowledge can't answer), `starter_gap` (a Draft-with-AI section that got nothing), and embed/diagnostic failures. |
 | `resolved` | boolean | Admin has addressed it. |
+| `kb_slug` | text | The `origin='gap'` KB **draft** the gap-draft pass created for this gap — enabling that entry resolves the gap (eager in the studio; swept hourly as the net). |
 | `created_at` | timestamptz | When flagged. |
 
-**Written by:** `maybeFlagGap` (and the `?cachecheck` diagnostic on embed
-failure, and the starter bake pass for ungroundable starters — deduped while
-unresolved). **Read by:** admin (Knowledge-gaps tab).
+**Written by:** `maybeFlagGap`, the `?cachecheck` diagnostic on embed failure,
+the starter bake pass (ungroundable starters), and `?genstarters=1` (missed
+sections) — all deduped while unresolved. `draftKbFromGaps` links `kb_slug`
+and resolves swept rows. **Read by:** admin (Knowledge-gaps card) and the
+gap-draft pass.
 
 ### `concierge_forms` — admin-defined in-chat forms
 | Column | Type | Purpose |
@@ -848,7 +851,7 @@ pruned by `prune_high_write`.
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
 | `log_edit_history()` | trigger | Snapshots an admin-managed row into `concierge_edit_history` after every real change. | `*_history` triggers on config, SOPs, KB, and the four calendar config tables (locations/hours/types/availability). |
-| `flush_concierge_cache()` | trigger | Flushes the semantic answer cache whenever prompt-shaping content changes, so an edit is never answered from a stale cache ([BEHAVIOR.md](../BEHAVIOR.md)). Learned rows are deleted; **pinned** starter answers are marked `stale` for re-bake instead (a starter tap never falls back to a live model call). | `flush_cache` statement triggers on `concierge_kb`/`concierge_config`/`concierge_sops`. |
+| `flush_concierge_cache()` | trigger | Flushes the semantic answer cache whenever prompt-shaping content changes, so an edit is never answered from a stale cache ([BEHAVIOR.md](../BEHAVIOR.md)). Learned rows are deleted; **pinned** starter answers are marked `stale` for re-bake instead (a starter tap never falls back to a live model call). | `flush_cache` statement triggers on `concierge_config`/`concierge_sops`; on `concierge_kb` three **row-level, enabled-aware** triggers (`flush_cache_ins/upd/del`) so creating or editing a *disabled* draft (the gap-draft pass) never flushes — only changes to model-visible knowledge do. |
 | `rate_hit(p_key, p_limit, p_window_seconds)` | → bool | Counts one request for `p_key` in the current fixed window (atomic upsert into `rate_limits`) and returns true when over `p_limit`. Shared across all edge instances. | both functions' rate limiters. |
 | `beat_learning_digest(p_days, p_ttl_min, p_min_n)` | → jsonb | The coach's **feedback loop** ([`COACH.md`](../COACH.md) §5): buckets the reply rate after each proactive move (a following user turn within 30 min) by beat kind × move over a trailing window, so the coach reasons over what actually landed. Self-caching into `concierge_insights` with a TTL; drops buckets under `p_min_n`. | concierge coach path (`beatLearningBlock`). |
 | `nps_metrics(p_days, p_coach?)` | → jsonb | The **NPS calculation** ([`NPS.md`](../NPS.md)): overall NPS (%promoters − %detractors, mirroring `npsScore` in `beats.ts`), the segment split, response count, **offers** (spoken `REQUEST_NPS` beat rows), **response_rate** (÷, mirroring `npsResponseRate`; null when coach-scoped or nothing offered), **gate_holds** (why the gate did NOT ask, from `payload.npsGate`), and category frequencies with the **detractor themes broken out**. Guarded like `get_edition()` (admin JWT or service role); granted to `authenticated`. Null NPS when there are no responses — never a fake zero. | The admin studio **NPS tab** (direct RPC). |

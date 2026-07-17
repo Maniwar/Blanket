@@ -204,6 +204,8 @@ Overhead (aggregate attribution only):
 - `starters` — admin "AI generate" conversation starters
 - `starter-bake` — the setup-time pass that pre-authors baked starter answers
   (one Haiku call per starter, once — the taps themselves never meter)
+- `gap-draft` — the gap-to-knowledge pass (ONE Haiku call clusters up to 40
+  open gaps into KB drafts; zero calls when the gap ledger is empty)
 - `eval-judge` / `lint` / `prompt-review` — the eval grader and the advisory
   honesty lint
 - `reengage` — the return-visit bubble line

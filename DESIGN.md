@@ -1579,6 +1579,31 @@ audited decision back) plus the pure beat tests.
   anything queued, and a knowledge edit re-bakes affected answers within the
   hour while my hand-edited wording is never overwritten.
 
+### 2.15 Gaps become knowledge — run it, clear the gaps
+
+- **As the merchant, I want the unanswered questions turned into knowledge
+  drafts, so that clearing the gap list is filling in blanks, not starting
+  from scratch.** *Accepted when:* one press of **Draft knowledge from gaps**
+  (or the hourly pass, unprompted) clusters the open gaps into titled KB
+  drafts — content pre-filled only where existing knowledge already holds the
+  facts (with `[slug]` sources cited), a deterministic fill-in skeleton
+  everywhere else — all born disabled for my review.
+- **As the merchant, I want enabling a draft to clear the gaps it covers, so
+  that the ledger empties itself as I do the work.** *Accepted when:* each gap
+  shows "draft ready" once linked; saving the enabled draft resolves its gaps
+  on the spot, and the hourly sweep nets anything enabled another way — proven
+  live by the Gap probe workflow.
+- **As the merchant, I want a Draft-with-AI section that gets nothing to tell
+  me why, so that a half-filled starters panel is a to-do list, not a
+  mystery.** *Accepted when:* every missed section carries an in-place note
+  and is filed as a `starter_gap` in the findings ledger, where the drafter
+  picks it up.
+- **As the house, I want draft creation to never degrade the live concierge,
+  so that background drafting is free of side effects.** *Accepted when:*
+  creating or editing a *disabled* entry leaves the answer cache and the baked
+  starters untouched (the flush trigger is enabled-aware), and the pass costs
+  zero model calls when the ledger is empty.
+
 ---
 
 ## 3. Architecture
