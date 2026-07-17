@@ -540,6 +540,7 @@ praise, other). Admin-managed under RLS, like goals/hooks.
 | `answer` | text | What the bot said. |
 | `reason` | text | Default `knowledge_gap`; also `starter_bake` (a starter the knowledge can't answer), `starter_gap` (a Draft-with-AI section that got nothing), and embed/diagnostic failures. |
 | `resolved` | boolean | Admin has addressed it. |
+| `resolved_at` | timestamptz | When it was cleared. Stamped by the `concierge_flags_resolved_at` trigger on any `false→true` flip (and cleared on reopen), so every resolution path — studio, gap-draft sweep, coach — records an honest timestamp. Feeds the Judge & Coach trend's "gaps cleared per day." |
 | `kb_slug` | text | The `origin='gap'` KB **draft** the gap-draft pass created for this gap — enabling that entry resolves the gap (eager in the studio; swept hourly as the net). |
 | `created_at` | timestamptz | When flagged. |
 
@@ -884,7 +885,7 @@ pruned by `prune_high_write`.
 | `patron_appointments(p_customer)` | → jsonb | One patron's bookings by `customers.id`. Admin/service-gated. | engine (UPCOMING VISIT context). |
 | `patron_appointments_by(p_email, p_user)` | → jsonb | Same, resolved by email/auth-user id server-side (the studio never sees `customers` ids). | patron drawer timeline. |
 | `appointment_facets(p_days)` | → jsonb | Bounded (≤ 5000) conversation/session booking facts. | 📅 badge on Conversations; the funnel's hard `Booked a visit` stage. |
-| `judge_findings(p_days?)` | → jsonb | The Judge & Coach ledger in one call: totals (spoke/held/vetoed, pre-filter kills, redraft scoreboard, **`floored`** = lines the merchant's judge floor let through), per-beat-kind outcomes, veto reasons clustered into named defect classes with fresh sample kills, and the unresolved gap ledger (repeat clusters, system alerts, studio feedback each labeled). The defect-class ladder is mirrored byte-for-byte by the engine's `classifyJudgeReason` so the floor and this report never disagree. Admin/service-gated. | studio "Judge & coach" tab; weekly ops report. |
+| `judge_findings(p_days?)` | → jsonb | The Judge & Coach ledger in one call: totals (spoke/held/vetoed, pre-filter kills, redraft scoreboard, **`floored`** = lines the merchant's judge floor let through), per-beat-kind outcomes, veto reasons clustered into named defect classes with fresh sample kills, the unresolved gap ledger (repeat clusters, system alerts, studio feedback each labeled), and a gap-filled daily **`series`** (one row per day with spoke/held/vetoed/prefilter/redraft/floored/`gaps_cleared`) that powers the "Is it getting better?" trend chart. The defect-class ladder is mirrored byte-for-byte by the engine's `classifyJudgeReason` so the floor and this report never disagree. Admin/service-gated. | studio "Judge & coach" tab; weekly ops report. |
 
 `EXECUTE` on the register/cache/booking RPCs is revoked from
 `public`/`anon`/`authenticated`; only the service role calls them. The

@@ -1654,6 +1654,29 @@ line hard. So the floor is the merchant's.
   pre-filter is never relaxable, and the family classification matches the
   reporting exactly (one unit-tested `classifyJudgeReason`).
 
+### 2.18 The rulebook, and proof it's working — the owner's controls at their fingertips
+
+The merchant said it plainly: *"I'm the owner, I make the rules"* and *"I need
+the controls at my fingertips, not hidden away in other panels guessing what
+I'm editing."* So the review's rules are visible and editable in place, and a
+line chart shows whether the changes are helping.
+
+- **As the owner, I want to see every rule the reviewer follows and edit it in
+  place, so that I'm not guessing what I'm changing.** *Accepted when:* the
+  Judge & coach rulebook card states each rule plainly, each with its own
+  Block/Allow control *and* an inline "in your words" field, plus a free-form
+  box for new rules — saved with **one** button as
+  `concierge_config.judge = {floor, notes, rules}`; the engine folds `notes`
+  and `rules` into the judge on every review (`extraJudgeRules`). Proven by the
+  jc studio harness (one Save writes all three; no second Save button).
+- **As the merchant, I want a timeline chart of the judge & coach numbers, so
+  that I can tell whether what I'm doing is improving the situation.**
+  *Accepted when:* an "Is it getting better?" card plots block rate, lines
+  blocked/let-through, redraft success, or gaps cleared over 14 / 30 / 90 days,
+  each with a caption naming the good direction; it reads the gap-filled daily
+  `series` from `judge_findings`. Proven by the Judge trend probe (live series
+  + `resolved_at` trigger) and the studio harness (metric/range redraw).
+
 ---
 
 ## 3. Architecture

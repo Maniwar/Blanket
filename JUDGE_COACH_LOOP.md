@@ -85,21 +85,35 @@ Cluster the streams into **findings**:
   rule quoted, and the proposed remedy with its tier.
 - **Intervention controls**: pause a beat kind, pin a rule ("never mention
   sign-in mechanics"), approve/decline remedies, revert any applied change.
-- **The standards floor** (merchant control over their own process): the
-  judge blocks a proactive line when it crosses a defect family (invented
-  offers, reciting the shopper, process talk, against your rules,
-  unsolicited questions, other). The merchant sets each to **Block** or
-  **Allow** — a preset (Strict / Standard / Facts-only) sets them all at
-  once, or they adjust any row. A family set to *Allow* means the concierge
-  may cross that line: it **speaks**, but the audit still records it and the
-  health strip shows a *"let through by your floor"* count — control without
-  going blind. The judge always RUNS (the floor changes what a block *does*,
-  never whether the review happens), the mechanical pre-filter is never
-  relaxable, and the floor is versioned like every setting
-  (`concierge_config.judge.floor`). Classification uses the same ladder as
-  the health strip (`classifyJudgeReason`, unit-tested), so the floor and the
-  report never disagree about what a block *was*.
-- **Health strip**: veto rate by beat kind (trend), repeat-offense rate,
+- **The rulebook** (merchant control over their own process — *"I'm the
+  owner, I make the rules"*): the judge blocks a proactive line when it
+  crosses a defect family (invented offers, reciting the shopper, process
+  talk, against your rules, unsolicited questions, other). The studio shows
+  **every rule stated plainly**, each with its own **Block/Allow** control
+  *and* an inline *"in your words"* field to refine it, plus a free-form box
+  for new rules — all saved with **one button**. A preset (Strict / Standard
+  / Facts-only) sets the on/off in bulk; the owner adjusts any rule in place,
+  never hunting across other panels. A family set to *Allow* means the
+  concierge may cross that line: it **speaks**, but the audit still records
+  it and the scoreboard shows a *"let through by your floor"* count — control
+  without going blind. The judge always RUNS (the floor changes what a block
+  *does*, never whether the review happens), the mechanical pre-filter is
+  never relaxable, and the whole rulebook is one versioned object
+  (`concierge_config.judge = {floor, notes, rules}` — `floor` is the per-family
+  Block/Allow, `notes` the per-rule refinements, `rules` the free-form
+  additions; the engine folds `notes` + `rules` into the judge prompt via
+  `extraJudgeRules`). Classification uses the same ladder as the scoreboard
+  (`classifyJudgeReason`, unit-tested), so the floor and the report never
+  disagree about what a block *was*.
+- **The impact trend** (*"is what I'm doing actually helping?"*): a line
+  chart, day by day, over 14 / 30 / 90 days. The merchant picks a measure —
+  block rate (↓ better), lines blocked, lines let through, redraft success
+  (↑ better), or knowledge gaps cleared (↑ better) — and each carries a
+  plain caption naming the good direction. It reads the gap-filled daily
+  `series` from `judge_findings`; "gaps cleared" is powered by the
+  `resolved_at` trigger. Every rule change and every gap filled should move a
+  line here — that is how the owner sees the loop closing.
+- **Scoreboard**: veto rate by beat kind, repeat-offense rate,
   redraft acceptance, time-to-heal, gaps closed vs recurring.
 - **Weekly digest email** to the owner: what was caught, what healed
   itself, what awaits approval.
