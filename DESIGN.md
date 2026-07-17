@@ -1631,6 +1631,29 @@ the goodbye — because a case could conclude in spirit but never in the data.
   matches the case's activity span, each row shows when it last moved plus a
   "case closed" cue, and the header states the ordering plainly.
 
+### 2.17 The merchant sets the judge floor — their process, their call
+
+The reach-out judge protects the shopper by blocking defective proactive
+lines. But *how strict* is a business decision, not ours: a private car
+seller may want to negotiate; a considered-luxury house may want every honesty
+line hard. So the floor is the merchant's.
+
+- **As the merchant, I want to decide which lines the concierge may cross, so
+  that the review enforces MY standards, not a fixed default.** *Accepted
+  when:* the Judge & coach House-rules card lets me set each defect family to
+  Block or Allow (with Strict / Standard / Facts-only presets); a family I
+  Allow lets the concierge speak that kind of line; the choice is versioned
+  like every setting.
+- **As the merchant, I want to keep seeing what my floor lets through, so that
+  loosening a rule is a decision, not a blind spot.** *Accepted when:* a
+  below-floor line still writes its audit row and the health strip shows a
+  "let through by your floor" count — proven by the Judge floor probe.
+- **As the house, I want the floor to never disable the safety mechanics, so
+  that control never becomes exposure.** *Accepted when:* the judge still runs
+  on every line (the floor changes only what a block *does*), the mechanical
+  pre-filter is never relaxable, and the family classification matches the
+  reporting exactly (one unit-tested `classifyJudgeReason`).
+
 ---
 
 ## 3. Architecture

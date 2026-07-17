@@ -85,6 +85,20 @@ Cluster the streams into **findings**:
   rule quoted, and the proposed remedy with its tier.
 - **Intervention controls**: pause a beat kind, pin a rule ("never mention
   sign-in mechanics"), approve/decline remedies, revert any applied change.
+- **The standards floor** (merchant control over their own process): the
+  judge blocks a proactive line when it crosses a defect family (invented
+  offers, reciting the shopper, process talk, against your rules,
+  unsolicited questions, other). The merchant sets each to **Block** or
+  **Allow** — a preset (Strict / Standard / Facts-only) sets them all at
+  once, or they adjust any row. A family set to *Allow* means the concierge
+  may cross that line: it **speaks**, but the audit still records it and the
+  health strip shows a *"let through by your floor"* count — control without
+  going blind. The judge always RUNS (the floor changes what a block *does*,
+  never whether the review happens), the mechanical pre-filter is never
+  relaxable, and the floor is versioned like every setting
+  (`concierge_config.judge.floor`). Classification uses the same ladder as
+  the health strip (`classifyJudgeReason`, unit-tested), so the floor and the
+  report never disagree about what a block *was*.
 - **Health strip**: veto rate by beat kind (trend), repeat-offense rate,
   redraft acceptance, time-to-heal, gaps closed vs recurring.
 - **Weekly digest email** to the owner: what was caught, what healed
