@@ -235,17 +235,23 @@ SQL, after which the roster is self-serve.
 | `user_email` | text | Signed-in email, if any. Also back-filled. |
 | `section` | text | Page section the chat opened from. |
 | `created_at` | timestamptz | Thread start. |
-| `status` | text (`active`/`snoozed`/`closed`) | **Lifecycle.** `active` by default; set by `handleWrapup`. |
-| `ended_at` | timestamptz | When the thread was wrapped (snoozed or closed). Presence of this = the thread is done; the next visit is a **re-engagement**. |
+| `status` | text (`active`/`snoozed`/`closed`/`concluded`) | **Lifecycle.** `active` by default; `snoozed`/`closed` set by `handleWrapup` (resumable — a new message revives them); **`concluded` is TERMINAL** — the bot said its warm goodbye (usually carrying the closing survey), and the visitor's next real message opens a **new conversation: a fresh case** for the same patron. Rating taps (`context.nps`) and nudges still attach to a concluded case. Stamped when `GRACEFUL_CLOSE`/`REQUEST_NPS` actually speaks (nudge path or typed farewell). |
+| `ended_at` | timestamptz | When the thread was wrapped (snoozed, closed, or concluded). Presence of this = the thread is done; the next visit is a **re-engagement** (or, after `concluded`, a fresh case). |
+| `last_activity_at` | timestamptz | The visitor's latest word (bot-initiated nudges don't count). The admin Conversations tab **sorts by this** and its date filter matches the case's activity span. Backfilled from `created_at`. |
 | `goal_status` | jsonb | Per-goal scoring: `{ "<slug>": {"status":"met|partial|unmet","note":"…"} }`. |
 | `goal_status_at` | timestamptz | When goals were last judged. |
 | `sales_stage` | text | Funnel stage from the async grader: `browsing`/`engaged`/`evaluating`/`objection`/`ready`/`won`/`lost`. Written in a **separate best-effort PATCH** from `goal_status`, so a missing column can't break grading. Shown as a chip in the admin Conversations tab. |
 | `ip` | text | Latest client IP for the session (from `x-forwarded-for`), stored for **abuse/legal forensics**. Admin-only (RLS), shown in the transcript header, and included in the transcript export **only** when the PII option is on. Disclosed in the privacy notice. **Searchable** in the admin: the Conversations tab matches it directly, and the Orders & Customers tab resolves it to `session_key`s and finds the orders placed from that IP (`ip ↔ session_key ↔ orders.chat_session`). A full IPv4/IPv6 matches exactly; a partial prefix, as a substring. |
 
-**Written by:** `logUserTurn` (create + identity back-fill), `handleWrapup`
-(status/ended_at), `evaluateGoals` (goal_status + sales_stage). **Read by:** `logUserTurn`
-(thread reuse), `customerBlock` (re-engagement recency — most recent
-`ended_at` for the user), admin (Conversations tab, goal scorecard).
+**Written by:** `logUserTurn` (create + identity back-fill + `last_activity_at`
+bump + the **case boundary**: a `concluded` thread is never revived — a real
+visitor message creates a new row), `handleWrapup` (status/ended_at), the
+spoken goodbye/survey (`status='concluded'`), `evaluateGoals` (goal_status +
+sales_stage). **Read by:** `logUserTurn` (thread reuse), `customerBlock`
+(re-engagement recency — most recent `ended_at` for the user), the beat
+ledger (the **silence latch**: a goodbye spoken since the visitor's last word
+holds every proactive door), admin (Conversations tab, goal scorecard).
+**Proven by:** the **Case probe** workflow.
 
 ### `concierge_messages` — every turn
 | Column | Type | Purpose |

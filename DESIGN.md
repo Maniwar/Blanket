@@ -1604,6 +1604,33 @@ audited decision back) plus the pure beat tests.
   starters untouched (the flush trigger is enabled-aware), and the pass costs
   zero model calls when the ledger is empty.
 
+### 2.16 The case has an ending — and the next visit is a fresh one
+
+Born from a live merchant transcript (Jul 16–17): a signed-in thread ran for
+two days — dozens of held beats, a goodbye with no survey, sales lines after
+the goodbye — because a case could conclude in spirit but never in the data.
+
+- **As the visitor, I want the goodbye to be the end, so that "the door stays
+  open" isn't followed by more selling.** *Accepted when:* once the graceful
+  close (or the survey that rode it) has spoken and I haven't answered, every
+  proactive door holds — the **silence latch**, unit-tested in the pure beat
+  engine — until I write again.
+- **As the merchant, I want the survey to actually ride the goodbye, so that
+  a case that ran dry still gets rated.** *Accepted when:* the pending-question
+  guard yields at the graceful close (the never-answered "what's your name?"
+  that starved the survey for days can't any more); the offer and the gate's
+  decision are audited either way.
+- **As the merchant, I want a concluded case to stay concluded, so that each
+  visit reads as its own story.** *Accepted when:* the spoken goodbye stamps
+  `status='concluded'` (terminal); the same visitor's next real message opens
+  a **new conversation** linked to the same patron; rating taps still attach
+  to the case they rate — proven live by the **Case probe** workflow.
+- **As the merchant, I want the Conversations tab to read by activity, so
+  that a case that moved five minutes ago isn't buried under its start date.**
+  *Accepted when:* the list orders by `last_activity_at`, the date filter
+  matches the case's activity span, each row shows when it last moved plus a
+  "case closed" cue, and the header states the ordering plainly.
+
 ---
 
 ## 3. Architecture
