@@ -439,40 +439,53 @@ post-purchase behavior. **Written by:** admin (Procedures tab). **Read by:**
 **Written by:** `logAction` (every tool execution + form submission). **Read
 by:** admin (read-only policy).
 
-### `concierge_cache` — semantic answer cache
+### `concierge_cache` — semantic answer cache + baked starter answers
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `id` | uuid PK | Row id. |
 | `question` | text | The canonical question. |
 | `answer_md` | text | The cached answer. |
-| `embedding` | `extensions.vector(384)` | gte-small embedding; HNSW index with `vector_ip_ops` (inner product). |
+| `embedding` | `extensions.vector(384)` | gte-small embedding; HNSW index with `vector_ip_ops` (inner product). Zero vector for a pinned row whose embed failed — pinned rows serve by exact match, never by similarity. |
 | `hits` | int | Times served. |
 | `enabled` | boolean | Off ⇒ never matched. |
-| `model` | text | Model that produced the answer. |
+| `model` | text | Model that produced the answer (`'baked'` for pinned rows). |
 | `created_at`,`last_hit_at` | timestamptz | Bookkeeping. |
+| `pinned` | boolean | **Baked starter answer** — a conversation starter's pre-authored reply, served by exact `norm_key` match with zero model + zero embedding calls ([KNOWLEDGE.md](../KNOWLEDGE.md)). |
+| `stale` | boolean | Knowledge changed since the bake; keeps serving until the hourly pass re-bakes it. |
+| `hand_edited` | boolean | The merchant's own wording — the auto-bake never overwrites it. |
+| `kb_slug` | text | The knowledge entry that grounds the baked answer. |
+| `norm_key` | text | `normalizeQuestionKey(question)` — the exact-match key; partial index `concierge_cache_pinned_key_idx` where `pinned`. |
 
-Engages **only** for anonymous, single-turn, short questions (signed-in and
-multi-turn answers depend on private/context state and are never cached).
-**Written by:** the chat path after a cacheable answer (`embed` +
-insert). **Matched by:** `match_cached_answer` RPC — with a **polarity guard**
+The **learned** tier engages only for anonymous, single-turn, short questions
+(signed-in and multi-turn answers depend on private/context state and are never
+cached). The **pinned** tier (baked starter answers) serves any turn, any
+visitor — its answers are grounded in house knowledge only.
+**Written by:** the chat path after a cacheable answer (`embed` + insert), and
+the starter bake pass (`bakeStarters` — on starters save, studio button,
+or hourly self-scheduler). **Matched by:** exact `norm_key` lookup first
+(pinned), then the `match_cached_answer` RPC — with a **polarity guard**
 at the call site: an embedding puts "does it shed?" and "does it never shed?"
 nearly on top of each other, so a hit whose negation signature differs from
 the incoming question's is refused and the model answers live. **Flushed by:**
 the `flush_cache` statement triggers on `concierge_kb`, `concierge_config`,
 and `concierge_sops` — the cache memorizes ANSWERS and those tables are their
-SOURCE, so any edit empties it (it re-warms from live traffic; an edited fact
-never keeps serving its stale cached answer). **Diagnosed by:**
-`GET ?cachecheck=1`. **Read by:** admin (Cache tab).
+SOURCE, so any edit empties the learned rows (they re-warm from live traffic)
+and marks pinned rows **stale** for re-bake (a starter tap never falls back to
+a live model call). **Diagnosed by:** `GET ?cachecheck=1` and the **Starter
+probe** workflow. **Read by:** admin (Saved answers tab).
 
 ### `concierge_insights` — cached "what's working" digests (coach feedback loop)
 | Column | Type | Purpose |
 | --- | --- | --- |
-| `kind` | text PK | Digest name (currently `'beat_learning'`). |
-| `payload` | jsonb | The computed digest: `{ window_days, total_spoke, buckets:[{beat, move, n, reply_rate}] }`. |
-| `computed_at` | timestamptz | When it was last recomputed (drives the TTL). |
+| `kind` | text PK | Digest name: `'beat_learning'`, `'judge_digest'` (weekly email claim), `'starter_bake'` (hourly bake claim + per-starter ledger). |
+| `payload` | jsonb | The computed digest — `beat_learning`: `{ window_days, total_spoke, buckets:[{beat, move, n, reply_rate}] }`; `starter_bake`: `{ baked, statuses:[{starter, status, kb}] }` (the ledger the Starter probe reads). |
+| `computed_at` | timestamptz | When it was last recomputed (drives the TTL / the atomic hourly-weekly claims). |
 
 A cache for the **sales-strategist coach's feedback loop** ([`COACH.md`](../COACH.md)
-§5). **Written & read by:** `beat_learning_digest()` only — the function serves
+§5), and the claim table for the self-scheduled passes (judge digest, starter
+bake) — one isolate wins the conditional `computed_at` PATCH, everyone else
+stands down. **Written & read by:** `beat_learning_digest()`, the digest/bake
+schedulers — the function serves
 the cached `payload` while it is fresher than the TTL, else recomputes and
 upserts. RLS is **enabled with no policy**, so it is reachable only through that
 `security definer` function (the service role / definer bypasses RLS); direct
@@ -519,12 +532,13 @@ praise, other). Admin-managed under RLS, like goals/hooks.
 | `conversation_id` | uuid → conversations | Source thread. |
 | `question` | text | What was asked. |
 | `answer` | text | What the bot said. |
-| `reason` | text | Default `knowledge_gap`; also carries embed/diagnostic failures. |
+| `reason` | text | Default `knowledge_gap`; also carries embed/diagnostic failures and `starter_bake` (a conversation starter the knowledge can't answer — add the facts or reword the starter). |
 | `resolved` | boolean | Admin has addressed it. |
 | `created_at` | timestamptz | When flagged. |
 
 **Written by:** `maybeFlagGap` (and the `?cachecheck` diagnostic on embed
-failure). **Read by:** admin (Knowledge-gaps tab).
+failure, and the starter bake pass for ungroundable starters — deduped while
+unresolved). **Read by:** admin (Knowledge-gaps tab).
 
 ### `concierge_forms` — admin-defined in-chat forms
 | Column | Type | Purpose |
@@ -834,7 +848,7 @@ pruned by `prune_high_write`.
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
 | `log_edit_history()` | trigger | Snapshots an admin-managed row into `concierge_edit_history` after every real change. | `*_history` triggers on config, SOPs, KB, and the four calendar config tables (locations/hours/types/availability). |
-| `flush_concierge_cache()` | trigger | Empties the semantic answer cache whenever prompt-shaping content changes, so an edit is never answered from a stale cache ([BEHAVIOR.md](../BEHAVIOR.md)). | `flush_cache` statement triggers on `concierge_kb`/`concierge_config`/`concierge_sops`. |
+| `flush_concierge_cache()` | trigger | Flushes the semantic answer cache whenever prompt-shaping content changes, so an edit is never answered from a stale cache ([BEHAVIOR.md](../BEHAVIOR.md)). Learned rows are deleted; **pinned** starter answers are marked `stale` for re-bake instead (a starter tap never falls back to a live model call). | `flush_cache` statement triggers on `concierge_kb`/`concierge_config`/`concierge_sops`. |
 | `rate_hit(p_key, p_limit, p_window_seconds)` | → bool | Counts one request for `p_key` in the current fixed window (atomic upsert into `rate_limits`) and returns true when over `p_limit`. Shared across all edge instances. | both functions' rate limiters. |
 | `beat_learning_digest(p_days, p_ttl_min, p_min_n)` | → jsonb | The coach's **feedback loop** ([`COACH.md`](../COACH.md) §5): buckets the reply rate after each proactive move (a following user turn within 30 min) by beat kind × move over a trailing window, so the coach reasons over what actually landed. Self-caching into `concierge_insights` with a TTL; drops buckets under `p_min_n`. | concierge coach path (`beatLearningBlock`). |
 | `nps_metrics(p_days, p_coach?)` | → jsonb | The **NPS calculation** ([`NPS.md`](../NPS.md)): overall NPS (%promoters − %detractors, mirroring `npsScore` in `beats.ts`), the segment split, response count, **offers** (spoken `REQUEST_NPS` beat rows), **response_rate** (÷, mirroring `npsResponseRate`; null when coach-scoped or nothing offered), **gate_holds** (why the gate did NOT ask, from `payload.npsGate`), and category frequencies with the **detractor themes broken out**. Guarded like `get_edition()` (admin JWT or service role); granted to `authenticated`. Null NPS when there are no responses — never a fake zero. | The admin studio **NPS tab** (direct RPC). |

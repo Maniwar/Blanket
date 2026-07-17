@@ -114,10 +114,17 @@ identical*. The rules that matter for us:
   don't reuse the chat prefix, so they pay plain input each time (kept tiny on
   purpose).
 
-### 2. Semantic answer cache (anonymous)
+### 2. Semantic answer cache (anonymous) + baked starter answers (everyone)
 Anonymous, single-turn questions are embedded (gte-small, local — **not** a Claude
 call) and matched against `concierge_cache`. A hit returns the stored answer with
 **zero** model calls. Skipped for anything about live/personal state.
+
+Ahead of the semantic match sits the **pinned tier**: conversation starters get
+pre-authored answers at setup time (one judge call per starter, KB-grounded),
+then serve by exact `norm_key` match with zero model **and** zero embedding
+calls — any turn, any visitor. The most-tapped buttons on the page never touch
+the meter again; `purpose='starter-bake'` rows are the only spend, and the
+Starter probe workflow proves the zero live.
 
 ### 3. `goal_sample_rate`
 Admin-tunable (Tuning → Engagement pace). At `1.0` the grader runs on every
@@ -195,6 +202,8 @@ Overhead (aggregate attribution only):
 - `directives` / `clientbook` / `notes` / `goals` — house-note reconciliation,
   client-book consolidation, note writing, goal grading
 - `starters` — admin "AI generate" conversation starters
+- `starter-bake` — the setup-time pass that pre-authors baked starter answers
+  (one Haiku call per starter, once — the taps themselves never meter)
 - `eval-judge` / `lint` / `prompt-review` — the eval grader and the advisory
   honesty lint
 - `reengage` — the return-visit bubble line

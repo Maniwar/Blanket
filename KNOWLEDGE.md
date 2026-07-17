@@ -72,7 +72,9 @@ buys us nothing at this scale and costs us the guarantee we care about most.
 ## The one place embeddings *are* used — and it's a cache, not retrieval
 
 The **semantic answer cache** (`concierge_cache`, pgvector) stores whole
-finished *answers*, keyed by a question's meaning:
+finished *answers*, keyed by a question's meaning. (Its exact-match sibling —
+**baked starter answers**, pinned rows served without even the embedding call —
+has its own section below.)
 
 - On an eligible turn (anonymous, one user turn, ≤300 chars, not a live/personal
   ask), the question is embedded locally with **gte-small** (384-dim, via
@@ -116,6 +118,55 @@ per-section starter *copy*.
 It's the same pattern as the prompt tuner (`?promptreview=1`) and the honesty
 lint (`?lint=1`): an admin-only, KB-grounded helper that proposes, never commits.
 
+## Baked starter answers — a tap never spends a model call
+
+Starters are the most-tapped inputs on the page, and the house knows in advance
+exactly what they say — so their answers are **pre-authored** ("baked") and
+served without a model call *or* an embedding call. The bake happens once, at
+setup time; the taps are free forever after.
+
+**Serving.** A baked answer is a **pinned** row in `concierge_cache`
+(`pinned=true`), exact-matched by `norm_key` — the question lower-cased,
+whitespace collapsed, trailing `?.!…` dropped (`normalizeQuestionKey` in
+`beats.ts`, the one shared normalizer every writer and reader calls). The match
+runs *ahead of* the semantic cache, on **any** turn for **any** visitor
+(signed-in included — baked answers are grounded in house knowledge only, never
+in a register), and streams with the cache marker, logged as `model='baked'`.
+A tap or a retyped copy of the same starter lands on the same row.
+
+**Baking.** One setup-time model call per starter authors its reply from the
+**live knowledge base only** — the same honesty rule as everything else:
+
+- The judge answers with a verdict: **ok** (bake it), **live** (a correct
+  answer needs live state — availability, remaining counts, a patron's own
+  orders — so the tap stays a real model call by design), or **ungroundable**
+  (the knowledge can't answer its own starter — filed to the findings ledger
+  as a `starter_bake` flag: *add the facts to Knowledge, or reword the
+  starter*; never invented).
+- Every baked answer names the KB entry that grounds it (`kb_slug`); when the
+  facts exist but no single entry holds them, the bake **drafts one** (capped),
+  so each answer stays traceable to knowledge the merchant can edit.
+
+**Auto-wiring.** Saving the starters card fires the bake; the **Bake starter
+answers** button (Studio → Saved answers) runs it on demand; and an hourly
+self-scheduler catches anything left (the pass is capped at 8 model calls, so a
+long list finishes over a few passes). Adding a starter is enough — no other
+setup.
+
+**Knowledge edits re-bake, never orphan.** The cache flush that fires on
+KB/config/SOP edits deletes *learned* rows but only marks pinned rows
+**stale** — a starter tap keeps serving the last good answer until the next
+pass re-bakes it from the updated knowledge. A merchant who edits a baked
+answer by hand marks it `hand_edited` ("your wording"), and the auto-bake never
+overwrites it.
+
+**Proof.** The **Starter probe** workflow (Actions → *Starter probe*) is the
+definitive live test: it plants a pinned row, taps it over the real wire, and
+asserts the streamed reply is **byte-identical** to the stored answer with
+**zero** rows in `concierge_llm_usage` for that conversation — then watches the
+real starters until every one is pinned or accounted for (live /
+needs-knowledge / queued), and deletes everything it created.
+
 ## Managing it
 
 - **Edit** in the Studio (Knowledge, Procedures, Selling, Goals). Everything is
@@ -128,7 +179,8 @@ lint (`?lint=1`): an admin-only, KB-grounded helper that proposes, never commits
 - **Honesty lint** (`?lint=1`) runs on prompt-text saves — a KB claim with no
   supporting source is flagged.
 - **Cache flush** fires automatically on KB/config/SOP edits, so a changed policy
-  is never served from an old cached answer.
+  is never served from an old cached answer. Learned rows flush clean; baked
+  starter answers survive as **stale** and re-bake within the hour.
 - **See the assembled prompt** (`?preview=1`) and **ask the prompt tuner**
   (`?promptreview=1`) to inspect and improve the result.
 

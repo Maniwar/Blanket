@@ -1559,6 +1559,26 @@ audited decision back) plus the pure beat tests.
   with the survey when the gate allows), once per day, then silence; every
   threshold is unit-tested in the pure beat engine.
 
+### 2.14 Baked starter answers — anticipated taps are free
+
+- **As the merchant, I want the suggested questions to answer instantly and
+  cost nothing, so that the buttons I put in front of every visitor never run
+  up the model bill.** *Accepted when:* tapping any configured starter streams
+  a pre-authored answer byte-identical to the stored row, logged as
+  `model='baked'`, with zero `concierge_llm_usage` rows for that turn — proven
+  live by the Starter probe workflow.
+- **As the merchant, I want those answers grounded in my knowledge base, so
+  that a cached reply is never an invented one.** *Accepted when:* every baked
+  row names the KB entry that grounds it (drafting one when the facts exist
+  but no single entry holds them); a starter the knowledge can't answer lands
+  in the findings ledger ("add the facts, or reword the starter") instead of
+  being baked; a live-state starter is left to the model by design.
+- **As the merchant, I want the wiring to be automatic, so that adding a
+  starter is the whole job.** *Accepted when:* saving the starters card fires
+  the bake, the studio button re-runs it on demand, the hourly pass finishes
+  anything queued, and a knowledge edit re-bakes affected answers within the
+  hour while my hand-edited wording is never overwritten.
+
 ---
 
 ## 3. Architecture
@@ -1628,9 +1648,10 @@ approach collides under concurrency and can't reclaim. `SKIP LOCKED` gives us
 lock-free-feeling allocation with correctness. (See migrations `0006`, `0010`,
 `0011`.)
 
-### 4.3 Two caches, and why they don't overlap
+### 4.3 The caches, and why they don't overlap
 
-The concierge uses **two independent caches**. They're easy to conflate, so the
+The concierge uses **two independent caches** — plus a **pinned tier** inside
+the first for conversation starters (below). They're easy to conflate, so the
 distinction up front:
 
 | | **Semantic answer cache** (ours) | **Prompt cache** (Anthropic's) |
@@ -1639,7 +1660,7 @@ distinction up front:
 | Where it lives | our Postgres (`concierge_cache`, pgvector) | Anthropic's servers; we only set a breakpoint |
 | Saves | the **entire** model call (0 calls on a hit) | ~90% of the **input** tokens on a call that still happens |
 | Applies to | anonymous, single-turn, state-free questions | every chat call (anon, signed-in, nudge, opener) |
-| Lifetime | until an admin clears it (manual) | 5-minute sliding TTL, self-refreshing |
+| Lifetime | flushed automatically on KB/config/SOP edits (pinned rows survive as *stale* and re-bake) | 5-minute sliding TTL, self-refreshing |
 
 The prompt cache is documented mechanism-and-all in [`COST.md`](COST.md) (lever 1);
 the semantic cache is below.
@@ -1666,12 +1687,34 @@ signed-in answers depend on private register state and multi-turn answers on
 context, so neither is ever cached or served from cache. The `match_cached_answer`
 RPC qualifies the pgvector operator explicitly (`operator(extensions.<#>)`)
 because the function's `search_path` is pinned empty for safety.
-**Operate it:** the admin **Cache** tab lists entries and clears stale ones (a
-changed policy shouldn't be served from an old answer — invalidation is manual by
-design), and `?cachecheck=1` exercises the whole write → match → delete round-trip
-so an embedding-runtime outage is visible.
+**Operate it:** the admin **Saved answers** tab lists entries; a changed policy
+is never served from an old answer because every KB/config/SOP edit flushes the
+learned rows automatically. `?cachecheck=1` exercises the whole write → match →
+delete round-trip so an embedding-runtime outage is visible.
 **Trade-off:** a background embedding call and a similarity threshold to tune; in
 exchange, the cheapest possible path for the most common traffic.
+
+**Baked starter answers (the pinned tier).**
+**Decision:** the tappable conversation starters get **pre-authored** answers —
+`pinned=true` rows in the same `concierge_cache` table, exact-matched by
+`norm_key` (`normalizeQuestionKey`: casefold, collapse whitespace, drop trailing
+punctuation) *ahead of* the semantic match.
+**Why:** starters are the most-tapped inputs on the page and their text is known
+in advance — anticipated taps shouldn't spend a model call *or* an embedding
+call, on any turn, for any visitor.
+**How:** one setup-time judge call per starter authors the answer from the live
+KB only (verdicts: *ok* → bake; *live* → the answer needs live state, the tap
+stays a real call by design; *ungroundable* → filed to the findings ledger, never
+invented), names or drafts the `kb_slug` that grounds it, and upserts the pinned
+row. Saving the starters card fires the bake; a studio button runs it on demand;
+an hourly self-scheduler (atomic claim on `concierge_insights`, 8-call cap per
+pass) finishes the rest. The KB-edit flush marks pinned rows **stale** instead of
+deleting them — taps keep serving the last good answer until the re-bake; a
+hand-edited answer is never overwritten.
+**Proof:** the **Starter probe** workflow plants a pinned row, taps it over the
+real wire, asserts the streamed reply is byte-identical to the stored answer with
+**zero** `concierge_llm_usage` rows for that conversation, then watches the real
+starters until each is pinned or accounted for (live / needs-knowledge / queued).
 
 ### 4.4 Streaming + tool use
 Replies stream over SSE (`data: {"t":…}` chunks) so the concierge "weaves" in
