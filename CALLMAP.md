@@ -134,3 +134,31 @@ prices it per conversation.
 - **Judge & coach page** — blocks, classes, gaps, drafts, pause switches.
 - **Calendar queue** — every booking/callback action with who acted.
 - **Tuning → history** — every config/KB/SOP edit, revertible.
+
+## 9. Evidence workflows (GitHub Actions — the sandbox-blind's eyes)
+
+All `workflow_dispatch`, read-only unless named otherwise:
+
+| Workflow | What it proves |
+| --- | --- |
+| **Judge pulse** | Spoke / held / blocked per day, block share, top block reasons — the judge-recovery watch. Counts only; no lines, no contact details. |
+| **NPS probe** | The closing choreography END TO END against production: real conversation, waits out the worth-rating minimum, types "that's all for now", asserts the warm goodbye + `{{nps}}`, reads the gate's audited decision, then **deletes every row it created**. |
+| **Calendar doctor** | Capacity matrix + slot counts + raw hours/windows config — why is nothing bookable? |
+| **Prod validate** | The calendar case deck (V1–V8) live, inside a rolled-back transaction. Step 1 commits one idempotent fix (tour windows). |
+| **Config conformance** | Every Engagement knob vs the widget's observed behavior (weekly cron + on demand). |
+| **key-probe** | Browser-credential health for both sites (publishable key + function liveness). |
+| **Deploy Concierge** | Beat tests, `deno check`, setup.sql apply, RPC probes, live smoke — and it **auto-triggers on any `supabase/**` push**, so code can never sit committed-but-undeployed. |
+
+## 10. Instruction channels (why the model obeys — measured, not hoped)
+
+Three channels carry house instructions to the model, in rising strength:
+**baked system text** (constitution/engagement blocks — strong for standing
+habits, carries exemplars) → **late system notes** (per-turn `system.push`
+— weakest; a note here LOST to the baked snooze exemplar in live probes) →
+**register notes in USER position** (a bracketed note beside the visitor's
+own message — the channel the SOPs are trained on, "when the register
+instructs you…"; the closing survey moved here and complied on the first
+live run). Rules of thumb: train the channel in an SOP, deliver per-turn
+imperatives in user position, keep a deterministic net under anything a
+visitor must never miss, and METER the net (`REQUEST_NPS_APPENDED` rows)
+so compliance is a rate with a target of zero, never a feeling.

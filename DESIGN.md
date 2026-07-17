@@ -1527,6 +1527,38 @@ events and asserted against both the picture and the mirrored rows).
   hashes and integrations unchanged), and no merchant-facing refusal or hint
   says "slug", "eval", or shows a raw table name.
 
+### 2.13 The closing choreography — warm close, one survey, proven live
+
+The end of a visit is choreography, not chance, and every step is proven
+against production by the `NPS probe` workflow (a real conversation that
+waits out the worth-rating minimum, says goodbye, and reads the gate's
+audited decision back) plus the pure beat tests.
+
+- **As a visitor who's done, I want one warm goodbye and one light question
+  — never a pitch, a recap, or a second ask — so that leaving feels like
+  being seen out, not escaped from.**
+  *Accepted when:* a typed farewell ("that's all for now") or the wrap-up
+  chip earns a brief goodbye that leaves the door open, the house's one
+  rating question with the `{{nps}}` scale on its own line, and the
+  wind-down token last — then true quiet; the gate offers ONCE per session,
+  only past the worth-rating minimum, never inside the per-customer
+  cooldown, and each decision is audited with its reason.
+- **As the house, I want the survey ask guaranteed by code, not model mood,
+  so that a visitor can never miss the one moment we may ask.**
+  *Accepted when:* the register instructs in USER position (the channel the
+  closing-survey SOP is trained on — a live probe showed a late system note
+  losing to the baked snooze exemplar, and the user-position note complying
+  first try); if the goodbye still lacks the scale, the stream tail appends
+  the question + `{{nps}}` with stream and stored transcript identical; and
+  every net catch writes a `REQUEST_NPS_APPENDED` row, so model compliance
+  is a measured rate with a target of zero.
+- **As the merchant, I want the run-dry close to be the same courtesy, so
+  that an ignored conversation ends with grace instead of an endless vigil.**
+  *Accepted when:* three consecutive silent holds — or four spoken lines
+  since the visitor's last word — earn exactly one warm goodbye (paired
+  with the survey when the gate allows), once per day, then silence; every
+  threshold is unit-tested in the pure beat engine.
+
 ---
 
 ## 3. Architecture
