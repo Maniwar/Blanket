@@ -9,11 +9,11 @@ five scenarios — fresh install, populated, RPC-error, edge cases, mobile
 what renders and what would have been written to the database. Zero
 `pageerror`s tolerated in any scenario.
 
-**Re-run:** `python3 cal_qa.py && node cal_qa_drive.js` (scratchpad copies of
-both scripts; the harness re-extracts from `admin.html` on every run, so it
-always tests the current code).
+**Re-run:** `python3 cal_qa.py && node cal_qa_drive.js` — the scripts live in
+`tools/qa/` (committed, restart-proof); the harness re-extracts from
+`admin.html` on every run, so it always tests the current code.
 
-## Result: 139 / 139 (current deck; originally 47 / 47 after one product fix)
+## Result: 137 / 137 (current deck; originally 47 / 47 after one product fix)
 
 The deck has grown with the tab: the original 47-check core (S1–S4 below)
 plus staff & hours (S5–S8), departures (S9), breaks/time-off v2 (S10–S11),
@@ -23,7 +23,7 @@ accountability & the closed-out fold (S17), and the Judge & coach page
 (S18 — now including the pause switches, the coach's draft strip, and the
 digest preview/send), and the time-off request lifecycle — chips,
 approve/decline/return/restore, overlap visibility on every surface (S19).
-Latest run: **139/139, 21 screenshots**, zero page errors.
+Latest run: **137/137, 20 screenshots**, zero page errors (deck rebuilt after a workspace reset; now committed under tools/qa/).
 
 **Bug found and fixed by this pass** — the out-of-hours warning ("Saved —
 but N window(s) fall entirely outside … business hours and will yield no
