@@ -345,6 +345,29 @@ export const scenarios = [
     ],
   },
 
+  // The wrap-up OFFER trigger — the other half of the survey the deck did not
+  // cover (CATALOG.md marked it "verify manually"). A BARE sign-off — not the
+  // literal "that's all", but a plain "thanks, bye" the old detector missed —
+  // must fire the closing survey: a warm goodbye that invites ONE rating and
+  // renders the {{nps}} scale. Runs against production every deploy, so a
+  // regression that silences the offer is caught, not shipped.
+  {
+    name: "nps-wrapup-offer",
+    desc: "A bare 'thanks, bye' ends the visit → the closing survey fires: a warm goodbye inviting one 0-10 rating, with the {{nps}} scale rendered.",
+    signedIn: false,
+    context: { section: "hero", device: "desktop" },
+    turns: [
+      { user: "would it be warm enough for a cold, north-facing bedroom?" },
+      {
+        user: "thanks, bye!",
+        checks: [
+          { includes: "{{nps}}" },
+          { judge: "The reply gives a brief, warm goodbye AND, in the same message, invites the visitor to answer one quick rating before they go (a 0-10 / how-likely-to-recommend question). It does NOT merely say goodbye, keep selling, or ask an unrelated question." },
+        ],
+      },
+    ],
+  },
+
   // ---- signed-in (needs EVAL_TOKEN) ----
   {
     name: "signed-in-count-uses-tool",
