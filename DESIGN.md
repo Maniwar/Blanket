@@ -1697,6 +1697,32 @@ every count is a door.
   Proven by a real-browser studio harness (segment/category filter → response
   list → transcript render → back / open-full / close).
 
+### 2.20 The concierge never claims a call it didn't make — and recovers when a tool fails
+
+A live transcript caught the worst kind of defect: a proactive line claiming
+the house "called you Thursday" when no call had happened. The model judge had
+blocked it eleven times, but the judge is a model call that **fails open** on
+any timeout — so on two attempts it slipped through, and once the false claim
+was in the thread later turns treated it as fact.
+
+- **As a shopper, I want the concierge to never claim it contacted me when it
+  didn't, so that I can trust what it says.** *Accepted when:* a deterministic
+  pre-filter (`claimsOutboundContact`, unit-tested) vetoes any proactive line
+  asserting the house called, phoned, texted, or reached out — **unless** the
+  CALLBACKS facts this turn show a *completed* call. It is mechanical, so unlike
+  the model judge it cannot fail open; the callback context line is worded so
+  an open (not-yet-called) request can't be paraphrased into "we called you,"
+  and the judge is no longer told to treat "already called you" as allowed.
+- **As the house, I want the drafter to learn from the block, so the same
+  fabrication isn't re-attempted.** *Accepted when:* RECENT BLOCKED DRAFTS
+  surfaces the **original** vetoed claim (`first_line`), not only its redraft.
+- **As a shopper, I want the concierge to keep serving when a lookup fails, so
+  a hiccup isn't a dead end.** *Accepted when:* a tool that throws becomes a
+  recoverable result the model can step down from (offer a callback, take an
+  inquiry) instead of a silent stalled turn; and a signed-in patron's known
+  name/email backfill a form so they're never asked to re-type what the
+  register already holds.
+
 ---
 
 ## 3. Architecture
