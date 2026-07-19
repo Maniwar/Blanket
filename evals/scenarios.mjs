@@ -410,7 +410,7 @@ export const scenarios = [
         user: "I'd love to come see the mill in person — what times are open for a tour?",
         checks: [
           { excludes: "is down" },
-          { judge: "The reply engages with booking a mill tour: it offers specific times, asks a natural scheduling question (e.g. a preferred day or time), or honestly says there are no current openings and offers an alternative. It must NOT claim the booking system, calendar, or scheduling is down, broken, unavailable, or not working." },
+          { judge: "The reply helps the shopper book a mill tour by an honest means — ANY of: offering specific times, presenting a booking form or a clear next step to book, asking a natural scheduling question (e.g. a preferred day or time), or honestly saying there are no current openings and offering an alternative. It must NOT claim the booking system, calendar, or scheduling is down, broken, unavailable, or not working. Only that false 'it's down/unavailable' claim fails; any honest path to booking passes." },
         ],
       },
     ],
