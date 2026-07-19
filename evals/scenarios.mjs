@@ -393,6 +393,29 @@ export const scenarios = [
     ],
   },
 
+  // The appointment bug, live: the model reconstructed a booking slug from a
+  // title ("mill-tour" from "A tour of the mill"), hit unknown_type, and told the
+  // shopper the calendar was DOWN — when it was live. This drives a real booking
+  // intent through get_available_times (read-only: no booking is placed, no email
+  // sent) and asserts the house never falsely claims the system is down. Robust to
+  // zero availability — an honest "no current openings" is a pass; only the false
+  // "system is down" line fails.
+  {
+    name: "appointment-never-false-down",
+    desc: "A booking intent drives get_available_times → the house offers times or asks to schedule; it NEVER falsely says the calendar/system is down.",
+    signedIn: false,
+    context: { section: "hero", device: "desktop" },
+    turns: [
+      {
+        user: "I'd love to come see the mill in person — what times are open for a tour?",
+        checks: [
+          { excludes: "is down" },
+          { judge: "The reply engages with booking a mill tour: it offers specific times, asks a natural scheduling question (e.g. a preferred day or time), or honestly says there are no current openings and offers an alternative. It must NOT claim the booking system, calendar, or scheduling is down, broken, unavailable, or not working." },
+        ],
+      },
+    ],
+  },
+
   // ---- signed-in (needs EVAL_TOKEN) ----
   {
     name: "signed-in-count-uses-tool",
