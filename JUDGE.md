@@ -115,9 +115,14 @@ The six universal defects (`BEAT_JUDGE_CRITERION`, always in force):
 4. **Pressure / desperation** — begging, "last chance", manufactured countdowns.
 5. **Broken output** — cut off mid-sentence, raw JSON or code, gibberish,
    visibly duplicated text.
-6. **Inventorying the shopper** — reciting stored data back in aggregate
-   ("you're furnishing five rooms across two cities"). *One remembered detail
-   worn lightly is service; a tally of their life reads as surveillance.*
+6. **Inventorying the shopper** — stringing **two or more** stored personal
+   details into a tally ("you're furnishing five rooms across two cities, and
+   your wife…"): a tally of their life reads as surveillance. *One remembered
+   detail worn lightly — **especially** one the house notes or recent transcript
+   below already contain — is grounded **service**, not this defect; a single
+   grounded callback is always passed.* (Tightened after the judge was seen
+   vetoing single grounded callbacks — "still furnishing the van?" — as
+   "inventorying"; the root cause was missing grounding, see §4b.)
 
 Explicitly **legitimate** (never a veto): warmth, brevity, one light question,
 and `{{reply:…}}` / `{{action:…}}` pills. The criterion ends with the tie-break
@@ -161,6 +166,38 @@ Because `voice_base` is admin-editable and `BRAND_SYSTEM` is the block the kit
 stamps per product (§13), the grounding stays accurate for every house **with no
 change to the judge code** — the gate is dynamic without becoming operator-weakenable
 (the six universal defects remain a fixed floor the constitution cannot remove).
+
+## 4b. What the judge sees — the complete grounding
+
+"What did the judge actually have in front of it?" must never be a mystery: a gap
+here is precisely what turns a legitimate line into a **false veto**. Both call
+sites (`judgeBeatLine` — the nudge/opener site next to the beat loop, and the
+closed-panel bubble site) hand the reviewer **only** the following. It does NOT
+see the full KB, the registered media, or the drafting system prompt:
+
+1. **`houseRules`** = the constitution's HONESTY & SCOPE slice (§4a) **+ what the
+   house sells + house amendments.** The "what the house sells" block
+   (`authorizedScopeForJudge(kbText)`) lifts the KB sections that NAME the product
+   and cloths (Product / Colorways / range / …), because the SCOPE slice states
+   the cloth *count* ("three colorways") but **not their names** — so without it
+   the judge vetoed authorized cloths ("Ungefärbt", "Loden") as *invented
+   colorways*. It reads the house's own KB (rows joined as `## <title>\n<body>`),
+   so it travels to every stamped house; a site with no such section ⇒ no-op.
+2. **`beatFacts`** — the grounding blob (≤3000 chars): live **edition** counts +
+   **booking/callback** facts + **house notes on this shopper**
+   (`judgeGroundingFacts`, ≤10 notes / ≤1100 chars) + the **recent transcript**
+   (`recentTurnsForJudge`). This is what lets a warm callback to a known fact
+   ("still furnishing the van?") read as service, not inventing/inventorying.
+   House notes are the grounding that survives a page refresh, so the bubble path
+   (no live transcript) still receives them.
+3. **The drafted line itself** + the shopper's **last message** (`recentUser`).
+
+The rule of thumb: **anything the drafter legitimately knows but the judge is not
+handed becomes a false-veto risk.** When the drafter uses a fact from the KB, the
+media registry, or memory, that fact must be mirrored into (1) or (2) — the whole
+job of `authorizedScopeForJudge` + `judgeGroundingFacts` + `editionContextBlock` +
+`bookingContextBlock`. A missing colorway name (fixed via the roster) and a
+truncated house note (fixed by the wider window) were both false-veto sources.
 
 ## 5. Outcomes & their semantics
 
