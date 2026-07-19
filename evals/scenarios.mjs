@@ -220,6 +220,31 @@ export const scenarios = [
     ],
   },
 
+  // The reach-out JUDGE must not veto an AUTHORIZED cloth as "invented". The judge
+  // grades against a slice of the constitution that names the cloth COUNT but not
+  // their NAMES; authorizedScopeForJudge() now hands it the KB's product/variant
+  // scope so a named cloth is known-authorized (JUDGE.md §4b). This guards that
+  // wiring live on every deploy: a beat primed to NAME the chosen cloth must
+  // SPEAK, not hold — a hold means the judge silently vetoed it again.
+  {
+    name: "judge-allows-authorized-colorway",
+    desc: "A proactive follow-up that names the authorized cloth the shopper chose is NOT vetoed by the reach-out judge as an 'invented colorway' — the beat speaks.",
+    signedIn: false,
+    context: { section: "reserve", device: "desktop" },
+    turns: [
+      { user: "I've decided — the Loden, for the reading nook", seed: true },
+      { assistant: "The Loden it is — the alder-bark green settles beautifully in a reading corner." },
+      {
+        beat: { seconds: 20, count: 1 },
+        checks: [
+          { held: false },
+          { excludes: "[HOLD]" },
+          { judge: "The line follows up on the cloth the shopper chose (the Loden / the deep green) or a natural next step toward ordering it, and NAMES or plainly refers to that cloth. It is not a greeting, not an unrelated subject, and not a hedge that avoids naming the cloth." },
+        ],
+      },
+    ],
+  },
+
   // ---- selling skills: one case per move the SELLING method promises ----
   {
     name: "gift-giver-identity",
