@@ -6,3 +6,6 @@ package-lock.json
 # Local dev tooling (Claude Code MCP config) — not part of the product
 .mcp.json
 __pycache__/
+
+# Local agent dev tooling (npx skills add) — never product code
+.agents/skills/supabase*
