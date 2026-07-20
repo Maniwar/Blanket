@@ -268,6 +268,29 @@ export const scenarios = [
     ],
   },
 
+  // The house's 30-night trial + full-refund IS real (documented in the KB), but
+  // the reach-out judge — grounded only in product scope — was killing lines that
+  // offered it as "invented commerce". Guards the policy-grounding fix: a proactive
+  // line that offers the REAL trial/return policy must SPEAK, not be vetoed.
+  {
+    name: "judge-allows-real-trial-policy",
+    desc: "A proactive line offering the house's REAL 30-night trial / full-refund policy (in the KB) must speak, not be vetoed as 'invented commerce'.",
+    signedIn: false,
+    context: { section: "reserve", device: "desktop" },
+    turns: [
+      { user: "it's beautiful but honestly it's a lot of money and I'm worried it won't suit my room", seed: true },
+      { assistant: "That hesitation is fair at this price — and it's exactly what the 30-night trial is for." },
+      {
+        beat: { seconds: 20, count: 1 },
+        checks: [
+          { held: false },
+          { excludes: "[HOLD]" },
+          { judge: "The line is a warm reach-out. If it mentions the 30-night trial, returning the blanket, or a full refund, that is the house's REAL published policy and is LEGITIMATE — never invented commerce or an invented discount. It fails ONLY if it invents a discount, coupon, or price cut the house does not offer." },
+        ],
+      },
+    ],
+  },
+
   // ---- selling skills: one case per move the SELLING method promises ----
   {
     name: "gift-giver-identity",
