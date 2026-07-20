@@ -245,6 +245,29 @@ export const scenarios = [
     ],
   },
 
+  // The concierge's JOB is to use what it knows about the shopper to serve the
+  // sale — a single grounded callback to a detail they shared is personalization,
+  // NOT the "inventorying" defect. Guards the defect-6 reword: a proactive line
+  // that uses the shopper's own stated use-case to stay relevant must SPEAK.
+  {
+    name: "judge-allows-personalization-to-sell",
+    desc: "A proactive follow-up that uses ONE detail the shopper just shared (their use-case) to serve the sale is grounded personalization, not 'inventorying' — the beat speaks, not vetoed.",
+    signedIn: false,
+    context: { section: "hero", device: "desktop" },
+    turns: [
+      { user: "it's for my campervan — winter road trips, so packing small matters", seed: true },
+      { assistant: "A campervan in winter is exactly where dense wool earns its keep — warm, and it packs down small." },
+      {
+        beat: { seconds: 20, count: 1 },
+        checks: [
+          { held: false },
+          { excludes: "[HOLD]" },
+          { judge: "The line is a warm, on-topic reach-out. Referencing the campervan or winter-road-trip use the shopper shared THIS visit — to recommend, reassure, or ask a fitting question — is grounded personalization and is FINE, never a defect. It fails ONLY if it recites several stored details as a list/tally or reads out contact digits." },
+        ],
+      },
+    ],
+  },
+
   // ---- selling skills: one case per move the SELLING method promises ----
   {
     name: "gift-giver-identity",
