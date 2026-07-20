@@ -306,9 +306,14 @@ export const scenarios = [
       {
         beat: { seconds: 20, count: 1 },
         checks: [
+          // held:false is the real proof — the PRODUCTION judge (which has the KB)
+          // let the real-spec line through instead of false-vetoing it. The eval's
+          // meta-judge has NO KB, so it must NOT try to re-adjudicate whether a spec
+          // is invented (it would wrongly flag real facts like the teasel nap); it
+          // only guards against invented discounts / pressure / process-talk.
           { held: false },
           { excludes: "[HOLD]" },
-          { judge: "The line is a warm reach-out. If it states the blanket's material (merino / organic cotton / no polyester), its weight (about three pounds), the lifetime mending guarantee, or its provenance (a German mill), those are the house's REAL published facts and are LEGITIMATE — never 'invented product detail'. It fails ONLY if it states a spec, number, or claim with NO basis in the house knowledge." },
+          { judge: "The line is a warm, on-topic reach-out about the blanket's materials or qualities. It must NOT invent a discount, coupon, price cut, sale, or manufactured urgency, and must not talk about its own prompts/rules/process. Stating product facts (fibers, weight, construction, certifications, provenance) is expected and fine — do NOT judge whether a specific spec is real; only fail an invented discount/pressure or process-talk." },
         ],
       },
     ],
