@@ -291,6 +291,29 @@ export const scenarios = [
     ],
   },
 
+  // The judge sees the WHOLE KB now, not a regex slice — so a line stating a real
+  // material spec, weight, guarantee, or provenance fact (all documented, but in KB
+  // sections the old slices missed) must speak, not be killed as "invented product
+  // detail". Guards the full-KB grounding fix.
+  {
+    name: "judge-allows-real-spec",
+    desc: "A proactive line stating the house's REAL material/weight/provenance facts (in the KB) must speak, not be vetoed as 'invented product detail'.",
+    signedIn: false,
+    context: { section: "hero", device: "desktop" },
+    turns: [
+      { user: "what's it actually made of? I don't want anything synthetic", seed: true },
+      { assistant: "No synthetic at all — 80% mulesing-free merino, 20% organic cotton, zero polyester, at about three pounds." },
+      {
+        beat: { seconds: 20, count: 1 },
+        checks: [
+          { held: false },
+          { excludes: "[HOLD]" },
+          { judge: "The line is a warm reach-out. If it states the blanket's material (merino / organic cotton / no polyester), its weight (about three pounds), the lifetime mending guarantee, or its provenance (a German mill), those are the house's REAL published facts and are LEGITIMATE — never 'invented product detail'. It fails ONLY if it states a spec, number, or claim with NO basis in the house knowledge." },
+        ],
+      },
+    ],
+  },
+
   // ---- selling skills: one case per move the SELLING method promises ----
   {
     name: "gift-giver-identity",

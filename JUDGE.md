@@ -172,17 +172,21 @@ change to the judge code** — the gate is dynamic without becoming operator-wea
 "What did the judge actually have in front of it?" must never be a mystery: a gap
 here is precisely what turns a legitimate line into a **false veto**. Both call
 sites (`judgeBeatLine` — the nudge/opener site next to the beat loop, and the
-closed-panel bubble site) hand the reviewer **only** the following. It does NOT
-see the full KB, the registered media, or the drafting system prompt:
+closed-panel bubble site) hand the reviewer the following. It sees the **whole
+house KB** — the same knowledge the drafter writes from — but NOT the registered
+media or the drafting system prompt:
 
-1. **`houseRules`** = the constitution's HONESTY & SCOPE slice (§4a) **+ what the
-   house sells + house amendments.** The "what the house sells" block
-   (`authorizedScopeForJudge(kbText)`) lifts the KB sections that NAME the product
-   and cloths (Product / Colorways / range / …), because the SCOPE slice states
-   the cloth *count* ("three colorways") but **not their names** — so without it
-   the judge vetoed authorized cloths ("Ungefärbt", "Loden") as *invented
-   colorways*. It reads the house's own KB (rows joined as `## <title>\n<body>`),
-   so it travels to every stamped house; a site with no such section ⇒ no-op.
+1. **`houseRules`** = the constitution's HONESTY & SCOPE slice (§4a) **+ the whole
+   house KB + house amendments.** The house-knowledge block
+   (`authorizedFactsForJudge(kbText)`) hands the reviewer the **entire** KB (rows
+   joined as `## <title>\n<body>`, capped at 8000 chars), not a regex slice of it.
+   The earlier slices ("what the house sells", "house policies") left whole KB
+   sections — Materials, Mill & provenance, Lifetime mending, Packaging, the
+   comparison table — **invisible**, so a true line grounded in one (a real
+   material spec "80% mulesing-free merino", a weight "three pounds", the "mending
+   promise" guarantee, "German mill" provenance) read as *invented* and was falsely
+   vetoed. The KB is small, so the judge now reads it whole; authorized ≠ invented,
+   wholesale. A site with no KB ⇒ no-op.
 2. **`beatFacts`** — the grounding blob (≤3000 chars): live **edition** counts +
    **booking/callback** facts + **house notes on this shopper**
    (`judgeGroundingFacts`, ≤10 notes / ≤1100 chars) + the **recent transcript**
@@ -193,11 +197,12 @@ see the full KB, the registered media, or the drafting system prompt:
 3. **The drafted line itself** + the shopper's **last message** (`recentUser`).
 
 The rule of thumb: **anything the drafter legitimately knows but the judge is not
-handed becomes a false-veto risk.** When the drafter uses a fact from the KB, the
-media registry, or memory, that fact must be mirrored into (1) or (2) — the whole
-job of `authorizedScopeForJudge` + `judgeGroundingFacts` + `editionContextBlock` +
-`bookingContextBlock`. A missing colorway name (fixed via the roster) and a
-truncated house note (fixed by the wider window) were both false-veto sources.
+handed becomes a false-veto risk.** KB facts are now covered wholesale
+(`authorizedFactsForJudge` hands over the entire KB); memory and live facts are
+mirrored via `judgeGroundingFacts` + `editionContextBlock` + `bookingContextBlock`.
+Regex-slicing the KB into "scope" and "policy" was itself a false-veto source —
+every section the slices missed (materials, provenance, the mending guarantee) was
+a blind spot — which is why the judge now reads the KB whole rather than filtered.
 
 ## 5. Outcomes & their semantics
 
