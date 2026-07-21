@@ -115,14 +115,18 @@ The six universal defects (`BEAT_JUDGE_CRITERION`, always in force):
 4. **Pressure / desperation** — begging, "last chance", manufactured countdowns.
 5. **Broken output** — cut off mid-sentence, raw JSON or code, gibberish,
    visibly duplicated text.
-6. **Inventorying the shopper** — stringing **two or more** stored personal
-   details into a tally ("you're furnishing five rooms across two cities, and
-   your wife…"): a tally of their life reads as surveillance. *One remembered
-   detail worn lightly — **especially** one the house notes or recent transcript
-   below already contain — is grounded **service**, not this defect; a single
-   grounded callback is always passed.* (Tightened after the judge was seen
-   vetoing single grounded callbacks — "still furnishing the van?" — as
-   "inventorying"; the root cause was missing grounding, see §4b.)
+6. **Inventorying the shopper** — stringing **three or more** stored personal
+   details into a tally ("you're furnishing five rooms across two cities, your
+   wife travels for work, and your last order shipped to…"): a tally of their
+   life reads as surveillance. *Re-engaging a returning shopper through **one or
+   two** known details — a project, a room, a relationship they shared — is
+   grounded **service** and **always passes**, even when it restarts the
+   conversation ("still furnishing the van?", "is your wife in on this one?").
+   Never call one or two grounded details a tally.* Asking whether a partner is
+   aligned is fair; **requiring** a partner's sign-off before the house will sell
+   is invented commerce (defect 3), not this. (Loosened from "two or more" after
+   the veto log showed single grounded callbacks still vetoed as "inventorying";
+   the grounding window the judge reads was also widened — see §4b.)
 
 Explicitly **legitimate** (never a veto): warmth, brevity, one light question,
 and `{{reply:…}}` / `{{action:…}}` pills. The criterion ends with the tie-break
