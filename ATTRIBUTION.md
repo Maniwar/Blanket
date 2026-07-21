@@ -30,6 +30,25 @@ together overstates. Identity-assisted is stamped **server-side at placement**
 signed-in purchase) and carries the driving conversation's session key, so
 drill-ins work the same as the other tiers.
 
+### A separate axis: add-on line attribution (`added_by`)
+
+The three tiers above credit the **whole order** to a chat. Companion pieces
+([`UPSELL.md`](UPSELL.md)) carry their own, **line-level** attribution in
+`order_addons.added_by` — who put *that piece* on the order, independent of who
+gets the order:
+
+| `added_by` | Meaning | Signal |
+| --- | --- | --- |
+| **`concierge`** | The concierge recommended it and the shopper took it — a causal upsell | Tapped from the concierge's `{{addon:…}}` pill in chat |
+| **`customer`** | The shopper toggled it on themselves in the register (pre-order) | Register toggle |
+| **`page`** | A register surface offered it after the card was signed (post-order) | The register card's post-order offer |
+
+The **Upsell & AOV** card on the Conversion tab reports on this axis
+(`addon_metrics`) — attach rate, add-on revenue, and specifically the
+**concierge-driven** share and the AOV lift. Optimize the bot's upsell
+performance on the `concierge` share, just as you optimize order attribution on
+the ✳ tier.
+
 ## How a commission gets attributed (the pipeline)
 
 1. **The chat leaves a key.** The concierge widget keeps a per-tab session key

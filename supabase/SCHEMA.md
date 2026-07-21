@@ -320,6 +320,32 @@ The core table. No payment or street-shipping data beyond what the demo needs.
 commission `?me=1` (prefill), admin (Customers/Orders). **Audited by:** the
 `log_order_event` trigger → `order_events`.
 
+### `order_addons` — companion pieces (cross-sell / upsell line items)
+The demo's only multi-item surface: small add-ons bought **alongside** (pre-order)
+or **after** (post-order) the cloth. The catalog itself is the engine's single
+source of truth (`?catalog=1`); only a price/name **snapshot** is kept here.
+See [`UPSELL.md`](../UPSELL.md).
+
+| Column | Type | Purpose | Written when |
+| --- | --- | --- | --- |
+| `id` | bigint PK | Line id. | add |
+| `order_id` | uuid → `orders` **on delete cascade** | The order this piece rides with. | add |
+| `addon_slug` | text | Catalog slug (`care-kit`, `kissen`, `decke-mini`). | add |
+| `name` | text | Snapshotted display name (immune to later catalog edits). | add |
+| `price_cents` | int (≥0) | Snapshotted shelf price at purchase. Re-priced server-side from the catalog — a client price is never trusted. | add |
+| `colorway` | text | The cloth's colorway, for variant pieces. | add |
+| `qty` | int (1–20) | Quantity. | add |
+| `added_by` | text | Attribution: `concierge` (the concierge recommended it and it was taken — causal upsell), `customer` (self-added in the register, pre-order), `page` (register surface offered it, post-order). Constraint `order_addons_added_by_check`. See [`ATTRIBUTION.md`](../ATTRIBUTION.md). | add |
+| `added_at` | timestamptz | When. | add |
+
+**Unique `(order_id, addon_slug)`** (`order_addons_order_slug_ux`) — one row per
+piece per order, so a double-tap or a retried request accumulates/no-ops instead
+of duplicating a line (which would inflate attach rate + revenue). RLS: `admin
+read` + `owner read own addons` (join to `orders`); **writes are service-role
+only**. **Written by:** `commission_order` (pre-order, de-duped + upserted in the
+placement transaction) and `add_order_addon` (post-order, idempotent). **Read
+by:** `addon_metrics` (the Conversion tab's Upsell & AOV card).
+
 ### `allocation_counter` — the next fresh number
 | Column | Type | Purpose |
 | --- | --- | --- |
@@ -853,7 +879,9 @@ pruned by `prune_high_write`.
 | `is_concierge_admin()` | → bool | True if the JWT email is in `concierge_admins`. | Every admin RLS policy. |
 | `is_super_admin()` | → bool | True if the JWT email is the super admin. | `concierge_admins` delete/update policies. |
 | `hold_serial(p_session)` | → (serial, expires_at) | Reserves the **lowest free** number for a visit — refresh own hold, else claim a lapsed hold, else draw from `allocation_counter`. `FOR UPDATE SKIP LOCKED`. | commission `?hold=1`. |
-| `commission_order(…13 args)` | → int | Places an order: consume this visit's hold (or a lapsed one, or a fresh number), insert the order, return the serial. `-1` when the edition is full. **Self-heals a serial collision:** if the chosen number is already on the register (counter/hold drift), it catches the `unique_violation` and advances to the next free serial (`max(serial)+1`, counter kept ahead) instead of failing placement. | commission POST. |
+| `commission_order(…14 args)` | → int | Places an order: consume this visit's hold (or a lapsed one, or a fresh number), insert the order, return the serial. `-1` when the edition is full. **Self-heals a serial collision:** if the chosen number is already on the register (counter/hold drift), it catches the `unique_violation` and advances to the next free serial (`max(serial)+1`, counter kept ahead) instead of failing placement. The 14th arg `p_addons jsonb` enters companion pieces (`order_addons`) in the SAME transaction — de-duped by slug (qty summed, `concierge` wins attribution), upserted, guarded casts, so a bad line never fails placement ([`UPSELL.md`](../UPSELL.md)). | commission POST. |
+| `add_order_addon(p_serial,p_user_id,p_email,p_slug,p_name,p_price_cents,p_colorway,p_added_by)` | → bigint | Adds one companion piece to an existing open order the caller owns (the **post-order** path). **Idempotent**: re-adding a piece already on the order is a no-op returning the existing line. `-1` when no matching open order is on the owner's register. | commission `POST ?addon=1`. |
+| `addon_metrics(p_days)` | → jsonb | The **Upsell & AOV** calculation ([`UPSELL.md`](../UPSELL.md)): attach rate, add-on revenue, revenue by `added_by` (how much the **concierge** drove vs self-serve), per-item and per-customer breakdowns, over kept orders in the window. Brand-neutral aggregate over `order_addons`. Raises unless `is_concierge_admin()`; granted to `authenticated`. | The admin studio **Conversion tab** (direct RPC). |
 | `cancel_order_return(p_serial,p_user_id,p_email)` | → text | Cancels a `placed` order the caller owns: sets `status='cancelled'`, moves `serial`→`cancelled_serial`, and re-inserts the number as a lapsed hold so it's reclaimable. | concierge `cancel_order` tool. |
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
