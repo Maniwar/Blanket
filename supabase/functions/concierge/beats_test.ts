@@ -670,16 +670,18 @@ Deno.test("widget tokens: the registry IS the whitelist — real controls pass, 
     "{{form:appointment}}", "{{form:appointment:3}}",
     "{{reply:Tell me about the wool}}", "{{nps}}",
     "{{img:selvedge_number}}", "{{video:mending}}",
+    "{{addon:care-kit}}", "{{addon:decke-mini}}", // cross-sell offer pills
   ];
   renderable.forEach((t) => assert(RENDERABLE_TOKEN_RE.test(t), t + " must be recognized as renderable UI"));
 
   // True plumbing / tool-meta tokens are NOT renderable — the reach-out gate must veto these.
-  ["{{tool:search}}", "{{action:recall_context}}", "{{action:tool}}", "{{npsx}}", "{{signin}}", "{{action:}}"]
+  ["{{tool:search}}", "{{action:recall_context}}", "{{action:tool}}", "{{npsx}}", "{{signin}}", "{{action:}}",
+   "{{addon:}}"] // empty slug is not a control (the regex is case-insensitive, so a slug's case is not policed here)
     .forEach((t) => assert(!RENDERABLE_TOKEN_RE.test(t), t + " must NOT be treated as renderable"));
 
   // Every registry example, once concrete, is covered by the union regex — guards a
   // future token being added to WIDGET_TOKENS without a matching pattern.
-  assert(WIDGET_TOKENS.length >= 8, "registry lists every known control");
+  assert(WIDGET_TOKENS.length >= 9, "registry lists every known control");
   assert(WIDGET_TOKENS.every((t) => t.label && t.renders && t.usage), "each token documents label/renders/usage");
 });
 

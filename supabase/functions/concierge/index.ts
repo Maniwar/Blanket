@@ -3290,6 +3290,35 @@ function sellingBlock(data: ConciergeData): string {
         "then re-open the door):\n" + lines.join("\n") + "\n";
     }
   }
+  // COMPANION PIECES — the cross-sell / upsell surface. Present ONLY when a catalog
+  // exists (config.commerce.addons or the built-in default), so a brand with no
+  // add-ons never sees it. Grounds the concierge on the REAL items + prices (from the
+  // single-source catalog) and gives the universal upsell method: earn the primary
+  // sale first, then offer ONE fitting companion with the {{addon:slug}} pill.
+  const addons = addonCatalog(data);
+  if (addons.length > 0) {
+    const hasPost = addons.some((a) => a.phase === "post" || a.phase === "both");
+    const line = (a: AddOn) =>
+      `  · {{addon:${a.slug}}} — ${a.name}, ${fmtMoney(a.price_cents)}` +
+      `${a.variants ? " (matched to your order)" : ""}: ${a.blurb}`;
+    s += "\nCOMPANION PIECES (cross-sell / upsell — raise the order's worth with a REAL, fitting add, never a pile-on)\n" +
+      "- The house also makes small companion pieces the buyer can add in ONE tap. Offer them TRUTHFULLY from " +
+      "this list — never invent an item, a price, or a claim:\n" +
+      addons.map(line).join("\n") + "\n" +
+      "- HOW to offer one: put {{addon:<slug>}} on its OWN line (like a reply pill). It renders a '＋ add it to " +
+      "your order' button at the piece's price, and a tap marks it YOUR recommendation and pre-selects it in the " +
+      "register. Name the piece and give ONE reason it fits THIS person before the pill; let the tap do the rest.\n" +
+      "- WHEN, pre-order: after they've chosen the main piece and are warm (evaluating / ready) — one companion " +
+      "that genuinely suits what they told you (a gift alongside their own, a second room, the care of what they're " +
+      "buying). Weave it into the ADVANCE; don't tack a store aisle onto the sale. At most ONE add per turn, and " +
+      "NEVER instead of the primary close — the main piece is the sale, the companion rides with it.\n" +
+      (hasPost
+        ? "- WHEN, post-order: once the register card is signed, a single well-chosen companion is a natural " +
+          "close, not a fresh pitch ('the one thing owners come back for is …' + its pill). Offer once.\n"
+        : "") +
+      "- Never stack companions, never discount, never manufacture urgency. If they decline, drop it and return " +
+      "to the main piece. The measure is a bigger order they're GLAD they made, not a longer receipt.\n";
+  }
   // INQUIRY FORMS — when a shopper can hand the house a lead through a form, the
   // form IS the path. Present only when such a form is enabled, and as a HARD rule
   // for every audience — so it does not depend on a soft SOP being followed, which
@@ -4618,6 +4647,12 @@ async function handleConfigGet(req: Request): Promise<Response> {
     assertiveness: assertivenessLevel({ config } as ConciergeData),
     auth: true,
     forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
+    // The add-on catalog rides the bootstrap so the chat pill ({{addon:…}}) and the
+    // register sheet render the SAME items + prices the concierge sells, no 2nd fetch.
+    addons: addonCatalog({ config } as ConciergeData).map((a) => ({
+      slug: a.slug, name: a.name, price_cents: a.price_cents, price: fmtMoney(a.price_cents),
+      variants: a.variants, phase: a.phase, blurb: a.blurb,
+    })),
   });
 }
 

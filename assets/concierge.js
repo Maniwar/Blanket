@@ -270,6 +270,12 @@
   var remoteVideos = null;     /* admin-added {{video:token}} sources (from ?config=1) */
   var remotePrivacyUrl = null; /* privacy-notice URL for the footer link (from ?config=1) */
   var remoteAssert = null;     /* admin assertiveness 1..5 (from ?config=1) */
+  var remoteAddons = [];       /* add-on catalog [{slug,name,price_cents,price,variants,phase,blurb}] (from ?config=1) */
+  function addonBySlug(slug) {
+    var s = String(slug || '').toLowerCase(), i;
+    for (i = 0; i < remoteAddons.length; i++) { if (remoteAddons[i].slug === s) { return remoteAddons[i]; } }
+    return null;
+  }
 
   /* Assertiveness 1 (restrained) .. 5 (closer); default 3. Scales how often and
      how soon the concierge reaches out. */
@@ -313,6 +319,31 @@
         submit_tool: typeof f.submit_tool === 'string' ? f.submit_tool : ''
       };
       out[f.slug] = def;
+    }
+    return out;
+  }
+
+  /* The add-on catalog from ?config=1 — the companion pieces the concierge can
+     offer with an {{addon:slug}} pill and the register lists as orderable. */
+  function sanitizeAddons(raw) {
+    var out = [], i, a;
+    if (Object.prototype.toString.call(raw) !== '[object Array]') { return out; }
+    for (i = 0; i < raw.length && i < 20; i++) {
+      a = raw[i];
+      if (!a || typeof a !== 'object') { continue; }
+      var slug = (typeof a.slug === 'string') ? a.slug.toLowerCase() : '';
+      if (!/^[a-z0-9][a-z0-9-]{0,38}$/.test(slug)) { continue; }
+      if (typeof a.name !== 'string' || !a.name) { continue; }
+      var cents = (typeof a.price_cents === 'number' && a.price_cents >= 0) ? Math.round(a.price_cents) : 0;
+      out.push({
+        slug: slug,
+        name: a.name.slice(0, 120),
+        price_cents: cents,
+        price: (typeof a.price === 'string' && a.price) ? a.price : ('$' + (cents / 100).toFixed(cents % 100 ? 2 : 0)),
+        variants: a.variants === true,
+        phase: (a.phase === 'pre' || a.phase === 'post' || a.phase === 'both') ? a.phase : 'both',
+        blurb: (typeof a.blurb === 'string') ? a.blurb.slice(0, 240) : ''
+      });
     }
     return out;
   }
@@ -367,6 +398,10 @@
           if (typeof j.privacy_url === 'string' && j.privacy_url) { remotePrivacyUrl = j.privacy_url; }
           if (typeof j.assertiveness === 'number') { remoteAssert = j.assertiveness; }
           remoteForms = sanitizeForms(j.forms);
+          remoteAddons = sanitizeAddons(j.addons);
+          /* publish the catalog so the register sheet (checkout.js) reads the SAME
+             items + prices without a second fetch */
+          try { window.__cxCatalog = remoteAddons.slice(); } catch (eCat) { /* ignore */ }
         }
         clearTimeout(timer);
         finish();
@@ -604,6 +639,9 @@
       'border-color:var(--cx-brass-soft);}',
       '.cx-reply:disabled{opacity:.35;cursor:default;}',
       '.cx-replies-used .cx-reply{opacity:.35;}',
+      /* the {{addon:…}} companion-piece offer — a reply chip, non-uppercase so the
+         piece name + price reads naturally (no new palette tokens to keep in sync) */
+      '.cx-reply-addon{text-transform:none;letter-spacing:.02em;}',
       /* the NPS 0-10 scale row (the {{nps}} token) */
       '.cx-npsrow{gap:4px;flex-wrap:nowrap;}',
       '.cx-npsrow .cx-reply{flex:1 1 0;min-width:0;text-align:center;padding:.5em 0;}',
@@ -1096,7 +1134,7 @@
     var low = m.toLowerCase();
     /* the real vocabulary the block renderer turns into UI — keep these */
     return low.indexOf('{{img:') === 0 || low.indexOf('{{video:') === 0 ||
-      low.indexOf('{{reply:') === 0 ||
+      low.indexOf('{{reply:') === 0 || low.indexOf('{{addon:') === 0 ||
       low.indexOf('{{form:') === 0 || low === '{{action:commission}}' ||
       low === '{{action:signin}}' || low === '{{nps}}';
   }
@@ -1256,6 +1294,47 @@
             : function () { openAuthRow(this); });   /* this = the tapped button — the form mounts right under it */
           act.appendChild(ab);
           frag.appendChild(act);
+        }
+        i++; continue;
+      }
+
+      /* {{addon:slug}} line — a companion-piece offer pill (cross-sell / upsell).
+         A tap marks the add the concierge's OWN recommendation, pre-selects it in
+         the register (added_by:'concierge' for the AOV dashboard), and opens the
+         sheet to finish. Unknown slug or no checkout → swallowed, never a blank line. */
+      var addm = /^\{\{addon:([a-z0-9][a-z0-9-]{0,38})\}\}$/i.exec(trimmed);
+      if (addm) {
+        flushPara();
+        var addSlug = addm[1].toLowerCase();
+        var addDef = addonBySlug(addSlug);
+        var canAdd = addDef && window.FeierabendCheckout && typeof window.FeierabendCheckout.open === 'function';
+        if (canAdd) {
+          var arow = el('div', 'cx-replies cx-fade-in');
+          arow.setAttribute('role', 'group');
+          arow.setAttribute('aria-label', 'Add a companion piece');
+          var addBtn = el('button', 'cx-reply cx-reply-addon', '＋ ' + addDef.name + ' · ' + addDef.price);
+          addBtn.type = 'button';
+          addBtn.addEventListener('click', function () {
+            /* record the concierge's recommendation so the register pre-selects it */
+            try {
+              var cur = JSON.parse(window.sessionStorage.getItem('cx-addons') || '[]');
+              if (Object.prototype.toString.call(cur) !== '[object Array]') { cur = []; }
+              if (cur.indexOf(addSlug) === -1) { cur.push(addSlug); }
+              window.sessionStorage.setItem('cx-addons', JSON.stringify(cur));
+            } catch (eAdd) { /* storage blocked — the register still lists it, just not pre-checked */ }
+            /* concierge-driven, like the commission button — stamp the attribution marker */
+            try {
+              window.sessionStorage.setItem('cx-commission-via', JSON.stringify({
+                ts: Date.now(), entry: entryMode, section: currentSection(), turns: history.length
+              }));
+            } catch (eAv) { /* degrades to ambient */ }
+            addBtn.disabled = true;
+            addBtn.textContent = '✓ ' + addDef.name + ' added · ' + addDef.price;
+            closePanel();
+            window.FeierabendCheckout.open();
+          });
+          arow.appendChild(addBtn);
+          frag.appendChild(arow);
         }
         i++; continue;
       }

@@ -636,6 +636,37 @@ async function commissionOrder(
   return null;
 }
 
+/** Add ONE companion piece to an existing order (the post-order path). Returns the
+ *  new line id, -1 when no matching open order is on the owner's register, or null
+ *  on failure. The caller has already re-priced `line` from the catalog. */
+async function addOrderAddon(
+  serial: number, userId: string | null, email: string | null, line: AddonRpcLine,
+): Promise<number | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/add_order_addon`, {
+      method: "POST",
+      headers: RPC_HEADERS,
+      body: JSON.stringify({
+        p_serial: serial, p_user_id: userId, p_email: email,
+        p_slug: line.slug, p_name: line.name, p_price_cents: line.price_cents,
+        p_colorway: line.colorway, p_added_by: line.added_by,
+      }),
+    });
+    if (res.ok) {
+      const v = await res.json() as unknown;
+      return typeof v === "number" && Number.isInteger(v) ? v : null;
+    }
+    if (res.status === 404) return null; // RPC not migrated yet
+    const body = await res.text().catch(() => "");
+    console.error("add_order_addon failed:", res.status, body.slice(0, 300));
+    return null;
+  } catch (e) {
+    console.error("add_order_addon fetch error:", e instanceof Error ? e.message : String(e));
+    return null;
+  }
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 // ── Transactional email ──────────────────────────────────────────────────────
@@ -1000,6 +1031,39 @@ Deno.serve(async (req: Request) => {
       return jsonError(req, 502, "Could not record that just now — try again.");
     }
     return jsonResponse(req, 200, { ok: true });
+  }
+
+  // ── POST ?addon=1 — add one companion piece to an existing order (post-order) ──
+  if (new URL(req.url).searchParams.get("addon")) {
+    if (await rateLimited("a:" + ip, 20)) {
+      return jsonError(req, 429, "A short pause, please — try again in a moment.");
+    }
+    let ab: Record<string, unknown>;
+    try { ab = await req.json() as Record<string, unknown>; } catch {
+      return jsonError(req, 400, "Request body must be valid JSON.");
+    }
+    const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const serial = typeof ab.serial === "number" ? ab.serial : parseInt(s(ab.serial), 10);
+    if (!Number.isInteger(serial) || serial < 1) return jsonError(req, 400, "A valid serial is required.");
+    const slug = s(ab.slug).toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{0,38}$/.test(slug)) return jsonError(req, 400, "A valid add-on slug is required.");
+    const cw = s(ab.colorway).toLowerCase();
+    const by = s(ab.added_by);
+    const addedBy = (by === "concierge" || by === "customer" || by === "page") ? by : "customer";
+    // Re-price from the authoritative catalog — never trust a client price.
+    const lines = await resolveAddonLines(
+      [{ slug, colorway: COLORWAYS.has(cw) ? cw : null, qty: 1, addedBy }],
+      COLORWAYS.has(cw) ? cw : "",
+    );
+    if (!lines.length) return jsonError(req, 400, "That companion piece is not in the catalog.");
+    // Owner: a signed-in session wins; else the email that placed the order.
+    const user = await verifyUser(req);
+    const email = user?.email ?? (s(ab.email).toLowerCase() || null);
+    if (!user && !email) return jsonError(req, 400, "An email or a signed-in session is required.");
+    const id = await addOrderAddon(serial, user?.id ?? null, email, lines[0]);
+    if (id === null) return jsonError(req, 502, "The register is briefly unavailable.");
+    if (id === -1) return jsonError(req, 404, "No open order with that number on your register.");
+    return jsonResponse(req, 200, { ok: true, id });
   }
 
   // ── POST ?fulfill=1 — admin advances an order and (on ship) notifies ──────

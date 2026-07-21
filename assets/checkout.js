@@ -450,6 +450,43 @@
       'overflow-wrap:break-word;word-break:break-word;}',
       '.ck-rv.ck-rv-soft{color:rgba(241,236,226,.6);}',
 
+      /* ---------- companion pieces (cross-sell / upsell) ---------- */
+      '.ck-addons{display:flex;flex-direction:column;gap:.6rem;margin:0 0 1.4rem;}',
+      '.ck-addons-lbl{font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.22em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.55);margin-bottom:.1rem;}',
+      '.ck-addon{display:flex;align-items:flex-start;gap:.85rem;width:100%;text-align:left;',
+      'padding:.8rem .85rem;background:rgba(241,236,226,.02);border:1px solid var(--ck-hair-soft);',
+      'border-radius:3px;cursor:pointer;color:var(--ck-ink);min-height:44px;',
+      'transition:border-color .25s ease,background .25s ease;}',
+      '.ck-addon:hover{border-color:var(--ck-hair);}',
+      '.ck-addon:focus-visible{outline:1px solid var(--ck-brass-soft);outline-offset:2px;}',
+      '.ck-addon.ck-addon-on{border-color:var(--ck-brass-soft);background:rgba(196,155,91,.07);}',
+      '.ck-addon-box{flex:0 0 auto;width:1.4rem;height:1.4rem;display:flex;align-items:center;',
+      'justify-content:center;margin-top:.1rem;border:1px solid var(--ck-hair);border-radius:2px;',
+      'color:var(--ck-brass-soft);font-size:.85rem;line-height:1;}',
+      '.ck-addon-on .ck-addon-box{border-color:var(--ck-brass-soft);background:var(--ck-brass-soft);color:#171F1A;}',
+      '.ck-addon-txt{flex:1 1 auto;min-width:0;}',
+      '.ck-addon-name{display:block;font-family:"Hanken Grotesk",sans-serif;font-weight:300;',
+      'font-size:.95rem;line-height:1.3;color:var(--ck-ink);}',
+      '.ck-addon-rec{margin-left:.5rem;font-style:normal;font-family:"IBM Plex Mono",monospace;',
+      'font-size:.52rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ck-brass-soft);}',
+      '.ck-addon-blurb{display:block;margin-top:.3rem;font-family:"Hanken Grotesk",sans-serif;',
+      'font-weight:300;font-size:.78rem;line-height:1.45;color:rgba(241,236,226,.6);}',
+      '.ck-addon-price{flex:0 0 auto;margin-top:.1rem;font-family:"IBM Plex Mono",monospace;',
+      'font-size:.72rem;letter-spacing:.06em;color:var(--ck-brass-soft);}',
+      /* post-order offer on the register card */
+      '.ck-postoffer{margin:.4rem 0 1.2rem;text-align:center;}',
+      '.ck-postoffer-lbl{font-family:"IBM Plex Mono",monospace;font-size:.56rem;letter-spacing:.18em;',
+      'text-transform:uppercase;color:rgba(241,236,226,.5);margin-bottom:.6rem;}',
+      '.ck-postoffer-row{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;}',
+      '.ck-postbtn{min-height:40px;padding:.55rem 1rem;border-radius:999px;cursor:pointer;',
+      'background:rgba(196,155,91,.1);border:1px solid rgba(196,155,91,.4);color:var(--ck-brass-soft);',
+      'font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.06em;',
+      'transition:background .25s,color .25s,border-color .25s,opacity .25s;}',
+      '.ck-postbtn:hover:not(:disabled){background:rgba(196,155,91,.2);color:var(--ck-ink);}',
+      '.ck-postbtn:disabled{cursor:default;}',
+      '.ck-postbtn-done{background:rgba(196,155,91,.2);color:var(--ck-ink);opacity:.85;}',
+
       /* calm error line */
       '.ck-sysline{margin:.9rem 0 0;font-family:"IBM Plex Mono",monospace;font-size:.62rem;',
       'letter-spacing:.14em;text-transform:uppercase;line-height:1.8;color:rgba(241,236,226,.6);}',
@@ -624,6 +661,105 @@
   var pickedAddrKey = null;          /* which saved ship-to is selected */
   var patronBillingAddresses = [];   /* saved billing addresses from ?me=1 */
   var pickedBillKey = null;          /* which saved billing address is selected */
+
+  /* ---- companion pieces (cross-sell / upsell) ---- */
+  var BASE_PRICE_CENTS = 58900;      /* the cloth itself — $589, the running-total base */
+  var catalogAddons = [];            /* [{slug,name,price_cents,price,variants,phase,blurb}] from ?catalog=1 */
+  var catalogLoaded = false;
+  var selectedAddons = {};           /* slug -> { added_by:'concierge'|'customer' } chosen for this order */
+  var postOrderAddons = {};          /* slug -> true, added AFTER the card was signed */
+  var lastOrderAddonSlugs = [];      /* what rode along with the just-signed order */
+
+  function fmtMoney(cents) {
+    var n = Math.max(0, Math.round(cents || 0));
+    return '$' + (n / 100).toFixed(n % 100 ? 2 : 0);
+  }
+  function catalogSlug(slug) {
+    var i; slug = String(slug || '').toLowerCase();
+    for (i = 0; i < catalogAddons.length; i++) { if (catalogAddons[i].slug === slug) { return catalogAddons[i]; } }
+    return null;
+  }
+  function addonsSubtotalCents() {
+    var sum = 0, s;
+    for (s in selectedAddons) {
+      if (Object.prototype.hasOwnProperty.call(selectedAddons, s)) {
+        var d = catalogSlug(s); if (d) { sum += d.price_cents; }
+      }
+    }
+    return sum;
+  }
+  /* Normalize one catalog row (from ?config=1's window.__cxCatalog or ?catalog=1). */
+  function normAddon(a) {
+    if (!a || typeof a !== 'object') { return null; }
+    var slug = (typeof a.slug === 'string') ? a.slug.toLowerCase() : '';
+    if (!/^[a-z0-9][a-z0-9-]{0,38}$/.test(slug) || typeof a.name !== 'string' || !a.name) { return null; }
+    var cents = (typeof a.price_cents === 'number' && a.price_cents >= 0) ? Math.round(a.price_cents) : 0;
+    return {
+      slug: slug, name: a.name.slice(0, 120), price_cents: cents,
+      price: (typeof a.price === 'string' && a.price) ? a.price : fmtMoney(cents),
+      variants: a.variants === true,
+      phase: (a.phase === 'pre' || a.phase === 'post' || a.phase === 'both') ? a.phase : 'both',
+      blurb: (typeof a.blurb === 'string') ? a.blurb.slice(0, 240) : ''
+    };
+  }
+  function setCatalog(list) {
+    var out = [], i, n;
+    if (Object.prototype.toString.call(list) !== '[object Array]') { return; }
+    for (i = 0; i < list.length && i < 20; i++) { n = normAddon(list[i]); if (n) { out.push(n); } }
+    catalogAddons = out;
+  }
+  /* Load the add-on catalog: prefer what the widget already fetched (window.__cxCatalog),
+     else fetch ?catalog=1 directly. Best-effort — a failure just omits the section. */
+  function loadCatalog() {
+    if (catalogLoaded) { return; }
+    catalogLoaded = true;
+    try {
+      if (Object.prototype.toString.call(window.__cxCatalog) === '[object Array]' && window.__cxCatalog.length) {
+        setCatalog(window.__cxCatalog);
+        if (catalogAddons.length) { return; }
+      }
+    } catch (eP) { /* ignore */ }
+    var e = conciergeEndpoint();
+    if (!e) { return; }
+    try {
+      fetch(e + (e.indexOf('?') === -1 ? '?catalog=1' : '&catalog=1'), { method: 'GET' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (j && Object.prototype.toString.call(j.addons) === '[object Array]') {
+            setCatalog(j.addons);
+            seedConciergeAddons();
+            if (panelOpen && act === 3) { showAct(3, 0); }   /* fill the section once it lands */
+          }
+        })['catch'](function () { /* no catalog — the sheet omits companions */ });
+    } catch (eF) { /* ignore */ }
+  }
+  /* Pull in the concierge's {{addon}} recommendations (stored by concierge.js) and
+     pre-select them, attributed to the concierge. Manual toggles override attribution. */
+  function seedConciergeAddons() {
+    try {
+      var recs = JSON.parse(window.sessionStorage.getItem('cx-addons') || '[]');
+      if (Object.prototype.toString.call(recs) !== '[object Array]') { return; }
+      recs.forEach(function (slug) {
+        slug = String(slug || '').toLowerCase();
+        if (catalogSlug(slug) && !selectedAddons[slug]) { selectedAddons[slug] = { added_by: 'concierge' }; }
+      });
+    } catch (eS) { /* ignore */ }
+  }
+  /* The add-on lines for the commission payload — server re-prices from the catalog. */
+  function addonPayload() {
+    var out = [], s;
+    for (s in selectedAddons) {
+      if (!Object.prototype.hasOwnProperty.call(selectedAddons, s)) { continue; }
+      var d = catalogSlug(s); if (!d) { continue; }
+      out.push({
+        slug: s,
+        colorway: d.variants && order.colorway ? order.colorway : undefined,
+        qty: 1,
+        added_by: selectedAddons[s].added_by || 'customer'
+      });
+    }
+    return out;
+  }
 
   /* ----------------------------------------------------------
      4. Swatch imagery — borrowed from the page's colorway chips
@@ -1425,6 +1561,41 @@
     return row;
   }
 
+  /* One toggle row for a companion piece. Tap flips it in/out of the order;
+     concierge-recommended pieces carry a "recommended" tag and start selected. */
+  function addonRow(def) {
+    var chosen = !!selectedAddons[def.slug];
+    var byConcierge = chosen && selectedAddons[def.slug].added_by === 'concierge';
+    var row = el('button', 'ck-addon' + (chosen ? ' ck-addon-on' : ''));
+    row.type = 'button';
+    row.setAttribute('aria-pressed', chosen ? 'true' : 'false');
+    row.appendChild(el('span', 'ck-addon-box', chosen ? '✓' : '＋'));
+    var txt = el('span', 'ck-addon-txt');
+    var nameLine = el('span', 'ck-addon-name');
+    nameLine.appendChild(document.createTextNode(def.name));
+    if (byConcierge) { nameLine.appendChild(el('em', 'ck-addon-rec', 'recommended')); }
+    txt.appendChild(nameLine);
+    if (def.blurb) { txt.appendChild(el('span', 'ck-addon-blurb', def.blurb)); }
+    row.appendChild(txt);
+    row.appendChild(el('span', 'ck-addon-price', def.price));
+    row.addEventListener('click', function () {
+      if (selectedAddons[def.slug]) { delete selectedAddons[def.slug]; }
+      else { selectedAddons[def.slug] = { added_by: 'customer' }; }
+      saveDraft();
+      showAct(3, 0);   /* re-render so the plate total and this toggle update together */
+    });
+    return row;
+  }
+  /* The companion-piece section for a phase ('pre' before signing, 'post' after). */
+  function buildAddonSection(phase) {
+    var items = catalogAddons.filter(function (a) { return a.phase === phase || a.phase === 'both'; });
+    if (!items.length) { return null; }
+    var wrap = el('div', 'ck-addons');
+    wrap.appendChild(el('div', 'ck-addons-lbl', 'Complete it — companion pieces'));
+    items.forEach(function (a) { wrap.appendChild(addonRow(a)); });
+    return wrap;
+  }
+
   function buildAct3() {
     var box = el('section', 'ck-act');
     box.setAttribute('aria-label', 'Act three — the commission');
@@ -1455,9 +1626,23 @@
         order.bill_address + (order.bill_address2 ? ', ' + order.bill_address2 : '') +
         ' — ' + order.bill_city + ', ' + order.bill_state + ' ' + order.bill_zip, true));
     }
-    plate.appendChild(plateRow('Price', PRICE_LINE));
+    var subC = addonsSubtotalCents();
+    plate.appendChild(plateRow(subC > 0 ? 'The cloth' : 'Price', subC > 0 ? '$589' : PRICE_LINE));
+    /* companion-piece lines + running total, when any are chosen */
+    Object.keys(selectedAddons).forEach(function (s) {
+      var d = catalogSlug(s);
+      if (d) { plate.appendChild(plateRow('+ ' + d.name, d.price, true)); }
+    });
+    if (subC > 0) {
+      plate.appendChild(plateRow('Total', fmtMoney(BASE_PRICE_CENTS + subC) + ' — demo, not charged'));
+    }
     plate.appendChild(plateRow('Nº', slotLabel() + ' — held while you finish'));
     box.appendChild(plate);
+
+    /* Cross-sell: companion pieces the buyer can add before signing. The concierge's
+       own recommendations arrive pre-selected and marked. */
+    var addonSec = buildAddonSection('pre');
+    if (addonSec) { box.appendChild(addonSec); }
 
     box.appendChild(el('p', 'ck-demoline', DEMO_LINE));
 
@@ -1537,6 +1722,13 @@
     function succeed(serial, standing) {
       sending = false;
       clearDraft();
+      /* the companion pieces are entered with the order — remember which, so the
+         post-order card offers only what wasn't already taken, then clear them and
+         the concierge's recommendation marker so a later order never inherits them */
+      lastOrderAddonSlugs = Object.keys(selectedAddons);
+      postOrderAddons = {};
+      selectedAddons = {};
+      try { window.sessionStorage.removeItem('cx-addons'); } catch (eCA) { /* ignore */ }
       /* standing: the register's count wins; otherwise count locally */
       var st = standing && typeof standing.count === 'number'
         ? { count: standing.count, tier: standing.tier || tierFor(standing.count) }
@@ -1689,7 +1881,7 @@
   function saveDraft() {
     try {
       if (act === 4) { return; }
-      window.sessionStorage.setItem('ck-draft', JSON.stringify({ act: act, order: order }));
+      window.sessionStorage.setItem('ck-draft', JSON.stringify({ act: act, order: order, addons: selectedAddons }));
     } catch (eS) { /* ignore */ }
   }
   function clearDraft() {
@@ -1869,7 +2061,9 @@
         city: order.bill_city,
         state: order.bill_state,
         zip: order.bill_zip
-      } : undefined
+      } : undefined,
+      /* companion pieces — the server re-prices each from the catalog */
+      addons: (function () { var a = addonPayload(); return a.length ? a : undefined; })()
     });
     try {
       getFreshToken().then(function (token) {
@@ -1945,6 +2139,56 @@
       window.requestAnimationFrame(frame);
     }
     window.requestAnimationFrame(frame);
+  }
+
+  /* Post-order offer on the register card — companion pieces the buyer can add to
+     the order they just signed, one tap, persisted via the commission ?addon=1 path.
+     Attributed 'page' (the register surface offered it, post-purchase). */
+  function buildPostOrderOffer(serial) {
+    if (isDemo()) { return null; }   /* no backend to persist a post-order add */
+    var items = catalogAddons.filter(function (a) {
+      return (a.phase === 'post' || a.phase === 'both') &&
+        lastOrderAddonSlugs.indexOf(a.slug) === -1 && !postOrderAddons[a.slug];
+    });
+    if (!items.length) { return null; }
+    var wrap = el('div', 'ck-postoffer');
+    wrap.appendChild(el('div', 'ck-postoffer-lbl', 'Add it to Nº ' + fmtSerial(serial) + ' — no second checkout'));
+    var rowc = el('div', 'ck-postoffer-row');
+    items.forEach(function (a) {
+      var b = el('button', 'ck-postbtn', '＋ ' + a.name + ' · ' + a.price);
+      b.type = 'button';
+      b.addEventListener('click', function () { postOrderAdd(a, b, serial); });
+      rowc.appendChild(b);
+    });
+    wrap.appendChild(rowc);
+    return wrap;
+  }
+  function postOrderAdd(def, btn, serial) {
+    if (btn.disabled) { return; }
+    btn.disabled = true;
+    var was = btn.textContent;
+    btn.textContent = 'Adding…';
+    var e = commissionEndpoint();
+    if (!e) { btn.textContent = was; btn.disabled = false; return; }
+    getFreshToken().then(function (token) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) { headers['Authorization'] = 'Bearer ' + token; }
+      return fetch(e + (e.indexOf('?') === -1 ? '?addon=1' : '&addon=1'), {
+        method: 'POST', headers: headers,
+        body: JSON.stringify({
+          serial: serial, slug: def.slug, email: order.email || undefined,
+          colorway: def.variants && order.colorway ? order.colorway : undefined,
+          added_by: 'page'
+        })
+      });
+    }).then(function (r) { return (r && r.ok) ? r.json()['catch'](function () { return {}; }) : null; })
+      .then(function (j) {
+        if (j && (j.ok || (typeof j.id === 'number' && j.id > 0))) {
+          postOrderAddons[def.slug] = true;
+          btn.textContent = '✓ ' + def.name + ' added';
+          btn.className = 'ck-postbtn ck-postbtn-done';
+        } else { btn.textContent = 'Try again — ' + def.name; btn.disabled = false; }
+      })['catch'](function () { btn.textContent = 'Try again — ' + def.name; btn.disabled = false; });
   }
 
   function buildAct4() {
@@ -2046,6 +2290,11 @@
     }
     box.appendChild(card);
     box.appendChild(el('p', 'ck-demoline', DEMO_LINE));
+
+    /* Post-order upsell: companion pieces the buyer can still add to THIS order,
+       one tap, no re-checkout. Excludes anything already entered with the order. */
+    var postSec = buildPostOrderOffer(serial);
+    if (postSec) { box.appendChild(postSec); }
 
     var returnRow = el('div', 'ck-returnrow');
     var againBtn = el('button', 'ck-finbtn ck-again', 'Commission another →');
@@ -2154,6 +2403,8 @@
     trackOpen();
     pubCkState();
     refreshHold();
+    loadCatalog();          /* fetch the companion catalog (best-effort) */
+    seedConciergeAddons();  /* pre-select anything the concierge recommended */
     prefillReturning();
     lastFocused = (document.activeElement && document.activeElement !== document.body)
       ? document.activeElement : null;
@@ -2322,6 +2573,16 @@
         }
       }
       if (typeof d.act === 'number' && d.act >= 1 && d.act <= 3) { act = d.act; }
+      if (d.addons && typeof d.addons === 'object') {
+        var as;
+        for (as in d.addons) {
+          if (Object.prototype.hasOwnProperty.call(d.addons, as) && d.addons[as] &&
+              /^[a-z0-9][a-z0-9-]{0,38}$/.test(as)) {
+            var by = d.addons[as].added_by;
+            selectedAddons[as] = { added_by: (by === 'concierge' || by === 'page') ? by : 'customer' };
+          }
+        }
+      }
       var fromKey = /[?&]code=/.test(window.location.search) ||
         window.location.hash.indexOf('access_token') > -1;
       if (fromKey && d.act >= 2) {
