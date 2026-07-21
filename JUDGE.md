@@ -147,6 +147,23 @@ seen vetoing a real `{{action:signin}}` CTA as a "meta instruction/tool token" �
 deterministic pre-filter had passed it, but the model over-fired defect 1 on the raw
 `{{…}}` syntax and the hand-written token list had already dropped snooze/img/video.)*
 
+**The judge must not veto the house's own way of selling.** Two clarifications keep it
+from suppressing the sales method: (1) a MATERIAL / DURABILITY / QUALITY property that is
+grounded in the KNOWLEDGE — *doesn't pill, softens with age, holds its shape, gentler on
+the fiber, mends for life* — is a product fact, **not** a medical/therapeutic claim (that
+ban is for health/treatment claims only); and SENSORY framing of a grounded spec
+(*"it settles over you," "the Feierabend hour with it across your knees"*) is the house
+making a real fact vivid — **selling, not invention**. (2) SILENCE is not a problem —
+a quiet shopper, a pause, or an unanswered topic is never defect 8; re-engaging after
+quiet is the whole point of a proactive line. *(Both added after the veto log showed the
+judge killing the house's own prescribed "SHOW" and value moves — hollowing out the sell.)*
+
+**Self-consistency voting (opt-in).** `config.judge.votes` (1–5, default **1**) samples the
+judge that many times at a non-zero temperature and takes a **strict-majority** verdict
+(`tallyJudgeVotes`, beats.ts) — a lone spurious veto is outvoted, directly attacking the
+"same line, two different verdicts" variance. Default 1 = today's single deterministic
+call, so it is a no-op until a merchant turns it on to A/B against the current rate.
+
 ## 4a. House grounding — dynamic, per-house, from the constitution
 
 The six defects are universal, but *what a given house may claim, how it prices,
