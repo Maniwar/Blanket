@@ -876,6 +876,21 @@
   /* conversations */
   .metrics{ display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:26px; }
   .metrics.two{ grid-template-columns:repeat(2, 1fr); }
+  /* Upsell & AOV card — a 4-tile KPI row, then two side-by-side breakdown tables. */
+  #cv-addon-kpis{ grid-template-columns:repeat(4, 1fr); margin-bottom:16px; }
+  @media (max-width:1180px){ #cv-addon-kpis{ grid-template-columns:repeat(2, 1fr); } }
+  .cv-addon-cols{ display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:820px){ .cv-addon-cols{ grid-template-columns:1fr; } }
+  .cv-addon-h{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--wool-faint); margin:0 0 8px; }
+  .mini-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .mini-table th{ text-align:left; font-family:'IBM Plex Mono', monospace; font-size:9.5px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--wool-faint); font-weight:400;
+    padding:0 8px 6px 0; border-bottom:1px solid var(--wool-faint); }
+  .mini-table td{ padding:7px 8px 7px 0; border-bottom:1px solid var(--wool-faint);
+    color:var(--wool); overflow:hidden; text-overflow:ellipsis; max-width:180px; white-space:nowrap; }
+  .mini-table td.num, .mini-table th.num{ text-align:right; font-family:'IBM Plex Mono', monospace; padding-right:0; }
+  .mini-table tr:last-child td{ border-bottom:none; }
   /* Conversion KPI rows fill their own widths — 4 commerce tiles, then 5
      concierge tiles — so no row leaves ragged orphans. The 👍 tile's value
      runs smaller at 5-up, so trim the type a touch on that row. */
@@ -2328,6 +2343,27 @@ need to ask my partner | Of course — the hold keeps their number while they ta
           <span class="micro">Every kept commission in the range, by tier — click a tier to open its orders</span>
         </div>
         <div id="cv-split"></div>
+      </section>
+
+      <!-- Upsell & AOV — how well the concierge lifts the order with companion pieces -->
+      <section class="card">
+        <div class="card-head">
+          <h3>Upsell &amp; AOV</h3>
+          <span class="micro">Companion pieces sold alongside the cloth — attach rate, the revenue the concierge drove, and the lift in average order value</span>
+        </div>
+        <div id="cv-addon-kpis" class="metrics"></div>
+        <div id="cv-addon-body">
+          <div class="cv-addon-cols">
+            <div>
+              <div class="cv-addon-h">By companion piece</div>
+              <div id="cv-addon-items"></div>
+            </div>
+            <div>
+              <div class="cv-addon-h">Top orders by add-on spend</div>
+              <div id="cv-addon-customers"></div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="card">
@@ -14540,6 +14576,80 @@ async function loadConversion() {
         series: inqSeries
       });
     }
+  }
+  // Upsell & AOV — its own RPC (server-aggregated over order_addons), matched to
+  // the current window. Never fails the report: an error just blanks its card.
+  loadAddonMetrics(cvWindowDays(win)).catch(function (e) {
+    console.warn('[concierge-admin] addon_metrics: ' + (e && e.message || e));
+  });
+}
+
+// Days in the current conversion window (for the day-parameterized addon_metrics
+// RPC). "All time" (open start) maps to the RPC's max lookback.
+function cvWindowDays(win) {
+  if (!win || win.curStart === null) return 3650;
+  return Math.max(1, Math.ceil((win.curEnd - win.curStart) / 86400000));
+}
+
+// Fetch + render the Upsell & AOV card. AOV framing uses PRICE (the base cloth the
+// dashboard already knows); the RPC returns brand-neutral add-on aggregates.
+async function loadAddonMetrics(days) {
+  const kpis = $('cv-addon-kpis'), items = $('cv-addon-items'), custs = $('cv-addon-customers');
+  if (!kpis) return;
+  const r = await sb.rpc('addon_metrics', { p_days: days });
+  if (r.error) throw new Error(r.error.message || 'addon_metrics failed');
+  const m = r.data || {};
+  const centsToUsd = function (c) { return (Number(c || 0) / 100); };
+  const usd = function (c) { return '$' + centsToUsd(c).toLocaleString('en-US', { maximumFractionDigits: 0 }); };
+  const attr = {};
+  (m.by_attr || []).forEach(function (a) { attr[a.added_by] = a; });
+  const conciergeRev = (attr.concierge && attr.concierge.revenue_cents) || 0;
+  const addonRev = Number(m.addon_revenue_cents || 0);
+  const orders = Number(m.orders_total || 0);
+  const attach = orders > 0 ? (Number(m.orders_with_addons || 0) / orders) : 0;
+  // AOV framing against the base cloth price (PRICE dollars).
+  const baseCents = orders * PRICE * 100;
+  const aovBase = PRICE;
+  const aovWith = orders > 0 ? centsToUsd((baseCents + addonRev) / orders) : PRICE;
+  const liftPct = baseCents > 0 ? (addonRev / baseCents) : 0;
+  const tile = function (label, val, sub) {
+    return '<div class="stat"><span class="micro">' + label + '</span>' +
+      '<div class="val">' + val + '</div>' +
+      (sub ? '<span class="micro" style="opacity:.75">' + sub + '</span>' : '') + '</div>';
+  };
+  kpis.innerHTML =
+    tile('Attach rate', (attach * 100).toFixed(attach >= 0.1 ? 0 : 1) + '%',
+      Number(m.orders_with_addons || 0) + ' of ' + orders + ' orders') +
+    tile('Add-on revenue', usd(addonRev), Number(m.addon_units || 0) + ' pieces') +
+    tile('Concierge-driven', usd(conciergeRev),
+      addonRev > 0 ? Math.round(conciergeRev / addonRev * 100) + '% of add-on revenue' : '—') +
+    tile('AOV', usd(aovWith * 100),
+      '+' + (liftPct * 100).toFixed(1) + '% vs $' + aovBase.toLocaleString('en-US'));
+  // Per-item table.
+  if (items) {
+    const rows = (m.per_item || []);
+    items.innerHTML = rows.length ? ('<table class="mini-table"><thead><tr>' +
+      '<th>Piece</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Concierge</th></tr></thead><tbody>' +
+      rows.map(function (it) {
+        const cr = Number(it.concierge_revenue_cents || 0), rev = Number(it.revenue_cents || 0);
+        return '<tr><td>' + esc(it.name || it.slug) + '</td>' +
+          '<td class="num">' + Number(it.units || 0) + '</td>' +
+          '<td class="num">' + usd(rev) + '</td>' +
+          '<td class="num">' + (rev > 0 ? Math.round(cr / rev * 100) + '%' : '—') + '</td></tr>';
+      }).join('') + '</tbody></table>') : '<div class="micro" style="opacity:.7">No companion pieces sold in this range yet.</div>';
+  }
+  // Per-customer (top add-on spenders) — the bot's upsell performance per customer.
+  if (custs) {
+    const rows = (m.per_customer || []);
+    custs.innerHTML = rows.length ? ('<table class="mini-table"><thead><tr>' +
+      '<th>Customer</th><th class="num">Add-ons</th><th class="num">Spend</th><th class="num">Concierge</th></tr></thead><tbody>' +
+      rows.map(function (c) {
+        const cr = Number(c.concierge_revenue_cents || 0), rev = Number(c.addon_revenue_cents || 0);
+        return '<tr><td>' + esc(c.email || '—') + '</td>' +
+          '<td class="num">' + Number(c.addon_units || 0) + '</td>' +
+          '<td class="num">' + usd(rev) + '</td>' +
+          '<td class="num">' + (rev > 0 ? Math.round(cr / rev * 100) + '%' : '—') + '</td></tr>';
+      }).join('') + '</tbody></table>') : '<div class="micro" style="opacity:.7">—</div>';
   }
 }
 
