@@ -2697,7 +2697,7 @@ need to ask my partner | Of course — the hold keeps their number while they ta
             <option value="90">90 days</option>
           </select>
         </div>
-        <div id="jc-trend"></div>
+        <div id="jc-trend" class="cv-chart"></div>
         <div id="jc-trend-cap" class="micro" style="margin-top:8px;opacity:.78;text-transform:none;letter-spacing:0;"></div>
         <div id="jc-trend-why" style="margin-top:12px;"></div>
         <div id="jc-drill" style="margin-top:12px;"></div>
@@ -10258,19 +10258,22 @@ function npsMultiLineChart(mount, opts) {
   const guide = mk('line'); guide.setAttribute('y1', T); guide.setAttribute('y2', T + ih);
   guide.setAttribute('stroke', 'rgba(241,236,226,.22)'); guide.setAttribute('stroke-width', '1');
   guide.setAttribute('stroke-dasharray', '2 3'); guide.style.display = 'none'; sv.appendChild(guide);
+  // Pass 1: lines + a fat transparent hit-path each (the LINE ITSELF is clickable → drills that family).
   series.forEach(function (s) {
     let path = '', pen = false;
     (s.values || []).forEach(function (v, i) { if (v == null) { pen = false; return; } path += (pen ? 'L' : 'M') + X(i) + ',' + Y(v); pen = true; });
-    if (path) {
-      const pl = mk('path'); pl.setAttribute('d', path); pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', s.color);
-      pl.setAttribute('stroke-width', '2'); pl.setAttribute('stroke-linejoin', 'round'); pl.setAttribute('stroke-linecap', 'round'); sv.appendChild(pl);
-      // fat transparent hit-path so the LINE ITSELF is clickable — drills that family
-      const hit = mk('path'); hit.setAttribute('d', path); hit.setAttribute('fill', 'none'); hit.setAttribute('stroke', 'transparent');
-      hit.setAttribute('stroke-width', '11'); hit.setAttribute('cursor', 'pointer');
-      const ht = mk('title'); ht.textContent = 'Review the ' + s.label + ' blocks'; hit.appendChild(ht);
-      if (opts.onLegend) hit.addEventListener('click', function () { opts.onLegend(s.key); });
-      sv.appendChild(hit);
-    }
+    if (!path) return;
+    const pl = mk('path'); pl.setAttribute('d', path); pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', s.color);
+    pl.setAttribute('stroke-width', '2'); pl.setAttribute('stroke-linejoin', 'round'); pl.setAttribute('stroke-linecap', 'round'); sv.appendChild(pl);
+    const hit = mk('path'); hit.setAttribute('d', path); hit.setAttribute('fill', 'none'); hit.setAttribute('stroke', 'transparent');
+    hit.setAttribute('stroke-width', '11'); hit.setAttribute('cursor', 'pointer');
+    const ht = mk('title'); ht.textContent = 'Review the ' + s.label + ' blocks'; hit.appendChild(ht);
+    if (opts.onLegend) hit.addEventListener('click', function () { opts.onLegend(s.key); });
+    sv.appendChild(hit);
+  });
+  // Pass 2: dots LAST, above every hit-path — so a dot sitting on a line crossing drills
+  // its OWN family+day, not whichever family's fat hit-path happens to overlap it.
+  series.forEach(function (s) {
     (s.values || []).forEach(function (v, i) {
       if (!v) return;
       const c = mk('circle'); c.setAttribute('cx', X(i)); c.setAttribute('cy', Y(v)); c.setAttribute('r', '3.5');
@@ -10286,8 +10289,8 @@ function npsMultiLineChart(mount, opts) {
   const tip = el('div', 'jc-tip');
   tip.style.cssText = 'position:absolute;z-index:20;display:none;min-width:150px;max-width:240px;background:#20201d;border:1px solid rgba(216,198,154,.4);border-radius:7px;padding:8px 9px;box-shadow:0 6px 20px rgba(0,0,0,.45);font-size:12px;';
   mount.appendChild(tip);
-  let hideT = null;
-  const hideTip = function () { tip.style.display = 'none'; guide.style.display = 'none'; };
+  let hideT = null, lastI = -1;
+  const hideTip = function () { tip.style.display = 'none'; guide.style.display = 'none'; lastI = -1; };
   tip.addEventListener('mouseenter', function () { if (hideT) { clearTimeout(hideT); hideT = null; } });
   tip.addEventListener('mouseleave', hideTip);
   sv.addEventListener('mouseleave', function () { hideT = setTimeout(hideTip, 220); });
@@ -10297,25 +10300,37 @@ function npsMultiLineChart(mount, opts) {
     let i = Math.round((vbX - L) / (iw / (n - 1 || 1)));
     i = Math.max(0, Math.min(n - 1, i));
     if (hideT) { clearTimeout(hideT); hideT = null; }
-    guide.setAttribute('x1', X(i)); guide.setAttribute('x2', X(i)); guide.style.display = '';
-    const here = series.map(function (s) { return { s: s, v: (s.values && s.values[i]) || 0 }; })
-      .filter(function (o) { return o.v; }).sort(function (a, b) { return b.v - a.v; });
-    tip.textContent = '';
-    const th = el('div', 'micro'); th.style.cssText = 'opacity:.8;margin-bottom:5px;letter-spacing:.04em;'; th.textContent = labels[i]; tip.appendChild(th);
-    if (!here.length) { tip.appendChild(el('div', 'micro', 'no blocks')); }
-    here.forEach(function (o) {
-      const r = document.createElement('button'); r.type = 'button';
-      r.style.cssText = 'display:flex;align-items:center;gap:7px;width:100%;background:none;border:0;color:inherit;cursor:pointer;padding:2px 0;font:inherit;text-align:left;';
-      const sw = document.createElement('span'); sw.style.cssText = 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;background:' + o.s.color + ';'; r.appendChild(sw);
-      const nm = el('span'); nm.style.cssText = 'flex:1;'; nm.textContent = o.s.label; r.appendChild(nm);
-      const vv = el('span'); vv.style.cssText = 'opacity:.85;font-variant-numeric:tabular-nums;'; vv.textContent = o.v; r.appendChild(vv);
-      if (opts.onPoint) r.addEventListener('click', function () { opts.onPoint(o.s.key, i); hideTip(); });
-      tip.appendChild(r);
-    });
+    // Rebuild the rows only when the hovered DAY changes — otherwise every pixel of
+    // cursor motion churns up to 7 buttons + listeners for nothing.
+    if (i !== lastI) {
+      lastI = i;
+      guide.setAttribute('x1', X(i)); guide.setAttribute('x2', X(i));
+      const here = series.map(function (s) { return { s: s, v: (s.values && s.values[i]) || 0 }; })
+        .filter(function (o) { return o.v; }).sort(function (a, b) { return b.v - a.v; });
+      tip.textContent = '';
+      const th = el('div', 'micro'); th.style.cssText = 'opacity:.8;margin-bottom:5px;letter-spacing:.04em;'; th.textContent = labels[i]; tip.appendChild(th);
+      if (!here.length) { tip.appendChild(el('div', 'micro', 'no blocks')); }
+      here.forEach(function (o) {
+        const r = document.createElement('button'); r.type = 'button';
+        r.style.cssText = 'display:flex;align-items:center;gap:7px;width:100%;background:none;border:0;color:inherit;cursor:pointer;padding:2px 0;font:inherit;text-align:left;';
+        const sw = document.createElement('span'); sw.style.cssText = 'width:9px;height:9px;border-radius:2px;flex:0 0 auto;background:' + o.s.color + ';'; r.appendChild(sw);
+        const nm = el('span'); nm.style.cssText = 'flex:1;'; nm.textContent = o.s.label; r.appendChild(nm);
+        const vv = el('span'); vv.style.cssText = 'opacity:.85;font-variant-numeric:tabular-nums;'; vv.textContent = o.v; r.appendChild(vv);
+        if (opts.onPoint) r.addEventListener('click', function () { opts.onPoint(o.s.key, i); hideTip(); });
+        tip.appendChild(r);
+      });
+    }
+    guide.style.display = '';
+    // Position against the tooltip's REAL measured size — flip left near the right edge,
+    // clamp up near the bottom — so its clickable rows never fall off the chart.
+    tip.style.display = 'block';
     const mrect = mount.getBoundingClientRect();
-    let lx = e.clientX - mrect.left + 14; const ty = e.clientY - mrect.top + 8;
-    if (lx + 250 > mrect.width) lx = e.clientX - mrect.left - 250;
-    tip.style.left = Math.max(0, lx) + 'px'; tip.style.top = ty + 'px'; tip.style.display = 'block';
+    const tw = tip.offsetWidth || 200, th2 = tip.offsetHeight || 0, gap = 14;
+    let lx = e.clientX - mrect.left + gap;
+    if (lx + tw + gap > mrect.width) lx = e.clientX - mrect.left - tw - gap;
+    let ty = e.clientY - mrect.top + 8;
+    if (ty + th2 + 4 > mrect.height) ty = mrect.height - th2 - 4;
+    tip.style.left = Math.max(0, lx) + 'px'; tip.style.top = Math.max(0, ty) + 'px';
   });
   const leg = el('div', 'jc-legend'); leg.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;';
   series.forEach(function (s) {
@@ -10416,11 +10431,14 @@ async function judgeReviewFamily(famKey, btn, out) {
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Reading the blocked lines…'; out.textContent = '';
   try {
     const days = state.jcRange || 30;
-    const curP = sb.from('concierge_config').select('value').eq('key', 'judge').maybeSingle();
-    const j = await adminPost('?judge_review=1', { family: famKey, days: days });
+    // Read the current amendment CONCURRENTLY with the review (supabase-js is lazy — it
+    // only fires on await/then, so both must be launched together to actually overlap).
+    const [j, c] = await Promise.all([
+      adminPost('?judge_review=1', { family: famKey, days: days }),
+      sb.from('concierge_config').select('value').eq('key', 'judge').maybeSingle().then(function (r) { return r; }, function () { return null; })
+    ]);
     if (!j || j.ok === false) throw new Error((j && j.error) || 'no review returned');
-    let curNote = '';
-    try { const c = await curP; curNote = (c && c.data && c.data.value && c.data.value.notes && c.data.value.notes[famKey]) || ''; } catch (e) { /* absent = none */ }
+    const curNote = (c && c.data && c.data.value && c.data.value.notes && c.data.value.notes[famKey]) || '';
     const card = el('div'); card.style.cssText = 'border:1px solid rgba(216,198,154,.35);border-radius:8px;padding:12px 14px;';
     const h = el('div', 'micro'); h.style.cssText = 'letter-spacing:.08em;opacity:.85;margin-bottom:6px;';
     h.textContent = 'THE COACH’S READ' + (j.count ? ' (' + j.count + ' lines)' : ''); card.appendChild(h);
