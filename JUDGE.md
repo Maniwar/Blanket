@@ -130,6 +130,19 @@ that keeps it high-precision: **"When uncertain, pass it."** The judge is a
 defect filter, not a taste critic — false vetoes (silencing good lines) are
 treated as worse than a rare miss, which is why the whole design is precision-biased.
 
+**Widget controls are single-sourced, and the judge never sees the raw token.**
+Every `{{…}}` the app renders (`{{action:signin|commission|snooze}}`, `{{form:…}}`,
+`{{reply:…}}`, `{{nps}}`, `{{img:…}}`, `{{video:…}}`) lives in one registry —
+`WIDGET_TOKENS` in `beats.ts`. The renderable pre-filter, the judge's WIDGET-CONTROLS
+note, and the studio's *Message controls* reference (served by `GET ?tokens=1`, shown
+on the Judge tab) all derive from it, so they can't drift. Before a line reaches the
+model judge, `describeTokensForJudge` swaps each token for a plain-English control
+(`{{action:signin}}` → `[Sign-in button]`), so the judge weighs the *language* and
+can't mistake a rendered control for a tool/plumbing leak. *(Added after the judge was
+seen vetoing a real `{{action:signin}}` CTA as a "meta instruction/tool token" — the
+deterministic pre-filter had passed it, but the model over-fired defect 1 on the raw
+`{{…}}` syntax and the hand-written token list had already dropped snooze/img/video.)*
+
 ## 4a. House grounding — dynamic, per-house, from the constitution
 
 The six defects are universal, but *what a given house may claim, how it prices,
