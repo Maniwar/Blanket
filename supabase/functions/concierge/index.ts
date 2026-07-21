@@ -3091,6 +3091,87 @@ function registerBlock(data: ConciergeData): string {
     "- Orders marked as gifts carry the recipient's name on the card; the buyer remains the owner of record.\n";
 }
 
+// ── ADD-ONS — the cross-sell / upsell catalog (the single source of truth) ────
+// The companion pieces the concierge can raise alongside the primary commission
+// (pre-order) or after it lands (post-order): the demo's upsell surface. One
+// registry, read everywhere — the register sheet and the commission server pull it
+// over GET ?catalog=1, the concierge is grounded on it for selling (ADDONS block +
+// KB), and every purchased line is attributed in order_addons (added_by).
+//
+// This is BRAND CONTENT. The kit's stamp neutralises ADDONS_DEFAULT to [] for a
+// stamped brand (one entry in stamp/tokens.manifest.json swaps this literal), so the
+// universal engine ships no catalog and each brand supplies its own — via
+// config.commerce.addons (no redeploy) or by re-stamping. The reference brand ships
+// the three demo companion pieces below; prices are in cents, a figure beside the cloth.
+interface AddOn {
+  slug: string; // stable id — the attribution + line-item key
+  name: string; // shown in the register, spoken by the concierge
+  price_cents: number; // demo price; snapshotted onto the order line at purchase
+  variants: boolean; // true → the piece is made to match the cloth's chosen variant
+  phase: string; // "pre" | "post" | "both" — when the offer makes sense
+  blurb: string; // one true sensory line the concierge can lean on
+}
+const ADDONS_DEFAULT: AddOn[] = [
+  {
+    slug: "care-kit",
+    name: "Wool Care Kit",
+    price_cents: 4800,
+    variants: false,
+    phase: "both",
+    blurb: "A horn comb, a cake of lanolin wool soap, and a cedar block — what the cloth needs to outlast you.",
+  },
+  {
+    slug: "kissen",
+    name: "Matching Wool Cushion",
+    price_cents: 16800,
+    variants: true,
+    phase: "both",
+    blurb: "The same merino twill and dye lot, sized for the small of your back on the same sofa.",
+  },
+  {
+    slug: "decke-mini",
+    name: "Lap Decke Mini",
+    price_cents: 26800,
+    variants: true,
+    phase: "both",
+    blurb: "A half-width companion for the reading chair or the train — the evening blanket, made portable.",
+  },
+];
+
+// A slug is the attribution key across the widget, the RPC and the dashboard —
+// keep it URL/DB-safe so it never needs escaping or a second lookup table.
+const RENDERABLE_ADDON_SLUG = /^[a-z0-9][a-z0-9-]{0,38}$/;
+
+// The LIVE catalog: a brand may override ADDONS_DEFAULT via config.commerce.addons
+// (same shape, validated) without a redeploy; otherwise the built-in default stands.
+function addonCatalog(data: ConciergeData): AddOn[] {
+  const raw = (data.config?.commerce as Record<string, unknown> | undefined)?.addons;
+  if (Array.isArray(raw)) {
+    const clean: AddOn[] = raw
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x))
+      .map((x) => ({
+        slug: String(x.slug ?? "").trim().toLowerCase(),
+        name: String(x.name ?? "").trim(),
+        price_cents: Math.max(0, Math.round(Number(x.price_cents) || 0)),
+        variants: x.variants === true,
+        phase: ["pre", "post", "both"].includes(String(x.phase)) ? String(x.phase) : "both",
+        blurb: String(x.blurb ?? "").trim(),
+      }))
+      .filter((a) => a.name && RENDERABLE_ADDON_SLUG.test(a.slug));
+    if (clean.length) return clean;
+  }
+  return ADDONS_DEFAULT;
+}
+function addonBySlug(data: ConciergeData, slug: string): AddOn | null {
+  const s = String(slug || "").trim().toLowerCase();
+  return addonCatalog(data).find((a) => a.slug === s) || null;
+}
+// Money as the register speaks it: whole dollars when even, cents when not.
+function fmtMoney(cents: number): string {
+  const n = Math.max(0, Math.round(cents || 0));
+  return "$" + (n / 100).toFixed(n % 100 === 0 ? 0 : 2);
+}
+
 // SELLING — the single owner of how you move the sale: discovery, the six moves, the
 // ladder, the commission trigger, the how-hard-to-sell dial, and the admin's angles &
 // objections. The rule text is an editable BASE (config.selling_base, versioned;
@@ -4538,6 +4619,25 @@ async function handleConfigGet(req: Request): Promise<Response> {
     auth: true,
     forms: forms.map((f) => ({ slug: f.slug, title: f.title, fields: f.fields })),
   });
+}
+
+// ── GET ?catalog=1 — the add-on catalog (public; the register + commission read it) ─
+// The single source of truth for the cross-sell / upsell companion pieces, so the
+// register sheet and the commission server render and price the SAME items the
+// concierge sells — no second hard-coded copy to drift. Public: these are shelf
+// facts (name + price), not customer data. Prices are cents; fmtMoney is the display.
+async function handleCatalogGet(req: Request): Promise<Response> {
+  const data = await loadConciergeData();
+  const addons = addonCatalog(data).map((a) => ({
+    slug: a.slug,
+    name: a.name,
+    price_cents: a.price_cents,
+    price: fmtMoney(a.price_cents),
+    variants: a.variants,
+    phase: a.phase,
+    blurb: a.blurb,
+  }));
+  return jsonResponse(req, 200, { addons });
 }
 
 // ── GET ?tools=1 — the built-in tools manifest for the admin Tools tab ────────
@@ -8684,6 +8784,9 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("site")) {
     return await handleSiteGet(req);
+  }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("catalog")) {
+    return await handleCatalogGet(req);
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("tools")) {
     return await handleToolsGet(req);

@@ -124,10 +124,18 @@ interface Billing {
   address: string; address2: string; city: string; state: string; zip: string;
 }
 
+// A companion piece as the CLIENT proposes it. Name + price are NOT taken from the
+// client — they are resolved from the catalog server-side (resolveAddonLines), so
+// the AOV the dashboard reports can never be inflated by a tampered payload.
+interface ClientAddon {
+  slug: string; colorway: string | null; qty: number; addedBy: string;
+}
+
 interface Commission {
   name: string; email: string; address: string; address2: string;
   city: string; state: string; zip: string; colorway: string;
   recipient: string; isGift: boolean; billing: Billing | null;
+  addons: ClientAddon[];
 }
 
 function validateBody(body: unknown): Commission | string {
@@ -207,7 +215,27 @@ function validateBody(body: unknown): Commission | string {
     }
     billing = { address: bAddress, address2: bAddress2, city: bCity, state: bState, zip: bZip };
   }
-  return { name, email, address, address2, city, state, zip, colorway, recipient, isGift, billing };
+
+  // Optional add-on lines. Validated leniently — a malformed line is dropped, never
+  // a reason to reject the whole commission. Only slug / colorway / qty / attribution
+  // come from the client; name and price are resolved from the catalog server-side.
+  const addons: ClientAddon[] = [];
+  if (Array.isArray(raw.addons)) {
+    for (const item of raw.addons.slice(0, 12)) {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
+      const a = item as Record<string, unknown>;
+      const slug = str(a.slug).toLowerCase();
+      if (!/^[a-z0-9][a-z0-9-]{0,38}$/.test(slug)) continue;
+      const cw = str(a.colorway).toLowerCase();
+      const colorway = COLORWAYS.has(cw) ? cw : null;
+      const qtyNum = typeof a.qty === "number" ? a.qty : parseInt(str(a.qty), 10);
+      const qty = Number.isFinite(qtyNum) ? Math.min(20, Math.max(1, Math.round(qtyNum))) : 1;
+      const by = str(a.added_by);
+      const addedBy = (by === "concierge" || by === "customer" || by === "page") ? by : "customer";
+      if (!addons.some((x) => x.slug === slug)) addons.push({ slug, colorway, qty, addedBy });
+    }
+  }
+  return { name, email, address, address2, city, state, zip, colorway, recipient, isGift, billing, addons };
 }
 
 // ── Optional signed-in linkage — verify Supabase Auth JWT ────────────────────
@@ -501,6 +529,56 @@ async function holdSerial(session: string): Promise<{ serial: number; expires_at
   } catch { return null; }
 }
 
+/** A companion piece as the RPC persists it — name + price snapshotted from the
+ *  authoritative catalog, colorway resolved, qty clamped, attribution carried. */
+interface AddonRpcLine {
+  slug: string; name: string; price_cents: number;
+  colorway: string | null; qty: number; added_by: string;
+}
+
+/** Enrich the client's add-on lines with the AUTHORITATIVE catalog (?catalog=1 on
+ *  the concierge function), so name + price come from the shelf, never the payload —
+ *  the AOV the dashboard reports is trustworthy. Unknown slugs are dropped; on a
+ *  catalog-fetch failure the lines are dropped too (the cloth still enters the
+ *  register). Variant pieces inherit the order's colorway when none was chosen. */
+async function resolveAddonLines(
+  addons: ClientAddon[], orderColorway: string,
+): Promise<AddonRpcLine[]> {
+  if (!addons.length || !SUPABASE_URL) return [];
+  let catalog: Array<Record<string, unknown>> = [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/concierge?catalog=1`, {
+      headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+    });
+    if (res.ok) {
+      const j = await res.json() as { addons?: Array<Record<string, unknown>> };
+      if (Array.isArray(j.addons)) catalog = j.addons;
+    }
+  } catch { /* no catalog reachable — drop the add-ons, keep the order */ }
+  if (!catalog.length) return [];
+  const bySlug = new Map<string, Record<string, unknown>>();
+  for (const c of catalog) {
+    const s = String(c.slug ?? "").toLowerCase();
+    if (s) bySlug.set(s, c);
+  }
+  const out: AddonRpcLine[] = [];
+  for (const a of addons) {
+    const c = bySlug.get(a.slug);
+    if (!c) continue;
+    const variants = c.variants === true;
+    const cw = variants ? (a.colorway ?? (COLORWAYS.has(orderColorway) ? orderColorway : null)) : null;
+    out.push({
+      slug: a.slug,
+      name: String(c.name ?? a.slug).slice(0, 120),
+      price_cents: Math.max(0, Math.round(Number(c.price_cents) || 0)),
+      colorway: cw,
+      qty: a.qty,
+      added_by: a.addedBy,
+    });
+  }
+  return out;
+}
+
 /** Calls public.commission_order; the serial, -1 (run fully spoken for),
  *  or null on failure. Falls back to the pre-holds 9-parameter signature so
  *  a freshly deployed function still works against a not-yet-migrated DB. */
@@ -508,6 +586,7 @@ async function commissionOrder(
   c: Commission, userId: string | null, session: string | null,
 ): Promise<number | null> {
   if (!SUPABASE_URL || !SERVICE_KEY) return null;
+  const addonLines = await resolveAddonLines(c.addons, c.colorway);
   const legacyArgs: Record<string, unknown> = {
     p_email: c.email,
     p_name: c.name,
@@ -520,6 +599,11 @@ async function commissionOrder(
     p_user_id: userId,
   };
   const attempts: Record<string, unknown>[] = [
+    // Preferred: the add-on-aware signature. If the DB isn't migrated yet the RPC
+    // 404s on this arg set and we fall through to the order-only signature below —
+    // the cloth still enters the register (add-ons resume once the DB catches up).
+    { ...legacyArgs, p_session: session, p_recipient: c.recipient || null,
+      p_is_gift: c.isGift, p_billing: c.billing, p_addons: addonLines.length ? addonLines : null },
     { ...legacyArgs, p_session: session, p_recipient: c.recipient || null,
       p_is_gift: c.isGift, p_billing: c.billing },
     { ...legacyArgs, p_session: session, p_recipient: c.recipient || null, p_is_gift: c.isGift },
