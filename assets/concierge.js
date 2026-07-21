@@ -399,9 +399,14 @@
           if (typeof j.assertiveness === 'number') { remoteAssert = j.assertiveness; }
           remoteForms = sanitizeForms(j.forms);
           remoteAddons = sanitizeAddons(j.addons);
-          /* publish the catalog so the register sheet (checkout.js) reads the SAME
-             items + prices without a second fetch */
-          try { window.__cxCatalog = remoteAddons.slice(); } catch (eCat) { /* ignore */ }
+          /* publish the catalog + base price so the register sheet (checkout.js)
+             reads the SAME items, prices, and running-total base — no second fetch */
+          try {
+            window.__cxCatalog = remoteAddons.slice();
+            if (typeof j.unit_price_cents === 'number' && j.unit_price_cents > 0) {
+              window.__cxPrice = Math.round(j.unit_price_cents);
+            }
+          } catch (eCat) { /* ignore */ }
         }
         clearTimeout(timer);
         finish();

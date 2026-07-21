@@ -663,13 +663,23 @@
   var pickedBillKey = null;          /* which saved billing address is selected */
 
   /* ---- companion pieces (cross-sell / upsell) ---- */
-  var BASE_PRICE_CENTS = 58900;      /* the cloth itself — $589, the running-total base */
+  var BASE_PRICE_FALLBACK_CENTS = 58900; /* the cloth — $589 — if config hasn't loaded */
   var catalogAddons = [];            /* [{slug,name,price_cents,price,variants,phase,blurb}] from ?catalog=1 */
-  var catalogLoaded = false;
+  var catalogFetched = false;        /* a network fetch SUCCEEDED (or we used __cxCatalog) — don't refetch */
+  var catalogFetching = false;       /* a fetch is in flight — don't start a second */
   var selectedAddons = {};           /* slug -> { added_by:'concierge'|'customer' } chosen for this order */
   var postOrderAddons = {};          /* slug -> true, added AFTER the card was signed */
   var lastOrderAddonSlugs = [];      /* what rode along with the just-signed order */
 
+  /* The running-total base: the configured unit price the widget published, or the
+     $589 fallback when config hasn't loaded. Never a stale hardcode if the merchant
+     changes the price. */
+  function basePriceCents() {
+    try {
+      if (typeof window.__cxPrice === 'number' && window.__cxPrice > 0) { return Math.round(window.__cxPrice); }
+    } catch (eP) { /* ignore */ }
+    return BASE_PRICE_FALLBACK_CENTS;
+  }
   function fmtMoney(cents) {
     var n = Math.max(0, Math.round(cents || 0));
     return '$' + (n / 100).toFixed(n % 100 ? 2 : 0);
@@ -708,30 +718,36 @@
     for (i = 0; i < list.length && i < 20; i++) { n = normAddon(list[i]); if (n) { out.push(n); } }
     catalogAddons = out;
   }
-  /* Load the add-on catalog: prefer what the widget already fetched (window.__cxCatalog),
-     else fetch ?catalog=1 directly. Best-effort — a failure just omits the section. */
+  /* Load the add-on catalog: prefer what the widget already fetched (window.__cxCatalog,
+     which may arrive AFTER the first open), else fetch ?catalog=1 directly. Runs on
+     every open — cheap, and it recovers if the widget's config lands late or an early
+     fetch failed. Only a SUCCESS latches; a failure leaves it retry-able next open. */
   function loadCatalog() {
-    if (catalogLoaded) { return; }
-    catalogLoaded = true;
+    // Always re-check the widget's published catalog first — it's synchronous + free.
     try {
-      if (Object.prototype.toString.call(window.__cxCatalog) === '[object Array]' && window.__cxCatalog.length) {
+      if (!catalogAddons.length &&
+          Object.prototype.toString.call(window.__cxCatalog) === '[object Array]' && window.__cxCatalog.length) {
         setCatalog(window.__cxCatalog);
-        if (catalogAddons.length) { return; }
+        if (catalogAddons.length) { catalogFetched = true; return; }
       }
     } catch (eP) { /* ignore */ }
+    if (catalogFetched || catalogFetching) { return; }   // already have it, or a fetch is in flight
     var e = conciergeEndpoint();
     if (!e) { return; }
+    catalogFetching = true;
     try {
       fetch(e + (e.indexOf('?') === -1 ? '?catalog=1' : '&catalog=1'), { method: 'GET' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
+          catalogFetching = false;
           if (j && Object.prototype.toString.call(j.addons) === '[object Array]') {
             setCatalog(j.addons);
+            catalogFetched = true;               // latch only on success
             seedConciergeAddons();
             if (panelOpen && act === 3) { showAct(3, 0); }   /* fill the section once it lands */
           }
-        })['catch'](function () { /* no catalog — the sheet omits companions */ });
-    } catch (eF) { /* ignore */ }
+        })['catch'](function () { catalogFetching = false; /* retry-able on the next open */ });
+    } catch (eF) { catalogFetching = false; /* retry-able */ }
   }
   /* Pull in the concierge's {{addon}} recommendations (stored by concierge.js) and
      pre-select them, attributed to the concierge. Manual toggles override attribution. */
@@ -1627,14 +1643,15 @@
         ' — ' + order.bill_city + ', ' + order.bill_state + ' ' + order.bill_zip, true));
     }
     var subC = addonsSubtotalCents();
-    plate.appendChild(plateRow(subC > 0 ? 'The cloth' : 'Price', subC > 0 ? '$589' : PRICE_LINE));
+    var baseC = basePriceCents();
+    plate.appendChild(plateRow(subC > 0 ? 'The cloth' : 'Price', subC > 0 ? fmtMoney(baseC) : PRICE_LINE));
     /* companion-piece lines + running total, when any are chosen */
     Object.keys(selectedAddons).forEach(function (s) {
       var d = catalogSlug(s);
       if (d) { plate.appendChild(plateRow('+ ' + d.name, d.price, true)); }
     });
     if (subC > 0) {
-      plate.appendChild(plateRow('Total', fmtMoney(BASE_PRICE_CENTS + subC) + ' — demo, not charged'));
+      plate.appendChild(plateRow('Total', fmtMoney(baseC + subC) + ' — demo, not charged'));
     }
     plate.appendChild(plateRow('Nº', slotLabel() + ' — held while you finish'));
     box.appendChild(plate);

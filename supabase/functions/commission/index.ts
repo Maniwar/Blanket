@@ -536,25 +536,40 @@ interface AddonRpcLine {
   colorway: string | null; qty: number; added_by: string;
 }
 
-/** Enrich the client's add-on lines with the AUTHORITATIVE catalog (?catalog=1 on
- *  the concierge function), so name + price come from the shelf, never the payload —
- *  the AOV the dashboard reports is trustworthy. Unknown slugs are dropped; on a
- *  catalog-fetch failure the lines are dropped too (the cloth still enters the
- *  register). Variant pieces inherit the order's colorway when none was chosen. */
-async function resolveAddonLines(
-  addons: ClientAddon[], orderColorway: string,
-): Promise<AddonRpcLine[]> {
-  if (!addons.length || !SUPABASE_URL) return [];
-  let catalog: Array<Record<string, unknown>> = [];
+// Cache the catalog in module scope so the commission path is NOT one network call
+// per order, and a transient ?catalog=1 blip serves the last good copy instead of
+// silently dropping a concierge-driven upsell. Short TTL — the catalog rarely moves.
+let catalogCache: { at: number; addons: Array<Record<string, unknown>> } | null = null;
+const CATALOG_TTL_MS = 60_000;
+async function fetchAddonCatalog(): Promise<Array<Record<string, unknown>>> {
+  if (catalogCache && (Date.now() - catalogCache.at) < CATALOG_TTL_MS) return catalogCache.addons;
+  if (!SUPABASE_URL) return catalogCache?.addons ?? [];
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/concierge?catalog=1`, {
       headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
     });
     if (res.ok) {
       const j = await res.json() as { addons?: Array<Record<string, unknown>> };
-      if (Array.isArray(j.addons)) catalog = j.addons;
+      if (Array.isArray(j.addons)) {
+        catalogCache = { at: Date.now(), addons: j.addons };
+        return j.addons;
+      }
     }
-  } catch { /* no catalog reachable — drop the add-ons, keep the order */ }
+  } catch { /* fall through to stale cache below */ }
+  // Fetch failed — serve the last good catalog if we have one (resilience), else [].
+  return catalogCache?.addons ?? [];
+}
+
+/** Enrich the client's add-on lines with the AUTHORITATIVE catalog (?catalog=1 on
+ *  the concierge function), so name + price come from the shelf, never the payload —
+ *  the AOV the dashboard reports is trustworthy. Unknown slugs are dropped; only when
+ *  no catalog is reachable AND none is cached are the lines dropped (the cloth still
+ *  enters the register). Variant pieces inherit the order's colorway when none chosen. */
+async function resolveAddonLines(
+  addons: ClientAddon[], orderColorway: string,
+): Promise<AddonRpcLine[]> {
+  if (!addons.length || !SUPABASE_URL) return [];
+  const catalog = await fetchAddonCatalog();
   if (!catalog.length) return [];
   const bySlug = new Map<string, Record<string, unknown>>();
   for (const c of catalog) {
