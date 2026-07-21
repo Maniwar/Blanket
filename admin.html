@@ -2743,6 +2743,13 @@ need to ask my partner | Of course — the hold keeps their number while they ta
         </div>
       </section>
 
+      <!-- CARD 3½ — MESSAGE CONTROLS: the {{…}} tokens the app renders, discovered live -->
+      <section class="card">
+        <div class="card-head"><h3>Message controls the concierge can use</h3><span class="micro">the {{…}} tokens your app renders — the reviewer allows every one</span></div>
+        <p class="note" style="margin:0 0 12px;">A message can carry a control the visitor’s app draws inline — a button, a form, tap-to-answer chips, the rating scale. Put one on its <strong>own line</strong> so it renders (buried mid-sentence it’s dropped). This list is read <strong>live from the engine</strong>, so it’s always exactly what the app renders and what the reviewer allows — one of these is never a “plumbing” block. You’ll see these in your procedures and prompts; anything else in <code>{{…}}</code> is a tool/meta token and is kept out of what visitors see.</p>
+        <div id="jc-tokens"><div class="micro" style="opacity:.7;">Loading…</div></div>
+      </section>
+
       <!-- CARD 4 — the coach's self-healing + the weekly email -->
       <section class="card">
         <div class="card-head"><h3>The coach&#8217;s drafts &amp; the weekly email</h3><span class="micro">nothing applies until you enable it</span></div>
@@ -3548,7 +3555,7 @@ function activateTab(name, fromHistory) {
   if (name === 'conversion') loadConversion();
   if (name === 'spend') loadSpend();
   if (name === 'calendar') loadCalendar();
-  if (name === 'judge') loadJudge();
+  if (name === 'judge') { loadJudge(); loadTokensRef(); }
   if (name === 'nps') loadNps();
   if (name === 'tuning') autoGrowAll('#panel-tuning .tsub.on');
   if (name === 'knowledge') autoGrowAll('#kb-list');
@@ -10983,6 +10990,47 @@ const JC_CLASS_LABELS = {
   etiquette: 'asked something unprompted',
   other: 'other',
 };
+// The message-controls reference — DISCOVERED live from the engine (?tokens=1), never
+// hardcoded here. WIDGET_TOKENS in the engine is the single source of truth, so this
+// list is always exactly what the app renders and what the reviewer allows.
+let _tokensRef = null;
+async function loadTokensRef() {
+  const mount = $('jc-tokens'); if (!mount) return;
+  const render = function (data) {
+    mount.textContent = '';
+    const toks = (data && data.tokens) || [];
+    if (!toks.length) { mount.appendChild(el('div', 'empty micro', 'No controls returned.')); return; }
+    const grid = el('div'); grid.style.cssText = 'display:grid;gap:8px;';
+    toks.forEach(function (t) {
+      const row = el('div'); row.style.cssText = 'border-left:2px solid rgba(216,198,154,.35);padding:6px 10px;';
+      const top = el('div'); top.style.cssText = 'display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;';
+      const code = el('code'); code.style.cssText = 'font-size:13px;color:var(--brass,#d8c69a);background:rgba(241,236,226,.05);padding:1px 6px;border-radius:4px;'; code.textContent = t.example;
+      const name = el('span', 'micro'); name.style.cssText = 'opacity:.85;'; name.textContent = t.label;
+      top.appendChild(code); top.appendChild(name); row.appendChild(top);
+      const rn = el('div', 'micro'); rn.style.cssText = 'opacity:.72;margin-top:3px;text-transform:none;letter-spacing:0;'; rn.textContent = 'Renders ' + t.renders + '.'; row.appendChild(rn);
+      if (t.usage) { const us = el('div', 'micro'); us.style.cssText = 'opacity:.6;margin-top:2px;text-transform:none;letter-spacing:0;'; us.textContent = t.usage; row.appendChild(us); }
+      grid.appendChild(row);
+    });
+    mount.appendChild(grid);
+    if (data.blocked_examples && data.blocked_examples.length) {
+      const bl = el('div', 'micro'); bl.style.cssText = 'margin-top:10px;opacity:.6;text-transform:none;letter-spacing:0;';
+      bl.textContent = 'Blocked as plumbing (never shown to visitors): ' + data.blocked_examples.join('   ');
+      mount.appendChild(bl);
+    }
+  };
+  if (_tokensRef) { render(_tokensRef); return; }
+  try {
+    const token = state.session && state.session.access_token;
+    const res = await fetch(SUPABASE_URL + '/functions/v1/concierge?tokens=1', {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY) }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    _tokensRef = await res.json();
+    render(_tokensRef);
+  } catch (e) {
+    mount.textContent = ''; mount.appendChild(el('div', 'empty micro', 'Could not load the controls — ' + (e && e.message ? e.message : e)));
+  }
+}
 async function loadJudge() {
   const note = $('jc-note'); if (note) { note.textContent = ''; note.className = 'micro'; }
   try {
