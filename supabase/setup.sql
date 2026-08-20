@@ -4499,6 +4499,14 @@ end; $$;
 grant execute on function public.support_close_metrics(int) to authenticated;
 revoke execute on function public.support_close_metrics(int) from public, anon;
 
+create or replace function public.support_set_intent(p_id uuid, p_intent text)
+returns void language sql security definer set search_path = '' as $$
+  update public.support_tickets
+     set intent = case when p_intent in ('support','feedback','handoff') then p_intent else intent end
+   where id = p_id;
+$$;
+revoke execute on function public.support_set_intent(uuid,text) from public, anon, authenticated;
+
 -- ── Alerting — the few things worth interrupting a human for ─────────────────
 -- Deliberately NOT "email on every ticket": an alert that always fires is an
 -- alert nobody reads. Every rule answers "is something going wrong?", and four
@@ -4561,8 +4569,10 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   a jsonb; rules jsonb; r jsonb; one jsonb; out_j jsonb := '[]'::jsonb;
   v_max int; v_recent int; v_thr int; v_win int; v_cd int; v_n int; rec record;
+  v_cfg jsonb; v_closed int; v_bot int; v_bot_ever int; v_reop int; v_rate numeric; v_ceil numeric;
 begin
-  a := public.support_config() -> 'alerts';
+  v_cfg := public.support_config();
+  a := v_cfg -> 'alerts';
   if a is null or coalesce((a->>'enabled')::boolean, false) is not true then return '[]'::jsonb; end if;
   rules := coalesce(a -> 'rules', '{}'::jsonb);
   v_max := greatest(1, coalesce(nullif(a->>'max_per_hour','')::int, 6));
@@ -4658,6 +4668,46 @@ begin
   end if;
 
   -- 6. the queue is drowning (off by default — it is a staffing signal, not an incident)
+  -- The CONTROL on the bot-close rate. Two independent trips, because a high
+  -- rate and a high reopen rate are different failures: the first says the bot is
+  -- doing too much of the closing, the second says those closes were not real.
+  -- A volume floor stops one early ticket tripping either.
+  r := rules -> 'bot_close';
+  if coalesce((r->>'enabled')::boolean, true) and v_recent < v_max then
+    v_win := greatest(1, coalesce(nullif(r->>'window_days','')::int, 7));
+    v_n   := greatest(3, coalesce(nullif(r->>'min_closed','')::int, 8));
+    v_cd  := coalesce(nullif(r->>'cooldown_mins','')::int, 1440);
+    v_ceil := coalesce(nullif(v_cfg->>'max_bot_close_rate','')::numeric, 0.6);
+    select count(*) filter (where t.status in ('resolved','closed')),
+           count(*) filter (where t.status in ('resolved','closed') and t.closed_by = 'bot'),
+           count(*) filter (where (t.status in ('resolved','closed') and t.closed_by = 'bot')
+                               or t.reopened_after_bot_close),
+           count(*) filter (where t.reopened_after_bot_close)
+      into v_closed, v_bot, v_bot_ever, v_reop
+      from public.support_tickets t where t.created_at > now() - make_interval(days => v_win);
+    if v_closed >= v_n then
+      v_rate := round(v_bot::numeric / v_closed, 4);
+      if v_rate > v_ceil then
+        one := public.support_alert_fire('bot_close', 'botrate', 'warn',
+          'Bot closed ' || round(v_rate * 100) || '% of tickets (ceiling ' || round(v_ceil * 100) || '%)',
+          'Over the last ' || v_win || ' days the bot closed ' || v_bot || ' of ' || v_closed ||
+          ' resolved tickets. Either it is closing things it should not, or things are being filed ' ||
+          'that were never tickets. Both are worth a look.', v_cd, null);
+        if one is not null then out_j := out_j || jsonb_build_array(one); v_recent := v_recent + 1; end if;
+      end if;
+    end if;
+    if v_bot_ever >= v_n and v_recent < v_max then
+      v_rate := round(v_reop::numeric / v_bot_ever, 4);
+      if v_rate > coalesce(nullif(r->>'max_reopen_rate','')::numeric, 0.2) then
+        one := public.support_alert_fire('bot_close', 'botreopen', 'critical',
+          round(v_rate * 100) || '% of bot-closed tickets were reopened',
+          v_reop || ' of ' || v_bot_ever || ' tickets the bot closed came back. Those closes were not ' ||
+          'resolutions — the bot is calling things fixed that are not.', v_cd, null);
+        if one is not null then out_j := out_j || jsonb_build_array(one); v_recent := v_recent + 1; end if;
+      end if;
+    end if;
+  end if;
+
   r := rules -> 'backlog';
   if coalesce((r->>'enabled')::boolean, false) and v_recent < v_max then
     v_thr := greatest(1, coalesce(nullif(r->>'threshold','')::int, 25));

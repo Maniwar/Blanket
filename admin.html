@@ -2112,6 +2112,14 @@ need to ask my partner | Of course — the hold keeps their number while they ta
 
       <div id="sup-kpis" class="metrics"></div>
 
+      <section class="card">
+        <div class="card-head">
+          <h3>Why people asked for a person</h3>
+          <span class="micro">the most actionable list here — every row is a gap the bot could not cover</span>
+        </div>
+        <div id="sup-handoff-reasons"></div>
+      </section>
+
       <section class="card sup-card">
         <div class="card-head">
           <h3>Tickets</h3>
@@ -2161,6 +2169,9 @@ need to ask my partner | Of course — the hold keeps their number while they ta
         <p class="note">With the desk <strong>off</strong> the concierge never sees the ticket tools, so it cannot offer an escalation the house does not staff. <strong>Areas</strong> are the only labels it may apply — before adding one, check no tool already covers it, or you will teach the bot to escalate work it can already do.</p>
         <div class="filters" style="gap:14px; flex-wrap:wrap; align-items:center;">
           <label class="sup-vis"><input type="checkbox" id="sup-cfg-enabled"> Support desk on</label>
+          <label class="sup-vis">Bot-close ceiling
+            <input id="sup-cfg-botceil" class="input" type="number" min="1" max="100" style="width:78px;"> %
+          </label>
           <label class="sup-vis" style="flex:1 1 340px;">Areas
             <input id="sup-cfg-areas" class="input" type="text" placeholder="order, delivery, care, product" style="width:100%;">
           </label>
@@ -14874,7 +14885,8 @@ async function loadSupport() {
   if (res.error) { fail('Support — tickets', res.error); listEl.innerHTML = '<div class="sup-empty">Could not load tickets.</div>'; return; }
   supState.rows = res.data || [];
   supRenderList();
-  supRenderKpis();
+  await supRenderKpis();
+  supRenderHandoffReasons();
   if (supState.ref) supOpen(supState.ref);
 }
 
@@ -14885,6 +14897,8 @@ async function loadSupportSetup() {
   var cfg = (row.data && row.data[0] && row.data[0].value) || {};
   supState.cfg = cfg;
   var en = $('sup-cfg-enabled'); if (en) en.checked = cfg.enabled === true;
+  var bc = $('sup-cfg-botceil');
+  if (bc) bc.value = Math.round((typeof cfg.max_bot_close_rate === 'number' ? cfg.max_bot_close_rate : 0.6) * 100);
   var ar = $('sup-cfg-areas');
   if (ar) ar.value = Object.prototype.toString.call(cfg.areas) === '[object Array]' ? cfg.areas.join(', ') : '';
   supRenderRouting(); supRenderSla(); supLoadAlerts();
@@ -14929,6 +14943,9 @@ async function supSaveDesk() {
   var note = $('sup-cfg-msg');
   var cfg = supState.cfg || {};
   cfg.enabled = $('sup-cfg-enabled').checked;
+  var bcv = parseInt(($('sup-cfg-botceil') || {}).value, 10);
+  // Stored as a rate; shown as a percentage, because operators think in percent.
+  cfg.max_bot_close_rate = (!isNaN(bcv) && bcv > 0 && bcv <= 100) ? (bcv / 100) : 0.6;
   cfg.areas = ($('sup-cfg-areas').value || '').split(',').map(function (s) { return s.trim().toLowerCase(); })
     .filter(function (s) { return /^[a-z0-9][a-z0-9-]{0,38}$/.test(s); });
   var routing = {};
@@ -15009,6 +15026,8 @@ var SUP_RULES = [
     why: 'The same signal, but it names the surface. Usually the most actionable alert here.' },
   { key: 'csat_floor', name: 'Poor rating', fields: ['threshold'],
     why: 'A resolution rated at or below this score. Once per ticket.' },
+  { key: 'bot_close', name: 'Bot closing too much', fields: ['min_closed', 'cooldown_mins'],
+    why: 'Trips two ways: the bot closed more than the ceiling set above, or too many of its closes were reopened. The second is the serious one — a reopened close was never a resolution.' },
   { key: 'backlog', name: 'Backlog too deep', fields: ['threshold', 'cooldown_mins'],
     why: 'A staffing signal rather than an incident — off by default.' }
 ];
@@ -15122,6 +15141,35 @@ async function supScanNow() {
   supRenderAlertLog();
 }
 
+/* The configured ceiling on how much of the closing the BOT may do. Above it,
+   the desk is either closing things it should not, or filing things that were
+   never tickets — both worth knowing. */
+function supBotCloseCeiling() {
+  try {
+    var v = supState.cfg && supState.cfg.max_bot_close_rate;
+    if (typeof v === 'number' && v > 0 && v <= 1) return v;
+  } catch (e) { /* default below */ }
+  return 0.6;
+}
+
+/* Why people give up on the bot — the most actionable list in the system, so it
+   gets its own place rather than being buried in a metrics blob. */
+function supRenderHandoffReasons() {
+  var el = $('sup-handoff-reasons'); if (!el) return;
+  var c = supState.close;
+  if (!c) { el.innerHTML = '<div class="sup-empty-sub">No data yet.</div>'; return; }
+  var rows = c.handoff_reasons || [];
+  if (!rows.length) {
+    el.innerHTML = '<div class="sup-empty"><div class="sup-empty-title">No handoffs in this window.</div>' +
+      '<div class="sup-empty-sub">Nobody has had to ask for a person.</div></div>';
+    return;
+  }
+  el.innerHTML = '<table class="mini-table"><thead><tr><th>Why they wanted a person</th><th class="num">n</th></tr></thead><tbody>' +
+    rows.map(function (r) {
+      return '<tr><td>' + supEsc(r.reason) + '</td><td class="num">' + Number(r.n || 0) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
 async function supRenderKpis() {
   var el = $('sup-kpis'); if (!el) return;
   try {
@@ -15143,6 +15191,27 @@ async function supRenderKpis() {
       tile('CSAT', m.csat_avg == null ? '—' : Number(m.csat_avg).toFixed(2), (m.csat_count || 0) + ' rated') +
       // Escalation's complement is the deflection story: what the bot handled alone.
       tile('Deflected', ((1 - esc_) * 100).toFixed(1) + '%', 'chats needing no human');
+    // The control panel for the bot-close rate. Shown next to the rate it
+    // polices, because a bot-close rate is meaningless without its reopen rate —
+    // quoting one without the other is how a desk fools itself.
+    try {
+      var cm = await sb.rpc('support_close_metrics', { p_days: 30 });
+      if (!cm.error && cm.data) {
+        var c = cm.data;
+        var pct = function (v) { return (Number(v || 0) * 100).toFixed(1) + '%'; };
+        var reop = Number(c.bot_close_reopen_rate || 0);
+        var ceil = supBotCloseCeiling();
+        var over = Number(c.bot_close_rate || 0) > ceil;
+        el.innerHTML += tile('Bot-closed', pct(c.bot_close_rate),
+          Number(c.bot_closed || 0) + ' of ' + Number(c.closed_total || 0) +
+          ' · ceiling ' + (ceil * 100).toFixed(0) + '%', over) +
+          tile('Reopened after bot close', pct(reop),
+            Number(c.reopened_after_bot_close || 0) + ' of ' + Number(c.bot_closed_ever || 0) +
+            ' ever bot-closed', reop > 0.2) +
+          tile('Handoffs', Number(c.handoffs || 0), pct(c.handoff_rate) + ' of tickets');
+        supState.close = c;
+      }
+    } catch (eC) { /* the close panel is additive — never breaks the strip */ }
   } catch (e) {
     el.innerHTML = '<div class="sup-empty">Metrics unavailable.</div>';
   }
