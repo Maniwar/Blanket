@@ -158,14 +158,13 @@ resolution, which is a different question from the relationship-level
 
 ---
 
-## The agent queue (studio → Front desk → Support)
+## The agent queue
+
+Described in full under **The studio: two tabs, on purpose** below — the queue is
+a source-list workspace, and its configuration lives in a separate tab.
 
 - **KPI strip** — open now, SLA breaches (red when non-zero), median first
   response, CSAT, and **Deflected** (escalation's complement).
-- **Queue** — filter by status / type / area / priority, plus free-text over
-  subject, email and `#ref`. Type, priority and breached-SLA show as pills. The
-  area filter is populated from the *same* configured list the concierge may tag
-  with, so the two cannot drift.
 - **Ticket detail** — the whole thread *including* internal notes (that is the
   point of this view), the app context the bot captured, a jump to the
   conversation it escalated from, inline status / priority / area / assignee
