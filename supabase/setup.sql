@@ -3883,9 +3883,9 @@ on conflict (slug) do nothing;
 -- PORTABILITY (this is load-bearing): support here depends on NOTHING from the
 -- commerce schema. A ticket links only to things every install has — a
 -- conversation, an email/user, and a free-form `meta` for app context. There is
--- no FK to `orders`, no colorway, no serial. That is what lets this same schema
--- drop into a different Supabase app (a CRM, a SaaS web app) as a config
--- exercise rather than a rewrite.
+-- no foreign key to the order tables, no product variant, no serial. That is
+-- what lets this same schema drop into a different Supabase app (a CRM, a SaaS
+-- web app) as a config exercise rather than a rewrite.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create table if not exists public.support_tickets (
