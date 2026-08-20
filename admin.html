@@ -936,6 +936,15 @@
   .sup-vis{ display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono', monospace;
     font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--wool-faint); cursor:pointer; }
   .sup-empty{ color:var(--wool-faint); font-size:13px; padding:22px 4px; text-align:center; }
+  /* alert rule editor */
+  .sup-rules{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .sup-rule{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:9px 11px; border:1px solid var(--wool-faint); border-radius:4px; }
+  .sup-rule-name{ min-width:150px; font-size:13px; }
+  .sup-rule-why{ flex:1 1 260px; font-size:11.5px; color:var(--wool-faint); line-height:1.45; }
+  .sup-rule label{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--wool-faint); display:flex; align-items:center; gap:5px; }
+  .sup-rule input[type=number]{ width:66px; }
   /* Conversion KPI rows fill their own widths — 4 commerce tiles, then 5
      concierge tiles — so no row leaves ragged orphans. The 👍 tile's value
      runs smaller at 5-up, so trim the type a touch on that row. */
@@ -2051,6 +2060,28 @@ need to ask my partner | Of course — the hold keeps their number while they ta
       </div>
 
       <div id="sup-kpis" class="metrics"></div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Alerts</h3>
+          <span class="micro">only the things worth interrupting someone for</span>
+          <button id="sup-al-scan" class="btn ghost" type="button" style="margin-left:auto;" title="Evaluate the rules right now against live data. Anything that fires is emailed and logged below.">Run a scan now</button>
+          <button id="sup-al-save" class="btn" type="button">Save</button>
+        </div>
+        <p class="note">Email on every ticket is how alerting becomes noise people filter away, so nothing here fires on routine activity. Each rule is separately switchable, repeats are suppressed per ticket/area/condition, and the <strong>hourly ceiling</strong> outranks every rule — so a real incident can't bury you in mail.</p>
+        <div class="filters" style="gap:12px; flex-wrap:wrap; align-items:center;">
+          <label class="sup-vis"><input type="checkbox" id="sup-al-enabled"> Alerts on</label>
+          <input id="sup-al-to" class="input" type="text" placeholder="notify (comma-separated emails)" style="min-width:280px;">
+          <label class="sup-vis">Max/hour <input id="sup-al-max" class="input" type="number" min="1" max="60" style="width:70px;"></label>
+        </div>
+        <div id="sup-al-rules" class="sup-rules"></div>
+        <div id="sup-al-msg" class="micro" style="min-height:14px; margin-top:8px;"></div>
+        <div class="card-head" style="margin-top:18px;">
+          <h3 style="font-size:13px;">Recently fired</h3>
+          <span class="micro">the dedupe ledger — proof of what actually went out</span>
+        </div>
+        <div id="sup-al-log"></div>
+      </section>
 
       <section class="card">
         <div class="card-head">
@@ -14728,6 +14759,9 @@ async function loadSupport() {
     if (q) q.addEventListener('input', function () { supRenderList(); });
     var r = $('sup-refresh');
     if (r) r.addEventListener('click', function () { loadSupport(); });
+    var sv = $('sup-al-save'); if (sv) sv.addEventListener('click', supSaveAlerts);
+    var sc = $('sup-al-scan'); if (sc) sc.addEventListener('click', supScanNow);
+    supLoadAlerts();
     // The area filter's options come from the same configured list the
     // concierge is allowed to tag with — one source of truth, no drift.
     try {
@@ -14753,6 +14787,114 @@ async function loadSupport() {
   supRenderList();
   supRenderKpis();
   if (supState.ref) supOpen(supState.ref);
+}
+
+/* The alert rules, described in the terms an operator decides on: what it is
+   for, and what it costs you in mail. Fields listed here are the ones each rule
+   actually reads, so the editor can never offer a knob the rule ignores. */
+var SUP_RULES = [
+  { key: 'urgent_ticket', name: 'Urgent ticket', fields: [],
+    why: 'A customer is blocked with no workaround. Once per ticket, never repeated.' },
+  { key: 'sla_breach', name: 'SLA breached', fields: [],
+    why: 'A first-response deadline passed with no reply. Once per ticket. This is the one that needs the scheduled scan — a deadline passing is not an event.' },
+  { key: 'spike', name: 'Ticket spike', fields: ['threshold', 'window_mins', 'cooldown_mins'],
+    why: 'Volume far above normal — something may be broken for everyone.' },
+  { key: 'area_cluster', name: 'One area lighting up', fields: ['threshold', 'window_mins', 'cooldown_mins'],
+    why: 'The same signal, but it names the surface. Usually the most actionable alert here.' },
+  { key: 'csat_floor', name: 'Poor rating', fields: ['threshold'],
+    why: 'A resolution rated at or below this score. Once per ticket.' },
+  { key: 'backlog', name: 'Backlog too deep', fields: ['threshold', 'cooldown_mins'],
+    why: 'A staffing signal rather than an incident — off by default.' }
+];
+
+async function supLoadAlerts() {
+  var wrap = $('sup-al-rules'); if (!wrap) return;
+  var cfgRow = await sb.from('concierge_config').select('value').eq('key', 'support').limit(1);
+  var cfg = (cfgRow.data && cfgRow.data[0] && cfgRow.data[0].value) || {};
+  var a = (cfg.alerts && typeof cfg.alerts === 'object') ? cfg.alerts : {};
+  var rules = (a.rules && typeof a.rules === 'object') ? a.rules : {};
+  supState.cfg = cfg;
+  $('sup-al-enabled').checked = a.enabled === true;
+  $('sup-al-to').value = Object.prototype.toString.call(a.to) === '[object Array]' ? a.to.join(', ') : '';
+  $('sup-al-max').value = (typeof a.max_per_hour === 'number' && a.max_per_hour > 0) ? a.max_per_hour : 6;
+  var num = function (rk, f, val, ph) {
+    return '<label>' + f.replace('_mins', ' mins').replace('_', ' ') +
+      '<input type="number" min="0" class="input" data-rule="' + rk + '" data-field="' + f +
+      '" value="' + (val == null ? '' : val) + '" placeholder="' + ph + '"></label>';
+  };
+  var DEF = { spike: { threshold: 5, window_mins: 15, cooldown_mins: 60 },
+              area_cluster: { threshold: 3, window_mins: 30, cooldown_mins: 60 },
+              csat_floor: { threshold: 2 }, backlog: { threshold: 25, cooldown_mins: 360 } };
+  wrap.innerHTML = SUP_RULES.map(function (r) {
+    var cur = rules[r.key] || {};
+    var on = cur.enabled === undefined ? (r.key !== 'backlog') : cur.enabled === true;
+    return '<div class="sup-rule">' +
+      '<label style="text-transform:none;"><input type="checkbox" data-rule="' + r.key + '" data-field="enabled"' +
+        (on ? ' checked' : '') + '></label>' +
+      '<div class="sup-rule-name">' + r.name + '</div>' +
+      '<div class="sup-rule-why">' + r.why + '</div>' +
+      r.fields.map(function (f) {
+        return num(r.key, f, cur[f], String((DEF[r.key] || {})[f] || ''));
+      }).join('') +
+    '</div>';
+  }).join('');
+  supRenderAlertLog();
+}
+
+async function supRenderAlertLog() {
+  var el = $('sup-al-log'); if (!el) return;
+  var r = await sb.from('support_alerts')
+    .select('rule,severity,subject,created_at,sent_at,send_error')
+    .order('created_at', { ascending: false }).limit(15);
+  var rows = r.data || [];
+  if (!rows.length) { el.innerHTML = '<div class="sup-empty">Nothing has fired yet.</div>'; return; }
+  el.innerHTML = '<table class="mini-table"><thead><tr><th>When</th><th>Rule</th><th>Alert</th><th>Mailed</th></tr></thead><tbody>' +
+    rows.map(function (x) {
+      var mailed = x.sent_at ? 'yes' : (x.send_error ? supEsc(x.send_error) : 'no');
+      return '<tr><td>' + supAgo(x.created_at) + '</td><td>' + supEsc(x.rule) + '</td>' +
+        '<td>' + supEsc(x.subject) + '</td><td>' + mailed + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+async function supSaveAlerts() {
+  var note = $('sup-al-msg');
+  var rules = {};
+  Array.prototype.forEach.call($('sup-al-rules').querySelectorAll('[data-rule]'), function (i) {
+    var rk = i.getAttribute('data-rule'), f = i.getAttribute('data-field');
+    rules[rk] = rules[rk] || {};
+    if (f === 'enabled') { rules[rk].enabled = i.checked; }
+    else if (i.value !== '') {
+      var n = parseInt(i.value, 10);
+      if (!isNaN(n) && n >= 0) rules[rk][f] = n;
+    }
+  });
+  var to = ($('sup-al-to').value || '').split(',').map(function (s) { return s.trim(); })
+    .filter(function (s) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s); });
+  var max = parseInt($('sup-al-max').value, 10);
+  var cfg = supState.cfg || {};
+  cfg.alerts = {
+    enabled: $('sup-al-enabled').checked,
+    to: to,
+    max_per_hour: (!isNaN(max) && max > 0) ? max : 6,
+    rules: rules
+  };
+  var r = await sb.from('concierge_config').upsert({ key: 'support', value: cfg }, { onConflict: 'key' });
+  if (r.error) { note.textContent = 'Could not save: ' + r.error.message; return; }
+  supState.cfg = cfg;
+  note.textContent = 'Saved.' + (cfg.enabled === false ? '' : '') +
+    (to.length ? '' : ' No recipients set — alerts will be recorded but not emailed.');
+}
+
+async function supScanNow() {
+  var note = $('sup-al-msg'), btn = $('sup-al-scan');
+  btn.disabled = true; note.textContent = 'Scanning…';
+  try {
+    var j = await adminPost('?support_alerts=1', {});
+    if (!j.fired) { note.textContent = 'Scanned — nothing met a rule (that is the normal, quiet result).'; }
+    else { note.textContent = j.fired + ' alert(s) fired, ' + j.sent + ' emailed.'; }
+  } catch (e) { note.textContent = 'Scan failed: ' + (e && e.message || e); }
+  btn.disabled = false;
+  supRenderAlertLog();
 }
 
 async function supRenderKpis() {
