@@ -270,6 +270,7 @@
   var remoteVideos = null;     /* admin-added {{video:token}} sources (from ?config=1) */
   var remotePrivacyUrl = null; /* privacy-notice URL for the footer link (from ?config=1) */
   var remoteAssert = null;     /* admin assertiveness 1..5 (from ?config=1) */
+  var remoteSupport = false;   /* is a staffed support desk configured? (from ?config=1) */
   var remoteAddons = [];       /* add-on catalog [{slug,name,price_cents,price,variants,phase,blurb}] (from ?config=1) */
   function addonBySlug(slug) {
     var s = String(slug || '').toLowerCase(), i;
@@ -399,6 +400,7 @@
           if (typeof j.assertiveness === 'number') { remoteAssert = j.assertiveness; }
           remoteForms = sanitizeForms(j.forms);
           remoteAddons = sanitizeAddons(j.addons);
+          remoteSupport = (j.support_enabled === true);
           /* publish the catalog + base price so the register sheet (checkout.js)
              reads the SAME items, prices, and running-total base — no second fetch */
           try {
@@ -647,6 +649,15 @@
       /* the {{addon:…}} companion-piece offer — a reply chip, non-uppercase so the
          piece name + price reads naturally (no new palette tokens to keep in sync) */
       '.cx-reply-addon{text-transform:none;letter-spacing:.02em;}',
+      '.cx-help{flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap;padding:.5rem 1.4rem .2rem;}',
+      '.cx-help-btn{font-family:"IBM Plex Mono",monospace;font-size:.62rem;letter-spacing:.06em;',
+      'padding:.45em .8em;border-radius:999px;cursor:pointer;background:transparent;',
+      'border:1px solid rgba(196,155,91,.32);color:var(--cx-brass-soft);min-height:32px;',
+      'transition:background .25s,border-color .25s,color .25s;}',
+      '.cx-help-btn:hover{background:rgba(196,155,91,.12);border-color:var(--cx-brass-soft);}',
+      '.cx-help-btn:focus-visible{outline:1px solid var(--cx-brass-soft);outline-offset:2px;}',
+      '.cx-help-human{margin-left:auto;}',
+
       /* the NPS 0-10 scale row (the {{nps}} token) */
       '.cx-npsrow{gap:4px;flex-wrap:nowrap;}',
       '.cx-npsrow .cx-reply{flex:1 1 0;min-width:0;text-align:center;padding:.5em 0;}',
@@ -1768,6 +1779,31 @@
     sendBtn.addEventListener('click', submitInput);
     row.appendChild(sendBtn);
     compose.appendChild(row);
+    /* Help row — the explicit doors. Relying on the model to notice someone is
+       stuck is not enough: a person who cannot find words for their problem, or
+       who has given up on the bot, needs a BUTTON. "Talk to a person" is
+       deliberately always present and never buried in the overflow menu — an
+       escape hatch you have to hunt for is not an escape hatch. */
+    if (remoteSupport) {
+      var helpRow = el('div', 'cx-help');
+      helpRow.setAttribute('role', 'group');
+      helpRow.setAttribute('aria-label', 'Get help');
+      [
+        ['Get help', 'I need help with something I can\u2019t work out.'],
+        ['Share feedback', 'I\u2019d like to share some product feedback.'],
+        ['Talk to a person', 'I\u2019d like a person to take this, please.']
+      ].forEach(function (pair, idx) {
+        var b = el('button', 'cx-help-btn' + (idx === 2 ? ' cx-help-human' : ''), pair[0]);
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          if (streaming) { return; }        /* same guard the reply pills use */
+          entryMode = 'help';               /* so attribution shows which door they took */
+          sendMessage(pair[1]);
+        });
+        helpRow.appendChild(b);
+      });
+      panel.appendChild(helpRow);
+    }
     panel.appendChild(compose);
 
     /* footer — with an optional admin-set Privacy link (inquiry forms collect a
