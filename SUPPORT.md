@@ -185,6 +185,72 @@ every adopting app defines differently.
 
 ---
 
+## The three doors, and the one that is always open
+
+Relying on the model to *notice* someone is stuck is not enough. A person who
+cannot find words for their problem, or who has already given up on the bot,
+needs a **button**. When a desk is staffed the widget shows three, above the
+composer:
+
+| Button | Sends | Intent |
+| --- | --- | --- |
+| **Get help** | "I need help with something I can't work out." | `support` |
+| **Share feedback** | "I'd like to share some product feedback." | `feedback` |
+| **Talk to a person** | "I'd like a person to take this, please." | `handoff` |
+
+They seed an ordinary message, so guided intake, grounding and the judge all
+apply unchanged — no parallel code path to drift.
+
+**"Talk to a person" is deliberately always visible**, never folded into the
+overflow menu. An escape hatch you have to hunt for is not an escape hatch.
+
+## Handoff — never gated
+
+`request_human_handoff` is never rate-limited, never asks the customer to
+justify it, and the model is instructed to call it the moment someone asks *or
+shows they are going in circles* ("this isn't helping", "you already said
+that", the same question twice). It never argues and never asks them to try one
+more thing first.
+
+A handoff on a ticket the bot had closed **reopens it, clears that close, and
+restarts the first-response clock** — an agent must not inherit an SLA the bot
+already "satisfied". The reason is recorded, because *why people give up on the
+bot* is the most useful question in this data; the queue surfaces it as its own
+panel.
+
+## Closing — and why the bot may not mark its own homework
+
+A bot that can close tickets **will** close tickets, because every close looks
+like success. So closure is controlled structurally, in four places at once:
+
+1. **Every close is attributed** — `closed_by` is `bot`, `customer`, or `agent`.
+   `close_my_ticket` always attributes to **`bot`**, even though the customer
+   authorised it: the model can never dress its own close as the customer's.
+2. **Consent must be explicit and just-given.** The model may ask *"does that
+   sort it?"*; it may **not** treat silence, a topic change, or its own
+   confidence as a yes. When in doubt it leaves the ticket open and says so.
+3. **Reopening is the truth serum.** `reopened_after_bot_close` is set by
+   **trigger** and is sticky — a reopen after a bot close cannot be edited away.
+4. **A ceiling that alerts.** `max_bot_close_rate` (default 60%) and a maximum
+   reopen rate (20%) are enforced by the `bot_close` alert rule, above a volume
+   floor so one early ticket cannot trip them.
+
+> **The denominator matters.** The reopen rate is measured against tickets the
+> bot **ever** closed, not those still closed. Measuring against still-closed
+> would shrink the denominator every time the bot got it wrong — flattering the
+> exact number being policed. (The first implementation had that bug; it was
+> caught in validation.)
+
+**A bot-close rate quoted without its reopen rate is how a desk fools itself**,
+so the studio shows them side by side.
+
+### Follow-up and self-close
+
+`check_ticket` lets a customer ask after their own tickets in chat at any time,
+and `close_ticket_by_requester` lets them close one themselves. A customer
+closing their own ticket is the only close that is unambiguously true — which is
+why `closed_by='customer'` is the standard the bot rate is measured against.
+
 ## Alerts — only what's worth interrupting someone for
 
 Support does **not** email on every ticket. An alert that always fires is an
