@@ -4090,14 +4090,92 @@ end; $$;
 revoke execute on function public.open_support_ticket(text,text,text,text,uuid,text,text,text,uuid,text,text,jsonb)
   from public, anon, authenticated;
 
--- Append to a ticket thread. Drives the status handshake the way a helpdesk does:
--- an agent's first PUBLIC reply stops the first-response clock and moves the ticket
--- to 'pending' (waiting on the customer); a customer reply re-opens it.
+-- ── The lifecycle rules live in TRIGGERS, not in one code path ───────────────
+-- Two clients write tickets: the concierge (service role, through the RPCs below)
+-- and the studio's Support queue (an admin, writing the tables directly under
+-- RLS). If the status handshake lived only in an RPC, the studio would silently
+-- skip it — an agent's reply would never stop the SLA clock. As triggers these
+-- are invariants of the DATA, true no matter who writes.
+
+-- 1. A new message drives the status handshake, the way a helpdesk does: an
+--    agent's first PUBLIC reply stops the first-response clock and moves the
+--    ticket to 'pending' (waiting on the customer); a customer reply re-opens it.
+--    An INTERNAL note deliberately does neither — a private note to your team is
+--    not a response to the customer, and must not stop their clock.
+create or replace function public.support_message_sync() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.author_kind = 'agent' and new.visibility = 'public' then
+    update public.support_tickets t
+       set first_response_at = coalesce(t.first_response_at, new.created_at),
+           status = case when t.status = 'open' then 'pending' else t.status end,
+           updated_at = now()
+     where t.id = new.ticket_id;
+  elsif new.author_kind = 'customer' then
+    update public.support_tickets t
+       set status = case when t.status in ('pending','resolved') then 'open' else t.status end,
+           resolved_at = case when t.status = 'resolved' then null else t.resolved_at end,
+           updated_at = now()
+     where t.id = new.ticket_id;
+  else
+    update public.support_tickets t set updated_at = now() where t.id = new.ticket_id;
+  end if;
+  return new;
+end; $$;
+drop trigger if exists support_message_sync on public.support_ticket_messages;
+create trigger support_message_sync after insert on public.support_ticket_messages
+  for each row execute function public.support_message_sync();
+
+-- 2. A status or assignment change stamps its lifecycle timestamps and writes its
+--    own internal audit line, so the thread reads as the whole history whichever
+--    client made the change. (The note it inserts re-enters trigger 1 as a
+--    'system' author, which only touches updated_at — so this terminates.)
+create or replace function public.support_ticket_audit() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.status is distinct from old.status then
+    insert into public.support_ticket_messages (ticket_id, author_kind, body, visibility)
+      values (new.id, 'system', 'Status ' || old.status || ' -> ' || new.status, 'internal');
+  end if;
+  if new.assignee_email is distinct from old.assignee_email then
+    insert into public.support_ticket_messages (ticket_id, author_kind, body, visibility)
+      values (new.id, 'system',
+        case when new.assignee_email is null then 'Unassigned'
+             else 'Assigned to ' || new.assignee_email end, 'internal');
+  end if;
+  return new;
+end; $$;
+drop trigger if exists support_ticket_audit on public.support_tickets;
+create trigger support_ticket_audit after update on public.support_tickets
+  for each row execute function public.support_ticket_audit();
+
+-- Lifecycle timestamps belong to the row, not the caller: set them BEFORE the
+-- write lands so a direct table update from the studio stamps them too.
+create or replace function public.support_ticket_stamp() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.status is distinct from old.status then
+    new.resolved_at := case when new.status = 'resolved' then now()
+                            when new.status in ('open','pending') then null
+                            else old.resolved_at end;
+    new.closed_at   := case when new.status = 'closed' then now()
+                            when new.status in ('open','pending') then null
+                            else old.closed_at end;
+  end if;
+  new.updated_at := now();
+  return new;
+end; $$;
+drop trigger if exists support_ticket_stamp on public.support_tickets;
+create trigger support_ticket_stamp before update on public.support_tickets
+  for each row execute function public.support_ticket_stamp();
+
+-- Append to a ticket thread. The handshake is the trigger's job; this validates,
+-- refuses to let a customer author an internal note, and inserts.
 create or replace function public.add_ticket_message(
   p_ref bigint, p_author_kind text, p_body text,
   p_author_email text default null, p_visibility text default 'public'
 ) returns bigint language plpgsql security definer set search_path = '' as $$
-declare v_id uuid; v_status text; v_kind text; v_vis text; v_msg bigint;
+declare v_id uuid; v_kind text; v_vis text; v_msg bigint;
 begin
   if coalesce(btrim(p_body),'') = '' then return -1; end if;
   v_kind := lower(coalesce(p_author_kind,''));
@@ -4105,34 +4183,18 @@ begin
   v_vis := case when lower(coalesce(p_visibility,'public')) = 'internal' then 'internal' else 'public' end;
   -- A customer can never write an internal note.
   if v_kind = 'customer' then v_vis := 'public'; end if;
-  select t.id, t.status into v_id, v_status from public.support_tickets t where t.ref = p_ref;
+  select t.id into v_id from public.support_tickets t where t.ref = p_ref;
   if v_id is null then return -1; end if;
   insert into public.support_ticket_messages (ticket_id, author_kind, author_email, body, visibility)
     values (v_id, v_kind, nullif(lower(btrim(coalesce(p_author_email,''))), ''),
             left(btrim(p_body), 8000), v_vis)
     returning id into v_msg;
-  if v_kind = 'agent' and v_vis = 'public' then
-    update public.support_tickets t
-       set first_response_at = coalesce(t.first_response_at, now()),
-           status = case when t.status = 'open' then 'pending' else t.status end,
-           updated_at = now()
-     where t.id = v_id;
-  elsif v_kind = 'customer' then
-    update public.support_tickets t
-       set status = case when t.status in ('pending','resolved') then 'open' else t.status end,
-           resolved_at = case when t.status = 'resolved' then null else t.resolved_at end,
-           updated_at = now()
-     where t.id = v_id;
-  else
-    update public.support_tickets t set updated_at = now() where t.id = v_id;
-  end if;
   return v_msg;
 end; $$;
 revoke execute on function public.add_ticket_message(bigint,text,text,text,text)
   from public, anon, authenticated;
 
--- Move a ticket's status, stamping the lifecycle timestamps and leaving a system
--- note in the thread so the audit reads in one place.
+-- Move a ticket's status. Timestamps and the audit line are the triggers' job.
 create or replace function public.set_ticket_status(
   p_ref bigint, p_status text, p_actor_email text default null
 ) returns text language plpgsql security definer set search_path = '' as $$
@@ -4143,19 +4205,7 @@ begin
   select t.id, t.status into v_id, v_old from public.support_tickets t where t.ref = p_ref;
   if v_id is null then return 'no such ticket'; end if;
   if v_old = v_new then return 'ok'; end if;
-  update public.support_tickets t
-     set status = v_new,
-         resolved_at = case when v_new = 'resolved' then now()
-                            when v_new in ('open','pending') then null
-                            else t.resolved_at end,
-         closed_at   = case when v_new = 'closed' then now()
-                            when v_new in ('open','pending') then null
-                            else t.closed_at end,
-         updated_at = now()
-   where t.id = v_id;
-  insert into public.support_ticket_messages (ticket_id, author_kind, author_email, body, visibility)
-    values (v_id, 'system', nullif(lower(btrim(coalesce(p_actor_email,''))), ''),
-            'Status ' || v_old || ' → ' || v_new, 'internal');
+  update public.support_tickets t set status = v_new where t.id = v_id;
   return 'ok';
 end; $$;
 revoke execute on function public.set_ticket_status(bigint,text,text) from public, anon, authenticated;
@@ -4163,15 +4213,13 @@ revoke execute on function public.set_ticket_status(bigint,text,text) from publi
 create or replace function public.assign_ticket(
   p_ref bigint, p_assignee_email text, p_actor_email text default null
 ) returns text language plpgsql security definer set search_path = '' as $$
-declare v_id uuid; v_to text;
+declare v_id uuid;
 begin
   select t.id into v_id from public.support_tickets t where t.ref = p_ref;
   if v_id is null then return 'no such ticket'; end if;
-  v_to := nullif(lower(btrim(coalesce(p_assignee_email,''))), '');
-  update public.support_tickets t set assignee_email = v_to, updated_at = now() where t.id = v_id;
-  insert into public.support_ticket_messages (ticket_id, author_kind, author_email, body, visibility)
-    values (v_id, 'system', nullif(lower(btrim(coalesce(p_actor_email,''))), ''),
-            case when v_to is null then 'Unassigned' else 'Assigned to ' || v_to end, 'internal');
+  update public.support_tickets t
+     set assignee_email = nullif(lower(btrim(coalesce(p_assignee_email,''))), '')
+   where t.id = v_id;
   return 'ok';
 end; $$;
 revoke execute on function public.assign_ticket(bigint,text,text) from public, anon, authenticated;

@@ -891,6 +891,51 @@
     color:var(--wool); overflow:hidden; text-overflow:ellipsis; max-width:180px; white-space:nowrap; }
   .mini-table td.num, .mini-table th.num{ text-align:right; font-family:'IBM Plex Mono', monospace; padding-right:0; }
   .mini-table tr:last-child td{ border-bottom:none; }
+
+  /* ---------- Support desk: queue + ticket detail ---------- */
+  #sup-kpis{ grid-template-columns:repeat(5, 1fr); margin-bottom:16px; }
+  @media (max-width:1180px){ #sup-kpis{ grid-template-columns:repeat(3, 1fr); } }
+  @media (max-width:760px){ #sup-kpis{ grid-template-columns:repeat(2, 1fr); } }
+  .sup-split{ display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:18px; align-items:start; }
+  @media (max-width:900px){ .sup-split{ grid-template-columns:1fr; } }
+  .sup-list{ max-height:620px; overflow:auto; border:1px solid var(--wool-faint); border-radius:4px; }
+  .sup-row{ display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer;
+    padding:11px 12px; border-bottom:1px solid var(--wool-faint); color:var(--wool); }
+  .sup-row:hover{ background:rgba(196,155,91,.07); }
+  .sup-row.on{ background:rgba(196,155,91,.13); }
+  .sup-row:last-child{ border-bottom:none; }
+  .sup-row-top{ display:flex; align-items:center; gap:7px; margin-bottom:4px; flex-wrap:wrap; }
+  .sup-ref{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--wool-faint); }
+  .sup-subject{ font-size:13px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sup-row-meta{ margin-top:4px; font-family:'IBM Plex Mono', monospace; font-size:9.5px;
+    letter-spacing:.05em; color:var(--wool-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* pills — type, priority, status, sla */
+  .sup-pill{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.09em;
+    text-transform:uppercase; padding:2px 6px; border-radius:3px; border:1px solid var(--wool-faint); white-space:nowrap; }
+  .sup-t-bug{ color:#E5A0A0; border-color:rgba(229,160,160,.5); }
+  .sup-t-feedback{ color:#A9C7E8; border-color:rgba(169,199,232,.5); }
+  .sup-t-question{ color:var(--wool-faint); }
+  .sup-p-urgent{ color:#E5A0A0; border-color:rgba(229,160,160,.6); background:rgba(229,160,160,.1); }
+  .sup-p-high{ color:#E8C9A0; border-color:rgba(232,201,160,.5); }
+  .sup-sla-breach{ color:#F0888A; border-color:rgba(240,136,138,.65); background:rgba(240,136,138,.12); }
+  .sup-detail{ border:1px solid var(--wool-faint); border-radius:4px; padding:16px; min-height:260px; }
+  .sup-d-head{ display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .sup-d-subject{ font-size:16px; line-height:1.3; flex:1 1 220px; }
+  .sup-d-ctx{ font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--wool-faint);
+    line-height:1.7; margin:8px 0 14px; word-break:break-all; }
+  .sup-thread{ display:flex; flex-direction:column; gap:10px; max-height:340px; overflow:auto; margin-bottom:14px; }
+  .sup-msg{ border-left:2px solid var(--wool-faint); padding:7px 0 7px 11px; }
+  .sup-msg.is-agent{ border-left-color:var(--brass-soft, #C49B5B); }
+  .sup-msg.is-internal{ border-left-style:dashed; background:rgba(196,155,91,.05); }
+  .sup-msg.is-system{ opacity:.6; }
+  .sup-msg-who{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--wool-faint); margin-bottom:3px; }
+  .sup-msg-body{ font-size:13px; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+  .sup-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .sup-reply{ width:100%; min-height:74px; }
+  .sup-vis{ display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono', monospace;
+    font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--wool-faint); cursor:pointer; }
+  .sup-empty{ color:var(--wool-faint); font-size:13px; padding:22px 4px; text-align:center; }
   /* Conversion KPI rows fill their own widths — 4 commerce tiles, then 5
      concierge tiles — so no row leaves ragged orphans. The 👍 tile's value
      runs smaller at 5-up, so trim the type a touch on that row. */
@@ -1217,6 +1262,7 @@
     <button class="tab on" data-tab="conversations" role="tab">Conversations</button>
     <button class="tab" data-tab="calendar" role="tab">Calendar</button>
     <button class="tab" data-tab="customers" role="tab">Orders &amp; Customers</button>
+    <button class="tab" data-tab="support" role="tab">Support</button>
     <button class="tab" data-tab="actions" role="tab">Actions</button>
     <button class="tab" data-tab="conversion" role="tab">Conversion</button>
     <button class="tab" data-tab="nps" role="tab">NPS</button>
@@ -1997,6 +2043,53 @@ need to ask my partner | Of course — the hold keeps their number while they ta
     </div>
 
     <!-- ============ TAB 3c : ACTIONS (register-action audit log) ============ -->
+    <div id="panel-support" class="panel">
+      <div class="panel-head">
+        <span class="micro">Support desk</span>
+        <h2>Support</h2>
+        <p class="note">Every escalation the concierge could not answer, plus the bugs and product feedback it captured. <strong>Type</strong> says what it is (question · bug · feedback), <strong>area</strong> says where in the product, <strong>priority</strong> drives the SLA clock. Pick a ticket to read the thread, reply to the customer, or leave an internal note only your team can see. A red SLA badge is a breached deadline.</p>
+      </div>
+
+      <div id="sup-kpis" class="metrics"></div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Queue</h3>
+          <span class="micro">click a ticket to open it</span>
+          <button id="sup-refresh" class="btn ghost" type="button" style="margin-left:auto;">Refresh</button>
+        </div>
+        <div class="filters" style="gap:8px; flex-wrap:wrap;">
+          <select id="sup-f-status" class="input">
+            <option value="active">Open &amp; pending</option>
+            <option value="open">Open</option>
+            <option value="pending">Pending</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+            <option value="">All statuses</option>
+          </select>
+          <select id="sup-f-type" class="input">
+            <option value="">All types</option>
+            <option value="question">Question</option>
+            <option value="bug">Bug</option>
+            <option value="feedback">Feedback</option>
+          </select>
+          <select id="sup-f-priority" class="input">
+            <option value="">All priorities</option>
+            <option value="urgent">Urgent</option>
+            <option value="high">High</option>
+            <option value="normal">Normal</option>
+            <option value="low">Low</option>
+          </select>
+          <select id="sup-f-area" class="input"><option value="">All areas</option></select>
+          <input id="sup-f-q" class="input" type="search" placeholder="Search subject, email, #ref" style="min-width:200px;">
+        </div>
+        <div class="sup-split">
+          <div id="sup-list" class="sup-list"></div>
+          <div id="sup-detail" class="sup-detail"></div>
+        </div>
+      </section>
+    </div>
+
     <div id="panel-actions" class="panel">
       <div class="panel-head">
         <span class="micro">Audit trail</span>
@@ -3509,12 +3602,12 @@ async function doSignOut() {
   route();
 }
 
-const TAB_NAMES = ['tuning', 'knowledge', 'procedures', 'cache', 'judge', 'customers', 'conversations', 'conversion', 'nps', 'spend', 'calendar', 'actions', 'website', 'tools', 'evals', 'edition'];
+const TAB_NAMES = ['tuning', 'knowledge', 'procedures', 'cache', 'judge', 'customers', 'conversations', 'conversion', 'nps', 'spend', 'calendar', 'actions', 'support', 'website', 'tools', 'evals', 'edition'];
 /* The fifteen pages hang off four sections — one calm line up top. A badge
    on a hidden page (Calendar's pending count) rolls up to its section, so
    nothing urgent hides behind a fold. */
 const TAB_GROUPS = [
-  { key: 'desk', label: 'Front desk', tabs: ['conversations', 'calendar', 'customers', 'actions'] },
+  { key: 'desk', label: 'Front desk', tabs: ['conversations', 'calendar', 'customers', 'support', 'actions'] },
   { key: 'results', label: 'Results', tabs: ['conversion', 'nps', 'spend'] },
   { key: 'training', label: 'Training', tabs: ['tuning', 'knowledge', 'procedures', 'evals', 'tools', 'cache', 'judge'] },
   { key: 'house', label: 'The house', tabs: ['website', 'edition'] },
@@ -3589,6 +3682,7 @@ function activateTab(name, fromHistory) {
     try { history.pushState({ tab: name }, '', '#' + name); } catch (eH) { /* ignore */ }
   }
   if (name === 'conversion') loadConversion();
+  if (name === 'support') loadSupport();
   if (name === 'spend') loadSpend();
   if (name === 'calendar') loadCalendar();
   if (name === 'judge') { loadJudge(); loadTokensRef(); }
@@ -14593,6 +14687,237 @@ function cvWindowDays(win) {
 
 // Fetch + render the Upsell & AOV card. AOV framing uses PRICE (the base cloth the
 // dashboard already knows); the RPC returns brand-neutral add-on aggregates.
+/* ── Support desk ────────────────────────────────────────────────────────────
+   The agent's workspace: a filterable queue on the left, the ticket and its
+   thread on the right. Reads and writes go straight to the tables under the
+   admin RLS policy — the status handshake, the lifecycle timestamps and the
+   audit lines are enforced by triggers, so the studio and the concierge cannot
+   drift apart (see SUPPORT.md). */
+var supState = { rows: [], ref: null, areas: [], internal: false };
+
+function supEsc(s) { return esc(s == null ? '' : String(s)); }
+function supAgo(iso) {
+  if (!iso) return '—';
+  var ms = Date.now() - new Date(iso).getTime();
+  var m = Math.round(ms / 60000);
+  if (m < 60) return m + 'm ago';
+  var h = Math.round(m / 60);
+  if (h < 48) return h + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+/* A breach is an unmet deadline on work still owed — the same rule the
+   support_metrics RPC counts, so the badge and the KPI can never disagree. */
+function supBreach(t) {
+  var owed = (t.status === 'open' || t.status === 'pending');
+  if (!owed) return '';
+  var now = Date.now();
+  if (!t.first_response_at && t.due_at && now > new Date(t.due_at).getTime()) return 'response';
+  if (!t.resolved_at && t.resolve_due_at && now > new Date(t.resolve_due_at).getTime()) return 'resolution';
+  return '';
+}
+
+async function loadSupport() {
+  var listEl = $('sup-list');
+  if (!listEl) return;
+  if (!supState.wired) {
+    supState.wired = true;
+    ['sup-f-status', 'sup-f-type', 'sup-f-priority', 'sup-f-area'].forEach(function (id) {
+      var el = $(id); if (el) el.addEventListener('change', function () { supRenderList(); });
+    });
+    var q = $('sup-f-q');
+    if (q) q.addEventListener('input', function () { supRenderList(); });
+    var r = $('sup-refresh');
+    if (r) r.addEventListener('click', function () { loadSupport(); });
+    // The area filter's options come from the same configured list the
+    // concierge is allowed to tag with — one source of truth, no drift.
+    try {
+      var cfg = await sb.from('concierge_config').select('value').eq('key', 'support').limit(1);
+      var areas = (cfg.data && cfg.data[0] && cfg.data[0].value && cfg.data[0].value.areas) || [];
+      if (Object.prototype.toString.call(areas) === '[object Array]') {
+        supState.areas = areas.filter(function (a) { return typeof a === 'string'; });
+        var sel = $('sup-f-area');
+        supState.areas.forEach(function (a) {
+          var o = document.createElement('option'); o.value = a; o.textContent = a; sel.appendChild(o);
+        });
+      }
+    } catch (eC) { /* no config yet — the filter just stays "All areas" */ }
+  }
+
+  listEl.innerHTML = '<div class="sup-empty">Loading…</div>';
+  var res = await sb.from('support_tickets')
+    .select('id,ref,subject,status,type,area,priority,requester_email,requester_name,assignee_email,' +
+            'created_at,updated_at,first_response_at,resolved_at,due_at,resolve_due_at,csat_score,meta,body,conversation_id')
+    .order('created_at', { ascending: false }).limit(500);
+  if (res.error) { fail('Support — tickets', res.error); listEl.innerHTML = '<div class="sup-empty">Could not load tickets.</div>'; return; }
+  supState.rows = res.data || [];
+  supRenderList();
+  supRenderKpis();
+  if (supState.ref) supOpen(supState.ref);
+}
+
+async function supRenderKpis() {
+  var el = $('sup-kpis'); if (!el) return;
+  try {
+    var r = await sb.rpc('support_metrics', { p_days: 30 });
+    if (r.error) throw new Error(r.error.message);
+    var m = r.data || {};
+    var breach = Number(m.breach_first_response || 0) + Number(m.breach_resolution || 0);
+    var tile = function (label, val, sub, cls) {
+      return '<div class="stat"><span class="micro">' + label + '</span>' +
+        '<div class="val"' + (cls ? ' style="color:#F0888A"' : '') + '>' + val + '</div>' +
+        (sub ? '<span class="micro" style="opacity:.75">' + sub + '</span>' : '') + '</div>';
+    };
+    var fr = m.first_response_mins_p50 == null ? '—' : Math.round(m.first_response_mins_p50) + 'm';
+    var esc_ = m.escalation_rate == null ? 0 : Number(m.escalation_rate);
+    el.innerHTML =
+      tile('Open now', Number(m.open_now || 0), (m.total || 0) + ' in 30d') +
+      tile('SLA breaches', breach, breach ? 'needs attention' : 'all within target', breach > 0) +
+      tile('First response', fr, 'median') +
+      tile('CSAT', m.csat_avg == null ? '—' : Number(m.csat_avg).toFixed(2), (m.csat_count || 0) + ' rated') +
+      // Escalation's complement is the deflection story: what the bot handled alone.
+      tile('Deflected', ((1 - esc_) * 100).toFixed(1) + '%', 'chats needing no human');
+  } catch (e) {
+    el.innerHTML = '<div class="sup-empty">Metrics unavailable.</div>';
+  }
+}
+
+function supRenderList() {
+  var el = $('sup-list'); if (!el) return;
+  var fs = ($('sup-f-status') || {}).value, ft = ($('sup-f-type') || {}).value;
+  var fp = ($('sup-f-priority') || {}).value, fa = ($('sup-f-area') || {}).value;
+  var q = (($('sup-f-q') || {}).value || '').trim().toLowerCase();
+  var rows = supState.rows.filter(function (t) {
+    if (fs === 'active') { if (t.status !== 'open' && t.status !== 'pending') return false; }
+    else if (fs && t.status !== fs) return false;
+    if (ft && t.type !== ft) return false;
+    if (fp && t.priority !== fp) return false;
+    if (fa && t.area !== fa) return false;
+    if (q) {
+      var hay = [t.subject, t.requester_email, t.requester_name, '#' + t.ref].join(' ').toLowerCase();
+      if (hay.indexOf(q.replace(/^#/, '#')) === -1 && hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+  if (!rows.length) { el.innerHTML = '<div class="sup-empty">No tickets match.</div>'; return; }
+  el.innerHTML = rows.map(function (t) {
+    var br = supBreach(t);
+    return '<button class="sup-row' + (String(t.ref) === String(supState.ref) ? ' on' : '') +
+      '" type="button" data-ref="' + t.ref + '">' +
+      '<div class="sup-row-top">' +
+        '<span class="sup-ref">#' + t.ref + '</span>' +
+        '<span class="sup-pill sup-t-' + supEsc(t.type) + '">' + supEsc(t.type) + '</span>' +
+        (t.priority === 'urgent' || t.priority === 'high'
+          ? '<span class="sup-pill sup-p-' + supEsc(t.priority) + '">' + supEsc(t.priority) + '</span>' : '') +
+        (br ? '<span class="sup-pill sup-sla-breach">SLA ' + br + '</span>' : '') +
+      '</div>' +
+      '<div class="sup-subject">' + supEsc(t.subject) + '</div>' +
+      '<div class="sup-row-meta">' + supEsc(t.status) + ' · ' + supEsc(t.area || 'untriaged') +
+        ' · ' + supEsc(t.requester_email || '—') + ' · ' + supAgo(t.created_at) + '</div>' +
+    '</button>';
+  }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.sup-row'), function (b) {
+    b.addEventListener('click', function () { supOpen(b.getAttribute('data-ref')); });
+  });
+}
+
+async function supOpen(ref) {
+  supState.ref = String(ref);
+  supRenderList();
+  var el = $('sup-detail'); if (!el) return;
+  var t = supState.rows.filter(function (r) { return String(r.ref) === String(ref); })[0];
+  if (!t) { el.innerHTML = '<div class="sup-empty">Ticket not found.</div>'; return; }
+  el.innerHTML = '<div class="sup-empty">Loading thread…</div>';
+  // Admin RLS returns internal notes too — that is the point of this view.
+  var mr = await sb.from('support_ticket_messages')
+    .select('author_kind,author_email,body,visibility,created_at')
+    .eq('ticket_id', t.id).order('created_at', { ascending: true }).limit(200);
+  var msgs = (mr.data || []);
+  var meta = t.meta && typeof t.meta === 'object' ? t.meta : {};
+  var ctx = ['page_url', 'app_version', 'user_agent', 'section'].filter(function (k) { return meta[k]; })
+    .map(function (k) { return k + ': ' + supEsc(meta[k]); }).join('<br>');
+  var br = supBreach(t);
+  var opts = function (vals, cur) {
+    return vals.map(function (v) {
+      return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + v + '</option>';
+    }).join('');
+  };
+  el.innerHTML =
+    '<div class="sup-d-head">' +
+      '<div class="sup-d-subject">' + supEsc(t.subject) + '</div>' +
+      '<span class="sup-ref">#' + t.ref + '</span>' +
+      (br ? '<span class="sup-pill sup-sla-breach">SLA ' + br + '</span>' : '') +
+    '</div>' +
+    '<div class="sup-d-ctx">' +
+      supEsc(t.requester_name || '') + ' &lt;' + supEsc(t.requester_email || '—') + '&gt; · opened ' + supAgo(t.created_at) +
+      (t.csat_score ? ' · CSAT ' + t.csat_score + '/5' : '') +
+      (ctx ? '<br>' + ctx : '') +
+      (t.conversation_id ? '<br><a href="#" id="sup-jump">open the conversation it came from →</a>' : '') +
+    '</div>' +
+    '<div class="sup-actions">' +
+      '<select id="sup-set-status" class="input">' + opts(['open', 'pending', 'resolved', 'closed'], t.status) + '</select>' +
+      '<select id="sup-set-priority" class="input">' + opts(['low', 'normal', 'high', 'urgent'], t.priority) + '</select>' +
+      '<select id="sup-set-area" class="input">' +
+        '<option value="">untriaged</option>' + opts(supState.areas, t.area || '') + '</select>' +
+      '<input id="sup-set-assignee" class="input" type="email" placeholder="assign to (email)" value="' +
+        supEsc(t.assignee_email || '') + '" style="min-width:170px;">' +
+    '</div>' +
+    '<div class="sup-thread">' + (msgs.length ? msgs.map(function (m) {
+      var cls = 'sup-msg is-' + supEsc(m.author_kind) + (m.visibility === 'internal' ? ' is-internal' : '');
+      return '<div class="' + cls + '">' +
+        '<div class="sup-msg-who">' + supEsc(m.author_kind) +
+          (m.visibility === 'internal' ? ' · internal note' : '') +
+          (m.author_email ? ' · ' + supEsc(m.author_email) : '') +
+          ' · ' + supAgo(m.created_at) + '</div>' +
+        '<div class="sup-msg-body">' + supEsc(m.body) + '</div></div>';
+    }).join('') : '<div class="sup-empty">No messages.</div>') + '</div>' +
+    '<textarea id="sup-reply" class="input sup-reply" placeholder="Reply to the customer…"></textarea>' +
+    '<div class="sup-actions" style="margin-top:8px;">' +
+      '<label class="sup-vis"><input type="checkbox" id="sup-internal"> Internal note (customer never sees this)</label>' +
+      '<button id="sup-send" class="btn" type="button" style="margin-left:auto;">Send</button>' +
+    '</div>' +
+    '<div id="sup-msg" class="micro" style="margin-top:8px; min-height:14px;"></div>';
+
+  var jump = $('sup-jump');
+  if (jump) jump.addEventListener('click', function (ev) {
+    ev.preventDefault();
+    // Same jump the Actions tab uses — lands in the chat, scrolled to the moment.
+    try { jumpToConversation(t.conversation_id, t.created_at, 'ticket #' + t.ref); }
+    catch (eJ) { activateTab('conversations'); }
+  });
+  $('sup-send').addEventListener('click', function () { supSend(t); });
+  $('sup-set-status').addEventListener('change', function () { supPatch(t, { status: this.value }); });
+  $('sup-set-priority').addEventListener('change', function () { supPatch(t, { priority: this.value }); });
+  $('sup-set-area').addEventListener('change', function () { supPatch(t, { area: this.value || null }); });
+  $('sup-set-assignee').addEventListener('change', function () {
+    supPatch(t, { assignee_email: this.value.trim().toLowerCase() || null });
+  });
+}
+
+async function supPatch(t, patch) {
+  var note = $('sup-msg');
+  var r = await sb.from('support_tickets').update(patch).eq('id', t.id);
+  if (r.error) { if (note) note.textContent = 'Could not save: ' + r.error.message; return; }
+  if (note) note.textContent = 'Saved.';
+  await loadSupport();
+}
+
+async function supSend(t) {
+  var box = $('sup-reply'), note = $('sup-msg');
+  var body = (box.value || '').trim();
+  if (!body) { note.textContent = 'Write something first.'; return; }
+  var internal = !!($('sup-internal') || {}).checked;
+  var btn = $('sup-send'); btn.disabled = true;
+  var r = await sb.from('support_ticket_messages').insert({
+    ticket_id: t.id, author_kind: 'agent', author_email: (state.email || null),
+    body: body, visibility: internal ? 'internal' : 'public'
+  });
+  btn.disabled = false;
+  if (r.error) { note.textContent = 'Could not send: ' + r.error.message; return; }
+  box.value = '';
+  note.textContent = internal ? 'Internal note added.' : 'Reply sent to the customer.';
+  await loadSupport();
+}
+
 async function loadAddonMetrics(days) {
   const kpis = $('cv-addon-kpis'), items = $('cv-addon-items'), custs = $('cv-addon-customers');
   if (!kpis) return;
