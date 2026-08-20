@@ -288,6 +288,43 @@ plus *Run a scan now* and a **recently fired** log showing what actually mailed.
 Email requires `RESEND_API_KEY`; without it alerts still record and appear in the
 studio, and the log says why nothing was mailed.
 
+## The studio: two tabs, on purpose
+
+**Support** (Front desk) is the agent's workspace. **Support Setup** (Training)
+is the configuration. They are separate because an agent works the queue all day
+and should never scroll past settings they touch monthly to reach it.
+
+### Support — the queue
+
+A source list → list → detail workspace, the shape Mail uses, because the
+agent's loop is *triage → scan → work* and each step should stay visible while
+doing the next.
+
+- **Source list** answers the triage question before any filtering: Breaching,
+  Needs reply, Assigned to me, Unassigned, All open, Resolved — each with a live
+  count, so heat is visible without clicking.
+- **One ordering, everywhere:** breached first, then priority, then **oldest
+  first**. FIFO within a priority is what stops old tickets being buried by
+  newer noisy ones, so the top of the list is always the right next ticket.
+- **Keyboard:** `J`/`K` or arrows move (keeping the row in view), `Enter`/`R`
+  jump to the reply box, `E` resolves, `/` focuses search, `Esc` leaves a field.
+  `E` drives the visible status control and fires its real handler — no
+  shortcut-only path that can drift from what the mouse does.
+- **Empty states say what they mean.** "Nothing is breaching — every open ticket
+  is still inside its SLA" is good news and reads as good news.
+
+### Support Setup — the configuration
+
+The desk's master switch and area vocabulary, routing rules, SLA clocks, and the
+alert rules with *Run a scan now* and the fired log.
+
+> **On Apple HIG:** the *structure and interaction standards* are applied — the
+> source-list/list/detail hierarchy, chrome deferring to content, semantic status
+> colour, full keyboard access, meaningful empty states, visible focus, generous
+> hit targets. The palette remains the studio's own; importing iOS system colours
+> into a tool with an established identity would read as a graft rather than a
+> design.
+
 ## Metrics — `support_metrics(p_days)`
 
 Admin-only. Volume and mix (`by_status`, `by_priority`, `by_type`, and `by_area`
