@@ -236,10 +236,33 @@ send cannot double-alert. Each attempt is then marked, which makes
 `support_alerts` both the dedupe ledger and the audit trail — including
 *"no recipients configured"* rather than a silent drop.
 
-> **Not yet built:** a scheduled caller. Until one is wired (a cron workflow or
-> `pg_cron` hitting the endpoint with the service key), `sla_breach` and
-> `backlog` only evaluate when a ticket opens or an operator clicks *Run a scan
-> now*. The event-driven rules work today.
+### The scheduled sweep
+
+`.github/workflows/support-alert-sweep.yml` runs every 15 minutes and calls the
+endpoint. It exists for one reason: **an SLA breach has no triggering event.** A
+deadline passing is the *absence* of something happening, so nothing notices
+unless something asks. Event-driven rules don't need it; `sla_breach` and
+`backlog` do.
+
+Sweeping often is safe — the scan is dedupe-guarded and capped, so on a quiet
+queue every run does nothing. The only cost of a tighter schedule is how quickly
+a breach is noticed.
+
+**Setup — one secret, in two places:**
+
+1. Generate one: `openssl rand -hex 32`
+2. **Supabase** → Edge Functions → `concierge` → Secrets: `ALERT_CRON_SECRET`
+3. **GitHub** → Settings → Secrets → Actions: `ALERT_CRON_SECRET` (same value)
+
+Deliberately **not** the service-role key. A cron job only needs to say "scan
+now", so it gets a credential that can do only that — a small exposure in CI
+rather than a total one. The endpoint accepts an admin JWT, the service key, or
+this secret.
+
+Until it's set the workflow **skips cleanly** rather than failing every 15
+minutes; a 403 in the job summary means the two values disagree, and says so.
+GitHub can delay scheduled runs under load, so treat it as *about* every 15
+minutes — for hard guarantees, drive the same endpoint from `pg_cron`.
 
 ### Configuring it (studio → Support → Alerts)
 

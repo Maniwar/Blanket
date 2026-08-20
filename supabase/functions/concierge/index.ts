@@ -9059,10 +9059,17 @@ async function notifySupportAlerts(alerts: Array<Record<string, unknown>>): Prom
 // The scan RECORDS before we mail, so a crash between the two can never
 // double-alert; each send is then marked so the log shows what truly went out.
 async function handleSupportAlertsPost(req: Request): Promise<Response> {
+  // Three ways in, in order of privilege. The scheduled sweep should NOT need the
+  // service key — that is the keys-to-the-kingdom credential, and a cron job only
+  // needs to say "scan now". ALERT_CRON_SECRET is a purpose-built shared secret
+  // that can do nothing else, so storing it in a CI secret store is a small
+  // exposure rather than a total one.
   const auth = req.headers.get("Authorization") ?? "";
   const bearer = auth.replace(/^Bearer\s+/i, "").trim();
+  const cronSecret = Deno.env.get("ALERT_CRON_SECRET") ?? "";
+  const isCron = cronSecret.length >= 16 && bearer === cronSecret;
   const isService = !!SERVICE_KEY && bearer === SERVICE_KEY;
-  if (!isService && !(await requireAdmin(req))) {
+  if (!isCron && !isService && !(await requireAdmin(req))) {
     return jsonError(req, 403, "Administrators only.");
   }
   const alerts = await pgRpc<Array<Record<string, unknown>>>("support_alert_scan", {});
