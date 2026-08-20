@@ -898,6 +898,47 @@
   @media (max-width:760px){ #sup-kpis{ grid-template-columns:repeat(2, 1fr); } }
   .sup-split{ display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:18px; align-items:start; }
   @media (max-width:900px){ .sup-split{ grid-template-columns:1fr; } }
+  /* ---- the agent workspace: source list -> list -> detail (HIG's Mail shape).
+     Three panes because the agent's loop is triage -> scan -> work, and each
+     step should stay visible while doing the next one. ---- */
+  .sup-work{ display:grid; grid-template-columns:186px minmax(300px,1fr) minmax(320px,1.25fr);
+    gap:16px; align-items:start; }
+  @media (max-width:1200px){ .sup-work{ grid-template-columns:170px 1fr; } .sup-work .sup-detail{ grid-column:1 / -1; } }
+  @media (max-width:820px){ .sup-work{ grid-template-columns:1fr; } }
+  .sup-search{ margin-left:auto; min-width:200px; }
+  .sup-kbd-hint{ display:block; margin-top:6px; font-family:'IBM Plex Mono', monospace;
+    font-size:10px; letter-spacing:.05em; color:var(--wool-faint); }
+  /* Source list — chrome recedes, the counts carry the meaning. */
+  .sup-views{ display:flex; flex-direction:column; gap:2px; }
+  .sup-view{ display:flex; align-items:center; gap:8px; width:100%; text-align:left; cursor:pointer;
+    background:none; border:none; border-radius:6px; padding:8px 10px; min-height:36px;
+    color:var(--wool); font-size:12.5px; line-height:1.3;
+    transition:background .15s ease, color .15s ease; }
+  .sup-view:hover{ background:rgba(196,155,91,.08); }
+  .sup-view.on{ background:rgba(196,155,91,.16); }
+  .sup-view:focus-visible{ outline:2px solid var(--brass-soft, #C49B5B); outline-offset:1px; }
+  .sup-view-dot{ flex:0 0 auto; width:7px; height:7px; border-radius:50%; background:var(--wool-faint); }
+  .sup-view.v-breach .sup-view-dot{ background:#F0888A; }
+  .sup-view.v-reply  .sup-view-dot{ background:#E8C9A0; }
+  .sup-view-name{ flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sup-view-n{ flex:0 0 auto; font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    color:var(--wool-faint); padding:1px 6px; border-radius:9px; background:rgba(241,236,226,.06); }
+  .sup-view.on .sup-view-n{ color:var(--wool); }
+  .sup-view.v-breach .sup-view-n{ color:#F0888A; background:rgba(240,136,138,.14); }
+  .sup-views-sep{ height:1px; background:var(--wool-faint); opacity:.5; margin:7px 4px; }
+  .sup-listwrap{ display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .sup-filters{ display:flex; gap:8px; flex-wrap:wrap; }
+  .sup-filters .input{ font-size:12px; padding:5px 8px; }
+  /* A selected row gets a leading brass rule — position is legible at a glance
+     while scrubbing with the keyboard. */
+  .sup-row{ border-left:2px solid transparent; }
+  .sup-row.on{ border-left-color:var(--brass-soft, #C49B5B); }
+  .sup-row:focus-visible{ outline:2px solid var(--brass-soft, #C49B5B); outline-offset:-2px; }
+  .sup-list:focus-visible{ outline:2px solid var(--brass-soft, #C49B5B); outline-offset:2px; }
+  .sup-list{ max-height:none; min-height:220px; }
+  @media (min-width:821px){ .sup-list{ max-height:560px; } .sup-detail{ max-height:560px; overflow:auto; } }
+  .sup-empty-title{ font-size:13px; color:var(--wool); margin-bottom:4px; }
+  .sup-empty-sub{ font-size:11.5px; color:var(--wool-faint); line-height:1.5; }
   .sup-list{ max-height:620px; overflow:auto; border:1px solid var(--wool-faint); border-radius:4px; }
   .sup-row{ display:block; width:100%; text-align:left; background:none; border:none; cursor:pointer;
     padding:11px 12px; border-bottom:1px solid var(--wool-faint); color:var(--wool); }
@@ -1272,6 +1313,7 @@
     <button class="tab" data-tab="calendar" role="tab">Calendar</button>
     <button class="tab" data-tab="customers" role="tab">Orders &amp; Customers</button>
     <button class="tab" data-tab="support" role="tab">Support</button>
+    <button class="tab" data-tab="support-setup" role="tab">Support Setup</button>
     <button class="tab" data-tab="actions" role="tab">Actions</button>
     <button class="tab" data-tab="conversion" role="tab">Conversion</button>
     <button class="tab" data-tab="nps" role="tab">NPS</button>
@@ -2052,14 +2094,97 @@ need to ask my partner | Of course — the hold keeps their number while they ta
     </div>
 
     <!-- ============ TAB 3c : ACTIONS (register-action audit log) ============ -->
+    <!-- SUPPORT — the agent's workspace. Structured backwards from their loop:
+         "what needs me now" -> open it -> reply -> next, without losing place.
+         Apple HIG informs the STRUCTURE (a Mail-style source list -> list ->
+         detail), the deference of chrome to content, full keyboard access, and
+         semantic status colour. The palette stays the studio's own: importing
+         iOS system colours into a loden-and-brass tool would read as a graft.
+         Configuration deliberately lives in its own tab — an agent works this
+         screen all day and should never scroll past settings to reach a queue. -->
     <div id="panel-support" class="panel">
       <div class="panel-head">
         <span class="micro">Support desk</span>
-        <h2>Support</h2>
-        <p class="note">Every escalation the concierge could not answer, plus the bugs and product feedback it captured. <strong>Type</strong> says what it is (question · bug · feedback), <strong>area</strong> says where in the product, <strong>priority</strong> drives the SLA clock. Pick a ticket to read the thread, reply to the customer, or leave an internal note only your team can see. A red SLA badge is a breached deadline.</p>
+        <h2>Queue</h2>
+        <p class="note">Escalations the concierge could not answer, plus bugs and feedback it captured. The list is ordered the way a desk is actually worked: <strong>breached first, then by priority, then oldest first</strong> — so the top of the list is always the right next ticket. <span class="sup-kbd-hint">↑↓ or J/K move · Enter opens · R reply · E resolve · / search</span></p>
       </div>
 
       <div id="sup-kpis" class="metrics"></div>
+
+      <section class="card sup-card">
+        <div class="card-head">
+          <h3>Tickets</h3>
+          <span class="micro" id="sup-scope-label">all open</span>
+          <input id="sup-f-q" class="input sup-search" type="search" placeholder="Search subject, email, #ref" aria-label="Search tickets">
+          <button id="sup-refresh" class="btn ghost" type="button">Refresh</button>
+        </div>
+
+        <div class="sup-work">
+          <!-- Source list: the triage question answered before any filtering.
+               Counts are the point — heat is visible without clicking. -->
+          <nav class="sup-views" id="sup-views" aria-label="Ticket views"></nav>
+
+          <div class="sup-listwrap">
+            <div class="sup-filters">
+              <select id="sup-f-type" class="input" aria-label="Filter by type">
+                <option value="">All types</option>
+                <option value="question">Question</option>
+                <option value="bug">Bug</option>
+                <option value="feedback">Feedback</option>
+              </select>
+              <select id="sup-f-area" class="input" aria-label="Filter by area"><option value="">All areas</option></select>
+            </div>
+            <div id="sup-list" class="sup-list" role="listbox" aria-label="Tickets" tabindex="0"></div>
+          </div>
+
+          <div id="sup-detail" class="sup-detail" aria-live="polite"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- SUPPORT SETUP — deliberate, occasional configuration. Separate from the
+         queue so the daily workspace stays a workspace. -->
+    <div id="panel-support-setup" class="panel">
+      <div class="panel-head">
+        <span class="micro">Support desk</span>
+        <h2>Support Setup</h2>
+        <p class="note">How the desk behaves: whether the concierge may escalate at all, the areas it may tag, who each area routes to, the SLA clocks, and which alerts are worth interrupting someone for. Changes take effect on the next conversation.</p>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>The desk</h3>
+          <span class="micro">the master switch and the vocabulary</span>
+          <button id="sup-cfg-save" class="btn" type="button" style="margin-left:auto;">Save</button>
+        </div>
+        <p class="note">With the desk <strong>off</strong> the concierge never sees the ticket tools, so it cannot offer an escalation the house does not staff. <strong>Areas</strong> are the only labels it may apply — before adding one, check no tool already covers it, or you will teach the bot to escalate work it can already do.</p>
+        <div class="filters" style="gap:14px; flex-wrap:wrap; align-items:center;">
+          <label class="sup-vis"><input type="checkbox" id="sup-cfg-enabled"> Support desk on</label>
+          <label class="sup-vis" style="flex:1 1 340px;">Areas
+            <input id="sup-cfg-areas" class="input" type="text" placeholder="order, delivery, care, product" style="width:100%;">
+          </label>
+        </div>
+        <div id="sup-cfg-msg" class="micro" style="min-height:14px; margin-top:8px;"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>Routing</h3>
+          <span class="micro">who gets it — most specific rule wins</span>
+        </div>
+        <p class="note">A rule is <code>area</code>, <code>type</code>, or <code>type:area</code>; the most specific match assigns the ticket. Prefer role addresses over individuals, so assignment survives someone leaving. An unmatched ticket stays <em>untriaged</em> rather than being mis-routed.</p>
+        <div id="sup-cfg-routing" class="sup-rules"></div>
+        <button id="sup-cfg-route-add" class="btn ghost" type="button" style="margin-top:10px;">Add a rule</button>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h3>SLA clocks</h3>
+          <span class="micro">minutes, by priority</span>
+        </div>
+        <p class="note">Two deadlines per priority: time to a <strong>first response</strong>, and time to <strong>resolution</strong>. A blown first-response deadline is what <code>sla_breach</code> alerts on.</p>
+        <div id="sup-cfg-sla" class="sup-rules"></div>
+      </section>
 
       <section class="card">
         <div class="card-head">
@@ -2081,43 +2206,6 @@ need to ask my partner | Of course — the hold keeps their number while they ta
           <span class="micro">the dedupe ledger — proof of what actually went out</span>
         </div>
         <div id="sup-al-log"></div>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h3>Queue</h3>
-          <span class="micro">click a ticket to open it</span>
-          <button id="sup-refresh" class="btn ghost" type="button" style="margin-left:auto;">Refresh</button>
-        </div>
-        <div class="filters" style="gap:8px; flex-wrap:wrap;">
-          <select id="sup-f-status" class="input">
-            <option value="active">Open &amp; pending</option>
-            <option value="open">Open</option>
-            <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
-            <option value="closed">Closed</option>
-            <option value="">All statuses</option>
-          </select>
-          <select id="sup-f-type" class="input">
-            <option value="">All types</option>
-            <option value="question">Question</option>
-            <option value="bug">Bug</option>
-            <option value="feedback">Feedback</option>
-          </select>
-          <select id="sup-f-priority" class="input">
-            <option value="">All priorities</option>
-            <option value="urgent">Urgent</option>
-            <option value="high">High</option>
-            <option value="normal">Normal</option>
-            <option value="low">Low</option>
-          </select>
-          <select id="sup-f-area" class="input"><option value="">All areas</option></select>
-          <input id="sup-f-q" class="input" type="search" placeholder="Search subject, email, #ref" style="min-width:200px;">
-        </div>
-        <div class="sup-split">
-          <div id="sup-list" class="sup-list"></div>
-          <div id="sup-detail" class="sup-detail"></div>
-        </div>
       </section>
     </div>
 
@@ -3633,14 +3721,14 @@ async function doSignOut() {
   route();
 }
 
-const TAB_NAMES = ['tuning', 'knowledge', 'procedures', 'cache', 'judge', 'customers', 'conversations', 'conversion', 'nps', 'spend', 'calendar', 'actions', 'support', 'website', 'tools', 'evals', 'edition'];
+const TAB_NAMES = ['tuning', 'knowledge', 'procedures', 'cache', 'judge', 'customers', 'conversations', 'conversion', 'nps', 'spend', 'calendar', 'actions', 'support', 'support-setup', 'website', 'tools', 'evals', 'edition'];
 /* The fifteen pages hang off four sections — one calm line up top. A badge
    on a hidden page (Calendar's pending count) rolls up to its section, so
    nothing urgent hides behind a fold. */
 const TAB_GROUPS = [
   { key: 'desk', label: 'Front desk', tabs: ['conversations', 'calendar', 'customers', 'support', 'actions'] },
   { key: 'results', label: 'Results', tabs: ['conversion', 'nps', 'spend'] },
-  { key: 'training', label: 'Training', tabs: ['tuning', 'knowledge', 'procedures', 'evals', 'tools', 'cache', 'judge'] },
+  { key: 'training', label: 'Training', tabs: ['tuning', 'knowledge', 'procedures', 'evals', 'tools', 'cache', 'judge', 'support-setup'] },
   { key: 'house', label: 'The house', tabs: ['website', 'edition'] },
 ];
 function groupOf(tab) {
@@ -3714,6 +3802,7 @@ function activateTab(name, fromHistory) {
   }
   if (name === 'conversion') loadConversion();
   if (name === 'support') loadSupport();
+  if (name === 'support-setup') loadSupportSetup();
   if (name === 'spend') loadSpend();
   if (name === 'calendar') loadCalendar();
   if (name === 'judge') { loadJudge(); loadTokensRef(); }
@@ -14752,16 +14841,14 @@ async function loadSupport() {
   if (!listEl) return;
   if (!supState.wired) {
     supState.wired = true;
-    ['sup-f-status', 'sup-f-type', 'sup-f-priority', 'sup-f-area'].forEach(function (id) {
+    ['sup-f-type', 'sup-f-area'].forEach(function (id) {
       var el = $(id); if (el) el.addEventListener('change', function () { supRenderList(); });
     });
     var q = $('sup-f-q');
     if (q) q.addEventListener('input', function () { supRenderList(); });
     var r = $('sup-refresh');
     if (r) r.addEventListener('click', function () { loadSupport(); });
-    var sv = $('sup-al-save'); if (sv) sv.addEventListener('click', supSaveAlerts);
-    var sc = $('sup-al-scan'); if (sc) sc.addEventListener('click', supScanNow);
-    supLoadAlerts();
+    supWireKeys();
     // The area filter's options come from the same configured list the
     // concierge is allowed to tag with — one source of truth, no drift.
     try {
@@ -14777,6 +14864,7 @@ async function loadSupport() {
     } catch (eC) { /* no config yet — the filter just stays "All areas" */ }
   }
 
+  supRenderViews();   // paint the rail immediately; counts fill in with the rows
   listEl.innerHTML = '<div class="sup-empty">Loading…</div>';
   var res = await sb.from('support_tickets')
     .select('id,ref,subject,status,type,area,priority,requester_email,requester_name,assignee_email,' +
@@ -14787,6 +14875,123 @@ async function loadSupport() {
   supRenderList();
   supRenderKpis();
   if (supState.ref) supOpen(supState.ref);
+}
+
+/* ---- Support Setup: deliberate, occasional configuration, kept out of the
+   agent's daily workspace. One read of the config feeds every editor here. ---- */
+async function loadSupportSetup() {
+  var row = await sb.from('concierge_config').select('value').eq('key', 'support').limit(1);
+  var cfg = (row.data && row.data[0] && row.data[0].value) || {};
+  supState.cfg = cfg;
+  var en = $('sup-cfg-enabled'); if (en) en.checked = cfg.enabled === true;
+  var ar = $('sup-cfg-areas');
+  if (ar) ar.value = Object.prototype.toString.call(cfg.areas) === '[object Array]' ? cfg.areas.join(', ') : '';
+  supRenderRouting(); supRenderSla(); supLoadAlerts();
+}
+
+function supRenderRouting() {
+  var el = $('sup-cfg-routing'); if (!el) return;
+  var r = (supState.cfg && supState.cfg.routing) || {};
+  var keys = Object.keys(r);
+  if (!keys.length) keys = [''];
+  el.innerHTML = keys.map(function (k) {
+    return '<div class="sup-rule">' +
+      '<input class="input sup-rt-k" type="text" value="' + supEsc(k) + '" placeholder="area, type, or type:area" style="min-width:190px;">' +
+      '<span class="micro">→</span>' +
+      '<input class="input sup-rt-v" type="email" value="' + supEsc(k ? r[k] : '') + '" placeholder="team@example.com" style="flex:1 1 200px;">' +
+      '<button class="btn ghost sup-rt-x" type="button" title="Remove this rule">Remove</button>' +
+    '</div>';
+  }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.sup-rt-x'), function (b) {
+    b.addEventListener('click', function () { b.parentNode.parentNode.removeChild(b.parentNode); });
+  });
+}
+
+function supRenderSla() {
+  var el = $('sup-cfg-sla'); if (!el) return;
+  var s = (supState.cfg && supState.cfg.sla) || {};
+  var DEF = { urgent: [30, 240], high: [120, 480], normal: [480, 2880], low: [1440, 10080] };
+  el.innerHTML = ['urgent', 'high', 'normal', 'low'].map(function (p) {
+    var cur = s[p] || {};
+    return '<div class="sup-rule" data-pri="' + p + '">' +
+      '<div class="sup-rule-name">' + p + '</div>' +
+      '<label>first response<input class="input sup-sla-f" type="number" min="1" value="' +
+        (cur.first_response_mins == null ? '' : cur.first_response_mins) + '" placeholder="' + DEF[p][0] + '"></label>' +
+      '<label>resolve<input class="input sup-sla-r" type="number" min="1" value="' +
+        (cur.resolve_mins == null ? '' : cur.resolve_mins) + '" placeholder="' + DEF[p][1] + '"></label>' +
+      '<div class="sup-rule-why">minutes</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function supSaveDesk() {
+  var note = $('sup-cfg-msg');
+  var cfg = supState.cfg || {};
+  cfg.enabled = $('sup-cfg-enabled').checked;
+  cfg.areas = ($('sup-cfg-areas').value || '').split(',').map(function (s) { return s.trim().toLowerCase(); })
+    .filter(function (s) { return /^[a-z0-9][a-z0-9-]{0,38}$/.test(s); });
+  var routing = {};
+  Array.prototype.forEach.call($('sup-cfg-routing').querySelectorAll('.sup-rule'), function (d) {
+    var k = (d.querySelector('.sup-rt-k').value || '').trim().toLowerCase();
+    var v = (d.querySelector('.sup-rt-v').value || '').trim();
+    if (k && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) routing[k] = v;
+  });
+  cfg.routing = routing;
+  var sla = {};
+  Array.prototype.forEach.call($('sup-cfg-sla').querySelectorAll('.sup-rule'), function (d) {
+    var p = d.getAttribute('data-pri');
+    var f = parseInt(d.querySelector('.sup-sla-f').value, 10);
+    var r = parseInt(d.querySelector('.sup-sla-r').value, 10);
+    var o = {};
+    if (!isNaN(f) && f > 0) o.first_response_mins = f;
+    if (!isNaN(r) && r > 0) o.resolve_mins = r;
+    if (Object.keys(o).length) sla[p] = o;
+  });
+  cfg.sla = sla;
+  var res = await sb.from('concierge_config').upsert({ key: 'support', value: cfg }, { onConflict: 'key' });
+  if (res.error) { note.textContent = 'Could not save: ' + res.error.message; return; }
+  supState.cfg = cfg;
+  note.textContent = 'Saved. ' + (cfg.enabled
+    ? 'The concierge may escalate into ' + (cfg.areas.length || 0) + ' area(s).'
+    : 'The desk is OFF — the concierge cannot offer to open a ticket.');
+}
+
+/* Full keyboard access, because clearing a queue is a repetitive motion and
+   reaching for the mouse on every ticket is the difference between working a
+   desk and fighting it. Deliberately ignored while typing in a field. */
+function supWireKeys() {
+  document.addEventListener('keydown', function (e) {
+    var panel = $('panel-support');
+    if (!panel || !panel.classList.contains('on')) return;
+    var tag = (e.target && e.target.tagName || '').toLowerCase();
+    var typing = tag === 'input' || tag === 'textarea' || tag === 'select';
+    if (e.key === '/' && !typing) { e.preventDefault(); var q = $('sup-f-q'); if (q) q.focus(); return; }
+    if (typing) {
+      if (e.key === 'Escape') { e.target.blur(); }
+      return;
+    }
+    var rows = supState.visible || [];
+    if (!rows.length) return;
+    var i = -1;
+    for (var k = 0; k < rows.length; k++) { if (String(rows[k].ref) === String(supState.ref)) { i = k; break; } }
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault(); supOpen(rows[Math.min(rows.length - 1, i + 1)].ref, true);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault(); supOpen(rows[Math.max(0, i <= 0 ? 0 : i - 1)].ref, true);
+    } else if ((e.key === 'Enter' || e.key === 'r') && i >= 0) {
+      e.preventDefault(); var rb = $('sup-reply'); if (rb) rb.focus();
+    } else if (e.key === 'e' && i >= 0) {
+      // Resolve is a status <select>, so drive that and fire the same change
+      // handler a mouse would — one code path, no shortcut-only behaviour to
+      // drift out of sync with the visible control.
+      e.preventDefault();
+      var ss = $('sup-set-status');
+      if (ss && ss.value !== 'resolved') {
+        ss.value = 'resolved';
+        ss.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+  });
 }
 
 /* The alert rules, described in the terms an operator decides on: what it is
@@ -14809,8 +15014,27 @@ var SUP_RULES = [
 
 async function supLoadAlerts() {
   var wrap = $('sup-al-rules'); if (!wrap) return;
-  var cfgRow = await sb.from('concierge_config').select('value').eq('key', 'support').limit(1);
-  var cfg = (cfgRow.data && cfgRow.data[0] && cfgRow.data[0].value) || {};
+  if (!supState.alertsWired) {
+    supState.alertsWired = true;
+    var sv = $('sup-al-save'); if (sv) sv.addEventListener('click', supSaveAlerts);
+    var sc = $('sup-al-scan'); if (sc) sc.addEventListener('click', supScanNow);
+    var ds = $('sup-cfg-save'); if (ds) ds.addEventListener('click', supSaveDesk);
+    var ra = $('sup-cfg-route-add');
+    if (ra) ra.addEventListener('click', function () {
+      var d = document.createElement('div'); d.className = 'sup-rule';
+      d.innerHTML = '<input class="input sup-rt-k" type="text" placeholder="area, type, or type:area" style="min-width:190px;">' +
+        '<span class="micro">→</span>' +
+        '<input class="input sup-rt-v" type="email" placeholder="team@example.com" style="flex:1 1 200px;">' +
+        '<button class="btn ghost sup-rt-x" type="button">Remove</button>';
+      d.querySelector('.sup-rt-x').addEventListener('click', function () { d.parentNode.removeChild(d); });
+      $('sup-cfg-routing').appendChild(d);
+    });
+  }
+  var cfg = supState.cfg;
+  if (!cfg) {
+    var cfgRow = await sb.from('concierge_config').select('value').eq('key', 'support').limit(1);
+    cfg = (cfgRow.data && cfgRow.data[0] && cfgRow.data[0].value) || {};
+  }
   var a = (cfg.alerts && typeof cfg.alerts === 'object') ? cfg.alerts : {};
   var rules = (a.rules && typeof a.rules === 'object') ? a.rules : {};
   supState.cfg = cfg;
@@ -14923,28 +15147,113 @@ async function supRenderKpis() {
   }
 }
 
-function supRenderList() {
-  var el = $('sup-list'); if (!el) return;
-  var fs = ($('sup-f-status') || {}).value, ft = ($('sup-f-type') || {}).value;
-  var fp = ($('sup-f-priority') || {}).value, fa = ($('sup-f-area') || {}).value;
+/* The views an agent actually triages by. Ordered by urgency of the QUESTION
+   they answer, not alphabetically: "is anything broken?" before "what is mine?"
+   before "show me everything". Each carries a count so heat is visible without
+   clicking into anything. */
+var SUP_VIEWS = [
+  { key: 'breach',   name: 'Breaching',   cls: 'v-breach',
+    test: function (t) { return supActive(t) && !!supBreach(t); } },
+  { key: 'reply',    name: 'Needs reply', cls: 'v-reply',
+    test: function (t) { return supActive(t) && !t.first_response_at; } },
+  { key: 'mine',     name: 'Assigned to me', cls: '',
+    test: function (t) { return supActive(t) && t.assignee_email && supMe() &&
+      String(t.assignee_email).toLowerCase() === supMe(); } },
+  { key: 'unassigned', name: 'Unassigned', cls: '',
+    test: function (t) { return supActive(t) && !t.assignee_email; } },
+  { key: 'sep' },
+  { key: 'active',   name: 'All open',    cls: '', test: supActive },
+  { key: 'resolved', name: 'Resolved',    cls: '',
+    test: function (t) { return t.status === 'resolved'; } },
+  { key: 'all',      name: 'Everything',  cls: '', test: function () { return true; } }
+];
+function supActive(t) { return t.status === 'open' || t.status === 'pending'; }
+function supMe() {
+  try { return String(state.session.user.email || '').toLowerCase(); } catch (e) { return ''; }
+}
+var SUP_PRI_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+/* One ordering, used everywhere: breached first, then priority, then OLDEST
+   first. The last part matters — within a priority a queue should be fair, and
+   FIFO is what stops old tickets from being buried by newer noisy ones. So the
+   top of the list is always the correct next ticket to work. */
+function supSort(rows) {
+  return rows.slice().sort(function (a, b) {
+    var ab = supBreach(a) ? 0 : 1, bb = supBreach(b) ? 0 : 1;
+    if (ab !== bb) return ab - bb;
+    var ap = SUP_PRI_RANK[a.priority] == null ? 9 : SUP_PRI_RANK[a.priority];
+    var bp = SUP_PRI_RANK[b.priority] == null ? 9 : SUP_PRI_RANK[b.priority];
+    if (ap !== bp) return ap - bp;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+}
+
+function supVisible() {
+  var view = SUP_VIEWS.filter(function (v) { return v.key === (supState.view || 'active'); })[0]
+    || SUP_VIEWS.filter(function (v) { return v.key === 'active'; })[0];
+  var ft = ($('sup-f-type') || {}).value, fa = ($('sup-f-area') || {}).value;
   var q = (($('sup-f-q') || {}).value || '').trim().toLowerCase();
-  var rows = supState.rows.filter(function (t) {
-    if (fs === 'active') { if (t.status !== 'open' && t.status !== 'pending') return false; }
-    else if (fs && t.status !== fs) return false;
+  return supSort(supState.rows.filter(function (t) {
+    if (!view.test(t)) return false;
     if (ft && t.type !== ft) return false;
-    if (fp && t.priority !== fp) return false;
     if (fa && t.area !== fa) return false;
     if (q) {
       var hay = [t.subject, t.requester_email, t.requester_name, '#' + t.ref].join(' ').toLowerCase();
-      if (hay.indexOf(q.replace(/^#/, '#')) === -1 && hay.indexOf(q) === -1) return false;
+      if (hay.indexOf(q) === -1) return false;
     }
     return true;
+  }));
+}
+
+function supRenderViews() {
+  var el = $('sup-views'); if (!el) return;
+  var cur = supState.view || 'active';
+  el.innerHTML = SUP_VIEWS.map(function (v) {
+    if (v.key === 'sep') return '<div class="sup-views-sep"></div>';
+    var n = supState.rows.filter(v.test).length;
+    return '<button class="sup-view ' + v.cls + (v.key === cur ? ' on' : '') + '" type="button" ' +
+      'data-view="' + v.key + '" aria-pressed="' + (v.key === cur ? 'true' : 'false') + '">' +
+      '<span class="sup-view-dot"></span><span class="sup-view-name">' + v.name + '</span>' +
+      '<span class="sup-view-n">' + n + '</span></button>';
+  }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.sup-view'), function (b) {
+    b.addEventListener('click', function () {
+      supState.view = b.getAttribute('data-view');
+      supRenderViews(); supRenderList();
+    });
   });
-  if (!rows.length) { el.innerHTML = '<div class="sup-empty">No tickets match.</div>'; return; }
+  var lbl = $('sup-scope-label');
+  if (lbl) {
+    var v = SUP_VIEWS.filter(function (x) { return x.key === cur; })[0];
+    lbl.textContent = v ? v.name.toLowerCase() : '';
+  }
+}
+
+function supRenderList() {
+  var el = $('sup-list'); if (!el) return;
+  supRenderViews();
+  var rows = supVisible();
+  supState.visible = rows;
+  if (!rows.length) {
+    /* An empty state should say what it MEANS, not just that a query returned
+       nothing — "nothing is breaching" is good news and should read as such. */
+    var v = supState.view || 'active';
+    var msg = v === 'breach' ? ['Nothing is breaching.', 'Every open ticket is still inside its SLA.']
+      : v === 'reply' ? ['Everything has a first reply.', 'No customer is waiting on an opening response.']
+      : v === 'mine' ? ['Nothing assigned to you.', 'Pick something up from Unassigned or All open.']
+      : v === 'unassigned' ? ['Everything is assigned.', 'No ticket is sitting without an owner.']
+      : v === 'active' ? ['The queue is clear.', 'No open or pending tickets — the concierge is handling them.']
+      : ['No tickets match.', 'Try a different view, or clear the search.'];
+    el.innerHTML = '<div class="sup-empty"><div class="sup-empty-title">' + msg[0] + '</div>' +
+      '<div class="sup-empty-sub">' + msg[1] + '</div></div>';
+    return;
+  }
   el.innerHTML = rows.map(function (t) {
     var br = supBreach(t);
-    return '<button class="sup-row' + (String(t.ref) === String(supState.ref) ? ' on' : '') +
-      '" type="button" data-ref="' + t.ref + '">' +
+    var isOn = String(t.ref) === String(supState.ref);
+    return '<button class="sup-row' + (isOn ? ' on' : '') +
+      '" type="button" role="option" aria-selected="' + (isOn ? 'true' : 'false') +
+      '" data-ref="' + t.ref + '">' +
       '<div class="sup-row-top">' +
         '<span class="sup-ref">#' + t.ref + '</span>' +
         '<span class="sup-pill sup-t-' + supEsc(t.type) + '">' + supEsc(t.type) + '</span>' +
@@ -14962,9 +15271,17 @@ function supRenderList() {
   });
 }
 
-async function supOpen(ref) {
+async function supOpen(ref, viaKey) {
   supState.ref = String(ref);
   supRenderList();
+  if (viaKey) {
+    // Keep the selected row visible when scrubbing with j/k — losing your
+    // place is the fastest way to make a keyboard queue useless.
+    try {
+      var sel = document.querySelector('.sup-row.on');
+      if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+    } catch (eSv) { /* older engines */ }
+  }
   var el = $('sup-detail'); if (!el) return;
   var t = supState.rows.filter(function (r) { return String(r.ref) === String(ref); })[0];
   if (!t) { el.innerHTML = '<div class="sup-empty">Ticket not found.</div>'; return; }
