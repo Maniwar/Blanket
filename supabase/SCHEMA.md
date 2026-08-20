@@ -346,6 +346,63 @@ only**. **Written by:** `commission_order` (pre-order, de-duped + upserted in th
 placement transaction) and `add_order_addon` (post-order, idempotent). **Read
 by:** `addon_metrics` (the Conversion tab's Upsell & AOV card).
 
+### `support_tickets` — the support desk ([SUPPORT.md](../SUPPORT.md))
+What the concierge opens when it cannot answer, when something is broken, or when
+the customer wants a human. **Portability note:** support depends on nothing from
+the commerce schema — no FK to `orders`, no serial, no colorway — so the same
+tables drop into another Supabase app as a config exercise.
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | uuid PK | Ticket id. |
+| `ref` | bigint identity **unique**, from 1000 | The human reference the customer quotes ("#1042"). |
+| `subject`,`body` | text | One-line summary and the full detail. |
+| `status` | text | `open` → `pending` (awaiting customer) → `resolved` → `closed`. |
+| `type` | text | `question` / `bug` / `feedback` — drives the concierge's **intake script**. |
+| `area` | text | The product surface — drives the **queue**. Only a configured value; an unknown one is dropped so it lands untriaged rather than mis-routed. |
+| `priority` | text | `low`/`normal`/`high`/`urgent` — drives the **SLA clock**. `urgent` = blocked with no workaround. |
+| `requester_name`,`requester_email`,`user_id` | text/uuid | Who raised it; a signed-in customer's contact comes from the account. |
+| `assignee_email` | text | The owning agent, auto-routed at creation (most specific of `type:area` → `area` → `type`). |
+| `conversation_id` | uuid → `concierge_conversations` | The chat it escalated from — one click back to the whole exchange. |
+| `session_key`,`origin` | text | Widget session; `concierge`/`customer`/`agent`/`form`. |
+| `first_response_at` | timestamptz | First **public agent** reply — the SLA clock stop. An internal note never sets it. |
+| `resolved_at`,`closed_at` | timestamptz | Stamped by the `support_ticket_stamp` trigger. |
+| `due_at`,`resolve_due_at` | timestamptz | SLA deadlines from priority at creation. A breach = deadline passed while still owed. |
+| `csat_score`,`csat_comment`,`csat_at` | smallint/text | 1–5 rating on a resolved/closed ticket. |
+| `meta` | jsonb | App context the bot captured: `{page_url, section, user_agent, app_version, captured_at}`. Free-form on purpose — it is what each adopting app defines differently. |
+| `created_at`,`updated_at` | timestamptz | |
+
+RLS: **admin all**; `owner read own tickets` (by `user_id` or JWT email).
+**Written by:** `open_support_ticket` (concierge, service role) and the studio's
+Support queue (admin, direct writes). **Read by:** the queue, `support_metrics`,
+and the customer-facing `get_support_ticket` / `my_support_tickets`.
+
+### `support_ticket_messages` — the thread
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | bigint PK | |
+| `ticket_id` | uuid → `support_tickets` **on delete cascade** | |
+| `author_kind` | text | `customer` / `agent` / `concierge` / `system`. |
+| `author_email` | text | |
+| `body` | text | |
+| `visibility` | text | `public` (customer sees) or `internal` (agents only). |
+| `created_at` | timestamptz | |
+
+RLS: **admin all**; `owner read own public messages` — an owner may select their
+own thread **only** where `visibility = 'public'`. The internal-note boundary
+lives in the POLICY, not in a query, so a private note cannot leak through a
+client that forgets to filter. A `customer` author can never write an internal note.
+
+### `support_macros` — canned replies
+`slug` (unique), `title`, `body`, `category`, `enabled`, `sort_order`. RLS: admin all.
+
+> **Lifecycle triggers.** Because both the concierge (RPC) and the studio (direct
+> writes) mutate tickets, the rules are triggers rather than one code path:
+> `support_message_sync` (an agent's first public reply stops the clock and moves
+> to `pending`; a customer reply reopens; an internal note does neither),
+> `support_ticket_stamp` (resolved/closed timestamps), and `support_ticket_audit`
+> (status and assignment changes write their own internal audit line).
+
 ### `allocation_counter` — the next fresh number
 | Column | Type | Purpose |
 | --- | --- | --- |
@@ -882,6 +939,12 @@ pruned by `prune_high_write`.
 | `commission_order(…14 args)` | → int | Places an order: consume this visit's hold (or a lapsed one, or a fresh number), insert the order, return the serial. `-1` when the edition is full. **Self-heals a serial collision:** if the chosen number is already on the register (counter/hold drift), it catches the `unique_violation` and advances to the next free serial (`max(serial)+1`, counter kept ahead) instead of failing placement. The 14th arg `p_addons jsonb` enters companion pieces (`order_addons`) in the SAME transaction — de-duped by slug (qty summed, `concierge` wins attribution), upserted, guarded casts, so a bad line never fails placement ([`UPSELL.md`](../UPSELL.md)). | commission POST. |
 | `add_order_addon(p_serial,p_user_id,p_email,p_slug,p_name,p_price_cents,p_colorway,p_added_by)` | → bigint | Adds one companion piece to an existing open order the caller owns (the **post-order** path). **Idempotent**: re-adding a piece already on the order is a no-op returning the existing line. `-1` when no matching open order is on the owner's register. | commission `POST ?addon=1`. |
 | `addon_metrics(p_days)` | → jsonb | The **Upsell & AOV** calculation ([`UPSELL.md`](../UPSELL.md)): attach rate, add-on revenue, revenue by `added_by` (how much the **concierge** drove vs self-serve), per-item and per-customer breakdowns, over kept orders in the window. Brand-neutral aggregate over `order_addons`. Raises unless `is_concierge_admin()`; granted to `authenticated`. | The admin studio **Conversion tab** (direct RPC). |
+| `open_support_ticket(…12 args)` | → jsonb | Opens a support ticket ([`SUPPORT.md`](../SUPPORT.md)): validates `type`, keeps `area` only when configured (an unknown one is dropped so it lands untriaged rather than mis-routed), routes most-specific-first (`type:area` → `area` → `type`), stamps both SLA deadlines from priority, and writes the customer's description as the opening thread message. Returns `{id, ref, status, type, area, priority, assignee_email, due_at, resolve_due_at}`. | concierge `open_ticket` tool. |
+| `add_ticket_message(p_ref,p_author_kind,p_body,…)` | → bigint | Appends to a thread. Refuses to let a `customer` author an internal note. The status handshake is the trigger's job, not this function's. | concierge; agent replies go direct under admin RLS. |
+| `set_ticket_status(p_ref,p_status,…)` / `assign_ticket(p_ref,p_assignee,…)` | → text | Move status / owner. Timestamps and the audit line are the triggers' job. | concierge, admin tooling. |
+| `get_support_ticket(p_ref,p_email,p_user_id)` / `my_support_tickets(p_email,p_user_id,p_limit)` | → jsonb | Customer-facing reads, owner-scoped; the thread is **public messages only** (defence in depth on top of the RLS policy). | concierge `check_ticket` tool. |
+| `submit_ticket_csat(p_ref,p_score,p_comment,p_email)` | → text | 1–5 rating on a `resolved`/`closed` ticket, scoped to the email that raised it. | resolution follow-up. |
+| `support_metrics(p_days)` | → jsonb | The Support tab's numbers: volume and mix (`by_status`/`by_priority`/`by_type`/`by_area`), SLA breach counts, first-response avg + median, resolution avg, CSAT, per-agent load, a daily series, and the **escalation rate** whose complement is deflection. Admin-guarded; granted to `authenticated`. | admin studio **Support tab**. |
 | `cancel_order_return(p_serial,p_user_id,p_email)` | → text | Cancels a `placed` order the caller owns: sets `status='cancelled'`, moves `serial`→`cancelled_serial`, and re-inserts the number as a lapsed hold so it's reclaimable. | concierge `cancel_order` tool. |
 | `match_cached_answer(query_embedding, match_threshold)` | → rows | Nearest cached answer above threshold; increments `hits`. Operator is `operator(extensions.<#>)`-qualified because `search_path=''`. | concierge chat (cache lookup), `?cachecheck`. |
 | `log_order_event()` | trigger | Writes `order_events`: full row on insert, field diffs on update. | Trigger `orders_audit` on `orders`. |
