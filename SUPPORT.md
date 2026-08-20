@@ -186,6 +186,85 @@ every adopting app defines differently.
 
 ---
 
+## Alerts — only what's worth interrupting someone for
+
+Support does **not** email on every ticket. An alert that always fires is an
+alert people filter into a folder, and then the one that mattered is in there
+too. Every rule answers *"is something going wrong?"*.
+
+| Rule | Fires when | Default |
+| --- | --- | --- |
+| `urgent_ticket` | A ticket opens at `urgent` — blocked, no workaround | on |
+| `sla_breach` | A first-response deadline passed with no reply | on |
+| `spike` | ≥5 tickets in 15 min — something may be broken for everyone | on |
+| `area_cluster` | ≥3 tickets on one **area** in 30 min — names the surface | on |
+| `csat_floor` | A resolution rated ≤2/5 | on |
+| `backlog` | Open+pending above a threshold — a staffing signal | **off** |
+
+`area_cluster` is usually the most actionable: "4 tickets on `billing` in 30
+minutes" tells you *where* to look, which a raw volume spike does not.
+
+### Four guards against becoming noise
+
+1. **Per-rule switch + thresholds** — every rule is independently off-able, with
+   its own threshold and window.
+2. **A dedupe key per alert** — the ticket, the area, or the condition.
+   `cooldown_mins: 0` means *once for this key, ever*, which is the right
+   semantic for per-ticket alerts: they must never repeat however often the scan
+   runs.
+3. **Per-rule cooldown** for recurring conditions, so a still-true condition
+   (the spike is still a spike) does not re-fire on every scan.
+4. **A global `max_per_hour` ceiling** that outranks every rule — the backstop
+   against an alert storm during precisely the incident you need to think in.
+
+Verified live: a first scan fired three alerts; the second and third scans fired
+**nothing**; and with the ceiling reached, a genuinely new urgent ticket produced
+zero alerts.
+
+### How it runs
+
+`POST ?support_alerts=1` scans, mails, and marks. It accepts an **admin JWT**
+(the studio's *Run a scan now*) or the **service key** (a scheduled sweep). Both
+are needed: `sla_breach` is time-based, and a deadline passing is not an event —
+something has to ask. Event-driven rules (`urgent_ticket`, `spike`,
+`area_cluster`) additionally scan **inline in the background** right after a
+ticket opens, so they don't wait for the sweep; that path is dedupe-guarded and
+capped, and can never delay or break the chat.
+
+Alerts are **recorded before the mail is attempted**, so a crash between scan and
+send cannot double-alert. Each attempt is then marked, which makes
+`support_alerts` both the dedupe ledger and the audit trail — including
+*"no recipients configured"* rather than a silent drop.
+
+> **Not yet built:** a scheduled caller. Until one is wired (a cron workflow or
+> `pg_cron` hitting the endpoint with the service key), `sla_breach` and
+> `backlog` only evaluate when a ticket opens or an operator clicks *Run a scan
+> now*. The event-driven rules work today.
+
+### Configuring it (studio → Support → Alerts)
+
+On/off, recipients, the hourly ceiling, and each rule's toggle and thresholds,
+plus *Run a scan now* and a **recently fired** log showing what actually mailed.
+
+```json
+"alerts": {
+  "enabled": true,
+  "to": ["concierge@feier-abend.co"],
+  "max_per_hour": 6,
+  "rules": {
+    "urgent_ticket": { "enabled": true, "cooldown_mins": 0 },
+    "sla_breach":    { "enabled": true, "cooldown_mins": 0 },
+    "spike":         { "enabled": true, "threshold": 5, "window_mins": 15, "cooldown_mins": 60 },
+    "area_cluster":  { "enabled": true, "threshold": 3, "window_mins": 30, "cooldown_mins": 60 },
+    "csat_floor":    { "enabled": true, "threshold": 2, "cooldown_mins": 0 },
+    "backlog":       { "enabled": false, "threshold": 25, "cooldown_mins": 360 }
+  }
+}
+```
+
+Email requires `RESEND_API_KEY`; without it alerts still record and appear in the
+studio, and the log says why nothing was mailed.
+
 ## Metrics — `support_metrics(p_days)`
 
 Admin-only. Volume and mix (`by_status`, `by_priority`, `by_type`, and `by_area`
