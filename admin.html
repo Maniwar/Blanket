@@ -893,8 +893,11 @@
   .mini-table tr:last-child td{ border-bottom:none; }
 
   /* ---------- Support desk: queue + ticket detail ---------- */
-  #sup-kpis{ grid-template-columns:repeat(5, 1fr); margin-bottom:16px; }
-  @media (max-width:1180px){ #sup-kpis{ grid-template-columns:repeat(3, 1fr); } }
+  /* 4-up each so neither row leaves ragged orphans (same rule as #cv-tiles). */
+  #sup-kpis{ grid-template-columns:repeat(4, 1fr); margin-bottom:16px; }
+  #sup-gov{ grid-template-columns:repeat(4, 1fr); margin-bottom:14px; }
+  @media (max-width:1180px){ #sup-gov{ grid-template-columns:repeat(2, 1fr); } }
+  @media (max-width:1180px){ #sup-kpis{ grid-template-columns:repeat(2, 1fr); } }
   @media (max-width:760px){ #sup-kpis{ grid-template-columns:repeat(2, 1fr); } }
   .sup-split{ display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:18px; align-items:start; }
   @media (max-width:900px){ .sup-split{ grid-template-columns:1fr; } }
@@ -905,9 +908,12 @@
     gap:16px; align-items:start; }
   @media (max-width:1200px){ .sup-work{ grid-template-columns:170px 1fr; } .sup-work .sup-detail{ grid-column:1 / -1; } }
   @media (max-width:820px){ .sup-work{ grid-template-columns:1fr; } }
-  .sup-search{ margin-left:auto; min-width:200px; }
-  .sup-kbd-hint{ display:block; margin-top:6px; font-family:'IBM Plex Mono', monospace;
-    font-size:10px; letter-spacing:.05em; color:var(--wool-faint); }
+  .sup-search{ margin-left:auto; min-width:200px; -webkit-appearance:none; appearance:none;
+    background:rgba(241,236,226,.03); color:var(--wool); }
+  .sup-search::-webkit-search-cancel-button{ filter:invert(1) opacity(.4); }
+  /* Keep every stat label on one line so numbers share a baseline across a row. */
+  #sup-kpis .stat .micro:first-child, #sup-gov .stat .micro:first-child{
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   /* Source list — chrome recedes, the counts carry the meaning. */
   .sup-views{ display:flex; flex-direction:column; gap:2px; }
   .sup-view{ display:flex; align-items:center; gap:8px; width:100%; text-align:left; cursor:pointer;
@@ -977,6 +983,18 @@
   .sup-vis{ display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono', monospace;
     font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--wool-faint); cursor:pointer; }
   .sup-empty{ color:var(--wool-faint); font-size:13px; padding:22px 4px; text-align:center; }
+  .sup-empty-line{ color:var(--wool-faint); font-size:12.5px; padding:4px 2px 2px; }
+  /* the detail pane's resting state */
+  .sup-rest{ display:flex; flex-direction:column; justify-content:center; height:100%;
+    min-height:220px; padding:8px 4px; }
+  .sup-rest-title{ font-size:14px; color:var(--wool); margin-bottom:6px; }
+  .sup-rest-sub{ font-size:12.5px; color:var(--wool-faint); line-height:1.6; max-width:42ch; }
+  .sup-keys{ display:grid; grid-template-columns:auto 1fr; gap:6px 12px; margin:18px 0 0;
+    font-size:12px; align-items:baseline; }
+  .sup-keys dt{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.06em;
+    color:var(--wool); border:1px solid var(--wool-faint); border-radius:3px;
+    padding:2px 7px; justify-self:start; }
+  .sup-keys dd{ margin:0; color:var(--wool-faint); }
   /* alert rule editor */
   .sup-rules{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
   .sup-rule{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
@@ -2107,16 +2125,21 @@ need to ask my partner | Of course — the hold keeps their number while they ta
       <div class="panel-head">
         <span class="micro">Support desk</span>
         <h2>Queue</h2>
-        <p class="note">Escalations the concierge could not answer, plus bugs and feedback it captured. The list is ordered the way a desk is actually worked: <strong>breached first, then by priority, then oldest first</strong> — so the top of the list is always the right next ticket. <span class="sup-kbd-hint">↑↓ or J/K move · Enter opens · R reply · E resolve · / search</span></p>
+        <p class="note">Escalations the concierge could not answer, plus bugs and feedback it captured. Ordered the way a desk is actually worked: <strong>breached first, then by priority, then oldest first</strong> — so the top of the list is always the right next ticket.</p>
       </div>
 
       <div id="sup-kpis" class="metrics"></div>
 
+      <!-- Governance is a WEEKLY read, not a daily one, and it belongs with the
+           handoff reasons: the numbers say how much the bot is closing, the list
+           says what it could not cover. Separated from the queue tiles above so
+           an agent working the desk is not skimming past them every morning. -->
       <section class="card">
         <div class="card-head">
-          <h3>Why people asked for a person</h3>
-          <span class="micro">the most actionable list here — every row is a gap the bot could not cover</span>
+          <h3>Is the bot behaving?</h3>
+          <span class="micro">a bot-close rate means nothing without its reopen rate beside it</span>
         </div>
+        <div id="sup-gov" class="metrics"></div>
         <div id="sup-handoff-reasons"></div>
       </section>
 
@@ -14887,6 +14910,7 @@ async function loadSupport() {
   supRenderList();
   await supRenderKpis();
   supRenderHandoffReasons();
+  if (!supState.ref) supDetailEmpty();
   if (supState.ref) supOpen(supState.ref);
 }
 
@@ -15160,8 +15184,9 @@ function supRenderHandoffReasons() {
   if (!c) { el.innerHTML = '<div class="sup-empty-sub">No data yet.</div>'; return; }
   var rows = c.handoff_reasons || [];
   if (!rows.length) {
-    el.innerHTML = '<div class="sup-empty"><div class="sup-empty-title">No handoffs in this window.</div>' +
-      '<div class="sup-empty-sub">Nobody has had to ask for a person.</div></div>';
+    // One line, not a full-height empty card: on a quiet desk this panel was
+    // pushing the actual ticket list below the fold.
+    el.innerHTML = '<div class="sup-empty-line">No handoffs in this window — nobody has had to ask for a person.</div>';
     return;
   }
   el.innerHTML = '<table class="mini-table"><thead><tr><th>Why they wanted a person</th><th class="num">n</th></tr></thead><tbody>' +
@@ -15183,32 +15208,49 @@ async function supRenderKpis() {
         (sub ? '<span class="micro" style="opacity:.75">' + sub + '</span>' : '') + '</div>';
     };
     var fr = m.first_response_mins_p50 == null ? '—' : Math.round(m.first_response_mins_p50) + 'm';
-    var esc_ = m.escalation_rate == null ? 0 : Number(m.escalation_rate);
+    // A rate with an empty denominator is UNKNOWN, not zero. Rendering "100%
+    // deflected" on a desk that has handled nothing is the dashboard opening by
+    // congratulating you — the same fake-zero this codebase already forbids for
+    // NPS. Every rate below returns an em dash until it has data to stand on.
+    var rate = function (v, denom) {
+      if (v == null || !denom) return '—';
+      return (Number(v) * 100).toFixed(1) + '%';
+    };
+    var esc_ = m.escalation_rate;
     el.innerHTML =
       tile('Open now', Number(m.open_now || 0), (m.total || 0) + ' in 30d') +
       tile('SLA breaches', breach, breach ? 'needs attention' : 'all within target', breach > 0) +
       tile('First response', fr, 'median') +
-      tile('CSAT', m.csat_avg == null ? '—' : Number(m.csat_avg).toFixed(2), (m.csat_count || 0) + ' rated') +
-      // Escalation's complement is the deflection story: what the bot handled alone.
-      tile('Deflected', ((1 - esc_) * 100).toFixed(1) + '%', 'chats needing no human');
+      tile('CSAT', m.csat_avg == null ? '—' : Number(m.csat_avg).toFixed(2), (m.csat_count || 0) + ' rated');
     // The control panel for the bot-close rate. Shown next to the rate it
     // polices, because a bot-close rate is meaningless without its reopen rate —
     // quoting one without the other is how a desk fools itself.
     try {
       var cm = await sb.rpc('support_close_metrics', { p_days: 30 });
-      if (!cm.error && cm.data) {
+      var gov = $('sup-gov');
+      if (!cm.error && cm.data && gov) {
         var c = cm.data;
-        var pct = function (v) { return (Number(v || 0) * 100).toFixed(1) + '%'; };
-        var reop = Number(c.bot_close_reopen_rate || 0);
+        var closedN = Number(c.closed_total || 0);
+        var everN = Number(c.bot_closed_ever || 0);
+        var totalN = Number(c.tickets_total || 0);
         var ceil = supBotCloseCeiling();
-        var over = Number(c.bot_close_rate || 0) > ceil;
-        el.innerHTML += tile('Bot-closed', pct(c.bot_close_rate),
-          Number(c.bot_closed || 0) + ' of ' + Number(c.closed_total || 0) +
-          ' · ceiling ' + (ceil * 100).toFixed(0) + '%', over) +
-          tile('Reopened after bot close', pct(reop),
-            Number(c.reopened_after_bot_close || 0) + ' of ' + Number(c.bot_closed_ever || 0) +
-            ' ever bot-closed', reop > 0.2) +
-          tile('Handoffs', Number(c.handoffs || 0), pct(c.handoff_rate) + ' of tickets');
+        // Only flag red once the number actually MEANS something — a red tile on
+        // an empty denominator trains people to ignore red.
+        var over = closedN > 0 && Number(c.bot_close_rate || 0) > ceil;
+        var reopOver = everN > 0 && Number(c.bot_close_reopen_rate || 0) > 0.2;
+        gov.innerHTML =
+          tile('Deflected', rate(esc_ == null ? null : (1 - Number(esc_)), Number(m.total || 0)),
+            'chats needing no human') +
+          tile('Bot-closed', rate(c.bot_close_rate, closedN),
+            closedN ? (Number(c.bot_closed || 0) + ' of ' + closedN + ' · ceiling ' +
+              (ceil * 100).toFixed(0) + '%') : 'nothing closed yet', over) +
+          // Deliberately short label: the long one wrapped to two lines and threw
+          // this tile's number off the baseline of its row.
+          tile('Reopened', rate(c.bot_close_reopen_rate, everN),
+            everN ? (Number(c.reopened_after_bot_close || 0) + ' of ' + everN + ' bot-closed')
+                  : 'after a bot close', reopOver) +
+          tile('Handoffs', Number(c.handoffs || 0),
+            totalN ? (rate(c.handoff_rate, totalN) + ' of tickets') : 'none yet');
         supState.close = c;
       }
     } catch (eC) { /* the close panel is additive — never breaks the strip */ }
@@ -15339,6 +15381,32 @@ function supRenderList() {
   Array.prototype.forEach.call(el.querySelectorAll('.sup-row'), function (b) {
     b.addEventListener('click', function () { supOpen(b.getAttribute('data-ref')); });
   });
+}
+
+/* The detail pane's resting state. It was previously a blank bordered rectangle
+   — dead space beside a different empty state, explaining nothing. The keyboard
+   shortcuts live HERE rather than in the page header, because this is the moment
+   an agent is deciding how to move through the queue, and header hints for a
+   list that may be empty are noise. */
+function supDetailEmpty() {
+  var el = $('sup-detail'); if (!el) return;
+  var n = (supState.rows || []).length;
+  el.innerHTML =
+    '<div class="sup-rest">' +
+      '<div class="sup-rest-title">' +
+        (n ? 'Select a ticket to work it.' : 'Nothing waiting.') + '</div>' +
+      '<div class="sup-rest-sub">' +
+        (n ? 'The top of the list is the right next one — it is sorted breached first, then by priority, then oldest.'
+           : 'When the concierge escalates something, or a customer asks for a person, it lands here.') +
+      '</div>' +
+      (n ? '<dl class="sup-keys">' +
+        '<dt>J / K</dt><dd>move through the queue</dd>' +
+        '<dt>Enter</dt><dd>open the selected ticket</dd>' +
+        '<dt>R</dt><dd>reply to the customer</dd>' +
+        '<dt>E</dt><dd>resolve</dd>' +
+        '<dt>/</dt><dd>search</dd>' +
+      '</dl>' : '') +
+    '</div>';
 }
 
 async function supOpen(ref, viaKey) {
