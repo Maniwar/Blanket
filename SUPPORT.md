@@ -212,6 +212,10 @@ unchanged and the stamp has nothing to rewrite.
 
 ## Configuration (`concierge_config` key `support`)
 
+Absent keys fall back to the built-in defaults; `enabled` absent means **off**.
+
+### The shape
+
 ```json
 {
   "enabled": true,
@@ -228,7 +232,40 @@ unchanged and the stamp has nothing to rewrite.
 }
 ```
 
-Absent keys fall back to the built-in defaults; `enabled` absent means **off**.
+### The live reference config (this house)
+
+```json
+{
+  "enabled": true,
+  "areas": ["order", "delivery", "care", "product", "account", "website"],
+  "routing": {
+    "bug:website": "concierge@feier-abend.co",
+    "order":       "register@feier-abend.co",
+    "delivery":    "register@feier-abend.co",
+    "care":        "workshop@feier-abend.co",
+    "product":     "workshop@feier-abend.co",
+    "account":     "concierge@feier-abend.co",
+    "website":     "concierge@feier-abend.co",
+    "feedback":    "concierge@feier-abend.co"
+  },
+  "sla": { "urgent": {"first_response_mins": 30, "resolve_mins": 240},
+           "high":   {"first_response_mins": 120, "resolve_mins": 480},
+           "normal": {"first_response_mins": 480, "resolve_mins": 2880},
+           "low":    {"first_response_mins": 1440, "resolve_mins": 10080} }
+}
+```
+
+Two choices in there are worth copying when you configure a new house:
+
+- **There is no `mending` area, on purpose.** The concierge already has a
+  `request_mending` tool. An area for it would teach the model to escalate work
+  it can already do itself — the precise failure the answer-first rule exists to
+  prevent. **Before adding an area, check no tool already covers it.**
+- **Routing points at role addresses, not people.** Assignment survives someone
+  leaving, and no individual's inbox becomes load-bearing for the demo.
+
+The SLA block above is written out explicitly even though it matches the
+built-in defaults, so the numbers are visible and editable rather than implicit.
 
 ---
 
