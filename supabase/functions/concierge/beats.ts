@@ -1128,3 +1128,27 @@ export function extractPageChunks(html: string, opts: ExtractOpts = {}): PageChu
   }
   return out;
 }
+
+/**
+ * Only public https pages. The sweep runs inside the edge function with the
+ * service role in scope, so an admin-set URL is still a request this server
+ * makes on someone's behalf — pointed at a loopback or link-local address it
+ * becomes a way to read things the internet cannot. Cheap to refuse, and no
+ * legitimate storefront lives at 127.0.0.1.
+ */
+export function safeWatchUrl(raw: string): boolean {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const h = u.hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal")) return false;
+  if (h === "metadata.google.internal" || h === "169.254.169.254") return false;
+  if (/^\[?(::1|fe80:|fc00:|fd)/i.test(h)) return false;
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 10 || a === 127 || a === 0 || (a === 192 && b === 168) ||
+        (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254)) return false;
+  }
+  return true;
+}

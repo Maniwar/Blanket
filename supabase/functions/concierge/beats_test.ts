@@ -17,6 +17,7 @@ import {
   chooseBeatAction,
   decodeEntities,
   extractPageChunks,
+  safeWatchUrl,
   DEFAULT_PROPOSAL_REST_HOURS,
   extractSubjects,
   hasPendingAsk,
@@ -867,4 +868,34 @@ Deno.test("decodeEntities handles named and numeric references", () => {
   assertEq(decodeEntities("Tea &amp; Cake &#8212; &#x2014; &nbsp;done"), "Tea & Cake — —  done", "decodeEntities('Tea &amp; Cake &#8212; &#x2014; &nbsp;done')");
   // An unknown entity is left alone rather than silently eaten.
   assertEq(decodeEntities("&notarealentity;"), "&notarealentity;", "decodeEntities('&notarealentity;')");
+});
+
+Deno.test("safeWatchUrl refuses anything that is not a public https page", () => {
+  // The sweep runs server-side with the service role in scope, so a watched URL
+  // is a request THIS SERVER makes. Pointed inward it reads what the internet
+  // cannot.
+  for (const bad of [
+    "http://feier-abend.co/",            // plaintext
+    "https://localhost/",
+    "https://127.0.0.1/",
+    "https://10.0.0.5/admin",
+    "https://192.168.1.1/",
+    "https://172.16.4.4/",
+    "https://169.254.169.254/latest/meta-data/",
+    "https://metadata.google.internal/",
+    "https://kong.internal/",
+    "file:///etc/passwd",
+    "not a url at all",
+    "",
+  ]) {
+    assert(!safeWatchUrl(bad), `should have refused: ${bad}`);
+  }
+  for (const good of [
+    "https://feier-abend.co/",
+    "https://maniwar.github.io/porsche996turbo/",
+    "https://example.com/listing?v=2",
+    "https://172.32.0.1/",   // just outside the private 172.16/12 block
+  ]) {
+    assert(safeWatchUrl(good), `should have allowed: ${good}`);
+  }
 });
