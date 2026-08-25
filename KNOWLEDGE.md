@@ -209,6 +209,113 @@ gaps, kicks the pass with a zero-cost tap, watches until both gaps are linked
 to a disabled draft (and prints it), then enables the draft and asserts both
 gaps clear — removing every row it created.
 
+## Site watch — when the page changes and the knowledge doesn't
+
+A storefront carries **three tiers of copy**, and the concierge can read exactly
+one of them:
+
+| tier | where it lives | can the bot see it? |
+| --- | --- | --- |
+| Hard-coded markup | `index.html` | **No** |
+| The site editor | `site_content` (Studio → Site) | **No** |
+| Knowledge sections | `concierge_kb` | **Yes — only this** |
+
+That gap is the quiet failure mode of the whole design. Add a payment method to
+the listing on Tuesday and the bot will still be answering Monday's question
+with last quarter's facts on Friday — confidently, because nothing told it
+otherwise. A page edit fires no event this server can hear.
+
+**Site watch closes it by reading the rendered page.** Rendered, not the CMS:
+hard-coded copy and editor copy are both HTML by the time a reader sees them, so
+watching the output catches both tiers at once. It runs the diff, drafts a
+knowledge entry for whatever moved, and stops.
+
+### It drafts. It never publishes.
+
+This is the load-bearing decision, and it is deliberate on two counts.
+
+**Page copy is not knowledge.** Marketing prose is written to *move* someone;
+a knowledge entry is written to *answer* someone. Auto-injecting page text into
+the prompt would bloat every turn, repeat itself, and quietly duplicate the
+curated KB with a persuasive variant of the same facts.
+
+**A model that reads copy and writes "knowledge" is one bad inference from
+inventing policy** — the same failure that once had the concierge treating a
+shopper's passing worry as a standing requirement (see `BEHAVIOR.md` → the
+client book writes no policy). So the drafting prompt is mostly prohibition:
+
+- Write only what the page says. No fee, price, timeline, guarantee, policy,
+  eligibility condition, or party's obligation that isn't in the copy.
+- Never resolve an ambiguity by picking the likely answer.
+- **Never import outside knowledge about a company the page happens to name.**
+  If the page names a payment processor the model recognises, it still knows
+  only what *this page* says about it.
+- Where the copy leaves an obvious question open, end with a
+  **`NOT STATED HERE:`** line naming the gaps. That line is the most valuable
+  thing the pass writes: it tells the concierge the edge of its own knowledge,
+  so it offers to find out instead of improvising past it.
+
+### How the diff works
+
+Section-granular, keyed off headings. A whole-page hash would tell you
+"something changed" and nothing more — useless for drafting. Keys come from
+**heading text, not position**, so inserting a section at the top doesn't
+renumber everything below it and report the page as wholly rewritten. Nav,
+header, footer and aside are dropped as chrome: a cart count and a copyright
+year change on their own schedule and are never the answer to a question.
+
+Three properties worth knowing, because each is a bug that would otherwise be
+invisible:
+
+- **First contact is a baseline, not news.** A page nobody has watched yet is
+  learned as it stands and produces *no* drafts. Otherwise day one buries the
+  reviewer under thirty proposals.
+- **The draft row — not the snapshot — is the durable record of a change.**
+  Snapshots advance in the same transaction that books the draft, never ahead of
+  it. If the drafting call fails, the before/after is still on the books, a
+  human can write the entry, and the next sweep retries. Advancing the snapshot
+  first would swallow the change forever.
+- **A page that can't be read is not a page with nothing on it.** A failed fetch
+  reports the failure and leaves the capture untouched, so a bad gateway is
+  never mistaken for a wiped site.
+
+At most **one open draft per section**: a section edited twice before anyone
+looks updates the open draft rather than stacking two overlapping proposals.
+`old_text` stays pinned to what the reviewer last had reason to believe was
+live, not the intermediate they never saw.
+
+### Reviewing
+
+Studio → **Knowledge → Site watch**. Each draft leads with the evidence (what
+the page now says, with *what it said before* one click away) and keeps the
+proposed entry editable — approving a draft you cannot correct is not review.
+
+- **Publish to knowledge** writes a real, enabled `concierge_kb` row, which
+  trips the cache-flush triggers, so stale cached answers on that topic are
+  dropped in the same breath.
+- **Not knowledge** dismisses it. That's a real answer, not a deferral: the
+  section stays quiet until it changes *again*.
+- A **removed** section leads with its old text and a warning. Knowledge still
+  promising a withdrawn offer is the expensive kind of wrong, so the draft is
+  framed as a correction.
+
+### Running it
+
+- **Check now** in the studio, any time.
+- **Every six hours** via the *Site Watch Sweep* workflow — deliberately far
+  slower than the alert sweep, because a page is edited a few times a year, not
+  a few times an hour. Needs `ALERT_CRON_SECRET` in both Supabase and GitHub
+  (the same purpose-built credential the support sweep uses — never the
+  service-role key).
+- Watched pages must be **public `https://`**. The sweep runs server-side with
+  the service role in scope, so an inward-pointing URL would read what the
+  internet cannot; loopback, private ranges and cloud metadata hosts are
+  refused (`safeWatchUrl`, unit-tested).
+
+Schema: `site_snapshots`, `site_kb_drafts`, and the RPCs `site_watch_record`,
+`site_kb_drafts_list`, `approve_site_kb_draft`, `dismiss_site_kb_draft`,
+`site_watch_status`. See `supabase/SCHEMA.md`.
+
 ## Managing it
 
 - **Edit** in the Studio (Knowledge, Procedures, Selling, Goals). Everything is
@@ -223,6 +330,9 @@ gaps clear — removing every row it created.
 - **Draft knowledge from gaps** (Knowledge → gaps card) turns unanswered
   visitor questions into KB drafts — grounded restatements or fill-in
   skeletons, never inventions; enabling a draft clears the gaps it covers.
+- **Site watch** (Knowledge → Site watch) turns *page* edits into KB drafts —
+  the other inbound queue: gaps are what a visitor asked and the bot couldn't
+  answer, site watch is what the page says and the bot was never told.
 - **Cache flush** fires automatically on KB/config/SOP edits, so a changed policy
   is never served from an old cached answer. Learned rows flush clean; baked
   starter answers survive as **stale** and re-bake within the hour.

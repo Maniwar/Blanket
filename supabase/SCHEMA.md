@@ -929,6 +929,49 @@ pruned by `prune_high_write`.
 
 ---
 
+### `site_snapshots` — the last time we read each section of a watched page
+
+The concierge answers only from `concierge_kb`. Copy hard-coded into the markup
+or written through the site editor is invisible to it, so a page can promise
+something the bot has never heard of. This is the memory of what the *page* said
+last time anyone looked. See [`KNOWLEDGE.md`](../KNOWLEDGE.md) → Site watch.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `url` | text | The watched page. Public `https://` only — enforced in the engine (`safeWatchUrl`), because the sweep runs server-side with the service role in scope. |
+| `chunk_key` | text | The section's identity, slugified from its **heading text, not its position** — so inserting a section at the top doesn't renumber everything below it and report the page as wholly rewritten. `unique (url, chunk_key)`. |
+| `heading` | text | The heading as rendered. |
+| `text` | text | The section's extracted prose (tags stripped, entities decoded, whitespace collapsed). |
+| `hash` | text | SHA-256 of `text` — the actual comparison. |
+| `captured_at` | timestamptz | Last read. |
+
+**Written by:** `site_watch_record` only, and only in the same transaction that
+books the resulting draft — never ahead of it. **Read by:** the same RPC's diff,
+and `site_watch_status` for the studio's header line.
+
+### `site_kb_drafts` — a proposed knowledge entry, born of a diff
+
+Its own table rather than a disabled `concierge_kb` row, so the *provenance* —
+what changed, from what, to what — sits beside the proposal while a human
+decides. A disabled KB row would carry the answer but lose the question.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `url` / `chunk_key` / `heading` | text | Which section moved. |
+| `change_kind` | text | `new` · `changed` · `removed`. A **removed** section still gets a draft: knowledge promising a withdrawn offer is the expensive kind of wrong. |
+| `old_text` / `new_text` | text | The evidence. On a second edit before review, `old_text` stays pinned to what the reviewer last had reason to believe was live — not the intermediate they never saw. |
+| `proposed_title` / `proposed_md` | text | What the drafting pass wrote, or null if it hasn't run or couldn't reach the model. Editable in the studio: approving a draft you cannot correct is not review. |
+| `status` | text | `pending` · `approved` · `dismissed`. **Partial unique index on `(url, chunk_key) where status='pending'`** — at most one open draft per section, so a section edited twice updates the open draft instead of stacking two overlapping proposals. |
+| `kb_slug` | text | The `concierge_kb` slug written on approval (`site-<chunk_key>`). |
+| `created_at` / `resolved_at` | timestamptz | Audit. |
+
+**The draft row — not the snapshot — is the durable record of a change.** If the
+drafting model call fails, the before/after is still on the books, a human can
+write the entry, and the next sweep retries. Advancing the snapshot first would
+swallow the change forever.
+
+---
+
 ## Functions (RPCs) — all `security definer`, `search_path = ''`
 
 | Function | Signature | What it does | Called by |
@@ -977,6 +1020,12 @@ pruned by `prune_high_write`.
 | `patron_appointments_by(p_email, p_user)` | → jsonb | Same, resolved by email/auth-user id server-side (the studio never sees `customers` ids). | patron drawer timeline. |
 | `appointment_facets(p_days)` | → jsonb | Bounded (≤ 5000) conversation/session booking facts. | 📅 badge on Conversations; the funnel's hard `Booked a visit` stage. |
 | `judge_findings(p_days?)` | → jsonb | The Judge & Coach ledger in one call: totals (spoke/held/vetoed, pre-filter kills, redraft scoreboard, **`floored`** = lines the merchant's judge floor let through), per-beat-kind outcomes, veto reasons clustered into named defect classes with fresh sample kills, the unresolved gap ledger (repeat clusters, system alerts, studio feedback each labeled), and a gap-filled daily **`series`** (one row per day with spoke/held/vetoed/prefilter/redraft/floored/`gaps_cleared` **plus that day's dominant defect family `top_family`**) that powers the "Is it getting better?" trend chart, alongside a **`changes`** array (every versioned edit to a judge-relevant setting or to knowledge in the window) that the chart draws as change markers so a movement can be read — which defect drove it, and which of the merchant's own edits it followed. The defect-class ladder is mirrored byte-for-byte by the engine's `classifyJudgeReason` so the floor and this report never disagree. Admin/service-gated. | studio "Judge & coach" tab; weekly ops report. |
+
+| `site_watch_record(p_url, p_chunks)` | → jsonb | **The diff, in one transaction.** Compares the freshly-extracted sections against `site_snapshots`, books a `site_kb_drafts` row for each new/changed/removed section, advances the snapshots, and returns what moved plus the drafts still needing a proposal. **First contact with a URL is a baseline, not news** — a page nobody has watched yet is learned as it stands and produces zero drafts, so day one doesn't bury the reviewer under thirty proposals. An **empty chunk array is refused**: it almost always means the fetch failed or the markup changed shape, and treating it as "everything was removed" would delete the whole baseline and fabricate a wall of removal drafts. Service-only. | `POST ?sitewatch=1`. |
+| `site_kb_drafts_list(p_status?, p_limit?)` | → setof `site_kb_drafts` | The review queue, newest first (≤200). Admin-gated. | Studio → Knowledge → Site watch. |
+| `approve_site_kb_draft(p_id, p_title?, p_md?)` | → jsonb | Publishes a draft as a real, **enabled** `concierge_kb` row (slug `site-<chunk_key>`, upserted) — which trips the cache-flush triggers, so stale cached answers on that topic are dropped in the same breath. Refuses a draft that is already resolved, or one with nothing to publish. Admin-gated. | Studio → Site watch → *Publish to knowledge*. |
+| `dismiss_site_kb_draft(p_id)` | → jsonb | Closes a pending draft as "not knowledge". A real answer, not a deferral: the snapshot has already advanced, so the section stays quiet until it changes *again*. Admin-gated. | Studio → Site watch → *Not knowledge*. |
+| `site_watch_status()` | → jsonb | Per-page section counts and last-read times, plus pending/approved/dismissed totals. Admin-gated. | Studio → Site watch header. |
 
 `EXECUTE` on the register/cache/booking RPCs is revoked from
 `public`/`anon`/`authenticated`; only the service role calls them. The
@@ -1095,6 +1144,7 @@ allowlist: `https://feier-abend.co`, `https://www.feier-abend.co`,
 | `POST ?judge=1` | `handleJudgePost` | **admin** | The pinned binary LLM judge server-side: `{criterion, transcript}` → `{pass, reason}`. Keeps the Anthropic key off the browser; used by the panel + CLI eval runners. |
 | `POST ?lint=1` | `handleLintPost` | **admin** | Advisory honesty lint on admin-authored rule text: `{text, label}` → `{findings:[{quote, why}]}`. Flags only clear constitution conflicts (invention, discounts, pressure, revealing the book, deception) — never style/tone/pacing. Fail-open (errors return zero findings); the studio calls it after a changed prompt-text saves and shows findings as a heads-up — the save is never blocked. |
 | `POST ?regrade=1` | `handleRegradePost` | **admin** | Re-run **goal grading** on demand for `{conversation_id}` or `{ids:[…]}` (≤30) — the Conversations panel's "Re-grade goals" / "Re-grade shown" buttons, so grading isn't only the sampled async pass. Returns `{graded, requested, empty, failed}`: `graded` counts real scorecard writes (`evaluateGoals` returns a success boolean), `empty` = chats with no messages, `failed` = judge ran but wrote nothing (transient). The per-chat button auto-retries once on `failed`. |
+| `POST ?sitewatch=1` | `handleSiteWatchPost` | **admin** / service / cron secret | **Site watch sweep.** Fetches each configured page (public `https://` only, size- and time-capped), splits it into heading-delimited sections, SHA-256s each, runs `site_watch_record`, and asks the model to draft KB entries for whatever moved — **strictly extractive**, and it never publishes. Three doors like the alert sweep: the studio's *Check now* with an admin JWT, the service key, or `ALERT_CRON_SECRET` — which is what the scheduled job carries, because a job that only needs to say "look at the site" has no business holding the keys to the kingdom. A page that can't be read reports the failure and leaves its capture untouched, so a bad gateway is never mistaken for a wiped site. |
 | `POST ?consolidate=1` | `handleConsolidatePost` | **admin** | Force-regenerate one patron's rolling **client summary** (`kind='summary'` note). Body `{email?, user_id?}`. Runs `consolidateClientBook(..., {force:true})` and returns `{ok, summary}` — the drawer's **Regenerate** button. (The same helper also runs automatically in the background after a signed-in turn once ~8 new notes have accrued.) |
 
 **SSE frames** (chat): `{"t":…}` text, `{"s":…}` status, `{"m":{cid,mid}}`
