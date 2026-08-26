@@ -3251,6 +3251,21 @@ const ASSERTIVENESS_GUIDANCE: Record<number, string> = {
     "always drive toward an entry in the Webbuch. Honest and warm, but unmistakably selling.",
 };
 
+/** The dial text for a level, honouring a per-level admin override
+ *  (config.assertiveness_guidance = {"5": "…"}). The built-in speaks the
+ *  reference house's own commerce — its ledger, its commission control — so a
+ *  brand whose selling ends somewhere else (an offer, a booking, an enquiry)
+ *  needs to be able to say so. Falls back per level, so overriding one rung
+ *  never blanks the other four. */
+function assertivenessGuidance(data: ConciergeData, level: number): string {
+  const custom = data.config?.assertiveness_guidance;
+  if (custom && typeof custom === "object" && !Array.isArray(custom)) {
+    const one = (custom as Record<string, unknown>)[String(level)];
+    if (typeof one === "string" && one.trim()) return one.trim();
+  }
+  return ASSERTIVENESS_GUIDANCE[level] ?? ASSERTIVENESS_GUIDANCE[3];
+}
+
 function assertivenessLevel(data: ConciergeData): number {
   const av = data.config?.assertiveness;
   const n = typeof av === "number" ? av : (typeof av === "string" ? parseFloat(av) : NaN);
@@ -3556,7 +3571,7 @@ const SELLING_BASE =
   "- HOW HARD TO SELL (current dial): {{DIAL}}\n";
 
 function sellingBlock(data: ConciergeData): string {
-  const dial = ASSERTIVENESS_GUIDANCE[assertivenessLevel(data)] ?? ASSERTIVENESS_GUIDANCE[3];
+  const dial = assertivenessGuidance(data, assertivenessLevel(data));
   const base = (typeof data.config?.selling_base === "string" && data.config.selling_base.trim())
     ? data.config.selling_base
     : SELLING_BASE;
