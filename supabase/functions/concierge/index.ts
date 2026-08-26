@@ -3251,6 +3251,13 @@ const ASSERTIVENESS_GUIDANCE: Record<number, string> = {
     "always drive toward an entry in the Webbuch. Honest and warm, but unmistakably selling.",
 };
 
+function assertivenessLevel(data: ConciergeData): number {
+  const av = data.config?.assertiveness;
+  const n = typeof av === "number" ? av : (typeof av === "string" ? parseFloat(av) : NaN);
+  if (!isFinite(n)) return 3;
+  return Math.min(5, Math.max(1, Math.round(n)));
+}
+
 /** The dial text for a level, honouring a per-level admin override
  *  (config.assertiveness_guidance = {"5": "…"}). The built-in speaks the
  *  reference house's own commerce — its ledger, its commission control — so a
@@ -3264,13 +3271,6 @@ function assertivenessGuidance(data: ConciergeData, level: number): string {
     if (typeof one === "string" && one.trim()) return one.trim();
   }
   return ASSERTIVENESS_GUIDANCE[level] ?? ASSERTIVENESS_GUIDANCE[3];
-}
-
-function assertivenessLevel(data: ConciergeData): number {
-  const av = data.config?.assertiveness;
-  const n = typeof av === "number" ? av : (typeof av === "string" ? parseFloat(av) : NaN);
-  if (!isFinite(n)) return 3;
-  return Math.min(5, Math.max(1, Math.round(n)));
 }
 
 // ── Prompt sections — one concern, one owner ─────────────────────────────────
