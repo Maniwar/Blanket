@@ -816,6 +816,39 @@ Deno.test("extractPageChunks drops scripts, styles and chrome", () => {
   assert(!c[0].text.includes("color:red"), "css leaked into content");
 });
 
+// A count-up counter serves its PLACEHOLDER, not its value. The listing that
+// found this put "$0" into its knowledge base under the word "Asking" — the
+// concierge could have quoted a car's asking price as zero. The real number is
+// in the attribute, so recover it rather than record the placeholder.
+Deno.test("extractPageChunks recovers animated counter values instead of capturing $0", () => {
+  const html = `<body><h2>Market</h2>
+    <div class="bv">$<span id="mktB1" data-count="52506">0</span></div>
+    <div class="bv">$<span id="mktB4" data-count="59900">0</span></div>
+    <p>A typical Tiptronic against this car, both figures shown above in full.</p></body>`;
+  const c = extractPageChunks(html);
+  assertEq(c.length, 1, "c.length");
+  assert(c[0].text.includes("52506"), "data-count value was not recovered");
+  assert(c[0].text.includes("59900"), "second counter was not recovered");
+  assert(!/\$\s*0\b/.test(c[0].text), `placeholder zero survived: ${c[0].text}`);
+});
+
+Deno.test("counter recovery never overwrites real text, and tolerates no attribute", () => {
+  // text already real -> untouched even though the attribute disagrees
+  const real = `<body><h2>Price</h2><p>The asking figure is written out in full below.</p>
+    <span data-count="1">$59,900</span></body>`;
+  assert(extractPageChunks(real)[0].text.includes("$59,900"), "authored text was replaced");
+
+  // a genuine zero with no counter attribute stays a zero
+  const zero = `<body><h2>Fees</h2><p>There is a line item here and it is genuinely nothing at all.</p>
+    <span>$0</span></body>`;
+  assert(extractPageChunks(zero)[0].text.includes("$0"), "a real zero was eaten");
+
+  // a counter whose attribute is also zero is left alone rather than churned
+  const zeroAttr = `<body><h2>Sold</h2><p>Nothing has sold yet and the counter says so plainly here.</p>
+    <span data-count="0">0</span></body>`;
+  assertEq(extractPageChunks(zeroAttr).length, 1, "zero-attribute counter broke extraction");
+});
+
 Deno.test("extractPageChunks keys are stable when a section is inserted above", () => {
   const before = `<body><h2>Payment</h2><p>We accept the usual cards and nothing more exotic.</p></body>`;
   const after = `<body><h2>Brand new banner</h2><p>An announcement that did not exist here yesterday at all.</p>
