@@ -4810,11 +4810,16 @@ create index if not exists site_kb_drafts_status_idx
 -- First contact with a URL is a BASELINE, not news: seeding snapshots for a
 -- page nobody has watched yet would otherwise open a draft for every section
 -- on it and bury the reviewer under thirty proposals on day one.
+-- Rename detection needs trigram similarity. Supabase installs extensions into
+-- the `extensions` schema, and this function runs with an empty search_path, so
+-- the call below is schema-qualified on purpose.
+create extension if not exists pg_trgm with schema extensions;
+
 create or replace function public.site_watch_record(p_url text, p_chunks jsonb)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_known int;
-  v_new int := 0; v_changed int := 0; v_removed int := 0;
+  v_new int := 0; v_changed int := 0; v_removed int := 0; v_renamed int := 0;
   v_baseline boolean;
 begin
   if coalesce(btrim(p_url),'') = '' then
@@ -4838,18 +4843,61 @@ begin
     from jsonb_array_elements(p_chunks) c
    where coalesce(c->>'key','') <> '' and coalesce(c->>'text','') <> '';
 
+  -- RENAMES. A section's key comes from its heading, so a heading that carries
+  -- a figure ("$20,407 Invested" → "$24,332 Invested") changes key when the
+  -- figure changes, and a key-based diff sees one section vanish and an
+  -- unrelated one appear. Left alone, the drafter then dutifully proposes
+  -- "service documentation no longer offered" — a false entry about a section
+  -- that merely got a new title. So before calling anything removed, look for a
+  -- NEW section whose text is mostly the same, and treat the pair as one edited
+  -- section under its new key. distinct on the new key: two vanished sections
+  -- cannot both claim one successor.
+  drop table if exists _renames;
+  create temp table _renames on commit drop as
+  select distinct on (n.chunk_key) gone.chunk_key as old_key, n.chunk_key as new_key, n.sim
+    from (
+      select s.chunk_key, s.text
+        from public.site_snapshots s
+       where s.url = p_url
+         and not exists (select 1 from _incoming i where i.chunk_key = s.chunk_key)
+    ) gone
+    cross join lateral (
+      select i.chunk_key, extensions.similarity(gone.text, i.text) as sim
+        from _incoming i
+       where not exists (select 1 from public.site_snapshots x
+                          where x.url = p_url and x.chunk_key = i.chunk_key)
+       order by extensions.similarity(gone.text, i.text) desc
+       limit 1
+    ) n
+   where n.sim >= 0.5
+   order by n.chunk_key, n.sim desc;
+
   if not v_baseline then
-    -- New sections
+    -- New sections (that are not the far side of a rename)
     insert into public.site_kb_drafts (url, chunk_key, heading, change_kind, old_text, new_text)
     select p_url, i.chunk_key, i.heading, 'new', null, i.text
       from _incoming i
       left join public.site_snapshots s on s.url = p_url and s.chunk_key = i.chunk_key
      where s.id is null
+       and not exists (select 1 from _renames r where r.new_key = i.chunk_key)
     on conflict (url, chunk_key) where status = 'pending' do update
       set change_kind = 'new', new_text = excluded.new_text,
           heading = excluded.heading, proposed_md = null, proposed_title = null,
           created_at = now();
     get diagnostics v_new = row_count;
+
+    -- Renamed sections: ONE edited draft under the new key, carrying the old
+    -- key's text as the baseline the reviewer compares against.
+    insert into public.site_kb_drafts (url, chunk_key, heading, change_kind, old_text, new_text)
+    select p_url, i.chunk_key, i.heading, 'changed', s.text, i.text
+      from _renames r
+      join _incoming i on i.chunk_key = r.new_key
+      join public.site_snapshots s on s.url = p_url and s.chunk_key = r.old_key
+    on conflict (url, chunk_key) where status = 'pending' do update
+      set change_kind = 'changed', new_text = excluded.new_text, heading = excluded.heading,
+          old_text = coalesce(site_kb_drafts.old_text, excluded.old_text),
+          proposed_md = null, proposed_title = null, created_at = now();
+    get diagnostics v_renamed = row_count;
 
     -- Edited sections. old_text is left alone on conflict: it holds the text a
     -- reviewer last had reason to believe was live, which is the useful
@@ -4866,14 +4914,15 @@ begin
           proposed_md = null, proposed_title = null, created_at = now();
     get diagnostics v_changed = row_count;
 
-    -- Vanished sections. Worth a draft of its own: the KB may still be
-    -- promising something the page has stopped offering, and that is the
-    -- expensive kind of wrong.
+    -- Vanished sections (that are not the near side of a rename). Worth a
+    -- draft of its own: the KB may still be promising something the page has
+    -- stopped offering, and that is the expensive kind of wrong.
     insert into public.site_kb_drafts (url, chunk_key, heading, change_kind, old_text, new_text)
     select p_url, s.chunk_key, s.heading, 'removed', s.text, null
       from public.site_snapshots s
       left join _incoming i on i.chunk_key = s.chunk_key
      where s.url = p_url and i.chunk_key is null
+       and not exists (select 1 from _renames r where r.old_key = s.chunk_key)
     on conflict (url, chunk_key) where status = 'pending' do update
       set change_kind = 'removed', new_text = null, created_at = now();
     get diagnostics v_removed = row_count;
@@ -4890,16 +4939,22 @@ begin
    where s.url = p_url
      and not exists (select 1 from _incoming i where i.chunk_key = s.chunk_key);
 
+  -- The undrafted queue, LONGEST FIRST: the market argument is proposed before
+  -- the photo captions. A draft whose title was set with no body is a recorded
+  -- "cosmetic, nothing to teach" verdict — excluded, or the model would be
+  -- asked about the same caption on every sweep.
   return jsonb_build_object(
     'ok', true, 'url', p_url, 'baseline', v_baseline,
     'sections', (select count(*) from _incoming),
-    'new', v_new, 'changed', v_changed, 'removed', v_removed,
+    'new', v_new, 'changed', v_changed + v_renamed, 'renamed', v_renamed, 'removed', v_removed,
     'drafts', (select coalesce(jsonb_agg(jsonb_build_object(
                  'id', d.id, 'chunk_key', d.chunk_key, 'heading', d.heading,
-                 'change_kind', d.change_kind, 'old_text', left(d.old_text, 4000),
-                 'new_text', left(d.new_text, 4000))), '[]'::jsonb)
+                 'change_kind', d.change_kind, 'old_text', left(d.old_text, 12000),
+                 'new_text', left(d.new_text, 12000))
+                 order by length(coalesce(d.new_text, d.old_text)) desc), '[]'::jsonb)
                  from public.site_kb_drafts d
-                where d.url = p_url and d.status = 'pending' and d.proposed_md is null));
+                where d.url = p_url and d.status = 'pending'
+                  and d.proposed_md is null and d.proposed_title is null));
 end; $$;
 revoke execute on function public.site_watch_record(text,jsonb) from public, anon, authenticated;
 

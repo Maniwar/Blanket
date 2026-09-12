@@ -7432,10 +7432,13 @@ function swDraftCard(d) {
   if (!d.proposed_md) {
     // Say WHY it is blank. A silent empty box reads as a bug; it usually means
     // the drafting pass has not run yet or could not reach the model, and the
-    // change itself is safely on the books either way.
+    // change itself is safely on the books either way. A title with no body is
+    // the drafter's recorded verdict that there is nothing here to teach.
     var why = el('div', 'micro');
     why.style.marginTop = '6px';
-    why.textContent = 'No proposal yet — the change is recorded, so this is safe to write yourself or leave for the next check.';
+    why.textContent = /^Cosmetic change/.test(d.proposed_title || '')
+      ? 'The drafter judged this a cosmetic change with nothing new to teach. Dismiss it — or write an entry if you disagree.'
+      : 'No proposal yet — the change is recorded, so this is safe to write yourself or leave for the next check.';
     card.appendChild(why);
   }
 

@@ -284,6 +284,41 @@ looks updates the open draft rather than stacking two overlapping proposals.
 `old_text` stays pinned to what the reviewer last had reason to believe was
 live, not the intermediate they never saw.
 
+### What the drafter is shown, and how much
+
+The drafter is handed the section's own text up to **8,000 characters**
+(extraction keeps up to 12,000 per section), the previous text for an edit, and
+nothing else — deliberately no other sections, so an entry cannot quietly
+borrow a claim from elsewhere on the page. It is told that a section dense with
+figures — comparable sales, prices, dates, mileages, lot numbers — is *data, not
+prose*, and to keep every figure; "2–8 bullets" is the shape for ordinary copy,
+not a cap. A pricing argument reduced to eight bullets has lost the argument,
+and the concierge would then invent the comps it cannot see.
+
+**None of these caps touch the chat path.** At answer time the concierge is
+given the *whole* knowledge base, every SOP for its audience, and its tool list,
+every turn — nothing is retrieved, nothing is truncated. The 996 listing's KB is
+~26,000 characters today and ~42,000 with every pending draft published: under a
+tenth of the model's context. See *Why it isn't RAG*, above.
+
+### Renames, order, and verdicts
+
+- **A renamed heading is not a removal.** Keys come from headings, so
+  *"$20,407 Invested"* → *"$24,332 Invested"* changes key, and a key-based diff
+  sees a removal plus an addition. Before calling anything removed, the diff
+  looks for a new section whose text is mostly the same (`pg_trgm` similarity
+  ≥ 0.5) and records the pair as **one changed section** under the new key,
+  with the old text as its baseline. Without this the drafter proposed *"service
+  documentation no longer offered"* for a section that had grown by $3,925.
+- **Longest first.** The undrafted queue is ordered by content length, so the
+  market argument is proposed before the photo captions.
+- **Batches to a ceiling.** Eight sections per model call, up to forty per
+  sweep — a rewrite of thirty sections lands in one *Check now*, not five.
+- **A "nothing to teach" verdict sticks.** When the drafter judges a change
+  cosmetic it records a title with no body. That draft is not re-sent on the
+  next sweep, and cannot be published (the RPC refuses an empty entry); the
+  studio shows the verdict and the reviewer dismisses it or writes the entry.
+
 ### Reviewing
 
 Studio → **Knowledge → Site watch**. Each draft leads with the evidence (what
